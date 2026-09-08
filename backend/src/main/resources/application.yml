@@ -1,0 +1,28 @@
+# WikiPulse 백엔드 (WP-36)
+#
+# 스키마는 이 애플리케이션이 소유하지 않는다. db/migrations 가 정본이고
+# JPA 는 검증만 한다(validate). 엔티티가 실제 테이블과 어긋나면 기동 때 걸린다.
+# 마이그레이션 도구(Flyway/Liquibase) 확정은 별도 — db MR 참고.
+
+spring:
+  application:
+    name: wikipulse-backend
+  datasource:
+    url: ${DATABASE_URL:jdbc:postgresql://localhost:5432/wikipulse}
+    username: ${DB_USER:wikipulse}
+    password: ${DB_PASSWORD:}
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: UTC
+
+# actuator 는 헬스체크만 노출한다.
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
