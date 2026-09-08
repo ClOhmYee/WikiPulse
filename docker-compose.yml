@@ -1,0 +1,138 @@
+# WikiPulse 로컬 개발 스택 (WP-63)
+#
+# 팀원마다 파이썬·JDK·PostgreSQL 설치가 달라 생기는 의존성 문제를 없앤다.
+# `docker compose up` 하나로 전원이 같은 환경을 띄운다.
+#
+#   docker compose up -d postgres kafka        # 인프라만 (백엔드·파이썬 로컬 개발)
+#   docker compose up -d                        # 전체 스택
+#   docker compose --profile pipeline up -d     # 파이프라인(producer·spark)까지
+#   docker compose down                         # 정지
+#   docker compose down -v                      # 정지 + 데이터 삭제(스키마 재적재)
+#
+# EC2 실물 구축(WP-26·-29)과 별개다. 이건 개발용이라 전부 단일
+# 인스턴스·복제 1이고 운영 구성과 다르다.
+
+name: wikipulse
+
+services:
+  # ---------------------------------------------------------------- 인프라
+  postgres:
+    build:
+      context: .
+      dockerfile: docker/postgres/Dockerfile
+    container_name: wikipulse-postgres
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-wikipulse}
+      POSTGRES_USER: ${POSTGRES_USER:-wikipulse}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in your local .env}
+      # pgserver 에서 겪은 시간대 문제를 피하려고 UTC 로 못박는다.
+      TZ: UTC
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-wikipulse} -d ${POSTGRES_DB:-wikipulse}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
+  kafka:
+    image: apache/kafka:3.9.0
+    container_name: wikipulse-kafka
+    ports:
+      - "9092:9092"
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_LISTENERS: INTERNAL://:29092,HOST://:9092,CONTROLLER://:9093
+      # 컨테이너 안(spark·producer)은 kafka:29092, 호스트는 localhost:9092.
+      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka:29092,HOST://localhost:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,INTERNAL:PLAINTEXT,HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+      KAFKA_LOG_RETENTION_HOURS: 168  # 명세 §5 재처리 창 7일
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --list || exit 1"]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+      start_period: 20s
+    volumes:
+      - kafka-data:/var/lib/kafka/data
+
+  # ---------------------------------------------------------------- 서비스
+  backend:
+    build:
+      context: ./backend
+    container_name: wikipulse-backend
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-wikipulse}
+      DB_USER: ${POSTGRES_USER:-wikipulse}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in your local .env}
+    ports:
+      - "8080:8080"
+
+  frontend:
+    build:
+      context: ./frontend
+    container_name: wikipulse-frontend
+    environment:
+      # 브라우저가 호스트에서 백엔드를 부르므로 localhost:8080.
+      VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:8080}
+    ports:
+      - "5174:5174"
+    depends_on:
+      - backend
+
+  # ---------------------------------------------------------------- 파이프라인 (선택)
+  producer:
+    build:
+      context: ./data-pipeline
+    container_name: wikipulse-producer
+    profiles: ["pipeline"]
+    depends_on:
+      kafka:
+        condition: service_healthy
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      KAFKA_TOPIC: wiki.edits
+      WIKIS: ${WIKIS:-enwiki}
+      # 값이 없으면 producer 가 기동 때 안내를 띄우고 멈춘다(config.py).
+      # 여기서 강제하면 producer 를 안 쓸 때도 compose 전체가 막힌다.
+      CONTACT_EMAIL: ${CONTACT_EMAIL:-}
+
+  spark:
+    image: apache/spark:3.5.3-python3
+    container_name: wikipulse-spark
+    profiles: ["pipeline"]
+    depends_on:
+      kafka:
+        condition: service_healthy
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      KAFKA_TOPIC: wiki.edits
+    volumes:
+      - ./data-pipeline/streaming:/opt/app/streaming:ro
+      - spark-checkpoint:/tmp/wikipulse-checkpoint
+    working_dir: /opt/app
+    command: >
+      /opt/spark/bin/spark-submit
+        --packages org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.3
+        --conf spark.jars.ivy=/tmp/ivy
+        streaming/edit_windows.py
+
+volumes:
+  postgres-data:
+  kafka-data:
+  spark-checkpoint:
