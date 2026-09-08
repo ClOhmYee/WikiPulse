@@ -33,3 +33,7 @@ venv/
 # pytest / Spark
 .pytest_cache/
 spark-warehouse/
+
+# Gradle / Java 빌드
+backend/.gradle/
+backend/build/
