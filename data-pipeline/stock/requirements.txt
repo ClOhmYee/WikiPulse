@@ -1,0 +1,7 @@
+# 종목 마스터·설명·임베딩 적재용
+requests==2.32.3
+yfinance==0.2.51
+psycopg[binary]==3.3.5
+
+# 개발용 (파싱 테스트만. pgserver 는 db/ 에서 온다)
+pytest==8.3.4
