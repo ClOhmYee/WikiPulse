@@ -6,13 +6,13 @@ Spring Boot 백엔드 (`WP-36`). 데이터 모델 v1 위의 읽기 API 골격이
 
 ## 스택
 
-- Spring Boot **4.1.1**, Java 17, Gradle 9.7 (wrapper 포함)
+- Spring Boot **3.5.16**, Java 17, Gradle 8.14 (wrapper 포함)
 - Spring Web MVC · Data JPA · Validation · Actuator
 - PostgreSQL (스키마는 `db/` 가 소유, 여기는 `ddl-auto=validate`)
 
-⚠️ Boot 4 는 starter 구조가 3.x 와 다르다. `spring-boot-starter-webmvc`(기존
-web), 슬라이스 테스트는 `spring-boot-starter-webmvc-test`. `@WebMvcTest` 도
-`org.springframework.boot.webmvc.test.autoconfigure` 로 옮겼다.
+Boot 3.5 를 골랐다. Initializr 기본은 4.x(2025-11 GA)지만, 프로젝트 교보재·팀
+친숙도가 3.x 기준이라 안정 라인으로 내렸다. 3.5.16 은 3.5 계열 마지막
+OSS 패치다(2026-06). LTS 급 지원이 필요하면 상용(HeroDevs 등) 또는 4.x 로.
 
 ## 엔드포인트
 
