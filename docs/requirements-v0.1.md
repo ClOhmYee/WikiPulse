@@ -68,8 +68,8 @@
 ### 3.2 처리 흐름
 
 1. Producer가 EventStreams SSE를 읽어 `wiki.edits` 토픽에 넣는다 (namespace 0, bot 플래그 유지).
-2. Spark Streaming이 토픽을 읽어 문서별 편집 수를 슬라이딩 윈도우로 집계하고, PostgreSQL의 28일 기준선과 비교해 편집 급증 문서를 뽑는다. 봇·1인 반복·되돌리기는 여기서 거른다.
-3. 편집 급증 문서에 대해 Pageviews API로 **편집 전후 조회수**를 조회하고, 기준선 대비 급등한 문서만 통과시킨다. 편집만 튀고 조회수가 안 튀면 편집 전쟁·봇·정리 작업으로 보고 버린다.
+2. Spark Streaming이 토픽을 읽어 문서별 편집 수를 슬라이딩 윈도우로 집계하고, PostgreSQL의 28일 기준선과 비교해 편집 급증 문서를 뽑는다. **기존 문서는 z-score(편집 z ≥ 3) AND 절대 편집수(≥ 10)로, 신규 문서(baseline 없음)는 절대 편집수만으로** 판정한다. 봇·1인 반복·되돌리기는 여기서 거른다. 임계 근거는 §6·§11.
+3. 편집 급증 문서에 대해 조회수를 조회해 기준선 대비 급등(조회수 z ≥ 3 AND ≥ 2배)한 문서만 확정한다. 편집만 튀고 조회수가 안 따라오면 편집 전쟁·정리 작업으로 보고 버린다. ⚠️ **조회수는 편집보다 늦게 온다**(§6). 그래서 편집만 통과한 문서는 먼저 **감지됨** 상태로 내보내고, 조회수가 들어오면 **확정**으로 올린다 — 7번의 3단계 상태가 이 지연을 그대로 드러낸다.
 4. 통과 문서들을 **클러스터** = 이슈로 묶는다. 묶는 근거 둘: Wikipedia Clickstream(전월 문서 간 이동량 — 사용자가 A에서 B로 실제로 넘어간 횟수)으로 엣지 가중치를 주고, Wikidata API로 항목 간 관계(같은 사건·같은 지역·상위 개념)를 확인해 약한 엣지를 자른다. 클러스터별 급등도(`pulse_score`)는 편집 급등과 조회수 급등을 합쳐 계산한다.
 5. 클러스터를 텍스트로 요약해 임베딩하고, pgvector에서 종목 임베딩과 코사인 Top-K를 뽑는다.
 6. LLM이 Top-K 각각에 근거 경로(직접 언급 / 제품·산업 관계 / 공급망·고객·경쟁 / 지역 노출)를 생성할 수 있는지 판정한다. GDELT에서 뽑은 이슈 관련 기관명·테마를 컨텍스트로 준다 (RAG). 통과한 것을 유사도 순으로 낸다. 노출 개수 제한은 아직 없다.
@@ -83,7 +83,7 @@
 | 구분 | 소스 | 용도 | 실측 (11번) |
 | --- | --- | --- | --- |
 | 편집 이벤트 | Wikipedia EventStreams `recentchange` | 급증 감지 | 전체 31/s, enwiki 2/s, 1.5 KB/건 |
-| 조회수 | Wikipedia Pageviews API / `pageview_complete` 덤프 | 28일 기준선, **편집 급증의 2차 판정** (편집 전후 조회수 급등) | 일별 user 677 MB bz2 |
+| 조회수 | Wikipedia Pageviews API(일별) · `other/pageviews` 시간별 덤프 · `pageview_complete` 덤프(일별, 봇 구분) | 28일 기준선, 급증 2차 판정 | 시간별 gz 49.6 MB · 일별 user 677 MB bz2 |
 | 문서 간 이동 | **Wikipedia Clickstream** 월별 덤프 | 클러스터링 엣지 가중치 | enwiki 월 471 MB gz |
 | 항목 관계 | **Wikidata API** (`wbgetentities`, SPARQL) | 클러스터링 — 문서 간 관계 확인(사건·지역·상위 개념). 티커 조회에는 안 씀 | — |
 | 리플레이 원본 | `mediawiki_history` 월 스냅샷, `pageview_complete` 일별 | 과거 시점 클러스터 스냅샷 계산 | 월 520~585 MB · 일 677 MB bz2 |
@@ -167,7 +167,8 @@ RAM 16 GB에서 Kafka + Spark + HDFS 데몬을 올리면 Spark executor 몫은 8
 ## 10. Open Issues
 
 - [x] ~~LLM 게이트웨이가 Claude `web_search`를 중계하는지~~ — **된다** (2026-09-07 실측, 11번). Anthropic `/v1/messages` + `web_search_20250305` 서버 도구가 정상 반환. OpenAI `web_search_preview`도 됨
-- [ ] 급증 판정 수식 — 편집: 윈도우 길이, 기준선 산출법(동시간대 EWMA?), 임계치(z-score + 최소 절대 편집수). 조회수: "편집 전후"의 창 길이(전 N시간 / 후 M시간), 급등 임계치. Pageviews API는 시간 단위라 지연이 최대 1시간 — 2차 판정 시점을 언제로 잡을지
+- [x] ~~급증 판정 수식~~ — **확정 (2026-09-08, §11 실측).** 편집·조회수 임계 z = 3, 절대 편집수 하한 10, 조회수 최소 2배. 기존 문서는 z-score, 신규 문서는 절대 편집수. Strait of Hormuz 조회수로 검증 — 평상시 최대 z 1.9, 사건 최소 z 11.2로 z=3이 오탐 없이 앉는다. 코드: `data-pipeline/spike/detector.py`, 테스트 13개. 남은 튜닝: 윈도우 길이, EWMA 가중, 봇 필터 강도는 실데이터 붙은 뒤
+- [ ] **조회수 지연 처리** — Pageviews API는 **일 단위, 하루 지연**(시간별 아님, 실측). 시간별은 `other/pageviews` 덤프(약 1시간 지연, 봇 구분 없음)만. "시간별 + 봇 구분"을 동시에 주는 소스가 없다. LIVE 2차 판정을 시간별 덤프(빠름·봇 미구분)로 할지 일별 API(느림·정확)로 할지 결정. 감지됨→확정 지연이 그만큼이다
 - [ ] 클러스터링 파라미터 — Clickstream 엣지 최소 이동량, Wikidata 관계 종류(어느 속성을 "같은 사건"으로 볼지), 클러스터 최소·최대 크기
 - [ ] 리플레이 시연 구간 — 어느 사건·며칠. GDELT 결손(2025-06-13~07-04) 밖에서
 - [ ] Top-K의 K (임베딩·GDELT 각각), 3등급 검증 발동 기준 N, 노출 개수 상한 — 지금은 없음. 정답셋 결과 보고
@@ -193,6 +194,9 @@ RAM 16 GB에서 Kafka + Spark + HDFS 데몬을 올리면 Spark executor 몫은 8
 | 위키 링크 그래프 → 상장기업 | Hormuz 1,358 이웃 중 0 · Milton 3 · Iran 4 · Nvidia 507(목록 문서 노이즈) | 2026-09-04 |
 | Wikidata 티커 | `wdt:P249` 40건 / `p:P414 → pq:P249` 15,875건 / NYSE+NASDAQ 3,905 | 2026-09-04 |
 | Wikimedia 덤프 | pageview_complete 일 user 677 MB bz2 · mediawiki_history enwiki 월 520~585 MB · clickstream enwiki 월 471 MB | 2026-09-04 |
+| 급증 임계 (Strait of Hormuz 조회수 2025-06) | 사건 전 18일 391±55, z 범위 −1.3~+1.9. 사건 첫날 6/12 z=11.2(2.6배), 정점 6/22 z=5311(746배). **z=3이 평상시 최대와 사건 최소 사이에 오탐 없이 앉음** | 2026-09-08 |
+| Pageviews 입도 | AQS API는 일별만(hourly 400 에러). 시간별 문서 조회수는 `other/pageviews` 덤프뿐, 봇 구분 없음 | 2026-09-08 |
+| 편집 곡선 (Hurricane Milton) | 신규 문서. 생성 당일(10-05) 40편집, 시간 최대 44/h. baseline 없어 z 불가 → 절대 편집수로 판정 | 2026-09-08 |
 | 서버 | t3.xlarge × 2, 4 vCPU / 16 GB / 309 GB | 2026-09-04 |
 | GATEWAY 게이트웨이 | `https://llm-gateway.example.com/{원래 호스트}/…` 경로 프록시. OpenAI 임베딩·responses, **Anthropic messages + web_search 서버 도구** 전부 HTTP 200 | 2026-09-07 |
 
