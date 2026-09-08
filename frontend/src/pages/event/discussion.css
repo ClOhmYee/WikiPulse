@@ -1,0 +1,276 @@
+.dc-discussion {
+  color: #f3f7f7;
+}
+.dc-heading h2 {
+  margin: 0 0 9px;
+  font-size: 20px;
+  font-weight: 650;
+  letter-spacing: -0.025em;
+}
+.dc-heading p {
+  margin: 0;
+  color: #9cafb6;
+  font-size: 13px;
+  line-height: 1.9;
+}
+.dc-local-notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  margin: 21px 0 24px;
+  color: #9cafb6;
+  font-size: 12px;
+  line-height: 1.8;
+}
+.dc-local-notice > svg {
+  flex-shrink: 0;
+  margin-top: 3px;
+  color: #86c9c4;
+}
+.dc-compose label,
+.dc-reply-compose label {
+  display: block;
+  margin-bottom: 11px;
+  color: #d0dadd;
+  font-size: 13px;
+  font-weight: 500;
+}
+.dc-discussion textarea {
+  display: block;
+  width: 100%;
+  min-height: 107px;
+  padding: 15px;
+  border: 1px solid #34434c;
+  border-radius: 9px;
+  background: #0b141b;
+  color: #f3f7f7;
+  resize: vertical;
+  font-size: 13px;
+  line-height: 1.9;
+  caret-color: #86c9c4;
+}
+.dc-discussion textarea::placeholder {
+  color: #9cafb6;
+}
+.dc-discussion :is(button, textarea, select):focus-visible {
+  outline: 2px solid #dbb057;
+  outline-offset: 4px;
+}
+.dc-compose-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 12px;
+}
+.dc-compose-actions > span {
+  color: #9cafb6;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+.dc-compose-actions .wp-button {
+  min-height: 39px;
+  font-size: 12px;
+}
+.dc-discussion button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+.dc-discussion .dc-status {
+  min-height: 22px;
+  margin: 14px 0 23px;
+  color: #86c9c4;
+  font-size: 12px;
+  line-height: 1.9;
+}
+.dc-list-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 20px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid #24313a;
+}
+.dc-list-heading h3 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 550;
+}
+.dc-list-heading h3 > span {
+  margin-left: 7px;
+  color: #86c9c4;
+  font-variant-numeric: tabular-nums;
+}
+.dc-list-heading label {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  color: #9cafb6;
+  font-size: 12px;
+}
+.dc-list-heading select {
+  min-height: 35px;
+  padding: 5px 8px;
+  border: 1px solid #34434c;
+  border-radius: 5px;
+  background: #0b141b;
+  color: #d0dadd;
+  font-size: 12px;
+}
+.dc-thread {
+  padding: 25px 0;
+  border-bottom: 1px solid #24313a;
+}
+.dc-author {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  margin-bottom: 15px;
+}
+.dc-avatar {
+  display: grid;
+  place-items: center;
+  width: 33px;
+  height: 33px;
+  flex-shrink: 0;
+  border: 1px solid #34434c;
+  border-radius: 50%;
+  color: #b8c8cf;
+  font-size: 12px;
+}
+.dc-avatar[data-own="true"] {
+  border-color: #527f7b;
+  color: #86c9c4;
+}
+.dc-author strong {
+  display: block;
+  margin-bottom: 3px;
+  color: #dce6e8;
+  font-size: 12px;
+  font-weight: 550;
+}
+.dc-author > div > span {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  color: #9cafb6;
+  font-size: 11px;
+}
+.dc-author i {
+  width: 2px;
+  height: 2px;
+  border-radius: 50%;
+  background: #9cafb6;
+}
+.dc-discussion .dc-body {
+  margin: 0 0 16px;
+  color: #c9d5d9;
+  font-size: 13px;
+  line-height: 1.95;
+  white-space: pre-wrap;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+}
+.dc-thread-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 19px;
+}
+.dc-thread-actions > button {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 36px;
+  padding: 4px 0;
+  border: 0;
+  background: transparent;
+  color: #9cafb6;
+  font-size: 12px;
+  cursor: pointer;
+}
+.dc-thread-actions > button:hover {
+  color: #f3f7f7;
+}
+.dc-thread-actions .dc-like[aria-pressed="true"] {
+  color: #86c9c4;
+}
+.dc-thread-actions > button > span {
+  font-variant-numeric: tabular-nums;
+}
+.dc-chevron-expanded {
+  transform: rotate(180deg);
+}
+.dc-replies:not([hidden]) {
+  display: block;
+  margin-top: 19px;
+  padding: 0 0 0 23px;
+  border-left: 1px solid #34434c;
+}
+.dc-replies[hidden] {
+  display: none;
+}
+.dc-reply {
+  padding: 14px 0;
+}
+.dc-reply:first-child {
+  padding-top: 0;
+}
+.dc-reply-author {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px 11px;
+  margin-bottom: 9px;
+}
+.dc-reply-author strong {
+  color: #dce6e8;
+  font-size: 12px;
+  font-weight: 500;
+}
+.dc-reply-author span {
+  color: #9cafb6;
+  font-size: 10px;
+}
+.dc-reply .dc-body {
+  margin-bottom: 0;
+}
+.dc-reply-compose {
+  padding-top: 12px;
+}
+.dc-reply-compose textarea {
+  min-height: 85px;
+}
+.dc-reply-compose label {
+  font-size: 12px;
+}
+@media (max-width: 600px) {
+  .dc-heading h2 {
+    font-size: 18px;
+  }
+  .dc-local-notice {
+    font-size: 11px;
+  }
+  .dc-replies:not([hidden]) {
+    padding-left: 14px;
+  }
+  .dc-discussion textarea {
+    padding: 12px;
+  }
+  .dc-thread {
+    padding: 23px 0;
+  }
+  .dc-thread-actions > button {
+    min-height: 40px;
+  }
+  .dc-author > div > span {
+    font-size: 10px;
+  }
+  .dc-compose-actions {
+    gap: 10px;
+  }
+  .dc-compose-actions .wp-button {
+    padding-right: 12px;
+    padding-left: 12px;
+  }
+}

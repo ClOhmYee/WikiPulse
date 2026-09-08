@@ -1,0 +1,81 @@
+import { ArrowRight } from "lucide-react";
+export function ArticleNetwork({ articles = [], selectedId, onSelect }) {
+  return (
+    <div className="wp-article-network">
+      <svg
+        viewBox="0 0 560 230"
+        role="img"
+        aria-label="사건을 구성하는 문서의 관계 예시"
+      >
+        {articles.slice(1).map((article, i) => {
+          const angle = (i / Math.max(1, articles.length - 1)) * Math.PI * 2;
+          return (
+            <line
+              key={article.id}
+              x1="280"
+              y1="110"
+              x2={280 + Math.cos(angle) * 170}
+              y2={110 + Math.sin(angle) * 78}
+              stroke="#416565"
+              strokeWidth="1"
+            />
+          );
+        })}
+        {articles.map((article, i) => {
+          const angle =
+            ((i - 1) / Math.max(1, articles.length - 1)) * Math.PI * 2;
+          const x = i === 0 ? 280 : 280 + Math.cos(angle) * 170;
+          const y = i === 0 ? 110 : 110 + Math.sin(angle) * 78;
+          return (
+            <g key={article.id}>
+              <circle
+                cx={x}
+                cy={y}
+                r={i === 0 ? 19 : 8}
+                fill={selectedId === article.id ? "#dbb057" : "#86c9c4"}
+                fillOpacity={i === 0 ? ".2" : ".8"}
+                stroke="#86c9c4"
+              />
+              <text
+                x={x}
+                y={y + (i === 0 ? 39 : 24)}
+                textAnchor="middle"
+                fill="#dce7e8"
+                fontSize="12"
+              >
+                {article.name}
+              </text>
+            </g>
+          );
+        })}
+      </svg>
+      <div className="wp-article-network__links">
+        {articles.map((article) =>
+          onSelect ? (
+            <button
+              key={article.id}
+              className="wp-chip"
+              data-active={selectedId === article.id}
+              onClick={() => onSelect(article.id)}
+            >
+              {article.name}
+              <ArrowRight size={12} />
+            </button>
+          ) : (
+            <a
+              key={article.id}
+              className="wp-chip"
+              href={`#/intelligence/${article.id}`}
+            >
+              {article.name}
+              <ArrowRight size={12} />
+            </a>
+          ),
+        )}
+      </div>
+      <p className="wp-muted wp-small">
+        문서 연결 구조를 설명하기 위한 예시입니다.
+      </p>
+    </div>
+  );
+}
