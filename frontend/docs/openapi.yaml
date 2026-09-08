@@ -1,0 +1,1635 @@
+openapi: 3.0.3
+info:
+  title: WikiPulse Frontend API - Proposed Contract
+  version: 0.2.0-proposal
+  description: >-
+    프론트엔드 연동 제안이며 구현된 API가 아니다. 현재 앱은 mockData.js를 import하고 데이터 HTTP 요청을 보내지 않는다. 모든 수치, 뉴스, 가격, 관계는 합성
+    fixture다. asOf=2025-06-24, timezone=Asia/Seoul, daily chart=2025-06-01~24. 보관함은 localStorage 전용이며 로그인, 수집,
+    계산, 데이터베이스 설계는 범위 밖이다. 필터 후 정렬하고 slice(offset, offset+limit)를 적용한다. total은 페이지 자르기 전 수,
+    hasMore=offset+data.length<total이다. 결측 배열은 []이며 필수 편집 수치의 결측을 0으로 치환하지 않는다. 실제 관계 근거를 위한 provenance 확장은
+    API_SPEC.md에 별도로 명시했으며 현재 모델에 구현된 것이 아니다. 사건 토론의 예시 글, 입력 글, 답글, 공감은 현재 브라우저 상태와 localStorage에만 반영된다.
+    Discussion POST/PUT은 향후 연동용 명세이며 다른 사용자에게 실제 글을 전송하지 않는다. 고정 표시명 나 (데모)는 계정 인증 정보가 아니다.
+servers:
+  - url: /api/v1
+    description: 제안한 상대 base path. 서버 존재나 배포를 의미하지 않는다.
+tags:
+  - name: Catalog
+  - name: Events
+  - name: Entities
+  - name: Stocks
+  - name: Search
+  - name: Discussion
+    description: 현재 브라우저 전용 토론 UI와 향후 API 제안.
+paths:
+  /categories:
+    get:
+      operationId: listCategories
+      tags:
+        - Catalog
+      parameters: []
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CategoryResponse"
+          description: 제안 계약의 성공 응답. 현재 운영 중인 endpoint가 아니다.
+        "400":
+          $ref: "#/components/responses/InvalidQuery"
+        "500":
+          $ref: "#/components/responses/InternalError"
+      summary: 주제 목록
+      description: 6개 주제를 기본 카탈로그 순서로 반환한다. all은 실제 Category ID가 아니다.
+  /events:
+    get:
+      operationId: listEvents
+      tags:
+        - Events
+      parameters:
+        - $ref: "#/components/parameters/Q"
+        - name: category
+          in: query
+          required: false
+          schema:
+            type: string
+            enum:
+              - all
+              - geopolitics
+              - technology
+              - energy
+              - space
+              - materials
+              - security
+            default: all
+        - name: window
+          in: query
+          required: false
+          schema:
+            type: string
+            enum:
+              - 24h
+              - 3d
+              - 7d
+            default: 24h
+        - name: sort
+          in: query
+          required: false
+          schema:
+            type: string
+            enum:
+              - pulse
+              - recent
+              - documents
+            default: pulse
+        - $ref: "#/components/parameters/Offset"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EventListResponse"
+          description: 제안 계약의 성공 응답. 현재 운영 중인 endpoint가 아니다.
+        "400":
+          $ref: "#/components/responses/InvalidQuery"
+        "500":
+          $ref: "#/components/responses/InternalError"
+      summary: Pulse Map 및 사건 목록
+      description: >-
+        q는 title+summary+keywords 부분 일치. category로 필터. window의 최근 1/3/7개 일별 포인트에서 edits/baseline/pageviews를
+        합산하고 pulse를 구한다. editors는 기준일 문서별 합계를 유지하며 전체 chart도 원래 일별 값을 유지한다. sort=pulse는 pulse 내림차순, recent는
+        startAt 내림차순, documents는 articleIds 길이 내림차순. 동률은 카탈로그 순서. 모든 필터와 정렬 뒤 페이지를 적용한다.
+  /events/{eventId}:
+    get:
+      operationId: getEvent
+      tags:
+        - Events
+      parameters:
+        - $ref: "#/components/parameters/EventId"
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EventResponse"
+          description: 제안 계약의 성공 응답. 현재 운영 중인 endpoint가 아니다.
+        "400":
+          $ref: "#/components/responses/InvalidQuery"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+      summary: Event Brief 상세
+      description: >-
+        24h 기준일 지표, 전체 chart/timeline/news/insights와 articleIds/stockSymbols를 해석한 included 요약을 반환한다. 탭, 기준선,
+        차트 범위, 문서 선택은 로컬 표시 변경이다.
+  /events/{eventId}/news:
+    get:
+      operationId: listEventNews
+      tags:
+        - Events
+      parameters:
+        - $ref: "#/components/parameters/EventId"
+        - $ref: "#/components/parameters/Q"
+        - name: type
+          in: query
+          required: false
+          schema:
+            type: string
+            enum:
+              - all
+              - news
+              - official
+              - analysis
+            default: all
+        - $ref: "#/components/parameters/Offset"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NewsResponse"
+          description: 제안 계약의 성공 응답. 현재 운영 중인 endpoint가 아니다.
+        "400":
+          $ref: "#/components/responses/InvalidQuery"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+      summary: 사건 관련 소식 검색
+      description: >-
+        현재 Event.news를 로컬 필터하는 UI를 위한 독립 조회 제안. q 검색 대상은 title+source+summary, type별 필터 후 publishedAt 내림차순이다.
+        유형 칩 총수는 필터 전 Event.news 기준이다. 참고 URL은 합성 헤드라인의 실제 기사 원문이 아니다.
+  /entities:
+    get:
+      operationId: listEntities
+      tags:
+        - Entities
+      parameters:
+        - $ref: "#/components/parameters/Q"
+        - $ref: "#/components/parameters/Offset"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EntityListResponse"
+          description: 제안 계약의 성공 응답. 현재 운영 중인 endpoint가 아니다.
+        "400":
+          $ref: "#/components/responses/InvalidQuery"
+        "500":
+          $ref: "#/components/responses/InternalError"
+      summary: 문서 검색용 목록
+      description: q는 name+title 부분 일치, 기본 카탈로그 순서. 독립 문서 목록 화면은 없으며 기존 통합 검색 또는 문서 참조 획득용 제안이다.
+  /entities/{entityId}:
+    get:
+      operationId: getEntity
+      tags:
+        - Entities
+      parameters:
+        - $ref: "#/components/parameters/EntityId"
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EntityResponse"
+          description: 제안 계약의 성공 응답. 현재 운영 중인 endpoint가 아니다.
+        "400":
+          $ref: "#/components/responses/InvalidQuery"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+      summary: Wiki Intelligence 상세
+      description: >-
+        기준일 지표, 전체 chart와 changes. included.entities는 relatedIds, included.events는 eventIds에 대응한다. 7/14/전체 범위,
+        편집/조회 지표와 기준선 토글은 로컬이다.
+  /entities/{entityId}/changes:
+    get:
+      operationId: listEntityChanges
+      tags:
+        - Entities
+      parameters:
+        - $ref: "#/components/parameters/EntityId"
+        - $ref: "#/components/parameters/Q"
+        - $ref: "#/components/parameters/Offset"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RevisionResponse"
+          description: 제안 계약의 성공 응답. 현재 운영 중인 endpoint가 아니다.
+        "400":
+          $ref: "#/components/responses/InvalidQuery"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+      summary: 문서 변경 내역 검색 및 비교
+      description: >-
+        q 검색 대상은 section+summary만이며 time 내림차순이다. before/after가 포함되므로 별도 diff endpoint는 없다. 예시 id는 Wikipedia
+        oldid가 아니다.
+  /stocks:
+    get:
+      operationId: listStocks
+      tags:
+        - Stocks
+      parameters:
+        - $ref: "#/components/parameters/Q"
+        - name: sector
+          in: query
+          required: false
+          schema:
+            type: string
+            default: all
+        - name: eventId
+          in: query
+          required: false
+          schema:
+            type: string
+            minLength: 1
+        - name: relationType
+          in: query
+          required: false
+          schema:
+            type: string
+            enum:
+              - all
+              - direct
+              - industry
+              - supply
+              - region
+            default: all
+        - name: sort
+          in: query
+          required: false
+          schema:
+            type: string
+            enum:
+              - events
+              - name
+            default: events
+        - $ref: "#/components/parameters/Offset"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StockListResponse"
+          description: 제안 계약의 성공 응답. 현재 운영 중인 endpoint가 아니다.
+        "400":
+          $ref: "#/components/responses/InvalidQuery"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+      summary: 전체 또는 사건별 관련 종목
+      description: >-
+        q는 symbol+name+sector+description 부분 일치. sector는 정확히 일치. eventId 지정 시 stock.eventIds 또는
+        Event.stockSymbols로 연결된 집합을 사용하며 사건이 없으면 404. relationType은 eventId가 있을 때만 허용하고 동일 사건의 relation을 검사한다.
+        events 정렬은 eventIds 길이 내림차순 후 symbol 오름차순, name은 symbol 오름차순이다. savedOnly는 API 쿼리가 아닌 로컬 필터다.
+  /stocks/{symbol}:
+    get:
+      operationId: getStock
+      tags:
+        - Stocks
+      parameters:
+        - $ref: "#/components/parameters/Symbol"
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StockResponse"
+          description: 제안 계약의 성공 응답. 현재 운영 중인 endpoint가 아니다.
+        "400":
+          $ref: "#/components/responses/InvalidQuery"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+      summary: 종목 상세와 관련 사건
+      description: >-
+        전체 Stock과 eventIds에 대응하는 included.events를 반환한다. 관련 사건은 date 내림차순, 동률은 카탈로그 순서. 연결 유형과 가격 차트 범위는 로컬 표시
+        변경이다. 관계 경로는 실제 증거 객체나 인과관계가 아니다. 가격 차트 범위는 7/14/all이며 현재 전체는 24개 일별 포인트다. 세로축은 가격 범위로 확대해 표시한다.
+  /search:
+    get:
+      operationId: searchWorkspace
+      tags:
+        - Search
+      parameters:
+        - $ref: "#/components/parameters/Q"
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 7
+            default: 7
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SearchResponse"
+          description: 제안 계약의 성공 응답. 현재 운영 중인 endpoint가 아니다.
+        "400":
+          $ref: "#/components/responses/InvalidQuery"
+        "500":
+          $ref: "#/components/responses/InternalError"
+      summary: 사건·문서·종목 통합 검색
+      description: >-
+        빈 q는 빈 결과. 사건(title+사건+keywords) → 문서(name+title) → 종목(name+symbol) 순서의 카탈로그에서 부분 일치 후 앞 limit개를 반환한다.
+        관련도 정렬이나 페이지네이션은 없다. kind/id로 클라이언트가 URL, icon, DOM ID를 만든다.
+  /events/{eventId}/discussions:
+    get:
+      operationId: listEventDiscussions
+      tags:
+        - Discussion
+      summary: 사건 토론 목록
+      description: >-
+        현재 사건별 예시 3개와 브라우저 저장 글을 표시한다. 제안 조회는 최대 200개 Thread와 그 replies를 한 번에 반환한다. q/offset/limit 없음. latest는
+        createdAt 내림차순, popular는 likes 내림차순 후 createdAt 내림차순. 답글은 배열 순서. 모든 현재 동작은 로컬이며 다른 사용자에게 전송되지 않는다.
+      parameters:
+        - $ref: "#/components/parameters/EventId"
+        - name: sort
+          in: query
+          required: false
+          schema:
+            type: string
+            enum:
+              - latest
+              - popular
+            default: latest
+      responses:
+        "200":
+          description: 향후 연동용 성공 응답 제안. 현재 화면은 로컬 상태만 변경한다.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DiscussionListResponse"
+        "400":
+          $ref: "#/components/responses/InvalidQuery"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    post:
+      operationId: createEventDiscussion
+      tags:
+        - Discussion
+      summary: 사건 토론 작성 제안
+      description: >-
+        실제 POST 미구현. 현재 body.trim()을 1~1000 UTF-16 code unit로 검사하고 사건당 최대 200개 글을 브라우저에만 저장한다. 작성자는 나 (데모),
+        isOwn=true, isSeed=false, likes=0, liked=false, replies=[]. author/ID/작성 시각/공감 수는 요청 본문으로 받지 않는 제안이다.
+        새 글 후 입력을 비우고 최신순으로 전환한다. 한도 초과는 400 LIMIT_REACHED.
+      parameters:
+        - $ref: "#/components/parameters/EventId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DiscussionWriteRequest"
+            example:
+              body: 어떤 문서의 변화가 사건 연결을 설명하나요?
+      responses:
+        "201":
+          description: 향후 연동용 성공 응답 제안. 현재 화면은 로컬 상태만 변경한다.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DiscussionThreadResponse"
+        "400":
+          $ref: "#/components/responses/InvalidBody"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+  /events/{eventId}/discussions/{threadId}/replies:
+    post:
+      operationId: createDiscussionReply
+      tags:
+        - Discussion
+      summary: 토론 답글 작성 제안
+      description: >-
+        실제 POST 미구현. 현재 해당 글의 replies 끝에 로컬 답글을 추가하고 입력을 비운다. 글당 최대 200개, body 길이 규칙은 토론과 동일하다. 나 (데모),
+        isOwn=true, isSeed=false. 중첩 답글이나 답글 공감은 없다. 한도 초과는 400 LIMIT_REACHED.
+      parameters:
+        - $ref: "#/components/parameters/EventId"
+        - $ref: "#/components/parameters/ThreadId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DiscussionWriteRequest"
+            example:
+              body: 편집 전후의 설명과 참고 문서를 함께 비교해 보겠습니다.
+      responses:
+        "201":
+          description: 향후 연동용 성공 응답 제안. 현재 화면은 로컬 상태만 변경한다.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DiscussionReplyResponse"
+        "400":
+          $ref: "#/components/responses/InvalidBody"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+  /events/{eventId}/discussions/{threadId}/like:
+    put:
+      operationId: setDiscussionLike
+      tags:
+        - Discussion
+      summary: 토론 공감 상태 설정 제안
+      description: >-
+        실제 PUT 미구현. 현재 글의 로컬 liked를 토글하고 false→true는 likes+1, true→false는 likes-1로 반영한다. 제안 요청은 원하는 최종 liked
+        상태이므로 같은 값을 반복해 보내도 공감 수를 반복 증감하지 않는다. 음수 공감은 허용하지 않으며 작성 한도는 적용하지 않는다.
+      parameters:
+        - $ref: "#/components/parameters/EventId"
+        - $ref: "#/components/parameters/ThreadId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DiscussionLikeRequest"
+            example:
+              liked: true
+      responses:
+        "200":
+          description: 향후 연동용 성공 응답 제안. 현재 화면은 로컬 상태만 변경한다.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DiscussionThreadResponse"
+        "400":
+          $ref: "#/components/responses/InvalidBody"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+components:
+  parameters:
+    Q:
+      name: q
+      in: query
+      required: false
+      schema:
+        type: string
+        maxLength: 200
+        default: ""
+      description: 앞뒤 공백 제거 후 대소문자 무시 부분 일치. 검색 대상은 endpoint별 설명 참조. 200자 제한은 전송 계약 제안이다.
+    Offset:
+      name: offset
+      in: query
+      required: false
+      schema:
+        type: integer
+        minimum: 0
+        default: 0
+      description: 필터·정렬 후 건너뛸 개수. 범위 밖이면 빈 배열.
+    Limit:
+      name: limit
+      in: query
+      required: false
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 50
+      description: 필터·정렬 후 반환할 최대 개수.
+    EventId:
+      name: eventId
+      in: path
+      required: true
+      schema:
+        type: string
+        minLength: 1
+      example: iran-hormuz-2025
+      description: encodeURIComponent로 인코딩한 사건 slug.
+    EntityId:
+      name: entityId
+      in: path
+      required: true
+      schema:
+        type: string
+        minLength: 1
+      example: strait-of-hormuz
+      description: encodeURIComponent로 인코딩한 문서 slug. Wikipedia 제목 자체가 아니다.
+    Symbol:
+      name: symbol
+      in: path
+      required: true
+      schema:
+        type: string
+        minLength: 1
+      example: 012450.KS
+      description: 입력 대소문자를 구분하지 않고 suffix를 보존한다. encodeURIComponent로 인코딩한다.
+    ThreadId:
+      name: threadId
+      in: path
+      required: true
+      description: encodeURIComponent로 인코딩한 해당 사건의 토론 글 ID.
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 120
+  responses:
+    InvalidQuery:
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            error:
+              code: INVALID_QUERY
+              details:
+                - field: window
+                  reason: unsupported_value
+              message: window 값은 24h, 3d, 7d 중 하나여야 합니다.
+      description: 쿼리 enum, 범위, 길이, 중복 또는 미정의 키 오류.
+    NotFound:
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            error:
+              code: NOT_FOUND
+              details: []
+              message: 대상을 찾을 수 없습니다.
+      description: 사건, 문서 또는 종목이 존재하지 않음.
+    InternalError:
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            error:
+              code: INTERNAL_ERROR
+              details: []
+              message: 데이터를 불러오지 못했습니다.
+      description: 조회 실패. HTTP 재시도는 향후 연동 범위.
+    InvalidBody:
+      description: 공백을 제외한 내용을 1~1,000자로 입력해 주세요.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            error:
+              code: INVALID_BODY
+              message: 공백을 제외한 내용을 1~1,000자로 입력해 주세요.
+              details: []
+    LimitReached:
+      description: 이 데모에서 허용한 작성 개수에 도달했습니다.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            error:
+              code: LIMIT_REACHED
+              message: 이 데모에서 허용한 작성 개수에 도달했습니다.
+              details: []
+  schemas:
+    CategoryId:
+      type: string
+      enum:
+        - geopolitics
+        - technology
+        - energy
+        - space
+        - materials
+        - security
+    Category:
+      type: object
+      required:
+        - id
+        - label
+        - color
+      properties:
+        id:
+          $ref: "#/components/schemas/CategoryId"
+        label:
+          type: string
+        color:
+          type: string
+          pattern: ^#[0-9a-fA-F]{6}$
+    ActivityPoint:
+      type: object
+      required:
+        - date
+        - edits
+        - baseline
+        - pageviews
+      properties:
+        date:
+          type: string
+          format: date
+        edits:
+          type: integer
+          minimum: 0
+        baseline:
+          type: integer
+          minimum: 1
+        pageviews:
+          type: integer
+          minimum: 0
+    PricePoint:
+      type: object
+      required:
+        - date
+        - price
+      properties:
+        date:
+          type: string
+          format: date
+        price:
+          type: number
+          minimum: 0
+    TimelineEntry:
+      type: object
+      required:
+        - id
+        - time
+        - title
+        - body
+        - kind
+        - entityId
+      properties:
+        id:
+          type: string
+        time:
+          type: string
+          format: date-time
+        title:
+          type: string
+        body:
+          type: string
+        kind:
+          type: string
+          enum:
+            - signal
+            - news
+            - context
+        entityId:
+          type: string
+          nullable: true
+    NewsItem:
+      type: object
+      required:
+        - id
+        - title
+        - source
+        - publishedAt
+        - type
+        - url
+        - summary
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        source:
+          type: string
+          description: 현재 값은 데모 뉴스 / 기관 발표 예시 / 데모 분석.
+        publishedAt:
+          type: string
+          format: date-time
+        type:
+          type: string
+          enum:
+            - news
+            - official
+            - analysis
+        url:
+          type: string
+          format: uri
+          nullable: true
+          description: 주제를 읽는 참고 URL. 합성 제목을 뒷받침하는 기사 주소가 아니다.
+        summary:
+          type: string
+    Insight:
+      type: object
+      required:
+        - title
+        - body
+      properties:
+        title:
+          type: string
+        body:
+          type: string
+    Revision:
+      type: object
+      required:
+        - id
+        - time
+        - editor
+        - section
+        - before
+        - after
+        - summary
+        - delta
+      properties:
+        id:
+          type: string
+          description: 실제 Wikipedia revision ID가 아닌 예시 ID.
+        time:
+          type: string
+          format: date-time
+        editor:
+          type: string
+          description: 가상 편집자 표시명.
+        section:
+          type: string
+        before:
+          type: string
+          description: 발췌 설명. 빈 문자열은 이전 내용 없음.
+        after:
+          type: string
+          description: 발췌 설명. 빈 문자열은 내용 삭제.
+        summary:
+          type: string
+        delta:
+          type: integer
+          description: 글자 수 증감 예시. 음수 가능. 발췌 문자열 길이 차이나 bytes가 아니다.
+    StockRelation:
+      type: object
+      required:
+        - eventId
+        - type
+        - strength
+        - explanation
+        - path
+      properties:
+        eventId:
+          type: string
+        type:
+          type: string
+          enum:
+            - direct
+            - industry
+            - supply
+            - region
+        strength:
+          type: string
+          enum:
+            - high
+            - medium
+          description: 예시 연결 강도. relation type, 직접 거래 또는 검증 결과와 다른 축.
+        explanation:
+          type: string
+        path:
+          type: array
+          items:
+            type: string
+            description: 설명용 문자열. 리소스 ID나 근거 원문이 아니다.
+    EventSummary:
+      type: object
+      required:
+        - id
+        - title
+        - summary
+        - category
+        - status
+        - date
+        - startAt
+        - updatedAt
+        - edits
+        - baseline
+        - pulse
+        - editors
+        - pageviews
+        - articleIds
+        - stockSymbols
+        - keywords
+        - chart
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        summary:
+          type: string
+        category:
+          $ref: "#/components/schemas/CategoryId"
+        status:
+          type: string
+          enum:
+            - rising
+            - sustained
+            - cooling
+        date:
+          type: string
+          format: date
+        startAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        edits:
+          type: integer
+          minimum: 0
+          description: 편집 횟수. 사건은 포함 문서의 합계.
+        baseline:
+          type: integer
+          minimum: 1
+          description: 같은 기간의 비교용 편집 횟수. 합성 값이며 실제 28일 평균이 아니다.
+        pulse:
+          type: number
+          minimum: 0
+          description: round(edits / baseline, 1). 단위는 배수이며 %가 아니다.
+        editors:
+          type: integer
+          minimum: 0
+          description: 기준일 문서별 편집자 수의 단순 합계. 문서 간 중복 제거 인원 및 3일·7일 고유 편집자 수가 아니다.
+        pageviews:
+          type: integer
+          minimum: 0
+          description: 조회 횟수. 고유 방문자 수가 아니다.
+        articleIds:
+          type: array
+          items:
+            type: string
+        stockSymbols:
+          type: array
+          items:
+            type: string
+        keywords:
+          type: array
+          items:
+            type: string
+        chart:
+          type: array
+          items:
+            $ref: "#/components/schemas/ActivityPoint"
+      description: Event에서 timeline/news/insights를 제외한 응답 projection. chart는 지도 미리보기에 필요하다.
+    Event:
+      allOf:
+        - $ref: "#/components/schemas/EventSummary"
+        - type: object
+          required:
+            - timeline
+            - news
+            - insights
+          properties:
+            timeline:
+              type: array
+              items:
+                $ref: "#/components/schemas/TimelineEntry"
+            news:
+              type: array
+              items:
+                $ref: "#/components/schemas/NewsItem"
+            insights:
+              type: array
+              items:
+                $ref: "#/components/schemas/Insight"
+      example:
+        id: iran-hormuz-2025
+        title: 호르무즈 해협, 에너지 공급망으로 번지는 관심
+        summary: 호르무즈 해협·이란·석유 문서의 편집이 함께 늘었습니다. 해상 운송에서 에너지 공급망까지 연결되는 맥락을 살펴보세요.
+        category: geopolitics
+        status: rising
+        startAt: "2025-06-18T08:40:00+09:00"
+        updatedAt: "2025-06-24T11:42:00+09:00"
+        articleIds:
+          - strait-of-hormuz
+          - iran
+          - petroleum
+        stockSymbols:
+          - XOM
+        keywords:
+          - 호르무즈 해협
+          - 해상 운송
+          - 원유
+          - 공급망
+        timeline:
+          - id: hormuz-1
+            time: "2025-06-24T11:42:00+09:00"
+            title: 운송 맥락으로 문서 연결 확대
+            body: 석유 문서의 운송 항목과 해협 문서의 항로 항목을 함께 읽을 수 있도록 구성한 예시입니다.
+            kind: context
+            entityId: petroleum
+          - id: hormuz-2
+            time: "2025-06-24T09:20:00+09:00"
+            title: 에너지 운송 관점의 뉴스 카드 추가
+            body: 원유 운송 경로를 설명하는 가상 뉴스 카드가 사건 맥락에 포함되었습니다.
+            kind: news
+            entityId: strait-of-hormuz
+          - id: hormuz-3
+            time: "2025-06-23T14:35:00+09:00"
+            title: 세 문서에서 함께 커지는 편집 흐름
+            body: 해협·국가·원자재 문서의 활동량이 같은 구간에 높아지는 데모 신호입니다.
+            kind: signal
+            entityId: iran
+          - id: hormuz-4
+            time: "2025-06-18T08:40:00+09:00"
+            title: 호르무즈 해협의 첫 편집 상승
+            body: 기준선과 비교한 편집량 변화가 사건 후보의 출발점이 되었습니다.
+            kind: signal
+            entityId: strait-of-hormuz
+        news:
+          - id: hormuz-news-1
+            title: 호르무즈 해협을 통해 읽는 원유 운송 경로
+            source: 데모 뉴스
+            publishedAt: "2025-06-24T09:20:00+09:00"
+            type: news
+            url: https://en.wikipedia.org/wiki/Strait_of_Hormuz
+            summary: "가상 기사 요약: 주요 항로와 주변 해역을 연결해 에너지 운송의 구조를 설명합니다. 링크는 주제 참고 문서입니다."
+          - id: hormuz-news-2
+            title: 해상 교역 지표를 확인하는 방법
+            source: 기관 발표 예시
+            publishedAt: "2025-06-23T16:10:00+09:00"
+            type: official
+            url: https://en.wikipedia.org/wiki/Maritime_transport
+            summary: 기관 자료 형식을 보여 주는 예시입니다. 통항량·운송량·집계 시점을 각각 확인하도록 구성했습니다.
+          - id: hormuz-news-3
+            title: 지역 이슈와 에너지 기업 사이의 연결 고리
+            source: 데모 분석
+            publishedAt: "2025-06-23T11:30:00+09:00"
+            type: analysis
+            url: https://en.wikipedia.org/wiki/Petroleum_industry
+            summary: "가상 분석: 정유·생산·운송 사업은 서로 다른 맥락을 가집니다. 이 연결만으로 가격 방향을 판단할 수는 없습니다."
+        insights:
+          - title: 한 문서의 급증에서 함께 움직이는 주제로
+            body: 해협 문서의 활동과 이란·석유 문서의 동시 변화를 함께 보여 줍니다. 데모 편집량을 합산한 Pulse로 사건의 관심도를 비교할 수 있습니다.
+          - title: 해상 운송을 따라 에너지 산업으로
+            body: 호르무즈 해협 → 원유 운송 → 에너지 기업의 순서로 탐색합니다. 기업 연결은 산업 맥락의 예시이며 수익·가격 영향은 포함하지 않습니다.
+          - title: 다음으로 확인할 맥락
+            body: 편집 변경 내용, 각 문서의 기준선, 기사 카드의 시점을 순서대로 살펴보세요. 같은 시간에 편집이 늘었다는 사실과 그 이유에 대한 해석은 구분합니다.
+        date: "2025-06-24"
+        edits: 824
+        baseline: 98
+        pulse: 8.4
+        editors: 190
+        pageviews: 501830
+        chart:
+          - date: "2025-06-01"
+            edits: 105
+            baseline: 98
+            pageviews: 161588
+          - date: "2025-06-02"
+            edits: 128
+            baseline: 98
+            pageviews: 174948
+          - date: "2025-06-03"
+            edits: 98
+            baseline: 98
+            pageviews: 154932
+          - date: "2025-06-04"
+            edits: 130
+            baseline: 98
+            pageviews: 168611
+          - date: "2025-06-05"
+            edits: 115
+            baseline: 98
+            pageviews: 169640
+          - date: "2025-06-06"
+            edits: 132
+            baseline: 98
+            pageviews: 179175
+          - date: "2025-06-07"
+            edits: 108
+            baseline: 98
+            pageviews: 162816
+          - date: "2025-06-08"
+            edits: 135
+            baseline: 98
+            pageviews: 169774
+          - date: "2025-06-09"
+            edits: 111
+            baseline: 98
+            pageviews: 156851
+          - date: "2025-06-10"
+            edits: 129
+            baseline: 98
+            pageviews: 173353
+          - date: "2025-06-11"
+            edits: 162
+            baseline: 98
+            pageviews: 191144
+          - date: "2025-06-12"
+            edits: 131
+            baseline: 98
+            pageviews: 170345
+          - date: "2025-06-13"
+            edits: 162
+            baseline: 98
+            pageviews: 183868
+          - date: "2025-06-14"
+            edits: 197
+            baseline: 98
+            pageviews: 209833
+          - date: "2025-06-15"
+            edits: 184
+            baseline: 98
+            pageviews: 204058
+          - date: "2025-06-16"
+            edits: 251
+            baseline: 98
+            pageviews: 229990
+          - date: "2025-06-17"
+            edits: 278
+            baseline: 98
+            pageviews: 237376
+          - date: "2025-06-18"
+            edits: 309
+            baseline: 98
+            pageviews: 249762
+          - date: "2025-06-19"
+            edits: 346
+            baseline: 98
+            pageviews: 279234
+          - date: "2025-06-20"
+            edits: 462
+            baseline: 98
+            pageviews: 332867
+          - date: "2025-06-21"
+            edits: 539
+            baseline: 98
+            pageviews: 363020
+          - date: "2025-06-22"
+            edits: 600
+            baseline: 98
+            pageviews: 389838
+          - date: "2025-06-23"
+            edits: 711
+            baseline: 98
+            pageviews: 459037
+          - date: "2025-06-24"
+            edits: 824
+            baseline: 98
+            pageviews: 501830
+    EntitySummary:
+      type: object
+      required:
+        - id
+        - title
+        - name
+        - description
+        - category
+        - edits
+        - baseline
+        - pulse
+        - editors
+        - pageviews
+        - eventIds
+        - relatedIds
+      properties:
+        id:
+          type: string
+          description: 문서 slug. Wikipedia 제목이 아니다.
+        title:
+          type: string
+          description: 영문 Wikipedia 제목.
+        name:
+          type: string
+        description:
+          type: string
+        category:
+          $ref: "#/components/schemas/CategoryId"
+        edits:
+          type: integer
+          minimum: 0
+          description: 편집 횟수. 사건은 포함 문서의 합계.
+        baseline:
+          type: integer
+          minimum: 1
+          description: 같은 기간의 비교용 편집 횟수. 합성 값이며 실제 28일 평균이 아니다.
+        pulse:
+          type: number
+          minimum: 0
+          description: round(edits / baseline, 1). 단위는 배수이며 %가 아니다.
+        editors:
+          type: integer
+          minimum: 0
+          description: 문서의 기준일 편집자 수 예시.
+        pageviews:
+          type: integer
+          minimum: 0
+          description: 조회 횟수. 고유 방문자 수가 아니다.
+        eventIds:
+          type: array
+          items:
+            type: string
+        relatedIds:
+          type: array
+          items:
+            type: string
+      description: Entity에서 chart와 changes를 제외한 응답 projection.
+    Entity:
+      allOf:
+        - $ref: "#/components/schemas/EntitySummary"
+        - type: object
+          required:
+            - chart
+            - changes
+          properties:
+            chart:
+              type: array
+              items:
+                $ref: "#/components/schemas/ActivityPoint"
+            changes:
+              type: array
+              items:
+                $ref: "#/components/schemas/Revision"
+    StockSummary:
+      type: object
+      required:
+        - symbol
+        - name
+        - market
+        - currency
+        - sector
+        - description
+        - price
+        - change
+        - eventIds
+        - relations
+      properties:
+        symbol:
+          type: string
+          description: suffix를 보존한 종목 식별자. 응답은 대문자.
+        name:
+          type: string
+        market:
+          type: string
+          enum:
+            - NYSE
+            - NASDAQ
+            - KRX
+        currency:
+          type: string
+          enum:
+            - USD
+            - KRW
+        sector:
+          type: string
+        description:
+          type: string
+        price:
+          type: number
+          minimum: 0
+          nullable: true
+          description: currency 단위의 예시 가격. null이면 — 표시.
+        change:
+          type: number
+          nullable: true
+          description: 이전 예시 가격 포인트 대비 퍼센트 값. 1.26은 1.26%.
+        eventIds:
+          type: array
+          items:
+            type: string
+        relations:
+          type: array
+          items:
+            $ref: "#/components/schemas/StockRelation"
+      description: Stock에서 chart만 제외한 응답 projection. 관계 설명은 목록에서도 필요하다.
+    Stock:
+      allOf:
+        - $ref: "#/components/schemas/StockSummary"
+        - type: object
+          required:
+            - chart
+          properties:
+            chart:
+              type: array
+              items:
+                $ref: "#/components/schemas/PricePoint"
+    SearchResult:
+      type: object
+      required:
+        - kind
+        - id
+        - title
+        - detail
+      properties:
+        kind:
+          type: string
+          enum:
+            - event
+            - entity
+            - stock
+        id:
+          type: string
+          description: 원본 event.id, entity.id 또는 stock.symbol.
+        title:
+          type: string
+        detail:
+          type: string
+    Pagination:
+      type: object
+      required:
+        - offset
+        - limit
+        - total
+        - hasMore
+      properties:
+        offset:
+          type: integer
+          minimum: 0
+        limit:
+          type: integer
+          minimum: 1
+          maximum: 100
+        total:
+          type: integer
+          minimum: 0
+          description: 필터·정렬 후, 페이지 자르기 전 결과 수.
+        hasMore:
+          type: boolean
+    Meta:
+      type: object
+      required:
+        - dataMode
+        - asOf
+        - timezone
+        - availableRange
+        - window
+      properties:
+        dataMode:
+          type: string
+          enum:
+            - mock
+          description: 이 계약은 합성 fixture만 표현한다.
+        asOf:
+          type: string
+          format: date
+          example: "2025-06-24"
+        timezone:
+          type: string
+          enum:
+            - Asia/Seoul
+        availableRange:
+          type: object
+          required:
+            - from
+            - to
+            - interval
+          properties:
+            from:
+              type: string
+              format: date
+            to:
+              type: string
+              format: date
+            interval:
+              type: string
+              enum:
+                - day
+        window:
+          type: string
+          enum:
+            - 24h
+            - 3d
+            - 7d
+          description: 주요 편집 지표 기간. 사건 목록 외에는 24h.
+    PageMeta:
+      allOf:
+        - $ref: "#/components/schemas/Meta"
+        - type: object
+          required:
+            - pagination
+          properties:
+            pagination:
+              $ref: "#/components/schemas/Pagination"
+    ErrorResponse:
+      type: object
+      required:
+        - error
+      properties:
+        error:
+          type: object
+          required:
+            - code
+            - message
+            - details
+          properties:
+            code:
+              type: string
+              enum:
+                - INVALID_QUERY
+                - NOT_FOUND
+                - INTERNAL_ERROR
+                - INVALID_BODY
+                - LIMIT_REACHED
+            message:
+              type: string
+            details:
+              type: array
+              items:
+                type: object
+                required:
+                  - field
+                  - reason
+                properties:
+                  field:
+                    type: string
+                  reason:
+                    type: string
+    CategoryResponse:
+      type: object
+      required:
+        - data
+        - meta
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Category"
+        meta:
+          $ref: "#/components/schemas/Meta"
+    EventListResponse:
+      type: object
+      required:
+        - data
+        - included
+        - meta
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/EventSummary"
+        included:
+          type: object
+          required:
+            - entities
+          properties:
+            entities:
+              type: array
+              items:
+                $ref: "#/components/schemas/EntitySummary"
+        meta:
+          $ref: "#/components/schemas/PageMeta"
+    EventResponse:
+      type: object
+      required:
+        - data
+        - included
+        - meta
+      properties:
+        data:
+          $ref: "#/components/schemas/Event"
+        included:
+          type: object
+          required:
+            - entities
+            - stocks
+          properties:
+            entities:
+              type: array
+              items:
+                $ref: "#/components/schemas/EntitySummary"
+            stocks:
+              type: array
+              items:
+                $ref: "#/components/schemas/StockSummary"
+        meta:
+          $ref: "#/components/schemas/Meta"
+    NewsResponse:
+      type: object
+      required:
+        - data
+        - meta
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/NewsItem"
+        meta:
+          $ref: "#/components/schemas/PageMeta"
+    EntityListResponse:
+      type: object
+      required:
+        - data
+        - meta
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/EntitySummary"
+        meta:
+          $ref: "#/components/schemas/PageMeta"
+    EntityResponse:
+      type: object
+      required:
+        - data
+        - included
+        - meta
+      properties:
+        data:
+          $ref: "#/components/schemas/Entity"
+        included:
+          type: object
+          required:
+            - entities
+            - events
+          properties:
+            entities:
+              type: array
+              items:
+                $ref: "#/components/schemas/EntitySummary"
+            events:
+              type: array
+              items:
+                $ref: "#/components/schemas/EventSummary"
+        meta:
+          $ref: "#/components/schemas/Meta"
+    RevisionResponse:
+      type: object
+      required:
+        - data
+        - meta
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Revision"
+        meta:
+          $ref: "#/components/schemas/PageMeta"
+    StockListResponse:
+      type: object
+      required:
+        - data
+        - included
+        - meta
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/StockSummary"
+        included:
+          type: object
+          required:
+            - events
+          properties:
+            events:
+              type: array
+              items:
+                $ref: "#/components/schemas/EventSummary"
+        meta:
+          $ref: "#/components/schemas/PageMeta"
+    StockResponse:
+      type: object
+      required:
+        - data
+        - included
+        - meta
+      properties:
+        data:
+          $ref: "#/components/schemas/Stock"
+        included:
+          type: object
+          required:
+            - events
+          properties:
+            events:
+              type: array
+              items:
+                $ref: "#/components/schemas/EventSummary"
+        meta:
+          $ref: "#/components/schemas/Meta"
+    SearchResponse:
+      type: object
+      required:
+        - data
+        - meta
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/SearchResult"
+        meta:
+          $ref: "#/components/schemas/Meta"
+    DiscussionReply:
+      type: object
+      required:
+        - id
+        - author
+        - body
+        - createdAt
+        - isOwn
+        - isSeed
+      properties:
+        id:
+          type: string
+          maxLength: 120
+        author:
+          type: string
+          maxLength: 80
+          description: 현재 고정 예시 작성자 또는 나 (데모). 계정 인증 정보가 아니다.
+        body:
+          type: string
+          minLength: 1
+          maxLength: 1000
+          pattern: \S
+          description: 앞뒤 공백 제거 후 1~1000 UTF-16 code unit. 일반 텍스트이며 HTML이 아니다.
+          x-length-unit: utf16-code-units
+        createdAt:
+          type: string
+          format: date-time
+          description: 예시는 2025-06-24, 사용자 로컬 입력은 브라우저 현재 ISO 시각. 사건 asOf 이후일 수 있다.
+        isOwn:
+          type: boolean
+          description: 내 브라우저 작성 표시. 권한이나 신원 증명이 아니다.
+        isSeed:
+          type: boolean
+          description: 기본 예시 글/답글 여부.
+    DiscussionThread:
+      allOf:
+        - $ref: "#/components/schemas/DiscussionReply"
+        - type: object
+          required:
+            - likes
+            - liked
+            - replies
+          properties:
+            likes:
+              type: integer
+              minimum: 0
+            liked:
+              type: boolean
+              description: 이 브라우저의 공감 여부.
+            replies:
+              type: array
+              maxItems: 200
+              items:
+                $ref: "#/components/schemas/DiscussionReply"
+      example:
+        id: discussion-example-user-1
+        author: 나 (데모)
+        body: 어떤 문서의 변화가 사건 연결을 설명하나요?
+        createdAt: "2026-09-07T05:12:00Z"
+        isOwn: true
+        isSeed: false
+        likes: 0
+        liked: false
+        replies: []
+    DiscussionWriteRequest:
+      type: object
+      required:
+        - body
+      properties:
+        body:
+          type: string
+          minLength: 1
+          maxLength: 1000
+          pattern: \S
+          description: 앞뒤 공백 제거 후 1~1000 UTF-16 code unit. 일반 텍스트이며 HTML이 아니다.
+          x-length-unit: utf16-code-units
+      additionalProperties: false
+    DiscussionLikeRequest:
+      type: object
+      required:
+        - liked
+      properties:
+        liked:
+          type: boolean
+      additionalProperties: false
+    DiscussionListResponse:
+      type: object
+      required:
+        - data
+        - meta
+      properties:
+        data:
+          type: array
+          maxItems: 200
+          items:
+            $ref: "#/components/schemas/DiscussionThread"
+        meta:
+          $ref: "#/components/schemas/Meta"
+    DiscussionThreadResponse:
+      type: object
+      required:
+        - data
+        - meta
+      properties:
+        data:
+          $ref: "#/components/schemas/DiscussionThread"
+        meta:
+          $ref: "#/components/schemas/Meta"
+    DiscussionReplyResponse:
+      type: object
+      required:
+        - data
+        - meta
+      properties:
+        data:
+          $ref: "#/components/schemas/DiscussionReply"
+        meta:
+          $ref: "#/components/schemas/Meta"
