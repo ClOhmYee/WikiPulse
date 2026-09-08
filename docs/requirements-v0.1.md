@@ -116,6 +116,25 @@ RDB는 PostgreSQL 하나다. MySQL을 따로 두지 않는다 — pgvector 때�
 
 후보 생성과 검증을 나눈다.
 
+### 6.1 이슈 대표 텍스트 (2026-09-08 확정)
+
+클러스터는 문서 여러 개인데 임베딩·LLM 입력은 글 한 덩이여야 한다. 그 변환 규칙:
+
+```
+{문서 제목}: {도입부 앞 N문장}
+{문서 제목}: {도입부 앞 N문장}
+...
+```
+
+- N = 클러스터 문서가 1개면 6, 2~3개면 4, 4개 이상이면 2. 전체 상한 2,000자
+- 문서 순서는 급등도(`pulse_score`) 내림차순
+- 출처는 Wikipedia API `prop=extracts&exintro&explaintext`, 리다이렉트를 따라간다
+- 🔴 **텍스트는 영어로 유지한다.** 종목 설명이 영어라 이슈 텍스트를 한국어로 만들면 언어 불일치만으로 코사인이 절반이 된다 (정답 평균 0.160 → 0.081, 11번). 사용자에게 보여줄 한국어 문장은 LLM 검증 단계에서 따로 만든다.
+
+~~LLM 한 번 호출해 이슈를 요약한 뒤 그것을 임베딩~~ → **채택하지 않는다** (2026-09-08). 랭킹 품질이 나열 방식과 동률인데 호출 1회와 4~6초가 붙고, 조용히 틀리는 실패 모드 셋이 실측됐다: ① 프롬프트 언어를 따라가 한국어 요약이 나오면 코사인 반토막 ② 정보가 부족하면 "설명할 수 없다"는 거부 문장이 그대로 임베딩됨 ③ 입력에 없는 사건을 지어냄. 근거는 `test/issue-text-poc/RESULT.md`.
+
+### 6.2 후보 생성과 검증
+
 - **후보 (recall)** — 두 경로의 합집합:
   - (a) 이슈 임베딩 ↔ 종목 임베딩 코사인 Top-K. pgvector 한 쿼리. 설명서에 그 리스크가 적힌 종목을 잡는다 (보험사, 에너지 인프라)
   - (b) GDELT 동시 출현 lift 상위. 이슈 기간 기사에서 기관명을 뽑아 종목 마스터와 조인. 설명엔 없는 2차 효과를 잡는다 (플로리다 전력, 발전기, 항공 결항)
@@ -190,13 +209,14 @@ RAM 16 GB에서 Kafka + Spark + HDFS 데몬을 올리면 Spark executor 몫은 8
 | GDELT lift, Milton | I=`HURRICANE ∧ florida` 10,707건. FPL 10.5 · Generac 9.3 · Duke 8.4 · Publix 7.0 · United 6.3 · Disney 4.7 · Nvidia 0.4 · MSFT 0.3 | 2026-09-07 |
 | GDELT lift, Iran | I=`iran` 35% → 석유 메이저 0.5 / I=`iran ∧ ENV_OIL` 6% → Chevron 3.6 · Exxon 2.6 | 2026-09-07 |
 | 임베딩 vs GDELT 후보 교집합 | 풀 S&P 500, 이슈=위키 intro. **`text-embedding-3-small`(GATEWAY)**: Milton K=10/20/30 → 1/1/3개, Iran+Hormuz → 2/4/5개, Jaccard ≤0.11. 로컬 MiniLM도 같은 범위(0/1/3, 1/3/3). 임베딩 Top-20에 NEE·Home Depot·Lennar·Eaton·Generac(정답)과 Monster Beverage·Intel·Nike(노이즈)가 섞임, 코사인 0.17~0.30. GDELT Top-20은 NEE·Duke·Generac·Mosaic·Progressive·Allstate·United·Disney — 정답 밀도 높음 | 2026-09-07 |
+| 이슈 대표 텍스트 방식 비교 | 클러스터 3건(Milton·Hormuz·Nvidia) × 종목 32개(정답 20 + 노이즈 12). 대표문서 도입부 / 제목+요약 나열 / LLM 요약 / 문서수 적응 나열의 정답 평균순위가 각각 10.6·10.5·11.0·10.5(Milton), 6.6·7.8·6.9·7.8(Hormuz), 4.0·5.0·3.3·4.0(Nvidia)로 **사실상 동률**. LLM 요약은 한국어로 생성 시 정답 평균 코사인 0.160 → 0.081로 반토막, 단일 문서에서 거부 응답이 그대로 임베딩됨. 정답-노이즈 분리도는 사건형 +0.05~0.15 / 기업형 +0.26 — 임베딩 단독이 사건형에 약하다는 §6 전제와 일치 | 2026-09-08 |
 | 위키 링크 그래프 → 상장기업 | Hormuz 1,358 이웃 중 0 · Milton 3 · Iran 4 · Nvidia 507(목록 문서 노이즈) | 2026-09-04 |
 | Wikidata 티커 | `wdt:P249` 40건 / `p:P414 → pq:P249` 15,875건 / NYSE+NASDAQ 3,905 | 2026-09-04 |
 | Wikimedia 덤프 | pageview_complete 일 user 677 MB bz2 · mediawiki_history enwiki 월 520~585 MB · clickstream enwiki 월 471 MB | 2026-09-04 |
 | 서버 | t3.xlarge × 2, 4 vCPU / 16 GB / 309 GB | 2026-09-04 |
 | GATEWAY 게이트웨이 | `https://llm-gateway.example.com/{원래 호스트}/…` 경로 프록시. OpenAI 임베딩·responses, **Anthropic messages + web_search 서버 도구** 전부 HTTP 200 | 2026-09-07 |
 
-재현 스크립트는 세션 스크래치패드에 있고 저장소엔 아직 없다.
+재현 스크립트는 아직 대부분 저장소 밖에 있다 (WP-53). 이슈 대표 텍스트 비교만 `test/issue-text-poc/`에 들어와 있다.
 
 ## 12. 변경 이력
 
