@@ -25,3 +25,11 @@ desktop.ini
 *.log
 logs/
 tmp/
+
+# Python 가상환경
+.venv/
+venv/
+
+# pytest / Spark
+.pytest_cache/
+spark-warehouse/

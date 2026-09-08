@@ -1,0 +1,6 @@
+# 프로듀서 실행용. Spark 잡은 컨테이너 이미지의 pyspark 를 쓴다.
+confluent-kafka==2.6.1
+requests==2.32.3
+
+# 개발용
+pytest==8.3.4
