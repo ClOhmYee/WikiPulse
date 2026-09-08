@@ -1,0 +1,5 @@
+# 스키마 테스트용. Docker 없이 PostgreSQL + pgvector 를 띄운다.
+# pgserver 가 PostgreSQL 바이너리를 번들로 들고 있다.
+pgserver==0.1.4
+psycopg[binary]==3.3.5
+pytest==8.3.4
