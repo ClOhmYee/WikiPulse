@@ -28,9 +28,14 @@ EventStreams (SSE)              Kafka                    Spark Structured Stream
 
 ### 1. 파이썬 환경
 
-🔴 **Python 3.11 을 쓴다.** PySpark 3.5 는 3.13 을 지원하지 않는다 — executor 가
-`Python worker exited unexpectedly (crashed)` 로 죽는데 스택트레이스에 버전
-얘기가 없어서 원인 찾기 어렵다.
+🔴 **Python 3.11 을 쓴다.** PySpark 3.5 가 지원하는 건 3.8~3.11 이다. 그보다 높은
+버전에서는 executor 가 `Python worker exited unexpectedly (crashed)` 로 죽는데,
+스택트레이스에 버전 얘기가 없어서 원인 찾기 어렵다. 2026-09-08 에 3.13.12 로
+만든 venv 에서 실제로 겪었다.
+
+⚠️ **시스템 기본 파이썬으로 venv 를 만들면 이 함정에 걸린다.** 이 프로젝트를
+확인한 PC 는 `python` 이 3.14.6, conda 가 3.13.12 였다. 둘 다 못 쓴다.
+아래처럼 3.11 을 명시해서 만든다.
 
 ```bash
 cd data-pipeline
