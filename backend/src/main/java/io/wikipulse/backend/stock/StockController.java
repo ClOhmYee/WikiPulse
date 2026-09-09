@@ -1,15 +1,19 @@
 package io.wikipulse.backend.stock;
 
+import io.wikipulse.backend.common.ApiResponse;
 import io.wikipulse.backend.issue.dto.IssueCardResponse;
+import io.wikipulse.backend.stock.dto.StockCardResponse;
 import io.wikipulse.backend.stock.dto.StockResponse;
 import java.util.List;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+/** 종목. API 명세 v0.1 §4. */
 @RestController
-@RequestMapping("/api/stocks")
+@RequestMapping("/api/v1/stocks")
 public class StockController {
 
     private final StockService service;
@@ -18,15 +22,27 @@ public class StockController {
         this.service = service;
     }
 
-    /** GET /api/stocks/{ticker} */
+    /** GET /api/v1/stocks?q=&sector=&exchange=&hasIssues=&offset=&limit= */
+    @GetMapping
+    public ApiResponse<List<StockCardResponse>> search(
+            @RequestParam(required = false) String q,
+            @RequestParam(required = false) String sector,
+            @RequestParam(required = false) String exchange,
+            @RequestParam(required = false, defaultValue = "false") boolean hasIssues,
+            @RequestParam(required = false) Integer offset,
+            @RequestParam(required = false) Integer limit) {
+        return service.search(q, sector, exchange, hasIssues, offset, limit);
+    }
+
+    /** GET /api/v1/stocks/{ticker} */
     @GetMapping("/{ticker}")
-    public StockResponse get(@PathVariable String ticker) {
+    public ApiResponse<StockResponse> get(@PathVariable String ticker) {
         return service.get(ticker);
     }
 
-    /** GET /api/stocks/{ticker}/issues — 이 종목이 걸린 이슈들 */
+    /** GET /api/v1/stocks/{ticker}/issues */
     @GetMapping("/{ticker}/issues")
-    public List<IssueCardResponse> issues(@PathVariable String ticker) {
+    public ApiResponse<List<IssueCardResponse>> issues(@PathVariable String ticker) {
         return service.issuesFor(ticker);
     }
 }

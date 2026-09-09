@@ -26,6 +26,9 @@ public class Stock {
     @Column(name = "exchange", nullable = false)
     private String exchange;
 
+    @Column(name = "cik")
+    private String cik;
+
     @Column(name = "sector")
     private String sector;
 
@@ -45,6 +48,10 @@ public class Stock {
 
     public String getExchange() {
         return exchange;
+    }
+
+    public String getCik() {
+        return cik;
     }
 
     public String getSector() {
