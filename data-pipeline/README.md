@@ -5,8 +5,12 @@ Wikipedia EventStreams 를 Kafka 로 옮기고, Spark Structured Streaming 이
 
 - `WP-30` EventStreams SSE → Kafka `wiki.edits` Producer
 - `WP-31` Spark Structured Streaming 골격 — 문서별 편집 윈도우 집계
+- `WP-32` GDELT GKG 15분 폴링 → HDFS 적재 Producer — [gdelt/README.md](gdelt/README.md)
 
 명세: [docs/requirements-v0.1.md](../docs/requirements-v0.1.md) §3
+
+> 이 폴더엔 서로 다른 잡이 산다. 위 두 개는 위키 편집 실시간 경로(Kafka·Spark),
+> `gdelt/` 는 뉴스 원본을 HDFS 에 쌓는 별도 배치성 수집기다. 각각 따로 뜬다.
 
 ```
 EventStreams (SSE)              Kafka                    Spark Structured Streaming
