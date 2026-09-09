@@ -12,7 +12,7 @@ The principal journey is onboarding → Pulse Map or issue search → issue repo
 |---|---|---|
 | `#/` | `App.jsx`, `NodeField.jsx` | Existing introduction and entry into the workspace |
 | `#/pulse` | `ExplorePage.jsx`, `PulseMap.jsx` | Select a signal cluster, inspect its preview, search/filter events, change chart period, zoom/pan/reset the map |
-| `#/issues`, `#/issues?q=…` | `ExplorePage.jsx` | Search, category filtering and sorting by Pulse, start time or document count |
+| `#/issues`, `#/issues?q=…` | `ExplorePage.jsx` | Card/list presentation switch (default list), search, category filtering and sorting; switching preserves state |
 | `#/issues/{issueId}` | `EventPage.jsx` | Report with overview, timeline, news, evidence and discussion; chart range/baseline; source selection; related stocks and saving |
 | `#/issues/{issueId}/stocks` | `StocksPage.jsx` | Issue-scoped stock directory with industry and relationship filters |
 | `#/stocks` | `StocksPage.jsx` | Stock search, industry and saved-only filters, sorting |

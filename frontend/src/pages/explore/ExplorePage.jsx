@@ -8,7 +8,7 @@ import {
   ChevronRight,
   CircleHelp,
   List,
-  Network,
+  LayoutGrid,
   Search,
   X,
 } from "lucide-react";
@@ -31,6 +31,7 @@ export default function ExplorePage({
   const [category, setCategory] = useState("all");
   const [period, setPeriod] = useState("24h");
   const [sort, setSort] = useState("pulse");
+  const [view, setView] = useState("list");
   const [selectedId, setSelectedId] = useState(events[0]?.id);
   const [showHelp, setShowHelp] = useState(false);
   const filtered = useMemo(
@@ -112,16 +113,16 @@ export default function ExplorePage({
             </button>
           )}
         </label>
-        <div className="wp-segment" aria-label="탐색 보기">
-          <a href="#/pulse" aria-current={!listView ? "page" : undefined}>
-            <Network size={16} />
-            지도
-          </a>
-          <a href="#/issues" aria-current={listView ? "page" : undefined}>
-            <List size={16} />
-            목록
-          </a>
-        </div>
+        {listView && (
+          <div className="wp-segment" aria-label="이슈 보기 방식">
+            <button onClick={() => setView("card")} aria-pressed={view === "card"}>
+              <LayoutGrid size={16} />카드
+            </button>
+            <button onClick={() => setView("list")} aria-pressed={view === "list"}>
+              <List size={16} />리스트
+            </button>
+          </div>
+        )}
         {!listView && (
           <div className="wp-segment" aria-label="차트 기간">
             {[
@@ -312,7 +313,7 @@ export default function ExplorePage({
                 </select>
               </label>
             </div>
-            <div className="event-list">
+            <div className="event-list" data-view={listView ? view : "list"}>
               {filtered.map((event) => (
                 <EventRow
                   category={getCategory(event.category)}
