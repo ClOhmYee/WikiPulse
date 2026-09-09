@@ -42,9 +42,15 @@ def test_local_write_덮어쓰기(tmp_path):
 # --- WebHdfsSink (가짜 세션) ---
 
 class FakeResponse:
-    def __init__(self, status_code, headers=None):
+    def __init__(self, status_code, headers=None, json_body=None):
         self.status_code = status_code
         self.headers = headers or {}
+        self._json = json_body
+
+    def json(self):
+        if self._json is None:
+            raise ValueError("no json")
+        return self._json
 
     def raise_for_status(self):
         if self.status_code >= 400:
@@ -84,26 +90,32 @@ def test_webhdfs_exists_404이면_거짓():
     assert sink.exists(REL) is False
 
 
-def test_webhdfs_write_2단계_리다이렉트를_따라간다():
-    dn = "http://hdfs-datanode:9864/webhdfs/v1/gdelt/gkg/x?op=CREATE&..."
+def test_webhdfs_write_part업로드후_rename으로_확정():
+    dn = "http://hdfs-datanode:9864/webhdfs/v1/gdelt/gkg/x.part?op=CREATE&..."
     sess = FakeSession(
         put_responses=[
-            FakeResponse(307, headers={"Location": dn}),  # namenode
-            FakeResponse(201),  # datanode
+            FakeResponse(307, headers={"Location": dn}),  # CREATE .part (namenode)
+            FakeResponse(201),  # datanode 업로드
+            FakeResponse(200, json_body={"boolean": True}),  # RENAME
         ]
     )
     sink = WebHdfsSink("http://hdfs-namenode:9870/", "/gdelt/gkg/", session=sess)
     sink.write(REL, b"PK\x03\x04data")
 
-    # 1단계: namenode 로 CREATE, 리다이렉트 안 따라감
+    # 1) CREATE 는 최종 경로가 아니라 .part 로
     nn_url, nn_kwargs = sess.puts[0]
-    assert nn_url == "http://hdfs-namenode:9870/webhdfs/v1/gdelt/gkg/" + REL
+    assert nn_url == "http://hdfs-namenode:9870/webhdfs/v1/gdelt/gkg/" + REL + ".part"
     assert nn_kwargs["params"]["op"] == "CREATE"
     assert nn_kwargs["allow_redirects"] is False
-    # 2단계: datanode Location 으로 실제 바디
+    # 2) datanode Location 으로 실제 바디
     dn_url, dn_kwargs = sess.puts[1]
     assert dn_url == dn
     assert dn_kwargs["data"] == b"PK\x03\x04data"
+    # 3) RENAME .part -> 최종
+    rn_url, rn_kwargs = sess.puts[2]
+    assert rn_url == "http://hdfs-namenode:9870/webhdfs/v1/gdelt/gkg/" + REL + ".part"
+    assert rn_kwargs["params"]["op"] == "RENAME"
+    assert rn_kwargs["params"]["destination"] == "/gdelt/gkg/" + REL
 
 
 def test_webhdfs_write_리다이렉트가_없으면_예외():
@@ -122,4 +134,18 @@ def test_webhdfs_write_datanode가_201이_아니면_예외():
     )
     sink = WebHdfsSink("http://hdfs-namenode:9870", "/gdelt/gkg", session=sess)
     with pytest.raises((WebHdfsError, RuntimeError)):
+        sink.write(REL, b"x")
+
+
+def test_webhdfs_write_rename_거부시_예외():
+    # RENAME 이 200 이어도 boolean=false 면(대상 이미 존재 등) 실패로 본다.
+    sess = FakeSession(
+        put_responses=[
+            FakeResponse(307, headers={"Location": "http://dn/x"}),
+            FakeResponse(201),
+            FakeResponse(200, json_body={"boolean": False}),
+        ]
+    )
+    sink = WebHdfsSink("http://hdfs-namenode:9870", "/gdelt/gkg", session=sess)
+    with pytest.raises(WebHdfsError):
         sink.write(REL, b"x")

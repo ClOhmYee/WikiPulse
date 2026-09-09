@@ -208,9 +208,15 @@ services:
       WEBHDFS_USER: hadoop
       HDFS_BASE_PATH: /gdelt/gkg
       GDELT_SELFHEAL_HOURS: ${GDELT_SELFHEAL_HOURS:-6}
+      GDELT_GAPS_PATH: /app/gdelt-data/gaps.json
       CONTACT_EMAIL: ${CONTACT_EMAIL:-}
     volumes:
+      # 소스는 읽기 전용 마운트(코드 바꿔도 재빌드 불필요).
       - ./data-pipeline/gdelt:/app/gdelt:ro
+      # 결손 기록(gaps.json)은 named 볼륨에 둔다 — down/재생성 후에도 유지되고,
+      # 필요하면 Spark 컨테이너가 같은 볼륨을 마운트해 읽을 수 있다. (영속화가
+      # 목적이면 이후 HDFS 로 옮기는 것도 대안 — gdelt/README 참고.)
+      - gdelt-gaps:/app/gdelt-data
     command: ["python", "-m", "gdelt.producer"]
 
 volumes:
@@ -219,3 +225,4 @@ volumes:
   spark-checkpoint:
   hdfs-namenode:
   hdfs-datanode:
+  gdelt-gaps:

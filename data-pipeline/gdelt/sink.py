@@ -106,6 +106,18 @@ class WebHdfsSink:
         raise WebHdfsError(f"GETFILESTATUS 예상 밖 응답: {resp.status_code}")
 
     def write(self, relpath: str, data: bytes) -> None:
+        """임시 경로(.part)에 올린 뒤 RENAME 으로 최종 경로에 확정한다.
+
+        LocalSink 와 같은 원자성을 HDFS 에서도 지킨다. 업로드가 중간에 끊기면
+        반쪽짜리가 <relpath>.part 로 남고 최종 경로엔 안 나타난다 — exists() 가
+        그걸 완성본으로 오인하지 않는다. 다음 사이클의 CREATE overwrite 가 남은
+        .part 를 덮는다.
+        """
+        tmp = relpath + ".part"
+        self._upload(tmp, data)
+        self._rename(tmp, relpath)
+
+    def _upload(self, relpath: str, data: bytes) -> None:
         # 1) namenode 에 CREATE — 307 로 datanode 위치를 받는다. 부모 디렉터리는
         #    WebHDFS 가 자동 생성한다 (2026-09-09 실측: /gdelt/gkg 를 미리 안 만들어도 됨).
         create = self._sess().put(
@@ -131,3 +143,22 @@ class WebHdfsSink:
         if put.status_code != 201:
             put.raise_for_status()
             raise WebHdfsError(f"datanode 쓰기 실패: {put.status_code}")
+
+    def _rename(self, src_relpath: str, dst_relpath: str) -> None:
+        # WebHDFS RENAME 은 200 + {"boolean": true}. 대상이 이미 있으면 false 다.
+        # store_file 이 exists() 로 미리 걸러 최종 경로는 비어 있으므로 true 여야 한다.
+        dst_abs = f"{self.base_path}/{dst_relpath}"
+        resp = self._sess().put(
+            self._url(src_relpath),
+            params={"op": "RENAME", "destination": dst_abs, "user.name": self.user},
+            timeout=self.timeout,
+        )
+        if resp.status_code != 200:
+            resp.raise_for_status()
+            raise WebHdfsError(f"RENAME 실패: {resp.status_code}")
+        try:
+            ok = bool(resp.json().get("boolean", False))
+        except Exception:
+            ok = True  # 본문 파싱 불가 시 상태코드만 신뢰
+        if not ok:
+            raise WebHdfsError(f"RENAME 거부됨: {src_relpath} -> {dst_relpath}")

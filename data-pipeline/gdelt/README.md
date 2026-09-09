@@ -86,10 +86,17 @@ cd data-pipeline/gdelt
 ```
 
 네트워크·HDFS·실시간 없이 돈다(가짜 세션·싱크·다운로더 주입). WebHDFS 실 왕복은
-compose 단일노드 HDFS 로 따로 검증한다.
+compose 단일노드 HDFS 로 따로 검증했다(`docker compose --profile gdelt`).
+
+## 결손 기록 영속
+
+`gaps.json` 은 compose 에서 named 볼륨(`gdelt-gaps`)에 둔다. `docker compose down`
+후 재생성해도 유지된다. 필요하면 Spark 컨테이너가 같은 볼륨을 마운트해 읽을 수
+있다. 더 강한 영속·공유가 필요하면 결손 기록을 HDFS 로 옮기는 것이 다음 후보다.
 
 ## 아직 안 한 것
 
-- **compose 서비스 연동** — `gdelt-producer` 를 compose `gdelt` 프로필에 붙여 실
-  HDFS 로 end-to-end (Step 3).
-- **EC2 배포** — 실 HDFS 2노드(`WP-28`) 준비 후.
+- **EC2 배포** — 실 HDFS 2노드(`WP-28`) 준비 후. producer 는
+  `GDELT_SINK=webhdfs` + 주소만 바꾸면 붙는다.
+- **결손 기록의 HDFS 이전(선택)** — 지금은 named 볼륨. Spark 접근·영속을 더 강하게
+  가져가려면 HDFS 로 옮긴다.

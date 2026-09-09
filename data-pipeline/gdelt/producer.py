@@ -120,11 +120,9 @@ class Producer:
         gkg = catalog.parse_lastupdate(self._get_text(self.cfg.lastupdate_url))
         status = store_file(gkg, sink=self.sink, download=self.download)
         log.info("최신 %s -> %s", gkg.timestamp, status)
-        if status == "gap":
-            # 최신이 404 인 건 이례적이지만, 오면 기록한다.
-            gaps.record(
-                self.cfg.gaps_path, [catalog.Gap(gkg.timestamp, gkg.timestamp)], reason="404"
-            )
+        # 최신 슬롯의 404 는 여기서 결손으로 굳히지 않는다 — CDN 전파 지연으로 방금
+        # 발행된 파일이 잠깐 404 일 수 있다. 결손 기록은 self_heal 이 확인 유예
+        # (GAP_CONFIRM_MARGIN)를 지난 슬롯에 대해서만 일괄로 한다.
         self.self_heal(now=now)
         return status
 

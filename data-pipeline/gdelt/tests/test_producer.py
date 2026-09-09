@@ -116,6 +116,21 @@ def test_poll_once_최신을_받는다(tmp_path):
     assert sink.exists("2026/09/09/20260909041500.gkg.csv.zip")
 
 
+def test_poll_once_최신_404는_즉시_결손기록_안함(tmp_path):
+    # 방금 발행된 파일이 CDN 지연으로 잠깐 404 일 수 있다. poll 은 즉시 기록하지 않고
+    # self_heal 의 확인 유예에 맡긴다(최근 슬롯이라 여기서도 기록 안 됨).
+    cfg = _cfg(tmp_path, selfheal_hours=0)
+    prod = Producer(
+        cfg,
+        sink=FakeSink(),
+        session=FakeSession(text_by_url={cfg.lastupdate_url: LU}),
+        download=_download_from({}),  # 최신도 404
+    )
+    status = prod.poll_once(now=_utc(2026, 9, 9, 4, 15))
+    assert status == "gap"
+    assert gaps.load(cfg.gaps_path) == []  # 결손 기록 안 됨
+
+
 # --- self_heal ---
 
 def test_self_heal_옛_404만_결손_확정(tmp_path):
