@@ -1,19 +1,43 @@
 package io.wikipulse.backend.stock.dto;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
+
 /**
- * 이슈에 붙은 관련 종목 하나. 이슈 상세와 종목 목록이 공유한다.
+ * 이슈에 붙은 관련 종목. API 명세 v0.1 §2 `/issues/{id}/stocks`.
+ * 이슈 상세와 종목쪽이 공유한다.
  *
- * <p>연관 근거는 상관계수가 아니라 rationale(LLM 이 만든 근거 문장)이다 —
- * 위키 활동과 주가의 상관관계는 학술 결과가 엇갈린다(명세 §9). tier 는
- * 매칭 경로(BOTH / GDELT_ONLY / EMBEDDING_ONLY), matchPath 는 근거 종류다.
+ * <p>verified=true 만 나간다(규칙). 정렬은 tier → gdeltLift → similarity.
+ * rationale 이 연관 근거다 — 상관계수가 아니다(명세 §9).
+ * similarity·gdeltLift 는 그 경로로 안 들어온 후보면 null.
  */
+@JsonInclude(JsonInclude.Include.NON_NULL)
 public record RelatedStockResponse(
         String ticker,
         String name,
         String exchange,
+        String sector,
         String tier,
         String matchPath,
         Double similarity,
         Double gdeltLift,
         String rationale) {
+
+    public interface Projection {
+        String getTicker();
+        String getName();
+        String getExchange();
+        String getSector();
+        String getTier();
+        String getMatchPath();
+        Double getSimilarity();
+        Double getGdeltLift();
+        String getRationale();
+    }
+
+    public static RelatedStockResponse from(Projection p) {
+        return new RelatedStockResponse(
+                p.getTicker(), p.getName(), p.getExchange(), p.getSector(),
+                p.getTier(), p.getMatchPath(), p.getSimilarity(),
+                p.getGdeltLift(), p.getRationale());
+    }
 }
