@@ -1,13 +1,6 @@
 import { useGlobalSearch } from "./useGlobalSearch";
 import { useEffect, useRef, useState } from "react";
-import {
-  Search,
-  Network,
-  FileText,
-  Layers3,
-  X,
-  ArrowDownLeft,
-} from "lucide-react";
+import { Search, Network, Layers3, X, ArrowDownLeft } from "lucide-react";
 export default function GlobalSearch({ searchRef }) {
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
@@ -16,8 +9,7 @@ export default function GlobalSearch({ searchRef }) {
   const search = query.trim().toLowerCase();
   const { data, loading, error, reload } = useGlobalSearch(query);
   const kinds = {
-    event: { path: "events", icon: Network },
-    entity: { path: "intelligence", icon: FileText },
+    event: { path: "issues", icon: Network },
     stock: { path: "stocks", icon: Layers3 },
   };
   const results = (data || [])
@@ -25,7 +17,7 @@ export default function GlobalSearch({ searchRef }) {
     .map((item) => ({
       ...item,
       id: `${item.kind}-${item.id}`,
-      href: `#/${kinds[item.kind].path}/${encodeURIComponent(item.id)}`,
+      href: `#/${kinds[item.kind].path}/${encodeURIComponent(item.kind === "stock" ? String(item.id).toUpperCase() : item.id)}`,
       icon: kinds[item.kind].icon,
     }));
   const close = () => {
@@ -84,7 +76,7 @@ export default function GlobalSearch({ searchRef }) {
         aria-activedescendant={
           active >= 0 && results[active] ? results[active].id : undefined
         }
-        placeholder="사건, 문서, 종목 검색"
+        placeholder="이슈, 종목 검색"
       />
       <kbd>Ctrl K</kbd>
       {query && (
@@ -136,7 +128,7 @@ export default function GlobalSearch({ searchRef }) {
           ) : (
             <div className="global-search__empty">
               “{query}”에 대한 결과가 없습니다.
-              <small>다른 사건명, 영문 문서명 또는 티커를 입력해 보세요.</small>
+              <small>다른 이슈명 또는 티커를 입력해 보세요.</small>
             </div>
           )}
           <div className="global-search__hint">

@@ -366,6 +366,12 @@
   gap: 24px;
   margin-bottom: 29px;
 }
+.account-page__links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 24px;
+}
 .wp-subtitle {
   color: var(--muted);
   margin-top: 9px !important;

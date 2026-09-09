@@ -17,6 +17,7 @@ import { CategoryTag } from "../../components/ui/CategoryTag";
 import { EmptyState } from "../../components/ui/EmptyState";
 import { TrendChart } from "../../components/charts/TrendChart";
 import PulseMap from "./PulseMap";
+import { wikipediaUrl } from "../../lib/wiki";
 
 export default function ExplorePage({
   listView = false,
@@ -116,7 +117,7 @@ export default function ExplorePage({
             <Network size={16} />
             지도
           </a>
-          <a href="#/explore" aria-current={listView ? "page" : undefined}>
+          <a href="#/issues" aria-current={listView ? "page" : undefined}>
             <List size={16} />
             목록
           </a>
@@ -261,17 +262,27 @@ export default function ExplorePage({
                   height={115}
                 />
                 <div className="signal-preview__documents">
-                  {selected.articleIds.slice(0, 3).map((id) => (
-                    <a href={`#/intelligence/${id}`} key={id}>
-                      {getEntity(id)?.title}
-                      <ChevronRight size={12} />
-                    </a>
-                  ))}
+                  {selected.articleIds
+                    .slice(0, 3)
+                    .map((id) => getEntity(id))
+                    .filter(Boolean)
+                    .map((article) => (
+                      <a
+                        href={wikipediaUrl(article)}
+                        key={article.id}
+                        target="_blank"
+                        rel="noreferrer"
+                        aria-label={`${article.title} 위키백과 원문 (새 탭)`}
+                      >
+                        {article.title}
+                        <ChevronRight size={12} />
+                      </a>
+                    ))}
                 </div>
                 <a
                   className="wp-button"
                   data-variant="primary"
-                  href={`#/events/${selected.id}`}
+                  href={`#/issues/${selected.id}`}
                 >
                   사건 자세히 보기
                   <ArrowRight size={16} />

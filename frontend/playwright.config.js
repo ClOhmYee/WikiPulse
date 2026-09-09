@@ -1,7 +1,8 @@
 import { defineConfig, devices } from '@playwright/test'
 import { fileURLToPath } from 'node:url'
 
-const baseURL = 'http://127.0.0.1:5174'
+const port = process.env.WIKIPULSE_E2E_PORT || '5174'
+const baseURL = `http://127.0.0.1:${port}`
 
 export default defineConfig({
   testDir: './e2e',
@@ -18,7 +19,7 @@ export default defineConfig({
     screenshot: 'off',
   },
   webServer: {
-    command: 'node node_modules/vite/bin/vite.js --host 127.0.0.1 --port 5174 --strictPort',
+    command: `node node_modules/vite/bin/vite.js --host 127.0.0.1 --port ${port} --strictPort`,
     env: { VITE_DATA_SOURCE: 'mock' },
     cwd: fileURLToPath(new URL('.', import.meta.url)),
     url: baseURL,

@@ -1,4 +1,5 @@
 import { ArrowRight } from "lucide-react";
+import { wikipediaUrl } from "../../lib/wiki";
 export function ArticleNetwork({ articles = [], selectedId, onSelect }) {
   return (
     <div className="wp-article-network">
@@ -65,7 +66,10 @@ export function ArticleNetwork({ articles = [], selectedId, onSelect }) {
             <a
               key={article.id}
               className="wp-chip"
-              href={`#/intelligence/${article.id}`}
+              href={wikipediaUrl(article)}
+              target="_blank"
+              rel="noreferrer"
+              aria-label={`${article.name} 위키백과 원문 (새 탭)`}
             >
               {article.name}
               <ArrowRight size={12} />

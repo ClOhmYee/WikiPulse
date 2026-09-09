@@ -14,7 +14,7 @@ test.afterEach(async ({ page }) => {
 })
 
 async function openDiscussion(page, eventId = EVENT) {
-  await page.goto(`/#/events/${eventId}`)
+  await page.goto(`/#/issues/${eventId}`)
   await page.getByRole('button', { name: '토론 참여하기', exact: true }).click()
   await expect(page.getByRole('tab', { name: '토론', exact: true })).toHaveAttribute('aria-selected', 'true')
   const board = page.getByRole('region', { name: regionName })
@@ -29,7 +29,7 @@ async function postThread(board, body) {
 }
 
 test('report overview contains three example discussions, and the top CTA opens the discussion tab', async ({ page }) => {
-  await page.goto(`/#/events/${EVENT}`)
+  await page.goto(`/#/issues/${EVENT}`)
   const overviewBoard = page.getByRole('region', { name: regionName })
   await expect(overviewBoard.locator('.dc-thread')).toHaveCount(3)
   await expect(overviewBoard).toContainText('다른 사용자에게 전송되지 않습니다')
@@ -141,10 +141,10 @@ test('blocked storage warns while a submitted thread remains usable across repor
 
 test('390px report exposes related stocks at the top and discussion remains within the viewport', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 })
-  await page.goto(`/#/events/${EVENT}`)
+  await page.goto(`/#/issues/${EVENT}`)
   const stocks = page.locator('.dt-report-actions').getByRole('link', { name: /^연관 주식/ })
   await expect(stocks).toBeInViewport()
-  await expect(stocks).toHaveAttribute('href', `#/events/${EVENT}/stocks`)
+  await expect(stocks).toHaveAttribute('href', `#/issues/${EVENT}/stocks`)
   await page.getByRole('button', { name: '토론 참여하기', exact: true }).click()
   const board = page.getByRole('region', { name: regionName })
   const own = await postThread(board, `모바일에서도 긴 문장이 읽혀야 합니다. ${'공급망과편집근거'.repeat(35)}`)
@@ -155,6 +155,6 @@ test('390px report exposes related stocks at the top and discussion remains with
   const composerWidth = await board.getByRole('textbox', { name: '내 의견 작성', exact: true }).boundingBox()
   expect(composerWidth.width).toBeLessThanOrEqual(390)
   await stocks.click()
-  await expect(page).toHaveURL(new RegExp(`#\/events\/${EVENT}\/stocks$`))
+  await expect(page).toHaveURL(new RegExp(`#\/issues\/${EVENT}\/stocks$`))
   await expect(page.getByRole('heading', { name: '이 사건과 연결된 종목', exact: true })).toBeVisible()
 })
