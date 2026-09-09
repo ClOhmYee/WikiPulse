@@ -5,6 +5,8 @@
  * @template T
  * @typedef {{data: T, included?: {events?: object[], entities?: object[], stocks?: object[]}, meta: Meta}} DataResponse
  * @typedef {Object} DataClient
+ * @property {(params?: {from?: string, to?: string, source?: string}, options?: RequestOptions) => Promise<object>} listSnapshots
+ * @property {(params?: {snapshotTs?: string, source?: string}, options?: RequestOptions) => Promise<object>} getPulseMap
  * @property {(options?: RequestOptions) => Promise<DataResponse<object[]>>} listCategories
  * @property {(params?: ListParams, options?: RequestOptions) => Promise<DataResponse<object[]>>} listEvents
  * @property {(params?: ListParams, options?: RequestOptions) => Promise<DataResponse<object[]>>} listEntities
