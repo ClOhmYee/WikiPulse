@@ -6,6 +6,7 @@ import {
   DEMO_DATE,
 } from "./fixtures/catalog.js";
 import { DataError } from "../contracts.js";
+import { listSnapshots, getPulseMap, historicalReport } from "./pulse.js";
 
 const meta = {
   dataMode: "mock",
@@ -91,6 +92,8 @@ const stockIncluded = (values) => ({
 });
 
 const handlers = {
+  listSnapshots,
+  getPulseMap,
   listCategories: () => envelope(categories),
   listEvents(params = {}) {
     validate(params, ["q", "category", "window", "sort", "offset", "limit"], {
@@ -133,6 +136,8 @@ const handlers = {
     return paginate(values, params, eventIncluded, { window });
   },
   getEvent(id) {
+    const archived = historicalReport(id, events);
+    if (archived) return envelope(archived.data, eventIncluded([archived.data]), { asOf: archived.snapshotTs.slice(0, 10), snapshotTs: archived.snapshotTs });
     const event = find(events, id);
     return envelope(event, {
       ...eventIncluded([event]),

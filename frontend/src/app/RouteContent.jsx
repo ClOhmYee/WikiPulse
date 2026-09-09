@@ -7,6 +7,7 @@ import { PageDataBoundary } from "../data/hooks/PageData";
 const EventPage = lazy(() => import("../pages/event/EventPage"));
 const AccountPage = lazy(() => import("../pages/account/AccountPage"));
 const StocksPage = lazy(() => import("../pages/stocks/StocksPage"));
+const PulsePage = lazy(() => import("../pages/pulse/PulsePage"));
 export default function RouteContent({
   pathname,
   route,
@@ -22,7 +23,8 @@ export default function RouteContent({
     separator < 0 ? "" : route.slice(separator + 1),
   );
   let content;
-  if (pathname === "/pulse" || pathname === "/issues")
+  if (pathname === "/pulse") content = <PulsePage savedEvents={savedEvents} onToggleEvent={onToggleEvent} onSource={onSource} />;
+  else if (pathname === "/issues")
     content = (
       <ExplorePage
         key={route}
@@ -81,7 +83,7 @@ export default function RouteContent({
       />
     );
   const resource =
-    pathname === "/pulse" || pathname === "/issues"
+    pathname === "/issues"
       ? "explore"
       : parts[0] === "issues" && parts.length === 2
         ? "event"
