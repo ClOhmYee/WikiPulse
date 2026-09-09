@@ -2,6 +2,8 @@
 
 기준일: 2026-09-08. 현재 기본 모드는 `mock`이다. 공통 비동기 조회 인터페이스와 HTTP 클라이언트는 구현되어 있으며, 실제 백엔드 서버는 아직 연결하지 않았다.
 
+2026-09-09 페이지 변경: [PAGES.md](PAGES.md)의 URL로 갱신했고 단일 문서 상세 화면을 제거했다. 아래 데이터 계약은 유지한다. 전체 검색은 같은 요청으로 받은 결과에서 이슈·종목만 표시한다. 이 문서의 2026-09-08 테스트 수치는 당시 기록이며 최신 결과는 [검증 기록](../../frontend/docs/VALIDATION.md)에 있다.
+
 ## `.env` 설정
 
 설정 파일은 **`frontend/.env`**다. `.env.example`은 Git에 공유하는 예시이며 `.env`는 기존 `.gitignore`의 `.env*` 규칙으로 제외한다. 설정 파일이 없는 새 체크아웃에서만 다음을 실행한다.
@@ -32,7 +34,7 @@ VITE_API_BASE_URL=https://backend.example.com/api/v1
 |---|---|
 | 카테고리 | listCategories |
 | 사건 지도/목록·상세 | listEvents / getEvent |
-| 문서 목록 계약·문서 상세 | listEntities / getEntity |
+| 기존 문서 목록·상세 데이터 계약(독립 페이지 제거) | listEntities / getEntity |
 | 종목 목록·상세 | listStocks / getStock |
 | 통합 검색 | searchWorkspace |
 | 보관함 내용 조회 | 저장 ID별 getEvent / getStock; 확인된 404는 표시 제외 |

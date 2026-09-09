@@ -1,16 +1,15 @@
 import { chromium } from '@playwright/test';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
-import { events, entities, stocks } from '../src/data/mock/fixtures/catalog.js';
+import { events, stocks } from '../src/data/mock/fixtures/catalog.js';
 
 const output = fileURLToPath(new URL('../../.impeccable/review/', import.meta.url));
 await mkdir(output, { recursive: true });
 const browser = await chromium.launch({ headless: true });
 const captures = [
   ['pulse', '/pulse'],
-  ['explore', '/explore'],
-  ['event', `/events/${events[0].id}`],
-  ['entity', `/intelligence/${entities[0].id}`],
+  ['explore', '/issues'],
+  ['event', `/issues/${events[0].id}`],
   ['stocks', '/stocks'],
   ['stock', `/stocks/${stocks[0].symbol}`],
   ['saved', '/saved'],

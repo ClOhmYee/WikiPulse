@@ -7,7 +7,7 @@ const require = createRequire(import.meta.url);
 const axePath = require.resolve('axe-core/axe.min.js');
 const browser = await chromium.launch({ headless: true });
 const results = [];
-const routes = ['/pulse', '/explore', '/events/iran-hormuz-2025', '/intelligence/strait-of-hormuz', '/stocks', '/stocks/NVDA', '/saved'];
+const routes = ['/pulse', '/issues', '/issues/iran-hormuz-2025', '/stocks', '/stocks/NVDA', '/saved', '/mypage', '/login', '/signup'];
 for (const width of [1440, 820, 390, 320]) {
   const context = await browser.newContext({ viewport: { width, height: 900 }, reducedMotion: 'reduce' });
   const page = await context.newPage();
@@ -16,7 +16,7 @@ for (const width of [1440, 820, 390, 320]) {
     await page.locator('h1').waitFor();
     await page.evaluate(() => document.fonts.ready);
     await page.addScriptTag({ path: axePath });
-    const states = route.startsWith('/events/') ? ['overview', 'discussion-expanded'] : ['default'];
+    const states = route.startsWith('/issues/') ? ['overview', 'discussion-expanded'] : ['default'];
     for (const state of states) {
     if (state === 'discussion-expanded') {
       await page.getByRole('tab', { name: '토론', exact: true }).click();

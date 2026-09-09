@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import { formatNumber } from "../../lib/format";
 import { EmptyState } from "../../components/ui/EmptyState";
+import { wikipediaUrl } from "../../lib/wiki";
 const newsTypes = [
   { id: "all", label: "전체" },
   { id: "news", label: "뉴스" },
@@ -26,7 +27,7 @@ const formatDate = (value) =>
     ? String(value).replace("T", " ").replace(/Z$/, "").slice(0, 16)
     : "날짜 미제공";
 
-export function Timeline({ entries, compact = false }) {
+export function Timeline({ entries, articles = [], compact = false }) {
   if (!entries.length)
     return (
       <EmptyState
@@ -52,12 +53,17 @@ export function Timeline({ entries, compact = false }) {
             </div>
             <h3>{entry.title}</h3>
             <p>{entry.body}</p>
-            {entry.entityId && (
+            {articles.some((article) => article.id === entry.entityId) && (
               <a
                 className="dt-text-link"
-                href={`#/intelligence/${entry.entityId}`}
+                href={wikipediaUrl(
+                  articles.find((article) => article.id === entry.entityId),
+                )}
+                target="_blank"
+                rel="noreferrer"
               >
-                연결 문서 살펴보기 <ArrowUpRight size={14} />
+                위키백과 원문 보기 <ArrowUpRight size={14} />
+                <span className="dt-sr-only"> (새 탭)</span>
               </a>
             )}
           </div>
@@ -185,8 +191,8 @@ export function Evidence({ articles, isExample }) {
       <div className="dt-section-intro">
         <h2>변화가 시작된 문서들</h2>
         <p>
-          어떤 문서가 함께 바뀌었는지 확인하고, 개별 문서의 편집 내역으로 들어가
-          보세요.
+          어떤 문서가 함께 바뀌었는지 확인하고, 위키백과 원문을 새 탭에서
+          읽어보세요.
         </p>
       </div>
       {articles.length ? (
@@ -194,7 +200,9 @@ export function Evidence({ articles, isExample }) {
           {articles.map((article) => (
             <a
               className="dt-evidence-row"
-              href={`#/intelligence/${article.id}`}
+              href={wikipediaUrl(article)}
+              target="_blank"
+              rel="noreferrer"
               key={article.id}
             >
               <div className="dt-doc-icon">
@@ -213,6 +221,7 @@ export function Evidence({ articles, isExample }) {
                 <span>평소 대비 {article.pulse}배</span>
               </div>
               <ChevronRight size={19} />
+              <span className="dt-sr-only">위키백과 원문 (새 탭)</span>
             </a>
           ))}
         </div>

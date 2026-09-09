@@ -1,6 +1,6 @@
 import { chromium } from '@playwright/test';
 import { strict as assert } from 'node:assert';
-import { events, entities, stocks } from '../src/data/mock/fixtures/catalog.js';
+import { events, stocks } from '../src/data/mock/fixtures/catalog.js';
 import { writeFile, mkdir } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 
@@ -18,9 +18,8 @@ assert.equal(response.status(), 200);
 const directEntry = requests.filter(url => /\.js(?:\?|$)/.test(url));
 assert(!directEntry.some(url => /\/OnboardingPage-[^/]+\.js/.test(url)), 'The workspace must not load the onboarding WebGL chunk on direct entry.');
 const routes = [
-  ['/explore', '사건을 탐색하세요'],
-  [`/events/${events[0].id}`, events[0].title],
-  [`/intelligence/${entities[0].id}`, entities[0].name],
+  ['/issues', '사건을 탐색하세요'],
+  [`/issues/${events[0].id}`, events[0].title],
   ['/stocks', '종목에서 사건의 맥락을 찾으세요.'],
   [`/stocks/${stocks[0].symbol}`, stocks[0].name],
   ['/saved', '관심의 흐름을 이어가세요'],
@@ -36,7 +35,7 @@ await page.getByRole('link', { name: '탐색 시작하기' }).waitFor();
 await page.getByRole('link', { name: '탐색 시작하기' }).click();
 await page.getByRole('heading', { name: '세상의 변화가 모이는 곳' }).waitFor();
 assert.deepEqual(errors, []);
-const result = { routes: 8, directEntryScripts: directEntry.map(url => url.split('/').at(-1)), noDataApiRequests: true, onboardingExit: true, errors };
+const result = { routes: routes.length + 2, directEntryScripts: directEntry.map(url => url.split('/').at(-1)), noDataApiRequests: true, onboardingExit: true, errors };
 const output = fileURLToPath(new URL('../test-results/production-smoke.json', import.meta.url));
 await mkdir(fileURLToPath(new URL('../test-results/', import.meta.url)), { recursive: true });
 await writeFile(output, JSON.stringify(result, null, 2));

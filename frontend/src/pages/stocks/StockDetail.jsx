@@ -145,7 +145,7 @@ export default function StockDetail({ symbol, savedStocks, onToggleStock }) {
                     </div>
                     <div className="st-event-body">
                       <a
-                        href={`#/events/${event.id}`}
+                        href={`#/issues/${event.id}`}
                         className="st-event-title"
                       >
                         <h3>{event.title}</h3>
@@ -177,7 +177,7 @@ export default function StockDetail({ symbol, savedStocks, onToggleStock }) {
                         </div>
                       )}
                       <a
-                        href={`#/events/${event.id}`}
+                        href={`#/issues/${event.id}`}
                         className="st-read-event"
                       >
                         사건과 근거 살펴보기

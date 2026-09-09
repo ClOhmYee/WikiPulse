@@ -1,6 +1,6 @@
 # 프론트엔드 구조와 확장 규칙
 
-기준일: 2026-09-08. 대상은 저장소 루트 Next.js 앱과 별개인 `frontend/` React/Vite 앱이다. JavaScript와 기존 해시 주소, 페이지 배치, 온보딩 그래픽을 유지하며 책임과 데이터 접근을 분리했다.
+기준일: 2026-09-09. 대상은 이 저장소의 `frontend/` React/Vite 앱이다. 2026-09-08에 책임과 데이터 접근을 분리했고, 2026-09-09에 [11개 페이지 URL](PAGES.md)을 반영했다. JavaScript·해시 라우팅·온보딩 그래픽은 유지한다. 이전 문서의 루트 Next.js 앱 설명은 이관 전 데모 저장소 기준으로 폐기한다.
 
 ## 폴더와 책임
 
@@ -16,7 +16,7 @@ frontend/src/
     onboarding/                    OnboardingPage·NodeField·온보딩 CSS
     explore/                       지도/목록 화면·PulseMap
     event/                         사건 상세·EventSections·로컬 토론/CSS
-    entity/                        문서 분석
+    account/                       마이페이지·로그인·회원가입 준비 안내
     stocks/                        목록·상세·공유 종목 요소/CSS
     saved/                         보관함 표시와 로컬 검색
   features/
@@ -34,7 +34,7 @@ frontend/src/
     hooks/                         비동기 조회·페이지 데이터 Context
     mock/                          비동기 목 구현·fixtures/catalog.js
     api/                           HTTP 호출·endpoint 연결·응답 어댑터
-  lib/                             숫자 표시 같은 순수 함수
+  lib/                             숫자 표시·위키백과 원문 주소 같은 순수 함수
   styles/                          워크스페이스·공통 상세 화면 CSS
 ```
 
@@ -70,6 +70,6 @@ frontend/src/
 4. 화면 둘 이상에서 공유하는 UI만 `components`로 이동한다. 상태와 동작을 공유하는 기능은 `features`에 둔다.
 5. API 응답 필드 변경은 먼저 `data/api/adapters.js`에서 흡수한다. 숫자 단위·데이터 의미가 달라지면 계약과 UI 대응도 함께 검토한다.
 
-온보딩은 `lazy()`로 유지한다. 서비스 직접 진입에서 OnboardingPage/Three.js 청크를 내려받지 않는지 production smoke로 확인한다. 이 앱은 루트 Next.js 라우트·수집기·SQLite를 사용하지 않는다.
+온보딩은 `lazy()`로 유지한다. 서비스 직접 진입에서 OnboardingPage/Three.js 청크를 내려받지 않는지 production smoke로 확인한다. 프론트의 mock 모드는 백엔드·수집기·DB 실행 없이 동작한다.
 
 설정과 실제 연결 절차, 검증 범위는 [DATA_SOURCE.md](./DATA_SOURCE.md)를 참고한다.
