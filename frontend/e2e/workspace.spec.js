@@ -81,7 +81,7 @@ test('event query, category, sorting and empty-state reset return the right even
   await expect(page.locator('.event-row')).toHaveCount(1)
   await expect(page.locator('.event-row')).toContainText('원자력 발전과 우라늄')
   await page.getByRole('button', { name: '검색어 지우기', exact: true }).click()
-  await page.getByRole('button', { name: 'AI · 반도체', exact: true }).click()
+  await page.getByRole('button', { name: '기술', exact: true }).click()
   await expect(page.locator('.event-row')).toHaveCount(1)
   await expect(page.locator('.event-row')).toContainText(chips.title)
   await page.getByRole('button', { name: /^전체/ }).click()
