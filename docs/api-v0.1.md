@@ -9,6 +9,8 @@
 
 ## 0. 이 문서가 정리한 것 — 계약이 두 벌이었다
 
+아래 표는 **2026-09-08 통합 결정 이전 상태**다. 2026-09-09 WP-76에서 BE의 Issue/Stock 경로는 `/api/v1`과 응답 봉투로 변경되었고, 이슈 상세에 `pageId/wiki/title/weight/isSeed/editCount/views`를 가진 `members`가 추가되었다. 펄스맵의 스냅샷 목록·일괄 그래프 조회는 별도 계약이며 WP-74에서 구현한다. [펄스맵 구현·계약](frontend/PULSE_MAP.md)을 참고한다.
+
 | | FE 제안 (`frontend/docs/openapi.yaml`, `0.2.0-proposal`) | BE 구현 (`backend/`, WP-36) |
 | --- | --- | --- |
 | 경로 | `/api/v1/events`, `/entities`, `/stocks` | `/api/issues`, `/api/stocks` |
@@ -19,7 +21,7 @@
 **v0.1은 이렇게 합친다** (2026-09-08 결정):
 
 - **경로·어휘·식별자는 BE·DB 쪽을 쓴다.** `event`가 아니라 `issue`, `entity`가 아니라 `page`. DB가 `issue_cluster`·`cluster_member`이고 명세 §3.2도 "클러스터 = 이슈"라, API만 다른 말을 쓰면 세 곳을 머릿속에서 번역해야 한다.
-- **봉투·페이지네이션·오류 규약은 FE 제안 쪽을 쓴다.** 이미 설계돼 있고 프론트 조회 계층이 그 형태를 기대한다. BE는 컨트롤러에 봉투만 씌우면 된다.
+- **봉투·페이지네이션·오류 규약은 FE 제안 쪽을 쓴다.** 이미 설계돼 있고 프론트 조회 계층이 그 형태를 기대한다. BE의 적용은 WP-76에 포함되었다.
 - base path는 `/api/v1`. ~~`/api`~~ → 버전 없는 경로는 계약이 바뀔 때 갈아탈 자리가 없다.
 
 ⚠️ **`frontend/docs/openapi.yaml`은 이 결정 이후 낡았다.** 연동 착수 시 이 문서에 맞춰 갱신한다. 그때까지 FE의 mock 모드는 그대로 돌아간다 (fixture는 API 계약과 무관).
@@ -97,7 +99,7 @@ DB `CHECK` 제약과 **같은 값을 그대로** 쓴다. 번역하지 않는다.
 
 ## 2. 이슈 — 피드 · 버블맵 · 상세
 
-피드와 버블맵은 같은 데이터를 카드/버블로 다르게 그릴 뿐이라 endpoint를 공유한다.
+피드와 펄스맵은 이슈를 공유하지만 독립 페이지다. 피드 내부에서 카드/리스트를 전환한다. 펄스맵은 시점별 문서 그래프가 필요하므로 아래 목록 응답 외에 `GET /api/v1/issues/map` 계약을 추가했다(2026-09-09, WP-72·73). [필드·행동 명세](frontend/PULSE_MAP.md), [OpenAPI](../frontend/docs/pulse-openapi.json). 서버 구현은 WP-74의 후속 작업이다.
 
 ### `GET /api/v1/issues`
 

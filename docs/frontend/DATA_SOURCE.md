@@ -33,7 +33,8 @@ VITE_API_BASE_URL=https://backend.example.com/api/v1
 | 영역 | 조회 방식 |
 |---|---|
 | 카테고리 | listCategories |
-| 사건 지도/목록·상세 | listEvents / getEvent |
+| 이슈 탐색·상세 | listEvents / getEvent |
+| 펄스맵 시점 목록·그래프 | listSnapshots / getPulseMap — /api/v1/issues/snapshots, /issues/map ([계약](PULSE_MAP.md)) |
 | 기존 문서 목록·상세 데이터 계약(독립 페이지 제거) | listEntities / getEntity |
 | 종목 목록·상세 | listStocks / getStock |
 | 통합 검색 | searchWorkspace |

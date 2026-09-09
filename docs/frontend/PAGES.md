@@ -9,7 +9,7 @@
 | 페이지 | 경로 | 현재 화면 |
 | --- | --- | --- |
 | 온보딩 | `/` | 서비스 소개와 펄스맵 진입 |
-| 펄스맵 | `/pulse` | 이슈 지도 |
+| 펄스맵 | `/pulse` | 날짜·시점 선택, HOT/NEW, 문서 노드·간선과 요약 패널 |
 | 이슈 탐색 | `/issues` | 이슈 카드/리스트 전환·검색 |
 | 이슈 상세 = 리포트 | `/issues/:issueId` | 개요·타임라인·뉴스·근거 문서·토론 |
 | 연관주식 | `/issues/:issueId/stocks` | 해당 이슈와 연결된 종목 |
@@ -43,7 +43,7 @@
 
 ## API와의 경계
 
-페이지 URL의 `issues`와 별개로 기존 프론트 API 클라이언트의 `/api/v1/events`, `/entities`, mock 데이터 모델, 저장 키는 이번 작업에서 변경하지 않는다. 백엔드와 API 계약을 맞추는 작업, 해시 제거 및 서버의 SPA fallback 설정은 별도 작업이다.
+페이지 URL의 `issues`와 별개로 기존 이슈 탐색·리포트 API 클라이언트의 `/api/v1/events`, `/entities`와 저장 키는 유지한다. 펄스맵은 별도 `/api/v1/issues/snapshots`, `/issues/map` 계약을 사용한다([상세](PULSE_MAP.md)). 서버 구현, 해시 제거 및 서버의 SPA fallback 설정은 별도 작업이다.
 
 ## 확인 기준
 

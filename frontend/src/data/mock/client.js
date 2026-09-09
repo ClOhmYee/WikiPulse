@@ -137,7 +137,30 @@ const handlers = {
   },
   getEvent(id) {
     const archived = historicalReport(id, events);
-    if (archived) return envelope(archived.data, eventIncluded([archived.data]), { asOf: archived.snapshotTs.slice(0, 10), snapshotTs: archived.snapshotTs });
+    if (archived)
+      return envelope(
+        archived.data,
+        {
+          entities: archived.nodes.map((node) => {
+            const original = entities.find((v) => v.id === node.pageId);
+            return {
+              ...entitySummary(original),
+              edits: node.editCount,
+              baseline: node.editBaseline,
+              pulse: node.editBaseline
+                ? Math.round((node.editCount / node.editBaseline) * 10) / 10
+                : 0,
+              pageviews: node.views,
+              editors: null,
+              eventIds: [id],
+              relatedIds: [],
+              chart: [],
+              changes: [],
+            };
+          }),
+        },
+        { asOf: archived.data.date, snapshotTs: archived.snapshotTs },
+      );
     const event = find(events, id);
     return envelope(event, {
       ...eventIncluded([event]),

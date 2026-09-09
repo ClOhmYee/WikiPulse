@@ -23,12 +23,18 @@ export default function RouteContent({
     separator < 0 ? "" : route.slice(separator + 1),
   );
   let content;
-  if (pathname === "/pulse") content = <PulsePage savedEvents={savedEvents} onToggleEvent={onToggleEvent} onSource={onSource} />;
+  if (pathname === "/pulse")
+    content = (
+      <PulsePage
+        savedEvents={savedEvents}
+        onToggleEvent={onToggleEvent}
+        onSource={onSource}
+      />
+    );
   else if (pathname === "/issues")
     content = (
       <ExplorePage
         key={route}
-        listView={pathname === "/issues"}
         initialQuery={queryParams.get("q") || ""}
         savedEvents={savedEvents}
         onToggleEvent={onToggleEvent}

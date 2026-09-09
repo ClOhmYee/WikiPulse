@@ -1,5 +1,39 @@
 # 프론트엔드 검증 기록
 
+## 2026-09-09 — 펄스맵 시간 탐색·문서 그래프
+
+대상: WP-37, WP-71, WP-72, WP-73. Windows · Node.js · Playwright Chromium에서 검증했다. 범위는 프론트·합성 mock·HTTP 계약이며, 실제 Spring API와 파이프라인 연결은 WP-74/75의 후속 작업이다. [구현·계약 설명](../../docs/frontend/PULSE_MAP.md)을 함께 참고한다.
+
+| 검사 | 결과 | 범위 |
+| --- | --- | --- |
+| `npm.cmd run lint` | 통과, 경고 0개 | 최종 SVG·컴포넌트 변경 포함 |
+| `npm.cmd run test:data` | 12개 통과 | 기존 데이터·라우팅 7개, 스냅샷/NEW/KST/무결성/API/배치 5개 |
+| `npm.cmd run test:contract` | 통과 | 기존 OpenAPI + Pulse OpenAPI 3.0.3, 7개 시점 및 대규모 fixture |
+| `npm.cmd run test:e2e` | 34개 통과 (30.5초) | 카드/리스트 상태 보존, 시간 이동, 지도 선택·확대·드래그, 기존 페이지 회귀 |
+| 지도 관련 E2E 재검증 | 3개 통과 (6.8초) | 최종 제목 줄바꿈 수정 후 모바일 제목 겹침, 선택·키보드·시점·확대 확인 |
+| `npm.cmd run test:api` | 11개 통과 | 실제 HTTP 클라이언트에 Playwright 응답 가로채기. 지연 응답 역전·실패·재시도·계약 오류·fixture 분리 |
+| `npm.cmd run build` | 종료 코드 0 | 최신 PulsePage 청크 34.12 kB. 기존 온보딩 청크 906.33 kB 경고 유지 |
+| 문서 정합 스캔 · `git diff --check` | 확인 완료 | 페이지 역할·API 현재 상태·폐기된 토글 및 변경 공백 확인 |
+
+20개 클러스터·500개 문서·1,000개 간선 fixture를 모두 렌더링했다. Node에서 초기 배치 계산 약 90ms를 관측했고, Chromium에서 지도 로딩·문서 선택·확대가 테스트의 3초 한도 안에 완료되었다. 특정 개발 환경의 합성 데이터 측정이며 실기기나 운영 데이터의 성능 보장은 아니다. 누락 지표는 0과 구분하고, 고립 노드는 유지하며 잘못된 참조·중복 간선·미래 지표는 응답 오류로 검증했다.
+
+1440×1000 데스크톱의 전체 지도·선택 상태와 390×844 모바일 화면을 직접 캡처해 확인했다. 모바일은 2열 그래프와 지도 아래 패널을 사용하며 긴 제목은 줄바꿈한다. 화면 가로 넘침과 제목끼리의 겹침을 검사했다. 파일은 `test-results/pulse-desktop.png`, `pulse-desktop-selected.png`, `pulse-mobile.png`이며 이후 Playwright 실행 시 초기화될 수 있다.
+
+전체 axe·프로덕션 smoke·실기기 GPU·Safari/Firefox는 이번 변경에서 다시 검증하지 않았다. API 모드는 `/issues/snapshots`와 `/issues/map`의 응답을 가로챈 검사이며 서버 구현 완료를 뜻하지 않는다. 실패 시 mock 자동 대체가 없음을 확인했다.
+
+테스트는 기존 5174 개발 서버와 별개로 mock 5176/API 5175를 사용했다. 재현은 아래 명령을 사용한다. 서버를 정리할 때는 이번 실행에서 시작한 프로세스인지 먼저 확인한다.
+
+```powershell
+npm.cmd --prefix frontend run lint
+npm.cmd --prefix frontend run test:data
+npm.cmd --prefix frontend run test:contract
+npm.cmd --prefix frontend run build
+$env:WIKIPULSE_E2E_PORT = '5176'
+npm.cmd --prefix frontend run test:e2e
+Remove-Item Env:WIKIPULSE_E2E_PORT
+npm.cmd --prefix frontend run test:api
+```
+
 ## 2026-09-09 — 페이지 URL 재구성 검증
 
 대상: WP-70의 로컬 작업 트리, Windows · Node.js · Playwright Chromium. 페이지 구성의 정본은 [PAGES.md](../../docs/frontend/PAGES.md)다. 아래 결과는 2026-09-09 구현 작업에서 실행한 결과이며, 배포·병합 완료를 뜻하지 않는다.

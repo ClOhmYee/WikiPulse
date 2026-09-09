@@ -13,7 +13,7 @@
 | 화면 | 브라우저 경로 | 현재 제공하는 동작 |
 |---|---|---|
 | 온보딩 | `#/` | Track → Cluster → Match 소개, 탐색 진입 |
-| Pulse Map | `#/pulse` | 사건 검색·주제 필터, 기간별 누적 신호, 지도 선택·확대·축소·이동, 사건 미리보기·저장 |
+| Pulse Map | `#/pulse` | 날짜·시점 선택, 문서 그래프·HOT/NEW·근거 패널. 별도 [Pulse 계약](pulse-openapi.json)과 [행동 명세](../../docs/frontend/PULSE_MAP.md) 사용 |
 | 이슈 탐색 | `#/issues` | 이슈 검색·주제 필터, Pulse/시작 시점/문서 수 정렬 |
 | 이슈 상세 = 리포트 | `#/issues/{issueId}` | 개요·타임라인·관련 소식·근거 문서·토론 탭, 차트 범위·기준선, 문서 선택, 이슈 저장 |
 | 종목 탐색 | `#/stocks` | 종목 검색·산업 필터·관심 종목 필터, 관련 사건 수/티커 정렬 |
@@ -44,7 +44,7 @@
 
 ```js
 const url = `/api/v1/events/${encodeURIComponent(eventId)}`;
-const query = new URLSearchParams({ q: '호르무즈', category: 'geopolitics', window: '3d' });
+const query = new URLSearchParams({ q: '호르무즈', category: 'world', window: '3d' });
 const listUrl = `/api/v1/events?${query.toString()}`;
 ```
 
@@ -254,7 +254,7 @@ StockRelation = { eventId, type, strength, explanation, path }
 
 `window`는 기준일을 포함하는 마지막 1/3/7개 **일 단위 포인트**를 사용한다. 반환 객체의 `edits`, `baseline`, `pageviews`는 선택 구간의 합, `pulse`는 합산 편집량/합산 기준선의 한 자리 반올림 값이다. `editors`는 기준일의 문서별 편집자 수 합계를 유지한다. `status`, `date`, `startAt`, `updatedAt`, ID 배열, `keywords`를 기간 선택 때문에 다시 만들지 않는다. `chart`는 전체 가용 날짜의 원래 일별 데이터를 유지한다.
 
-Pulse Map은 기간이 바뀌면 누적 지표와 정렬에 이 값을 사용한다. 사건 탐색은 `window=24h` 스냅샷을 사용한다. Map 차트는 날짜 간 흐름을 보여 주기 위해 24h/3d/7d에서 각각 마지막 2/4/8개 일별 포인트를 보여 준다. 이는 시간별 원시 데이터나 정확한 rolling 24시간 시계열이 아니다. 임의 시작일·종료일 선택, 상태 필터, 뉴스 유무 필터는 현재 UI에 없다.
+위 `window`는 기존 사건 목록 API 계약이다. 이슈 탐색은 기본 `24h`를 사용한다. 펄스맵의 24h/3d/7d 누적 전환은 2026-09-09 제거하고 실제 스냅샷 날짜·시각 선택으로 교체했다. 펄스맵은 이 이벤트 목록·차트에서 과거 그래프를 재구성하지 않는다.
 
 ### GET `/events/{eventId}`
 
@@ -342,7 +342,7 @@ Pulse Map은 기간이 바뀌면 누적 지표와 정렬에 이 값을 사용한
 {
   "id": "iran-hormuz-2025",
   "title": "호르무즈 해협, 에너지 공급망으로 번지는 관심",
-  "category": "geopolitics",
+  "category": "world",
   "status": "rising",
   "date": "2025-06-24",
   "startAt": "2025-06-18T08:40:00+09:00",
@@ -379,8 +379,8 @@ NVDA의 예시 `price`는 `143.72`, `change`는 `2.14`, `currency`는 `USD`다. 
 | 동작 | 연동 시 조회 | 현재 구현 |
 |---|---|---|
 | 온보딩 진행·지도 이동/확대/초기화 | 없음 | 브라우저 로컬 UI 상태 |
-| Pulse Map 진입·검색·주제·기간·정렬 | `/categories`, `/events` | fixture 조회·필터·집계·정렬 |
-| 지도에서 사건 선택 | 추가 조회 불필요 | 목록 데이터와 문서 참조로 미리보기 |
+| Pulse Map 진입·시각 선택 | `/issues/snapshots`, `/issues/map` | 같은 계약의 합성 snapshot/HTTP 클라이언트 |
+| 지도 검색·주제·이슈·문서 선택 | 추가 조회 불필요 | 로드한 스냅샷의 노드·간선·요약 표시 |
 | 사건 상세 이동 | `/events/{eventId}` | `getEvent`와 참조 helper |
 | 상세 탭·차트·기준선·문서 선택 | 추가 조회 불필요 | 받은 필드의 표시 변경 |
 | 소식 검색·유형 변경 | 필요 시 `/events/{eventId}/news` | `event.news`를 로컬 필터 |
@@ -437,7 +437,8 @@ NVDA의 예시 `price`는 `143.72`, `change`는 `2.14`, `currency`는 `USD`다. 
 - `src/app/App.jsx`, `src/app/RouteContent.jsx`: 앱 조립과 라우트.
 - `src/features/`: 전체 검색과 로컬 저장.
 - `src/data/`: mock/API 공통 조회, 응답 어댑터, 페이지 데이터 로딩.
-- `src/pages/explore/ExplorePage.jsx`: 사건 검색·정렬·기간별 화면값.
+- `src/pages/explore/ExplorePage.jsx`: 이슈 검색·정렬·카드/리스트 표시 전환.
+- `src/pages/pulse/PulsePage.jsx`: 독립된 스냅샷 조회와 문서 그래프. [펄스맵 계약](pulse-openapi.json)을 사용한다.
 - `src/pages/event/EventPage.jsx`: 상세 탭, 뉴스 필터, 차트와 문서 참조.
 - `src/pages/account/AccountPage.jsx`: 독립된 마이페이지·로그인·회원가입 준비 안내. 기존 `EntityPage.jsx`는 제거했다.
 - `src/lib/wiki.js`: 리포트와 펄스맵에서 사용하는 위키백과 원문 링크.

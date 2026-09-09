@@ -183,8 +183,8 @@ export default function EventPage({
         <div>
           <span>문서별 편집자 합계</span>
           <strong>
-            {formatNumber(event.editors)}
-            <small>명</small>
+            {event.editors === null ? "미제공" : formatNumber(event.editors)}
+            {event.editors !== null && <small>명</small>}
           </strong>
         </div>
       </div>

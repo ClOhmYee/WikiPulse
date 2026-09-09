@@ -11,7 +11,7 @@ The principal journey is onboarding → Pulse Map or issue search → issue repo
 | Hash route | Owner | Implemented purpose |
 |---|---|---|
 | `#/` | `App.jsx`, `NodeField.jsx` | Existing introduction and entry into the workspace |
-| `#/pulse` | `ExplorePage.jsx`, `PulseMap.jsx` | Select a signal cluster, inspect its preview, search/filter events, change chart period, zoom/pan/reset the map |
+| `#/pulse` | `pages/pulse/PulsePage.jsx`, `PulseMap.jsx` | Date/snapshot selection, HOT/NEW, document graph, zoom/pan/reset, snapshot summary and document evidence |
 | `#/issues`, `#/issues?q=…` | `ExplorePage.jsx` | Card/list presentation switch (default list), search, category filtering and sorting; switching preserves state |
 | `#/issues/{issueId}` | `EventPage.jsx` | Report with overview, timeline, news, evidence and discussion; chart range/baseline; source selection; related stocks and saving |
 | `#/issues/{issueId}/stocks` | `StocksPage.jsx` | Issue-scoped stock directory with industry and relationship filters |
@@ -59,7 +59,7 @@ The desktop shell uses a fixed 214px left sidebar and a 78px top header containi
 
 Detail-specific responsive refinements are kept in `details.css`; use those selectors when extending detail pages rather than copying the shell's layout assumptions. The app's minimum viewport width is 320px. On mobile, search results become a fixed panel below the header, horizontally overflowing tab/filter rows can scroll, and toast placement clears bottom navigation.
 
-Depth comes mainly from dark surface changes and fine borders. The SVG map uses a radial atmosphere and translucent points; content panels stay restrained. Search results and feedback can use shadows, including the toast's `0 8px 24px #0006`. Common panels use 12px corners and 24px padding (20px padding on mobile); buttons use 6px corners, chips and icon buttons 5px, and map containers 12px/10px at desktop/mobile.
+Depth comes mainly from dark surface changes and fine borders. The SVG map uses faint cluster boundaries, individual document nodes and supplied relationship edges. Its layout is fixed after d3-force calculation and cached by identity. Search results and feedback can use shadows, including the toast's `0 8px 24px #0006`. Common panels use 12px corners and 24px padding (20px padding on mobile); buttons use 6px corners, chips and icon buttons 5px, and map containers 12px/10px at desktop/mobile. The map has a dedicated [snapshot/graph contract and handoff](../../docs/frontend/PULSE_MAP.md).
 
 ## Component ownership and reuse
 

@@ -17,7 +17,7 @@ export default [
       sourceType: 'module',
       parserOptions: { ecmaFeatures: { jsx: true } },
       globals: Object.fromEntries([
-        'window', 'document', 'localStorage', 'performance', 'requestAnimationFrame',
+        'window', 'document', 'localStorage', 'performance', 'requestAnimationFrame', 'DOMPoint',
         'cancelAnimationFrame', 'ResizeObserver', 'Element', 'WheelEvent', 'URLSearchParams',
         'Float32Array', 'Math', 'Number', 'Array', 'Object', 'String', 'Boolean', 'JSON',
         'globalThis', 'Promise', 'structuredClone', 'AbortController', 'Set', 'Map', 'Intl', 'console', 'Uint8Array', 'URL', 'Error',

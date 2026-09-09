@@ -41,38 +41,41 @@ test('onboarding CTA opens the workspace and releases onboarding scroll state', 
   await expect(page.getByRole('region', { name: '사건 관계 지도' })).toBeVisible()
 })
 
-test('map selection, zoom limits, dragging, reset and period controls change the view', async ({ page }) => {
-  await openWorkspace(page)
-  const map = page.getByRole('region', { name: '사건 관계 지도' })
-  const preview = page.getByRole('complementary', { name: '선택한 사건' })
-  await map.getByRole('button', { name: new RegExp(chips.title) }).click()
-  await expect(preview.getByRole('heading', { name: chips.title })).toBeVisible()
-  await expect(map.getByRole('button', { name: new RegExp(chips.title) })).toHaveAttribute('aria-pressed', 'true')
-  const transformGroup = map.locator('svg > g[transform]')
-  const initialTransform = await transformGroup.getAttribute('transform')
-  await page.getByRole('button', { name: '지도 확대', exact: true }).click()
-  await expect(transformGroup).not.toHaveAttribute('transform', initialTransform)
-  for (let step = 0; step < 5; step++) {
-    const zoomIn = page.getByRole('button', { name: '지도 확대', exact: true })
-    if (await zoomIn.isEnabled()) await zoomIn.click()
+test('map selection, zoom, pan, reset and snapshot selection update the same view', async ({ page }) => {
+  await openWorkspace(page);
+  const map = page.getByRole('region', { name: '사건 관계 지도' });
+  const preview = page.getByRole('complementary', { name: '선택한 사건' });
+  await map.getByRole('button', { name: new RegExp(chips.title) }).locator('.document-cluster__title').click();
+  await expect(preview.getByRole('heading', { name: chips.title })).toBeVisible();
+  const group = map.locator('svg > g[transform]');
+  await page.getByRole('button', { name: '지도 위치 초기화' }).click();
+  const initial = await group.getAttribute('transform');
+  await page.getByRole('button', { name: '지도 확대', exact: true }).click();
+  await expect(group).not.toHaveAttribute('transform', initial);
+  for (let i = 0; i < 6; i++) {
+    const control = page.getByRole('button', { name: '지도 확대', exact: true });
+    if (await control.isEnabled()) await control.click();
   }
-  await expect(page.getByRole('button', { name: '지도 확대', exact: true })).toBeDisabled()
-  await page.getByRole('button', { name: '지도 위치 초기화' }).click()
-  await expect(transformGroup).toHaveAttribute('transform', initialTransform)
-  const svgBox = await map.getByRole('img', { name: /사건을 선택하면.*요약을 볼 수 있습니다/ }).boundingBox()
-  await page.mouse.move(svgBox.x + 20, svgBox.y + svgBox.height * 0.25)
-  await page.mouse.down()
-  await page.mouse.move(svgBox.x + 72, svgBox.y + svgBox.height * 0.25 + 15, { steps: 4 })
-  await page.mouse.up()
-  await expect(transformGroup).not.toHaveAttribute('transform', initialTransform)
-  await page.getByRole('button', { name: '지도 위치 초기화' }).click()
-  await expect(transformGroup).toHaveAttribute('transform', initialTransform)
-  await page.getByRole('button', { name: '7일', exact: true }).click()
-  await expect(map).toContainText('7일 누적 편집')
-  await expect(preview.getByRole('img', { name: /편집 추이/ })).toHaveAttribute('aria-label', /8개 시점/)
-  await preview.getByRole('link', { name: '사건 자세히 보기' }).click()
-  await expect(page).toHaveURL(new RegExp(`#\\/issues\\/${chips.id}$`))
-})
+  await expect(page.getByRole('button', { name: '지도 확대', exact: true })).toBeDisabled();
+  await page.getByRole('button', { name: '지도 위치 초기화' }).click();
+  await expect(group).toHaveAttribute('transform', initial);
+  await map.getByRole('group', { name: '이슈와 문서 관계 그래프' }).scrollIntoViewIfNeeded();
+  const box = await map.getByRole('group', { name: '이슈와 문서 관계 그래프' }).boundingBox();
+  await page.mouse.move(box.x + 8, box.y + 8);
+  await page.mouse.down();
+  await page.mouse.move(box.x + 58, box.y + 28, { steps: 4 });
+  await page.mouse.up();
+  await expect(group).not.toHaveAttribute('transform', initial);
+  await page.getByRole('button', { name: '지도 위치 초기화' }).click();
+  await expect(group).toHaveAttribute('transform', initial);
+  await page.getByRole('button', { name: '이전 시점', exact: true }).click();
+  await expect(map).toHaveAttribute('data-snapshot', '2025-06-23T15:00:00Z');
+  await expect(preview).toHaveAttribute('data-snapshot', '2025-06-23T15:00:00Z');
+  await expect(preview.getByRole('heading', { name: chips.title })).toBeVisible();
+  await preview.getByRole('link', { name: '사건 자세히 보기' }).click();
+  await expect(page).toHaveURL(/#\/issues\/ai-chip-controls~5$/);
+  await expect(page.getByRole('heading', { level: 1, name: chips.title })).toBeVisible();
+});
 
 test('event query, category, sorting and empty-state reset return the right events', async ({ page }) => {
   await openWorkspace(page, '/issues')

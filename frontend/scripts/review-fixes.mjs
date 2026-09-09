@@ -5,13 +5,13 @@ const output = fileURLToPath(new URL('../../.impeccable/review/', import.meta.ur
 const browser = await chromium.launch({ headless: true });
 const page = await browser.newPage({ viewport: { width: 390, height: 844 }, reducedMotion: 'reduce' });
 await page.goto('http://127.0.0.1:5174/#/pulse');
-await page.locator('.pulse-map').waitFor();
+await page.locator('.document-map').waitFor();
 await page.evaluate(() => document.fonts.ready);
 await page.screenshot({ path: `${output}/workspace-pulse-mobile.png`, fullPage: true });
-await page.locator('.pulse-map').screenshot({ path: `${output}/workspace-map-mobile-fix.png` });
+await page.locator('.document-map').screenshot({ path: `${output}/workspace-map-mobile-fix.png` });
 const mobile = await page.evaluate(() => {
-  const controls = document.querySelector('.pulse-map__controls').getBoundingClientRect();
-  const labels = [...document.querySelectorAll('.pulse-map__cluster text')].map(element => {
+  const controls = document.querySelector('.document-map__controls').getBoundingClientRect();
+  const labels = [...document.querySelectorAll('.document-cluster__title')].map(element => {
     const bounds = element.getBoundingClientRect();
     return { text: element.textContent, bottom: bounds.bottom, overlaps: bounds.bottom > controls.top && bounds.top < controls.bottom && bounds.right > controls.left && bounds.left < controls.right };
   });

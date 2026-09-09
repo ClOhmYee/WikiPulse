@@ -17,8 +17,10 @@ export function createApiClient(baseURL, fetcher) {
       await request(`${path}/${encodeURIComponent(id)}`, {}, options),
     );
   return {
-    listSnapshots: async (params = {}, options) => validateSnapshots(await request("/issues/snapshots", params, options)),
-    getPulseMap: async (params = {}, options) => validateMap(await request("/issues/map", params, options), params),
+    listSnapshots: async (params = {}, options) =>
+      validateSnapshots(await request("/issues/snapshots", params, options)),
+    getPulseMap: async (params = {}, options) =>
+      validateMap(await request("/issues/map", params, options), params),
     listCategories: async (options) =>
       adaptResponse(await request("/categories", {}, options), { list: true }),
     listEvents: list("/events"),

@@ -14,7 +14,8 @@ frontend/src/
     layout/                        공통 레이아웃·렌더링 오류 경계
   pages/
     onboarding/                    OnboardingPage·NodeField·온보딩 CSS
-    explore/                       지도/목록 화면·PulseMap
+    explore/                       이슈 탐색 카드/리스트
+    pulse/                         시점 선택·문서 그래프·근거 패널
     event/                         사건 상세·EventSections·로컬 토론/CSS
     account/                       마이페이지·로그인·회원가입 준비 안내
     stocks/                        목록·상세·공유 종목 요소/CSS
@@ -43,6 +44,8 @@ frontend/src/
 `app → 페이지 데이터 경계 → 페이지/기능 → 표시 컴포넌트`로 구성한다. 한 페이지는 다른 페이지를 import하지 않는다. 여러 화면이 사용하는 사건 행은 `components/event`에, 사건에서만 사용하는 토론은 `pages/event`에 둔다. 범용 UI는 fixture나 서버 주소를 알지 않고 props로 데이터를 받는다.
 
 페이지의 `usePageData()`는 **해당 화면에서 이미 로드한 데이터**를 읽는다. 이 Context는 앱 전체 데이터를 쌓는 전역 저장소가 아니다. `PageDataBoundary`가 `useAsyncResource`를 통해 `resources.js`와 공통 `dataClient`를 호출하고, 로딩/오류를 처리한 뒤 기존 화면을 렌더한다. `getEvent`, `getEntity`, `getStock`, `getCategory`는 이 화면에 로드된 데이터에서 찾는 동기 selector이며 HTTP 메서드와 구분한다.
+
+펄스맵은 `PageDataBoundary`의 전체 이벤트 로더를 사용하지 않는다. `PulsePage`가 공통 클라이언트의 `listSnapshots`·`getPulseMap`을 `useAsyncResource`로 조회하고 원자적인 시점별 그래프를 받는다. `data/pulse/contract.js`에서 무결성을 확인하고 `pages/pulse/layout.js`가 복사된 노드의 배치만 계산한다. [펄스맵 설계·계약](PULSE_MAP.md)을 참조한다.
 
 `dataClient`는 모든 조회를 Promise로 제공한다. 목 구현만 fixture를 import하며, API 구현은 `fetch`로 받은 응답을 어댑터에서 통일한다. 페이지·기능·앱·컴포넌트의 직접 fixture import는 ESLint가 차단한다. 상세 응답의 `included`는 연관 객체를 찾는 데 사용하고 목록 요약을 상세 데이터로 재사용하지 않는다.
 

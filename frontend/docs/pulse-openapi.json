@@ -1,0 +1,513 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "WikiPulse Pulse Map contract",
+    "version": "1.0.0-proposal",
+    "description": "Frontend mock/API contract. Server implementation tracked in WP-74; production/storage in WP-75. IDs are opaque strings on the wire; numeric database IDs must be serialized without precision loss."
+  },
+  "servers": [
+    {
+      "url": "/api/v1"
+    }
+  ],
+  "paths": {
+    "/issues/snapshots": {
+      "get": {
+        "operationId": "listSnapshots",
+        "parameters": [
+          {
+            "name": "from",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date-time",
+              "pattern": "Z$"
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date-time",
+              "pattern": "Z$"
+            }
+          },
+          {
+            "name": "source",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "live",
+                "replay"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Completed snapshots, including zero-cluster snapshots; unique by source and snapshotTs.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SnapshotResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/issues/map": {
+      "get": {
+        "operationId": "getPulseMap",
+        "parameters": [
+          {
+            "name": "snapshotTs",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date-time",
+              "pattern": "Z$"
+            }
+          },
+          {
+            "name": "source",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "live",
+                "replay"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Atomic graph from one completed snapshot; omitting timestamp selects latest LIVE, or latest replay when no LIVE exists. Edges refer only to nodes within the same cluster.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MapResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Requested snapshot does not exist; never substitute current data.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Snapshot": {
+        "type": "object",
+        "required": [
+          "snapshotTs",
+          "source",
+          "clusterCount"
+        ],
+        "properties": {
+          "snapshotTs": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "Z$"
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "live",
+              "replay"
+            ]
+          },
+          "clusterCount": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "additionalProperties": false
+      },
+      "SnapshotResponse": {
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Snapshot"
+            }
+          }
+        },
+        "additionalProperties": false
+      },
+      "Node": {
+        "type": "object",
+        "required": [
+          "pageId",
+          "wiki",
+          "title",
+          "isSeed",
+          "editCount",
+          "views",
+          "editBaseline",
+          "viewBaseline",
+          "spikeScore",
+          "sizeScore",
+          "completeness",
+          "windowStart",
+          "windowEnd"
+        ],
+        "properties": {
+          "pageId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "wiki": {
+            "type": "string",
+            "pattern": "^[a-z-]+wiki$"
+          },
+          "title": {
+            "type": "string",
+            "minLength": 1
+          },
+          "isSeed": {
+            "type": "boolean"
+          },
+          "editCount": {
+            "type": "number",
+            "minimum": 0,
+            "nullable": true
+          },
+          "views": {
+            "type": "number",
+            "minimum": 0,
+            "nullable": true
+          },
+          "editBaseline": {
+            "type": "number",
+            "minimum": 0,
+            "nullable": true
+          },
+          "viewBaseline": {
+            "type": "number",
+            "minimum": 0,
+            "nullable": true
+          },
+          "spikeScore": {
+            "type": "number",
+            "minimum": 0,
+            "nullable": true
+          },
+          "sizeScore": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "nullable": true
+          },
+          "completeness": {
+            "type": "string",
+            "enum": [
+              "complete",
+              "pending",
+              "unavailable"
+            ]
+          },
+          "windowStart": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "Z$"
+          },
+          "windowEnd": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "Z$"
+          }
+        },
+        "additionalProperties": false
+      },
+      "Evidence": {
+        "type": "object",
+        "required": [
+          "label"
+        ],
+        "properties": {
+          "label": {
+            "type": "string",
+            "minLength": 1
+          },
+          "month": {
+            "type": "string",
+            "pattern": "^\\d{4}-(0[1-9]|1[0-2])$"
+          },
+          "observedAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "Z$"
+          }
+        },
+        "additionalProperties": false
+      },
+      "Edge": {
+        "type": "object",
+        "required": [
+          "id",
+          "sourcePageId",
+          "targetPageId",
+          "kind",
+          "directed",
+          "weight",
+          "evidence"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "sourcePageId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "targetPageId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "clickstream",
+              "wikidata"
+            ]
+          },
+          "directed": {
+            "type": "boolean"
+          },
+          "weight": {
+            "type": "number",
+            "minimum": 0
+          },
+          "evidence": {
+            "$ref": "#/components/schemas/Evidence"
+          }
+        },
+        "additionalProperties": false
+      },
+      "Cluster": {
+        "type": "object",
+        "required": [
+          "id",
+          "issueKey",
+          "label",
+          "summary",
+          "category",
+          "firstDetectedAt",
+          "hot",
+          "pulseScore",
+          "status",
+          "memberCount",
+          "nodes",
+          "edges"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "issueKey": {
+            "type": "string",
+            "minLength": 1
+          },
+          "label": {
+            "type": "string",
+            "minLength": 1
+          },
+          "summary": {
+            "type": "string",
+            "minLength": 1,
+            "nullable": true
+          },
+          "category": {
+            "type": "string",
+            "enum": [
+              "politics",
+              "world",
+              "society",
+              "economy",
+              "technology",
+              "science",
+              "culture",
+              "sports",
+              "environment",
+              "other"
+            ]
+          },
+          "firstDetectedAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "Z$",
+            "nullable": true
+          },
+          "hot": {
+            "type": "boolean"
+          },
+          "pulseScore": {
+            "type": "number",
+            "minimum": 0
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "DETECTED",
+              "VERIFYING",
+              "CONFIRMED"
+            ]
+          },
+          "memberCount": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "nodes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Node"
+            }
+          },
+          "edges": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Edge"
+            }
+          }
+        },
+        "additionalProperties": false
+      },
+      "MapMeta": {
+        "type": "object",
+        "required": [
+          "snapshotTs",
+          "source",
+          "scoreVersion",
+          "newWindowHours",
+          "clusterCount",
+          "nodeCount",
+          "edgeCount",
+          "truncated"
+        ],
+        "properties": {
+          "snapshotTs": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "Z$"
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "live",
+              "replay"
+            ]
+          },
+          "dataMode": {
+            "type": "string",
+            "minLength": 1
+          },
+          "scoreVersion": {
+            "type": "string",
+            "minLength": 1
+          },
+          "newWindowHours": {
+            "type": "number",
+            "exclusiveMinimum": true,
+            "minimum": 0
+          },
+          "clusterCount": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "nodeCount": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "edgeCount": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "truncated": {
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": false
+      },
+      "MapResponse": {
+        "type": "object",
+        "required": [
+          "data",
+          "meta"
+        ],
+        "properties": {
+          "data": {
+            "type": "object",
+            "required": [
+              "clusters"
+            ],
+            "properties": {
+              "clusters": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/Cluster"
+                }
+              }
+            },
+            "additionalProperties": false
+          },
+          "meta": {
+            "$ref": "#/components/schemas/MapMeta"
+          }
+        },
+        "additionalProperties": false
+      },
+      "Error": {
+        "type": "object",
+        "required": [
+          "error"
+        ],
+        "properties": {
+          "error": {
+            "type": "object",
+            "required": [
+              "code"
+            ],
+            "properties": {
+              "code": {
+                "type": "string",
+                "minLength": 1
+              },
+              "message": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false
+      }
+    }
+  }
+}
