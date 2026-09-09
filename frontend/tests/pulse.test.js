@@ -5,6 +5,7 @@ import { pulseMaps, makeStressMap } from '../src/data/mock/fixtures/pulse.js';
 import { validateMap, validateSnapshots } from '../src/data/pulse/contract.js';
 import { isNewIssue, kstDate, closestSnapshot, calendarDays } from '../src/data/pulse/time.js';
 import { createApiClient } from '../src/data/api/client.js';
+import { createLayoutEngine, nodeRadius } from '../src/pages/pulse/layout.js';
 
 test('KST dates, missing dates, NEW boundary and real timestamp snapping', () => {
   assert.equal(kstDate('2025-06-23T15:00:00Z'), '2025-06-24');
@@ -54,4 +55,23 @@ test('API map boundary preserves source, timestamp and cancellation without fall
   const broken = createApiClient('/api/v1', async () => new Response('{}', { status: 503 }));
   await assert.rejects(broken.getPulseMap(), /불러오지 못했습니다/);
   controller.abort(); await assert.rejects(mockClient.getPulseMap({}, { signal: controller.signal }), { name: 'AbortError' });
+});
+
+test('layout preserves identity and fixed score scale and handles 500 nodes', () => {
+  const layout = createLayoutEngine();
+  const graph = makeStressMap();
+  const start = performance.now();
+  const first = layout(graph.data.clusters);
+  const duration = performance.now() - start;
+  assert(duration < 2000, `layout took ${duration}ms`);
+  const filtered = layout([graph.data.clusters[3]]);
+  assert.deepEqual(filtered.clusters[0], first.clusters[3]);
+  const next = structuredClone(graph.data.clusters);
+  next[3].nodes[0].sizeScore = 0.8;
+  const changed = layout(next).clusters[3].nodes[0];
+  assert.equal(changed.x, first.clusters[3].nodes[0].x);
+  assert.equal(changed.y, first.clusters[3].nodes[0].y);
+  assert.equal(changed.radius, nodeRadius(0.8));
+  for (const c of first.clusters) for (const n of c.nodes) assert(Number.isFinite(n.x) && Number.isFinite(n.y));
+  console.log(`500 nodes / 1000 edges layout: ${duration.toFixed(1)}ms`);
 });

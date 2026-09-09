@@ -1822,6 +1822,12 @@
   border-radius: 12px;
   background: var(--wp-surface);
 }
-.event-list[data-view="card"] .event-row__main { grid-column: 1 / -1; }
+.event-list[data-view="card"] .event-row__main {
+  grid-column: 1 / -1;
+}
 .event-list[data-view="card"] .event-row__signal,
-.event-list[data-view="card"] .event-row__edits { display: flex; flex-direction: column; align-items: start; }
+.event-list[data-view="card"] .event-row__edits {
+  display: flex;
+  flex-direction: column;
+  align-items: start;
+}

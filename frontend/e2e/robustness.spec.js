@@ -142,20 +142,7 @@ test('WebGL unavailable fallback retains the full story and a keyboard-operable 
   await expect(page.locator('html')).not.toHaveClass(/scene-snap-enabled/)
 })
 
-test('seven-day map values are accumulated correctly and fourteen-day stock charts retain exact prices', async ({ page }) => {
-  await page.goto('/#/pulse')
-  const map = page.getByRole('region', { name: '사건 관계 지도' })
-  await page.getByRole('button', { name: '7일', exact: true }).click()
-  for (const event of events) {
-    const points = event.chart.slice(-7)
-    const edits = points.reduce((sum, point) => sum + point.edits, 0)
-    const baseline = points.reduce((sum, point) => sum + point.baseline, 0)
-    const pulse = Math.round(edits / baseline * 10) / 10
-    await expect(map.getByRole('button', { name: `${event.title}, Pulse ${pulse}배`, exact: true })).toBeVisible()
-    const row = page.locator('.event-row').filter({ has: page.getByRole('link', { name: event.title, exact: true }) })
-    await expect(row.locator('.event-row__signal')).toContainText(`${pulse.toFixed(1)}×`)
-    await expect(row.locator('.event-row__edits')).toContainText(formatNumber(edits))
-  }
+test('fourteen-day stock charts retain exact prices', async ({ page }) => {
   await page.goto('/#/stocks/NVDA')
   await page.getByRole('group', { name: '예시 가격 차트 기간' }).getByRole('button', { name: '14일', exact: true }).click()
   const chart = page.getByRole('img', { name: /NVDA 예시 가격/ })

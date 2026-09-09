@@ -25,7 +25,7 @@ npm.cmd run dev
 | 경로 | 내용 |
 |---|---|
 | `#/` | 기존 Track → Cluster → Match 온보딩 |
-| `#/pulse` | 사건 지도, 검색·주제·기간, 선택 사건 미리보기 |
+| `#/pulse` | 날짜·시점 탐색, HOT/NEW, 문서 그래프·근거 패널 ([계약](../docs/frontend/PULSE_MAP.md)) |
 | `#/issues` | 이슈 목록, 검색·주제·정렬 |
 | `#/issues/iran-hormuz-2025` | 이슈 리포트: 개요, 타임라인, 뉴스 예시, 근거 문서, 토론 |
 | `#/issues/iran-hormuz-2025/stocks` | 이슈에 연결된 종목과 연결 유형 |

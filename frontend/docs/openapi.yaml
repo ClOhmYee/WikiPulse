@@ -862,6 +862,7 @@ components:
           description: round(edits / baseline, 1). 단위는 배수이며 %가 아니다.
         editors:
           type: integer
+          nullable: true
           minimum: 0
           description: 기준일 문서별 편집자 수의 단순 합계. 문서 간 중복 제거 인원 및 3일·7일 고유 편집자 수가 아니다.
         pageviews:
@@ -1124,6 +1125,7 @@ components:
           description: round(edits / baseline, 1). 단위는 배수이며 %가 아니다.
         editors:
           type: integer
+          nullable: true
           minimum: 0
           description: 문서의 기준일 편집자 수 예시.
         pageviews:
