@@ -54,12 +54,16 @@ paths:
             type: string
             enum:
               - all
-              - geopolitics
+              - politics
+              - world
+              - society
+              - economy
               - technology
-              - energy
-              - space
-              - materials
-              - security
+              - science
+              - culture
+              - sports
+              - environment
+              - other
             default: all
         - name: window
           in: query
@@ -607,12 +611,16 @@ components:
     CategoryId:
       type: string
       enum:
-        - geopolitics
+        - politics
+        - world
+        - society
+        - economy
         - technology
-        - energy
-        - space
-        - materials
-        - security
+        - science
+        - culture
+        - sports
+        - environment
+        - other
     Category:
       type: object
       required:
@@ -902,7 +910,7 @@ components:
         id: iran-hormuz-2025
         title: 호르무즈 해협, 에너지 공급망으로 번지는 관심
         summary: 호르무즈 해협·이란·석유 문서의 편집이 함께 늘었습니다. 해상 운송에서 에너지 공급망까지 연결되는 맥락을 살펴보세요.
-        category: geopolitics
+        category: world
         status: rising
         startAt: "2025-06-18T08:40:00+09:00"
         updatedAt: "2025-06-24T11:42:00+09:00"

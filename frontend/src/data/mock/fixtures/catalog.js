@@ -8,14 +8,8 @@ export const DEMO_DATE = "2025-06-24";
 export const DEMO_NOTICE =
   "2025.06.24 기준의 가상 데이터입니다. 편집·뉴스·가격과 연결 관계는 화면 체험을 위한 예시입니다.";
 
-export const categories = [
-  { id: "geopolitics", label: "국제 정세", color: "#edb778" },
-  { id: "technology", label: "AI · 반도체", color: "#96ade7" },
-  { id: "energy", label: "에너지", color: "#a6bd8c" },
-  { id: "space", label: "우주 · 항공", color: "#b09cd4" },
-  { id: "materials", label: "배터리 · 소재", color: "#d5a7bc" },
-  { id: "security", label: "사이버 보안", color: "#83bcb9" },
-];
+import { issueCategories } from "../../categories.js";
+export const categories = issueCategories;
 
 const wiki = (title) =>
   `https://en.wikipedia.org/wiki/${encodeURIComponent(title.replaceAll(" ", "_"))}`;
@@ -81,7 +75,7 @@ const entityFixtures = [
     id: "strait-of-hormuz",
     title: "Strait of Hormuz",
     name: "호르무즈 해협",
-    category: "geopolitics",
+    category: "world",
     description:
       "페르시아만과 오만만을 잇는 해상 통로. 에너지 운송과 주변 지역 문서의 변화를 함께 살펴봅니다.",
     edits: 412,
@@ -118,7 +112,7 @@ const entityFixtures = [
     id: "iran",
     title: "Iran",
     name: "이란",
-    category: "geopolitics",
+    category: "world",
     description:
       "중동의 국가 문서. 외교·지리·에너지 항목이 호르무즈 해협과 연결되는 맥락을 제공합니다.",
     edits: 248,
@@ -155,7 +149,7 @@ const entityFixtures = [
     id: "petroleum",
     title: "Petroleum",
     name: "석유",
-    category: "energy",
+    category: "environment",
     description:
       "원유 생산과 정제, 운송을 다루는 문서. 지정학 이슈가 에너지 산업으로 이어지는 탐색 지점입니다.",
     edits: 164,
@@ -303,7 +297,7 @@ const entityFixtures = [
     id: "nuclear-power",
     title: "Nuclear power",
     name: "원자력 발전",
-    category: "energy",
+    category: "environment",
     profile: "sustained",
     description:
       "원자력을 이용한 전력 생산 문서. 발전 방식, 연료와 장기 전력 수요의 관계를 살펴봅니다.",
@@ -341,7 +335,7 @@ const entityFixtures = [
     id: "uranium",
     title: "Uranium",
     name: "우라늄",
-    category: "energy",
+    category: "environment",
     profile: "sustained",
     description:
       "원자력 연료로 사용되는 원소 문서. 연료 주기와 생산·가공 단계를 따라 탐색합니다.",
@@ -379,7 +373,7 @@ const entityFixtures = [
     id: "spacex",
     title: "SpaceX",
     name: "스페이스X",
-    category: "space",
+    category: "science",
     profile: "cooling",
     description:
       "우주 발사체와 우주 수송 관련 기업 문서. 발사체 개발 및 재사용 기술 문서와 연결됩니다.",
@@ -417,7 +411,7 @@ const entityFixtures = [
     id: "reusable-launch-system",
     title: "Reusable launch vehicle",
     name: "재사용 발사체",
-    category: "space",
+    category: "science",
     profile: "cooling",
     description:
       "발사체 구성 요소를 회수해 다시 사용하는 기술 문서. 회수 방식과 운용 구조를 설명합니다.",
@@ -455,7 +449,7 @@ const entityFixtures = [
     id: "lithium-ion-battery",
     title: "Lithium-ion battery",
     name: "리튬 이온 배터리",
-    category: "materials",
+    category: "economy",
     profile: "sustained",
     description:
       "이차전지의 구성과 제조, 활용 문서. 원재료부터 완성 셀까지 공급망 맥락을 제공합니다.",
@@ -493,7 +487,7 @@ const entityFixtures = [
     id: "lithium",
     title: "Lithium",
     name: "리튬",
-    category: "materials",
+    category: "economy",
     profile: "sustained",
     description:
       "배터리 원재료와 연결되는 원소 문서. 생산 방식과 가공·활용 문서의 변화를 살펴봅니다.",
@@ -531,7 +525,7 @@ const entityFixtures = [
     id: "cybersecurity",
     title: "Computer security",
     name: "사이버 보안",
-    category: "security",
+    category: "society",
     description:
       "정보 시스템을 보호하는 원칙과 기술 문서. 인증, 클라우드와 보안 제품의 관계를 읽습니다.",
     edits: 132,
@@ -568,7 +562,7 @@ const entityFixtures = [
     id: "cloud-computing",
     title: "Cloud computing",
     name: "클라우드 컴퓨팅",
-    category: "security",
+    category: "society",
     description:
       "네트워크를 통해 제공되는 컴퓨팅 자원 문서. 보안 운영과 AI 인프라의 연결 맥락입니다.",
     edits: 76,
@@ -632,7 +626,7 @@ const eventFixtures = [
     title: "호르무즈 해협, 에너지 공급망으로 번지는 관심",
     summary:
       "호르무즈 해협·이란·석유 문서의 편집이 함께 늘었습니다. 해상 운송에서 에너지 공급망까지 연결되는 맥락을 살펴보세요.",
-    category: "geopolitics",
+    category: "world",
     status: "rising",
     startAt: at(18, "08:40"),
     updatedAt: at(24, "11:42"),
@@ -806,7 +800,7 @@ const eventFixtures = [
     title: "원자력 발전과 우라늄, 전력 수요의 연결",
     summary:
       "원자력 발전과 연료 문서에서 높은 관심이 이어집니다. 전력 생산의 구조에서 연료 공급까지 문서 사이의 관계를 따라가세요.",
-    category: "energy",
+    category: "environment",
     status: "sustained",
     startAt: at(14, "09:15"),
     updatedAt: at(24, "11:16"),
@@ -893,7 +887,7 @@ const eventFixtures = [
     title: "재사용 발사체, 발사 이후에도 이어지는 변화",
     summary:
       "우주 수송과 재사용 기술 문서의 편집량이 고점을 지나 완만해졌습니다. 신호가 잦아드는 동안 남은 기술 맥락을 읽어보세요.",
-    category: "space",
+    category: "science",
     status: "cooling",
     startAt: at(13, "07:50"),
     updatedAt: at(24, "10:41"),
@@ -980,7 +974,7 @@ const eventFixtures = [
     title: "배터리 소재에서 셀까지, 공급망을 잇는 편집",
     summary:
       "리튬과 리튬 이온 배터리 문서의 관심이 함께 유지됩니다. 원재료·가공·셀 제조의 서로 다른 연결 경로를 비교해 보세요.",
-    category: "materials",
+    category: "economy",
     status: "sustained",
     startAt: at(15, "09:40"),
     updatedAt: at(24, "10:36"),
@@ -1067,7 +1061,7 @@ const eventFixtures = [
     title: "클라우드 보안, 계정과 접근 관리로 모이는 관심",
     summary:
       "사이버 보안과 클라우드 컴퓨팅 문서의 편집이 늘고 있습니다. 접근 제어부터 보안 운영까지 연결되는 개념을 따라가세요.",
-    category: "security",
+    category: "society",
     status: "rising",
     startAt: at(20, "10:25"),
     updatedAt: at(24, "11:32"),
