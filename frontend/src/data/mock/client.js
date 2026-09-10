@@ -4,16 +4,18 @@ import {
   events,
   stocks,
   DEMO_DATE,
+  HISTORY_START,
 } from "./fixtures/catalog.js";
+import { resolveReport, articleAt } from "./fixtures/history.js";
 import { DataError } from "../contracts.js";
-import { listSnapshots, getPulseMap, historicalReport } from "./pulse.js";
+import { listSnapshots, getPulseMap } from "./pulse.js";
 
 const meta = {
   dataMode: "mock",
   asOf: DEMO_DATE,
   timezone: "Asia/Seoul",
   window: "24h",
-  availableRange: { from: "2025-06-01", to: DEMO_DATE, interval: "day" },
+  availableRange: { from: HISTORY_START, to: DEMO_DATE, interval: "day" },
 };
 const omit = (value, keys) =>
   Object.fromEntries(
@@ -22,6 +24,19 @@ const omit = (value, keys) =>
 const eventSummary = (value) => omit(value, ["timeline", "news", "insights"]);
 const entitySummary = (value) => omit(value, ["chart", "changes"]);
 const stockSummary = (value) => omit(value, ["chart"]);
+function stockForReport(stock, event) {
+  const baseId = event.id.split("~")[0];
+  return {
+    ...stockSummary(stock),
+    // This projection belongs to the selected report, not today's quote/history.
+    price: event.date === DEMO_DATE ? stock.price : null,
+    change: event.date === DEMO_DATE ? stock.change : null,
+    eventIds: [event.id],
+    relations: stock.relations
+      .filter((r) => r.eventId === baseId)
+      .map((r) => ({ ...r, eventId: event.id })),
+  };
+}
 const match = (text, query = "") =>
   text.toLowerCase().includes(query.trim().toLowerCase());
 const invalid = () => {
@@ -77,10 +92,21 @@ function find(values, id, key = "id") {
 const referenced = (values, ids, project) =>
   values.filter((item) => ids.includes(item.id ?? item.symbol)).map(project);
 const eventIncluded = (values) => ({
-  entities: referenced(
-    entities,
-    values.flatMap((item) => item.articleIds),
-    entitySummary,
+  entities: [...new Set(values.flatMap((item) => item.articleIds))].map(
+    (id) => {
+      const latest = values
+        .filter((item) => item.articleIds.includes(id))
+        .sort((a, b) => b.date.localeCompare(a.date))[0];
+      return entitySummary(
+        articleAt(
+          id,
+          latest.date,
+          values
+            .filter((item) => item.articleIds.includes(id))
+            .map((item) => item.id),
+        ),
+      );
+    },
   ),
 });
 const stockIncluded = (values) => ({
@@ -136,36 +162,20 @@ const handlers = {
     return paginate(values, params, eventIncluded, { window });
   },
   getEvent(id) {
-    const archived = historicalReport(id, events);
-    if (archived)
-      return envelope(
-        archived.data,
-        {
-          entities: archived.nodes.map((node) => {
-            const original = entities.find((v) => v.id === node.pageId);
-            return {
-              ...entitySummary(original),
-              edits: node.editCount,
-              baseline: node.editBaseline,
-              pulse: node.editBaseline
-                ? Math.round((node.editCount / node.editBaseline) * 10) / 10
-                : 0,
-              pageviews: node.views,
-              editors: null,
-              eventIds: [id],
-              relatedIds: [],
-              chart: [],
-              changes: [],
-            };
-          }),
-        },
-        { asOf: archived.data.date, snapshotTs: archived.snapshotTs },
-      );
-    const event = find(events, id);
-    return envelope(event, {
-      ...eventIncluded([event]),
-      stocks: referenced(stocks, event.stockSymbols, stockSummary),
-    });
+    const event = resolveReport(id);
+    if (!event) find([], id);
+    return envelope(
+      event,
+      {
+        entities: event.articleIds.map((pageId) =>
+          entitySummary(articleAt(pageId, event.date, [event.id])),
+        ),
+        stocks: stocks
+          .filter((stock) => event.stockSymbols.includes(stock.symbol))
+          .map((stock) => stockForReport(stock, event)),
+      },
+      { asOf: event.date, snapshotTs: event.updatedAt },
+    );
   },
   listEntities(params = {}) {
     validate(params, ["q", "offset", "limit"]);
@@ -196,7 +206,8 @@ const handlers = {
     if (params.sector !== undefined && typeof params.sector !== "string")
       invalid();
     if (params.relationType !== undefined && !params.eventId) invalid();
-    const event = params.eventId ? find(events, params.eventId) : null;
+    const event = params.eventId ? resolveReport(params.eventId) : null;
+    if (params.eventId && !event) find([], params.eventId);
     const values = stocks
       .filter(
         (stock) =>
@@ -212,13 +223,15 @@ const handlers = {
             stock.sector === params.sector) &&
           (!params.relationType ||
             params.relationType === "all" ||
-            stock.relations.some(
+            stockForReport(stock, event).relations.some(
               (relation) =>
                 relation.eventId === params.eventId &&
                 relation.type === params.relationType,
             )),
       )
-      .map(stockSummary)
+      .map((stock) =>
+        event ? stockForReport(stock, event) : stockSummary(stock),
+      )
       .sort(
         (a, b) =>
           (params.sort === "name"
@@ -226,7 +239,12 @@ const handlers = {
             : b.eventIds.length - a.eventIds.length) ||
           a.symbol.localeCompare(b.symbol),
       );
-    return paginate(values, params, stockIncluded);
+    return paginate(
+      values,
+      params,
+      event ? () => ({ events: [eventSummary(event)] }) : stockIncluded,
+      event ? { asOf: event.date } : {},
+    );
   },
   getStock(symbol) {
     const stock = find(stocks, String(symbol).toUpperCase(), "symbol");

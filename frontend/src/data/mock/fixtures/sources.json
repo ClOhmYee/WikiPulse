@@ -1,0 +1,2815 @@
+{
+  "checkedAt": "2026-09-10",
+  "universe": {
+    "name": "Nasdaq-100",
+    "asOf": "2026-09-10",
+    "source": "https://en.wikipedia.org/wiki/List_of_NASDAQ-100_companies",
+    "revisionId": 1368915166,
+    "membershipMode": "fixed-current-universe",
+    "note": "Current constituent snapshot applied to all demo dates; not historical index membership.",
+    "stocks": [
+      {
+        "symbol": "ADBE",
+        "name": "Adobe Inc.",
+        "title": "Adobe Inc.",
+        "industry": "Technology",
+        "subsector": "Software"
+      },
+      {
+        "symbol": "AMD",
+        "name": "Advanced Micro Devices",
+        "title": "AMD",
+        "industry": "Technology",
+        "subsector": "Semiconductors"
+      },
+      {
+        "symbol": "ABNB",
+        "name": "Airbnb",
+        "title": "Airbnb",
+        "industry": "Consumer Discretionary",
+        "subsector": "Diversified Commercial Services"
+      },
+      {
+        "symbol": "ALNY",
+        "name": "Alnylam Pharmaceuticals",
+        "title": "Alnylam Pharmaceuticals",
+        "industry": "Health Care",
+        "subsector": "Biotechnology"
+      },
+      {
+        "symbol": "GOOGL",
+        "name": "Alphabet Inc. (Class A)",
+        "title": "Alphabet Inc.",
+        "industry": "Technology",
+        "subsector": "Software"
+      },
+      {
+        "symbol": "GOOG",
+        "name": "Alphabet Inc. (Class C)",
+        "title": "Alphabet Inc.",
+        "industry": "Technology",
+        "subsector": "Software"
+      },
+      {
+        "symbol": "AMZN",
+        "name": "Amazon",
+        "title": "Amazon (company)",
+        "industry": "Consumer Discretionary",
+        "subsector": "Catalog/Specialty Distribution"
+      },
+      {
+        "symbol": "AEP",
+        "name": "American Electric Power",
+        "title": "American Electric Power",
+        "industry": "Utilities",
+        "subsector": "Electric Utilities"
+      },
+      {
+        "symbol": "AMGN",
+        "name": "Amgen",
+        "title": "Amgen",
+        "industry": "Health Care",
+        "subsector": "Biotechnology"
+      },
+      {
+        "symbol": "ADI",
+        "name": "Analog Devices",
+        "title": "Analog Devices",
+        "industry": "Technology",
+        "subsector": "Semiconductors"
+      },
+      {
+        "symbol": "AAPL",
+        "name": "Apple Inc.",
+        "title": "Apple Inc.",
+        "industry": "Technology",
+        "subsector": "Computer Hardware"
+      },
+      {
+        "symbol": "AMAT",
+        "name": "Applied Materials",
+        "title": "Applied Materials",
+        "industry": "Technology",
+        "subsector": "Semiconductors"
+      },
+      {
+        "symbol": "APP",
+        "name": "AppLovin",
+        "title": "AppLovin",
+        "industry": "Technology",
+        "subsector": "Software"
+      },
+      {
+        "symbol": "ARM",
+        "name": "Arm Holdings",
+        "title": "Arm Holdings",
+        "industry": "Technology",
+        "subsector": "Semiconductors"
+      },
+      {
+        "symbol": "ASML",
+        "name": "ASML Holding",
+        "title": "ASML Holding",
+        "industry": "Technology",
+        "subsector": "Industrial Machinery"
+      },
+      {
+        "symbol": "ALAB",
+        "name": "Astera Labs",
+        "title": "Astera Labs",
+        "industry": "Technology",
+        "subsector": "Semiconductors"
+      },
+      {
+        "symbol": "ADSK",
+        "name": "Autodesk",
+        "title": "Autodesk",
+        "industry": "Technology",
+        "subsector": "Software"
+      },
+      {
+        "symbol": "ADP",
+        "name": "Automatic Data Processing",
+        "title": "ADP (company)",
+        "industry": "Industrials",
+        "subsector": "Diversified Commercial Services"
+      },
+      {
+        "symbol": "AXON",
+        "name": "Axon Enterprise",
+        "title": "Axon Enterprise",
+        "industry": "Industrials",
+        "subsector": "Ordnance & Accessories"
+      },
+      {
+        "symbol": "BKR",
+        "name": "Baker Hughes",
+        "title": "Baker Hughes",
+        "industry": "Energy",
+        "subsector": "Oil Equipment & Services"
+      },
+      {
+        "symbol": "BKNG",
+        "name": "Booking Holdings",
+        "title": "Booking Holdings",
+        "industry": "Consumer Discretionary",
+        "subsector": "Transportation Services"
+      },
+      {
+        "symbol": "AVGO",
+        "name": "Broadcom",
+        "title": "Broadcom",
+        "industry": "Technology",
+        "subsector": "Semiconductors"
+      },
+      {
+        "symbol": "CDNS",
+        "name": "Cadence Design Systems",
+        "title": "Cadence Design Systems",
+        "industry": "Technology",
+        "subsector": "Software"
+      },
+      {
+        "symbol": "CTAS",
+        "name": "Cintas",
+        "title": "Cintas",
+        "industry": "Industrials",
+        "subsector": "Garments & Clothing"
+      },
+      {
+        "symbol": "CSCO",
+        "name": "Cisco",
+        "title": "Cisco",
+        "industry": "Telecommunications",
+        "subsector": "Computer Communications Equipment"
+      },
+      {
+        "symbol": "CCEP",
+        "name": "Coca-Cola Europacific Partners",
+        "title": "Coca-Cola Europacific Partners",
+        "industry": "Consumer Staples",
+        "subsector": "Soft Drinks"
+      },
+      {
+        "symbol": "CMCSA",
+        "name": "Comcast",
+        "title": "Comcast",
+        "industry": "Telecommunications",
+        "subsector": "Cable & Other Pay Television Services"
+      },
+      {
+        "symbol": "CEG",
+        "name": "Constellation Energy",
+        "title": "Constellation Energy",
+        "industry": "Utilities",
+        "subsector": "Electric Utilities"
+      },
+      {
+        "symbol": "CPRT",
+        "name": "Copart",
+        "title": "Copart",
+        "industry": "Consumer Discretionary",
+        "subsector": "Retail"
+      },
+      {
+        "symbol": "CRWV",
+        "name": "CoreWeave",
+        "title": "CoreWeave",
+        "industry": "Technology",
+        "subsector": "Computer Services"
+      },
+      {
+        "symbol": "COST",
+        "name": "Costco",
+        "title": "Costco",
+        "industry": "Consumer Discretionary",
+        "subsector": "Department/Specialty Retail Stores"
+      },
+      {
+        "symbol": "CRWD",
+        "name": "CrowdStrike",
+        "title": "CrowdStrike",
+        "industry": "Technology",
+        "subsector": "Software"
+      },
+      {
+        "symbol": "CSX",
+        "name": "CSX Corporation",
+        "title": "CSX Corporation",
+        "industry": "Industrials",
+        "subsector": "Railroads"
+      },
+      {
+        "symbol": "DDOG",
+        "name": "Datadog",
+        "title": "Datadog",
+        "industry": "Technology",
+        "subsector": "Software"
+      },
+      {
+        "symbol": "DXCM",
+        "name": "DexCom",
+        "title": "DexCom",
+        "industry": "Health Care",
+        "subsector": "Medical/Dental Instruments"
+      },
+      {
+        "symbol": "FANG",
+        "name": "Diamondback Energy",
+        "title": "Diamondback Energy",
+        "industry": "Energy",
+        "subsector": "Oil & Gas Production"
+      },
+      {
+        "symbol": "DASH",
+        "name": "DoorDash",
+        "title": "DoorDash",
+        "industry": "Technology",
+        "subsector": "Software"
+      },
+      {
+        "symbol": "EXC",
+        "name": "Exelon",
+        "title": "Exelon",
+        "industry": "Utilities",
+        "subsector": "Power Generation"
+      },
+      {
+        "symbol": "FAST",
+        "name": "Fastenal",
+        "title": "Fastenal",
+        "industry": "Industrials",
+        "subsector": "Construction & Materials"
+      },
+      {
+        "symbol": "FER",
+        "name": "Ferrovial",
+        "title": "Ferrovial",
+        "industry": "Industrials",
+        "subsector": "Military, Government, Technical"
+      },
+      {
+        "symbol": "FTNT",
+        "name": "Fortinet",
+        "title": "Fortinet",
+        "industry": "Technology",
+        "subsector": "Computer Peripheral Equipment"
+      },
+      {
+        "symbol": "GEHC",
+        "name": "GE HealthCare",
+        "title": "GE HealthCare",
+        "industry": "Health Care",
+        "subsector": "Medical Electronics"
+      },
+      {
+        "symbol": "GILD",
+        "name": "Gilead Sciences",
+        "title": "Gilead Sciences",
+        "industry": "Health Care",
+        "subsector": "Biotechnology"
+      },
+      {
+        "symbol": "HONA",
+        "name": "Honeywell Aerospace",
+        "title": "Honeywell Aerospace",
+        "industry": "Industrials",
+        "subsector": "Aerospace"
+      },
+      {
+        "symbol": "HON",
+        "name": "Honeywell Technologies",
+        "title": "Honeywell",
+        "industry": "Industrials",
+        "subsector": "Diversified Industrials"
+      },
+      {
+        "symbol": "IDXX",
+        "name": "Idexx Laboratories",
+        "title": "Idexx Laboratories",
+        "industry": "Health Care",
+        "subsector": "Biotechnology"
+      },
+      {
+        "symbol": "INTC",
+        "name": "Intel",
+        "title": "Intel",
+        "industry": "Technology",
+        "subsector": "Semiconductors"
+      },
+      {
+        "symbol": "INTU",
+        "name": "Intuit",
+        "title": "Intuit",
+        "industry": "Technology",
+        "subsector": "Computer Software"
+      },
+      {
+        "symbol": "ISRG",
+        "name": "Intuitive Surgical",
+        "title": "Intuitive Surgical",
+        "industry": "Health Care",
+        "subsector": "Industrial Specialties"
+      },
+      {
+        "symbol": "KDP",
+        "name": "Keurig Dr Pepper",
+        "title": "Keurig Dr Pepper",
+        "industry": "Consumer Staples",
+        "subsector": "Soft Drinks"
+      },
+      {
+        "symbol": "KLAC",
+        "name": "KLA Corporation",
+        "title": "KLA Corporation",
+        "industry": "Technology",
+        "subsector": "Electronic Components"
+      },
+      {
+        "symbol": "KHC",
+        "name": "Kraft Heinz",
+        "title": "Kraft Heinz",
+        "industry": "Consumer Staples",
+        "subsector": "Packaged Foods"
+      },
+      {
+        "symbol": "LRCX",
+        "name": "Lam Research",
+        "title": "Lam Research",
+        "industry": "Technology",
+        "subsector": "Industrial Machinery"
+      },
+      {
+        "symbol": "LIN",
+        "name": "Linde plc",
+        "title": "Linde plc",
+        "industry": "Basic Materials",
+        "subsector": "Major Chemicals"
+      },
+      {
+        "symbol": "LITE",
+        "name": "Lumentum",
+        "title": "Lumentum",
+        "industry": "Technology",
+        "subsector": "Communication Equipment"
+      },
+      {
+        "symbol": "MAR",
+        "name": "Marriott International",
+        "title": "Marriott International",
+        "industry": "Consumer Discretionary",
+        "subsector": "Hotels/Resorts"
+      },
+      {
+        "symbol": "MRVL",
+        "name": "Marvell Technology",
+        "title": "Marvell Technology",
+        "industry": "Technology",
+        "subsector": "Semiconductors"
+      },
+      {
+        "symbol": "MELI",
+        "name": "Mercado Libre",
+        "title": "Mercado Libre",
+        "industry": "Consumer Discretionary",
+        "subsector": "Catalog/Specialty Distribution"
+      },
+      {
+        "symbol": "META",
+        "name": "Meta Platforms",
+        "title": "Meta Platforms",
+        "industry": "Technology",
+        "subsector": "Software"
+      },
+      {
+        "symbol": "MCHP",
+        "name": "Microchip Technology",
+        "title": "Microchip Technology",
+        "industry": "Technology",
+        "subsector": "Semiconductors"
+      },
+      {
+        "symbol": "MU",
+        "name": "Micron Technology",
+        "title": "Micron Technology",
+        "industry": "Technology",
+        "subsector": "Semiconductors"
+      },
+      {
+        "symbol": "MSFT",
+        "name": "Microsoft",
+        "title": "Microsoft",
+        "industry": "Technology",
+        "subsector": "Software"
+      },
+      {
+        "symbol": "MSTR",
+        "name": "MicroStrategy",
+        "title": "MicroStrategy",
+        "industry": "Technology",
+        "subsector": "Software"
+      },
+      {
+        "symbol": "MDLZ",
+        "name": "Mondelez International",
+        "title": "Mondelez International",
+        "industry": "Consumer Staples",
+        "subsector": "Packaged Foods"
+      },
+      {
+        "symbol": "MPWR",
+        "name": "Monolithic Power Systems",
+        "title": "Monolithic Power Systems",
+        "industry": "Technology",
+        "subsector": "Semiconductors"
+      },
+      {
+        "symbol": "MNST",
+        "name": "Monster Beverage",
+        "title": "Monster Beverage",
+        "industry": "Consumer Staples",
+        "subsector": "Soft Drinks"
+      },
+      {
+        "symbol": "NBIS",
+        "name": "Nebius Group",
+        "title": "Nebius Group",
+        "industry": "Technology",
+        "subsector": "Computer Services"
+      },
+      {
+        "symbol": "NFLX",
+        "name": "Netflix, Inc.",
+        "title": "Netflix, Inc.",
+        "industry": "Consumer Discretionary",
+        "subsector": "Consumer Electronics"
+      },
+      {
+        "symbol": "NVDA",
+        "name": "Nvidia",
+        "title": "Nvidia",
+        "industry": "Technology",
+        "subsector": "Semiconductors"
+      },
+      {
+        "symbol": "NXPI",
+        "name": "NXP Semiconductors",
+        "title": "NXP Semiconductors",
+        "industry": "Technology",
+        "subsector": "Semiconductors"
+      },
+      {
+        "symbol": "ORLY",
+        "name": "O'Reilly Automotive",
+        "title": "O'Reilly Automotive",
+        "industry": "Consumer Discretionary",
+        "subsector": "Specialty Retailers"
+      },
+      {
+        "symbol": "ODFL",
+        "name": "Old Dominion Freight Line",
+        "title": "Old Dominion Freight Line",
+        "industry": "Industrials",
+        "subsector": "Trucking"
+      },
+      {
+        "symbol": "PCAR",
+        "name": "Paccar",
+        "title": "Paccar",
+        "industry": "Consumer Discretionary",
+        "subsector": "Motor Vehicles"
+      },
+      {
+        "symbol": "PLTR",
+        "name": "Palantir Technologies",
+        "title": "Palantir Technologies",
+        "industry": "Technology",
+        "subsector": "Software"
+      },
+      {
+        "symbol": "PANW",
+        "name": "Palo Alto Networks",
+        "title": "Palo Alto Networks",
+        "industry": "Technology",
+        "subsector": "Computer Peripheral Equipment"
+      },
+      {
+        "symbol": "PAYX",
+        "name": "Paychex",
+        "title": "Paychex",
+        "industry": "Industrials",
+        "subsector": "Diversified Commercial Services"
+      },
+      {
+        "symbol": "PYPL",
+        "name": "PayPal",
+        "title": "PayPal",
+        "industry": "Industrials",
+        "subsector": "Diversified Commercial Services"
+      },
+      {
+        "symbol": "PDD",
+        "name": "PDD Holdings",
+        "title": "Pinduoduo",
+        "industry": "Technology",
+        "subsector": "EDP Services"
+      },
+      {
+        "symbol": "PEP",
+        "name": "PepsiCo",
+        "title": "PepsiCo",
+        "industry": "Consumer Staples",
+        "subsector": "Soft Drinks"
+      },
+      {
+        "symbol": "QCOM",
+        "name": "Qualcomm",
+        "title": "Qualcomm",
+        "industry": "Technology",
+        "subsector": "Semiconductors"
+      },
+      {
+        "symbol": "REGN",
+        "name": "Regeneron Pharmaceuticals",
+        "title": "Regeneron Pharmaceuticals",
+        "industry": "Health Care",
+        "subsector": "Biotechnology"
+      },
+      {
+        "symbol": "RKLB",
+        "name": "Rocket Lab",
+        "title": "Rocket Lab",
+        "industry": "Industrials",
+        "subsector": "Aerospace"
+      },
+      {
+        "symbol": "ROP",
+        "name": "Roper Technologies",
+        "title": "Roper Technologies",
+        "industry": "Technology",
+        "subsector": "Software"
+      },
+      {
+        "symbol": "ROST",
+        "name": "Ross Stores",
+        "title": "Ross Stores",
+        "industry": "Consumer Discretionary",
+        "subsector": "Clothing/Shoe/Accessory Stores"
+      },
+      {
+        "symbol": "SNDK",
+        "name": "Sandisk",
+        "title": "Sandisk",
+        "industry": "Technology",
+        "subsector": "Electronic Components"
+      },
+      {
+        "symbol": "STX",
+        "name": "Seagate Technology",
+        "title": "Seagate Technology",
+        "industry": "Technology",
+        "subsector": "Electronic Components"
+      },
+      {
+        "symbol": "SHOP",
+        "name": "Shopify",
+        "title": "Shopify",
+        "industry": "Technology",
+        "subsector": "Software"
+      },
+      {
+        "symbol": "SPCX",
+        "name": "SpaceX",
+        "title": "SpaceX",
+        "industry": "Telecommunications",
+        "subsector": "Telecommunications Services"
+      },
+      {
+        "symbol": "SBUX",
+        "name": "Starbucks",
+        "title": "Starbucks",
+        "industry": "Consumer Discretionary",
+        "subsector": "Restaurants"
+      },
+      {
+        "symbol": "SNPS",
+        "name": "Synopsys",
+        "title": "Synopsys",
+        "industry": "Technology",
+        "subsector": "Software"
+      },
+      {
+        "symbol": "TMUS",
+        "name": "T-Mobile US",
+        "title": "T-Mobile US",
+        "industry": "Telecommunications",
+        "subsector": "Telecommunications Services"
+      },
+      {
+        "symbol": "TTWO",
+        "name": "Take-Two Interactive",
+        "title": "Take-Two Interactive",
+        "industry": "Consumer Discretionary",
+        "subsector": "Miscellaneous Amusement & Recreation Services"
+      },
+      {
+        "symbol": "TER",
+        "name": "Teradyne",
+        "title": "Teradyne",
+        "industry": "Technology",
+        "subsector": "Semiconductors"
+      },
+      {
+        "symbol": "TSLA",
+        "name": "Tesla, Inc.",
+        "title": "Tesla, Inc.",
+        "industry": "Consumer Discretionary",
+        "subsector": "Automobiles & Parts"
+      },
+      {
+        "symbol": "TXN",
+        "name": "Texas Instruments",
+        "title": "Texas Instruments",
+        "industry": "Technology",
+        "subsector": "Semiconductors"
+      },
+      {
+        "symbol": "TRI",
+        "name": "Thomson Reuters",
+        "title": "Thomson Reuters",
+        "industry": "Technology",
+        "subsector": "Software"
+      },
+      {
+        "symbol": "VRTX",
+        "name": "Vertex Pharmaceuticals",
+        "title": "Vertex Pharmaceuticals",
+        "industry": "Health Care",
+        "subsector": "Biotechnology"
+      },
+      {
+        "symbol": "WMT",
+        "name": "Walmart",
+        "title": "Walmart",
+        "industry": "Consumer Discretionary",
+        "subsector": "Department/Specialty Retail Stores"
+      },
+      {
+        "symbol": "WBD",
+        "name": "Warner Bros. Discovery",
+        "title": "Warner Bros. Discovery",
+        "industry": "Consumer Discretionary",
+        "subsector": "Entertainment"
+      },
+      {
+        "symbol": "WDC",
+        "name": "Western Digital",
+        "title": "Western Digital",
+        "industry": "Technology",
+        "subsector": "Electronic Components"
+      },
+      {
+        "symbol": "WDAY",
+        "name": "Workday, Inc.",
+        "title": "Workday, Inc.",
+        "industry": "Technology",
+        "subsector": "Software"
+      },
+      {
+        "symbol": "XEL",
+        "name": "Xcel Energy",
+        "title": "Xcel Energy",
+        "industry": "Utilities",
+        "subsector": "Conventional Electricity"
+      }
+    ]
+  },
+  "articles": {
+    "2025 United Nations Climate Change Conference": {
+      "pageId": 75227876,
+      "title": "2025 United Nations Climate Change Conference",
+      "url": "https://en.wikipedia.org/wiki/2025_United_Nations_Climate_Change_Conference",
+      "firstRevisionAt": "2023-11-05T05:45:33Z",
+      "firstRevisionId": 1183580044
+    },
+    "2026 FIFA World Cup": {
+      "pageId": 36581929,
+      "title": "2026 FIFA World Cup",
+      "url": "https://en.wikipedia.org/wiki/2026_FIFA_World_Cup",
+      "firstRevisionAt": "2012-07-30T05:39:24Z",
+      "firstRevisionId": 504886819
+    },
+    "2026 Winter Olympics": {
+      "pageId": 38416091,
+      "title": "2026 Winter Olympics",
+      "url": "https://en.wikipedia.org/wiki/2026_Winter_Olympics",
+      "firstRevisionAt": "2013-02-04T06:16:57Z",
+      "firstRevisionId": 536472373
+    },
+    "5G": {
+      "pageId": 23475353,
+      "title": "5G",
+      "url": "https://en.wikipedia.org/wiki/5G",
+      "firstRevisionAt": "2009-07-03T08:46:49Z",
+      "firstRevisionId": 300020021
+    },
+    "ADP (company)": {
+      "pageId": 1212868,
+      "title": "ADP (company)",
+      "url": "https://en.wikipedia.org/wiki/ADP_(company)",
+      "firstRevisionAt": "2004-11-26T20:37:59Z",
+      "firstRevisionId": 7881057
+    },
+    "AI accelerator": {
+      "pageId": 50827978,
+      "title": "Neural processing unit",
+      "url": "https://en.wikipedia.org/wiki/Neural_processing_unit",
+      "firstRevisionAt": "2016-06-16T16:06:32Z",
+      "firstRevisionId": 725586187
+    },
+    "AMD": {
+      "pageId": 2400,
+      "title": "AMD",
+      "url": "https://en.wikipedia.org/wiki/AMD",
+      "firstRevisionAt": "2001-10-30T23:59:05Z",
+      "firstRevisionId": 369467235
+    },
+    "ASML Holding": {
+      "pageId": 2875651,
+      "title": "ASML",
+      "url": "https://en.wikipedia.org/wiki/ASML",
+      "firstRevisionAt": "2005-10-10T12:14:06Z",
+      "firstRevisionId": 25198207
+    },
+    "Adobe Inc.": {
+      "pageId": 1955,
+      "title": "Adobe Inc.",
+      "url": "https://en.wikipedia.org/wiki/Adobe_Inc.",
+      "firstRevisionAt": "2001-09-27T06:27:28Z",
+      "firstRevisionId": 235733
+    },
+    "Airbnb": {
+      "pageId": 32058290,
+      "title": "Airbnb",
+      "url": "https://en.wikipedia.org/wiki/Airbnb",
+      "firstRevisionAt": "2011-06-12T12:41:57Z",
+      "firstRevisionId": 433874375
+    },
+    "Alnylam Pharmaceuticals": {
+      "pageId": 40448087,
+      "title": "Alnylam Pharmaceuticals",
+      "url": "https://en.wikipedia.org/wiki/Alnylam_Pharmaceuticals",
+      "firstRevisionAt": "2013-09-04T21:01:23Z",
+      "firstRevisionId": 571562362
+    },
+    "Alphabet Inc.": {
+      "pageId": 47489893,
+      "title": "Alphabet Inc.",
+      "url": "https://en.wikipedia.org/wiki/Alphabet_Inc.",
+      "firstRevisionAt": "2015-08-10T21:02:43Z",
+      "firstRevisionId": 675478818
+    },
+    "Alpine skiing": {
+      "pageId": 39576,
+      "title": "Alpine skiing",
+      "url": "https://en.wikipedia.org/wiki/Alpine_skiing",
+      "firstRevisionAt": "2001-09-19T03:58:17Z",
+      "firstRevisionId": 247284
+    },
+    "Amazon (company)": {
+      "pageId": 90451,
+      "title": "Amazon (company)",
+      "url": "https://en.wikipedia.org/wiki/Amazon_(company)",
+      "firstRevisionAt": "2002-09-24T11:49:13Z",
+      "firstRevisionId": 310456
+    },
+    "Amazon Web Services": {
+      "pageId": 1691376,
+      "title": "Amazon Web Services",
+      "url": "https://en.wikipedia.org/wiki/Amazon_Web_Services",
+      "firstRevisionAt": "2005-04-04T12:37:02Z",
+      "firstRevisionId": 11872781
+    },
+    "American Electric Power": {
+      "pageId": 1648542,
+      "title": "American Electric Power",
+      "url": "https://en.wikipedia.org/wiki/American_Electric_Power",
+      "firstRevisionAt": "2005-03-25T20:18:12Z",
+      "firstRevisionId": 12120429
+    },
+    "Amgen": {
+      "pageId": 932897,
+      "title": "Amgen",
+      "url": "https://en.wikipedia.org/wiki/Amgen",
+      "firstRevisionAt": "2004-08-26T19:49:34Z",
+      "firstRevisionId": 6368812
+    },
+    "Analog Devices": {
+      "pageId": 644341,
+      "title": "Analog Devices",
+      "url": "https://en.wikipedia.org/wiki/Analog_Devices",
+      "firstRevisionAt": "2004-05-09T15:32:49Z",
+      "firstRevisionId": 3511659
+    },
+    "AppLovin": {
+      "pageId": 51759510,
+      "title": "AppLovin",
+      "url": "https://en.wikipedia.org/wiki/AppLovin",
+      "firstRevisionAt": "2016-09-26T22:10:27Z",
+      "firstRevisionId": 741342987
+    },
+    "Apple Inc.": {
+      "pageId": 856,
+      "title": "Apple Inc.",
+      "url": "https://en.wikipedia.org/wiki/Apple_Inc.",
+      "firstRevisionAt": "2001-11-03T13:19:06Z",
+      "firstRevisionId": 234249
+    },
+    "Applied Materials": {
+      "pageId": 479719,
+      "title": "Applied Materials",
+      "url": "https://en.wikipedia.org/wiki/Applied_Materials",
+      "firstRevisionAt": "2004-02-21T05:18:39Z",
+      "firstRevisionId": 5858369
+    },
+    "Arm Holdings": {
+      "pageId": 21896483,
+      "title": "Arm Holdings",
+      "url": "https://en.wikipedia.org/wiki/Arm_Holdings",
+      "firstRevisionAt": "2002-02-22T20:38:31Z",
+      "firstRevisionId": 16286
+    },
+    "Association football": {
+      "pageId": 10568,
+      "title": "Association football",
+      "url": "https://en.wikipedia.org/wiki/Association_football",
+      "firstRevisionAt": "2001-11-16T00:52:59Z",
+      "firstRevisionId": 336624705
+    },
+    "Astera Labs": {
+      "pageId": 80319564,
+      "title": "Astera Labs",
+      "url": "https://en.wikipedia.org/wiki/Astera_Labs",
+      "firstRevisionAt": "2025-06-30T03:47:50Z",
+      "firstRevisionId": 1298036554
+    },
+    "Autodesk": {
+      "pageId": 180584,
+      "title": "Autodesk",
+      "url": "https://en.wikipedia.org/wiki/Autodesk",
+      "firstRevisionAt": "2003-02-08T04:01:48Z",
+      "firstRevisionId": 654545
+    },
+    "Automatic Data Processing": {
+      "pageId": 1212868,
+      "title": "ADP (company)",
+      "url": "https://en.wikipedia.org/wiki/ADP_(company)",
+      "firstRevisionAt": "2004-11-26T20:37:59Z",
+      "firstRevisionId": 7881057
+    },
+    "Autonomous robot": {
+      "pageId": 48049,
+      "title": "Autonomous robot",
+      "url": "https://en.wikipedia.org/wiki/Autonomous_robot",
+      "firstRevisionAt": "2002-02-24T04:47:20Z",
+      "firstRevisionId": 17070
+    },
+    "Axon Enterprise": {
+      "pageId": 4762404,
+      "title": "Axon Enterprise",
+      "url": "https://en.wikipedia.org/wiki/Axon_Enterprise",
+      "firstRevisionAt": "2006-04-15T20:41:12Z",
+      "firstRevisionId": 48611401
+    },
+    "Baker Hughes": {
+      "pageId": 629006,
+      "title": "Baker Hughes",
+      "url": "https://en.wikipedia.org/wiki/Baker_Hughes",
+      "firstRevisionAt": "2004-05-01T16:28:37Z",
+      "firstRevisionId": 3406943
+    },
+    "Battery management system": {
+      "pageId": 18801266,
+      "title": "Battery management system",
+      "url": "https://en.wikipedia.org/wiki/Battery_management_system",
+      "firstRevisionAt": "2008-08-10T21:22:35Z",
+      "firstRevisionId": 231094842
+    },
+    "Battery recycling": {
+      "pageId": 13207354,
+      "title": "Battery recycling",
+      "url": "https://en.wikipedia.org/wiki/Battery_recycling",
+      "firstRevisionAt": "2007-09-11T01:10:14Z",
+      "firstRevisionId": 157053809
+    },
+    "Bitcoin": {
+      "pageId": 28249265,
+      "title": "Bitcoin",
+      "url": "https://en.wikipedia.org/wiki/Bitcoin",
+      "firstRevisionAt": "2009-03-08T16:41:07Z",
+      "firstRevisionId": 275832581
+    },
+    "Blockchain": {
+      "pageId": 44065971,
+      "title": "Blockchain",
+      "url": "https://en.wikipedia.org/wiki/Blockchain",
+      "firstRevisionAt": "2014-10-09T14:38:31Z",
+      "firstRevisionId": 628931216
+    },
+    "Body camera": {
+      "pageId": 42456582,
+      "title": "Body camera",
+      "url": "https://en.wikipedia.org/wiki/Body_camera",
+      "firstRevisionAt": "2014-04-10T15:13:20Z",
+      "firstRevisionId": 603606475
+    },
+    "Booking Holdings": {
+      "pageId": 44829655,
+      "title": "Booking Holdings",
+      "url": "https://en.wikipedia.org/wiki/Booking_Holdings",
+      "firstRevisionAt": "2014-12-24T16:32:22Z",
+      "firstRevisionId": 639487143
+    },
+    "Broadcom": {
+      "pageId": 6896005,
+      "title": "Broadcom",
+      "url": "https://en.wikipedia.org/wiki/Broadcom",
+      "firstRevisionAt": "2006-09-08T08:41:46Z",
+      "firstRevisionId": 74491657
+    },
+    "Building automation": {
+      "pageId": 2893444,
+      "title": "Building automation",
+      "url": "https://en.wikipedia.org/wiki/Building_automation",
+      "firstRevisionAt": "2005-10-12T22:34:24Z",
+      "firstRevisionId": 25385905
+    },
+    "Building information modeling": {
+      "pageId": 3978080,
+      "title": "Building information modeling",
+      "url": "https://en.wikipedia.org/wiki/Building_information_modeling",
+      "firstRevisionAt": "2006-02-06T11:47:51Z",
+      "firstRevisionId": 38452151
+    },
+    "Business intelligence": {
+      "pageId": 168387,
+      "title": "Business intelligence",
+      "url": "https://en.wikipedia.org/wiki/Business_intelligence",
+      "firstRevisionAt": "2003-01-12T22:17:28Z",
+      "firstRevisionId": 583693
+    },
+    "Business travel": {
+      "pageId": 12482068,
+      "title": "Business travel",
+      "url": "https://en.wikipedia.org/wiki/Business_travel",
+      "firstRevisionAt": "2007-07-27T16:04:55Z",
+      "firstRevisionId": 147470297
+    },
+    "CHIPS and Science Act": {
+      "pageId": 71460046,
+      "title": "CHIPS and Science Act",
+      "url": "https://en.wikipedia.org/wiki/CHIPS_and_Science_Act",
+      "firstRevisionAt": "2022-08-05T03:45:14Z",
+      "firstRevisionId": 1102447902
+    },
+    "CSX Corporation": {
+      "pageId": 1199246,
+      "title": "CSX Corporation",
+      "url": "https://en.wikipedia.org/wiki/CSX_Corporation",
+      "firstRevisionAt": "2004-11-22T23:28:51Z",
+      "firstRevisionId": 7764672
+    },
+    "Cadence Design Systems": {
+      "pageId": 11678999,
+      "title": "Cadence Design Systems",
+      "url": "https://en.wikipedia.org/wiki/Cadence_Design_Systems",
+      "firstRevisionAt": "2003-10-28T07:57:07Z",
+      "firstRevisionId": 1637604
+    },
+    "Carbon capture and storage": {
+      "pageId": 3679268,
+      "title": "Carbon capture and storage",
+      "url": "https://en.wikipedia.org/wiki/Carbon_capture_and_storage",
+      "firstRevisionAt": "2006-01-10T20:56:44Z",
+      "firstRevisionId": 34657933
+    },
+    "Carbon neutrality": {
+      "pageId": 73361588,
+      "title": "Net-zero emissions",
+      "url": "https://en.wikipedia.org/wiki/Net-zero_emissions",
+      "firstRevisionAt": "2023-03-23T10:28:27Z",
+      "firstRevisionId": 1146198233
+    },
+    "Charging station": {
+      "pageId": 10592503,
+      "title": "Charging station",
+      "url": "https://en.wikipedia.org/wiki/Charging_station",
+      "firstRevisionAt": "2007-04-11T09:41:21Z",
+      "firstRevisionId": 121902854
+    },
+    "ChatGPT": {
+      "pageId": 72417803,
+      "title": "ChatGPT",
+      "url": "https://en.wikipedia.org/wiki/ChatGPT",
+      "firstRevisionAt": "2022-12-05T00:11:07Z",
+      "firstRevisionId": 1125621134
+    },
+    "Cintas": {
+      "pageId": 2354469,
+      "title": "Cintas",
+      "url": "https://en.wikipedia.org/wiki/Cintas",
+      "firstRevisionAt": "2005-08-01T14:24:35Z",
+      "firstRevisionId": 20050280
+    },
+    "Cisco": {
+      "pageId": 51746,
+      "title": "Cisco",
+      "url": "https://en.wikipedia.org/wiki/Cisco",
+      "firstRevisionAt": "2002-05-09T03:39:36Z",
+      "firstRevisionId": 133204
+    },
+    "Climate change mitigation": {
+      "pageId": 2119179,
+      "title": "Climate change mitigation",
+      "url": "https://en.wikipedia.org/wiki/Climate_change_mitigation",
+      "firstRevisionAt": "2005-06-26T15:10:34Z",
+      "firstRevisionId": 15863701
+    },
+    "Clinical trial": {
+      "pageId": 241717,
+      "title": "Clinical trial",
+      "url": "https://en.wikipedia.org/wiki/Clinical_trial",
+      "firstRevisionAt": "2003-06-07T14:36:43Z",
+      "firstRevisionId": 1040905
+    },
+    "Cloud computing": {
+      "pageId": 19541494,
+      "title": "Cloud computing",
+      "url": "https://en.wikipedia.org/wiki/Cloud_computing",
+      "firstRevisionAt": "2007-03-03T11:08:54Z",
+      "firstRevisionId": 112299950
+    },
+    "Cloud gaming": {
+      "pageId": 29104117,
+      "title": "Cloud gaming",
+      "url": "https://en.wikipedia.org/wiki/Cloud_gaming",
+      "firstRevisionAt": "2010-10-07T22:06:50Z",
+      "firstRevisionId": 389406617
+    },
+    "Cloud storage": {
+      "pageId": 11295734,
+      "title": "Cloud storage",
+      "url": "https://en.wikipedia.org/wiki/Cloud_storage",
+      "firstRevisionAt": "2007-05-18T20:54:06Z",
+      "firstRevisionId": 131862384
+    },
+    "Coca-Cola Europacific Partners": {
+      "pageId": 47457671,
+      "title": "Coca-Cola Europacific Partners",
+      "url": "https://en.wikipedia.org/wiki/Coca-Cola_Europacific_Partners",
+      "firstRevisionAt": "2015-08-07T19:15:19Z",
+      "firstRevisionId": 675029280
+    },
+    "Comcast": {
+      "pageId": 303749,
+      "title": "Comcast",
+      "url": "https://en.wikipedia.org/wiki/Comcast",
+      "firstRevisionAt": "2003-08-24T16:35:31Z",
+      "firstRevisionId": 1570845
+    },
+    "Computer security": {
+      "pageId": 7398,
+      "title": "Computer security",
+      "url": "https://en.wikipedia.org/wiki/Computer_security",
+      "firstRevisionAt": "2001-11-05T23:06:35Z",
+      "firstRevisionId": 241881
+    },
+    "Computer-aided design": {
+      "pageId": 37315,
+      "title": "Computer-aided design",
+      "url": "https://en.wikipedia.org/wiki/Computer-aided_design",
+      "firstRevisionAt": "2001-07-26T17:01:58Z",
+      "firstRevisionId": 242562
+    },
+    "Constellation Energy": {
+      "pageId": 2209823,
+      "title": "Constellation Energy",
+      "url": "https://en.wikipedia.org/wiki/Constellation_Energy",
+      "firstRevisionAt": "2005-07-11T01:55:43Z",
+      "firstRevisionId": 18569452
+    },
+    "Construction": {
+      "pageId": 239038,
+      "title": "Construction",
+      "url": "https://en.wikipedia.org/wiki/Construction",
+      "firstRevisionAt": "2003-06-02T18:55:43Z",
+      "firstRevisionId": 990331
+    },
+    "Consumer spending": {
+      "pageId": 571005,
+      "title": "Consumer spending",
+      "url": "https://en.wikipedia.org/wiki/Consumer_spending",
+      "firstRevisionAt": "2004-04-02T04:56:31Z",
+      "firstRevisionId": 4216084
+    },
+    "Continuous glucose monitor": {
+      "pageId": 56098091,
+      "title": "Continuous glucose monitor",
+      "url": "https://en.wikipedia.org/wiki/Continuous_glucose_monitor",
+      "firstRevisionAt": "2017-12-20T18:11:18Z",
+      "firstRevisionId": 816333115
+    },
+    "Copart": {
+      "pageId": 38364252,
+      "title": "Copart",
+      "url": "https://en.wikipedia.org/wiki/Copart",
+      "firstRevisionAt": "2013-01-29T16:15:27Z",
+      "firstRevisionId": 535533201
+    },
+    "CoreWeave": {
+      "pageId": 77192694,
+      "title": "CoreWeave",
+      "url": "https://en.wikipedia.org/wiki/CoreWeave",
+      "firstRevisionAt": "2024-06-20T18:23:54Z",
+      "firstRevisionId": 1230111281
+    },
+    "Corporate finance": {
+      "pageId": 34742901,
+      "title": "Corporate finance",
+      "url": "https://en.wikipedia.org/wiki/Corporate_finance",
+      "firstRevisionAt": "2004-04-23T23:21:19Z",
+      "firstRevisionId": 3536577
+    },
+    "Cortina d'Ampezzo": {
+      "pageId": 568829,
+      "title": "Cortina d'Ampezzo",
+      "url": "https://en.wikipedia.org/wiki/Cortina_d%27Ampezzo",
+      "firstRevisionAt": "2004-04-01T06:27:07Z",
+      "firstRevisionId": 3359360
+    },
+    "Costco": {
+      "pageId": 446056,
+      "title": "Costco",
+      "url": "https://en.wikipedia.org/wiki/Costco",
+      "firstRevisionAt": "2004-01-28T22:54:03Z",
+      "firstRevisionId": 2251813
+    },
+    "CrowdStrike": {
+      "pageId": 50758178,
+      "title": "CrowdStrike",
+      "url": "https://en.wikipedia.org/wiki/CrowdStrike",
+      "firstRevisionAt": "2016-06-08T15:25:12Z",
+      "firstRevisionId": 724333159
+    },
+    "Cryptocurrency": {
+      "pageId": 36662188,
+      "title": "Cryptocurrency",
+      "url": "https://en.wikipedia.org/wiki/Cryptocurrency",
+      "firstRevisionAt": "2012-08-08T05:00:13Z",
+      "firstRevisionId": 506344061
+    },
+    "Data breach": {
+      "pageId": 13307577,
+      "title": "Data breach",
+      "url": "https://en.wikipedia.org/wiki/Data_breach",
+      "firstRevisionAt": "2007-09-17T14:29:23Z",
+      "firstRevisionId": 158497538
+    },
+    "Data center": {
+      "pageId": 579730,
+      "title": "Data center",
+      "url": "https://en.wikipedia.org/wiki/Data_center",
+      "firstRevisionAt": "2004-04-06T14:15:25Z",
+      "firstRevisionId": 4810286
+    },
+    "Data privacy": {
+      "pageId": 237536,
+      "title": "Information privacy",
+      "url": "https://en.wikipedia.org/wiki/Information_privacy",
+      "firstRevisionAt": "2003-05-31T06:08:32Z",
+      "firstRevisionId": 982031
+    },
+    "Datadog": {
+      "pageId": 40075229,
+      "title": "Datadog",
+      "url": "https://en.wikipedia.org/wiki/Datadog",
+      "firstRevisionAt": "2013-07-26T15:18:19Z",
+      "firstRevisionId": 565898876
+    },
+    "Deforestation": {
+      "pageId": 8103,
+      "title": "Deforestation",
+      "url": "https://en.wikipedia.org/wiki/Deforestation",
+      "firstRevisionAt": "2001-05-17T15:30:12Z",
+      "firstRevisionId": 246701
+    },
+    "DexCom": {
+      "pageId": 28495884,
+      "title": "Dexcom",
+      "url": "https://en.wikipedia.org/wiki/Dexcom",
+      "firstRevisionAt": "2010-08-23T14:22:05Z",
+      "firstRevisionId": 380505973
+    },
+    "Dexcom": {
+      "pageId": 28495884,
+      "title": "Dexcom",
+      "url": "https://en.wikipedia.org/wiki/Dexcom",
+      "firstRevisionAt": "2010-08-23T14:22:05Z",
+      "firstRevisionId": 380505973
+    },
+    "Diamondback Energy": {
+      "pageId": 59351825,
+      "title": "Diamondback Energy",
+      "url": "https://en.wikipedia.org/wiki/Diamondback_Energy",
+      "firstRevisionAt": "2018-12-11T18:58:58Z",
+      "firstRevisionId": 873203532
+    },
+    "Digital asset": {
+      "pageId": 2407654,
+      "title": "Digital asset",
+      "url": "https://en.wikipedia.org/wiki/Digital_asset",
+      "firstRevisionAt": "2005-08-08T18:32:26Z",
+      "firstRevisionId": 20560169
+    },
+    "Digital evidence": {
+      "pageId": 2293988,
+      "title": "Digital evidence",
+      "url": "https://en.wikipedia.org/wiki/Digital_evidence",
+      "firstRevisionAt": "2005-07-23T15:47:07Z",
+      "firstRevisionId": 19446586
+    },
+    "Digital twin": {
+      "pageId": 47896295,
+      "title": "Digital twin",
+      "url": "https://en.wikipedia.org/wiki/Digital_twin",
+      "firstRevisionAt": "2015-09-22T03:20:01Z",
+      "firstRevisionId": 682189175
+    },
+    "Digital wallet": {
+      "pageId": 5719877,
+      "title": "Digital wallet",
+      "url": "https://en.wikipedia.org/wiki/Digital_wallet",
+      "firstRevisionAt": "2006-06-26T18:24:04Z",
+      "firstRevisionId": 60697442
+    },
+    "DoorDash": {
+      "pageId": 47035079,
+      "title": "DoorDash",
+      "url": "https://en.wikipedia.org/wiki/DoorDash",
+      "firstRevisionAt": "2015-06-21T03:48:12Z",
+      "firstRevisionId": 667865766
+    },
+    "Dynamic random-access memory": {
+      "pageId": 74567,
+      "title": "Dynamic random-access memory",
+      "url": "https://en.wikipedia.org/wiki/Dynamic_random-access_memory",
+      "firstRevisionAt": "2002-07-29T08:04:33Z",
+      "firstRevisionId": 167687
+    },
+    "E-commerce": {
+      "pageId": 9611,
+      "title": "E-commerce",
+      "url": "https://en.wikipedia.org/wiki/E-commerce",
+      "firstRevisionAt": "2001-07-27T14:41:08Z",
+      "firstRevisionId": 1274813414
+    },
+    "Edge computing": {
+      "pageId": 5276122,
+      "title": "Edge computing",
+      "url": "https://en.wikipedia.org/wiki/Edge_computing",
+      "firstRevisionAt": "2006-05-24T18:41:35Z",
+      "firstRevisionId": 54927445
+    },
+    "Electric power distribution": {
+      "pageId": 212253,
+      "title": "Electric power distribution",
+      "url": "https://en.wikipedia.org/wiki/Electric_power_distribution",
+      "firstRevisionAt": "2003-04-18T04:00:01Z",
+      "firstRevisionId": 843025
+    },
+    "Electric vehicle": {
+      "pageId": 279350,
+      "title": "Electric vehicle",
+      "url": "https://en.wikipedia.org/wiki/Electric_vehicle",
+      "firstRevisionAt": "2003-07-27T04:13:22Z",
+      "firstRevisionId": 1200870
+    },
+    "Electrical grid": {
+      "pageId": 20344155,
+      "title": "Electrical grid",
+      "url": "https://en.wikipedia.org/wiki/Electrical_grid",
+      "firstRevisionAt": "2008-11-22T18:21:45Z",
+      "firstRevisionId": 253432685
+    },
+    "Electrolysis of water": {
+      "pageId": 3206764,
+      "title": "Electrolysis of water",
+      "url": "https://en.wikipedia.org/wiki/Electrolysis_of_water",
+      "firstRevisionAt": "2005-11-20T19:48:52Z",
+      "firstRevisionId": 28849035
+    },
+    "Electronic design automation": {
+      "pageId": 216881,
+      "title": "Electronic design automation",
+      "url": "https://en.wikipedia.org/wiki/Electronic_design_automation",
+      "firstRevisionAt": "2003-04-26T20:32:39Z",
+      "firstRevisionId": 865169
+    },
+    "Energy security": {
+      "pageId": 9560337,
+      "title": "Energy security",
+      "url": "https://en.wikipedia.org/wiki/Energy_security",
+      "firstRevisionAt": "2007-02-17T17:33:37Z",
+      "firstRevisionId": 108870633
+    },
+    "Energy transition": {
+      "pageId": 39208945,
+      "title": "Energy transition",
+      "url": "https://en.wikipedia.org/wiki/Energy_transition",
+      "firstRevisionAt": "2013-04-24T19:57:23Z",
+      "firstRevisionId": 552010526
+    },
+    "Enterprise resource planning": {
+      "pageId": 9310,
+      "title": "Enterprise resource planning",
+      "url": "https://en.wikipedia.org/wiki/Enterprise_resource_planning",
+      "firstRevisionAt": "2001-04-06T15:58:12Z",
+      "firstRevisionId": 248914
+    },
+    "Esports": {
+      "pageId": 564204,
+      "title": "Esports",
+      "url": "https://en.wikipedia.org/wiki/Esports",
+      "firstRevisionAt": "2004-03-30T11:16:34Z",
+      "firstRevisionId": 2980531
+    },
+    "Ethernet": {
+      "pageId": 9499,
+      "title": "Ethernet",
+      "url": "https://en.wikipedia.org/wiki/Ethernet",
+      "firstRevisionAt": "2001-11-04T20:22:41Z",
+      "firstRevisionId": 444790242
+    },
+    "Exelon": {
+      "pageId": 2202520,
+      "title": "Exelon",
+      "url": "https://en.wikipedia.org/wiki/Exelon",
+      "firstRevisionAt": "2005-07-09T22:02:23Z",
+      "firstRevisionId": 18491133
+    },
+    "Export control": {
+      "pageId": 12851599,
+      "title": "Export control",
+      "url": "https://en.wikipedia.org/wiki/Export_control",
+      "firstRevisionAt": "2007-08-20T12:45:49Z",
+      "firstRevisionId": 152453312
+    },
+    "Extreme ultraviolet lithography": {
+      "pageId": 2154371,
+      "title": "EUV lithography",
+      "url": "https://en.wikipedia.org/wiki/EUV_lithography",
+      "firstRevisionAt": "2005-07-02T04:44:27Z",
+      "firstRevisionId": 17996638
+    },
+    "FIFA": {
+      "pageId": 11049,
+      "title": "FIFA",
+      "url": "https://en.wikipedia.org/wiki/FIFA",
+      "firstRevisionAt": "2001-09-26T21:43:04Z",
+      "firstRevisionId": 251675
+    },
+    "FIFA World Cup": {
+      "pageId": 11370,
+      "title": "FIFA World Cup",
+      "url": "https://en.wikipedia.org/wiki/FIFA_World_Cup",
+      "firstRevisionAt": "2001-10-17T10:25:28Z",
+      "firstRevisionId": 252355
+    },
+    "Falcon 9": {
+      "pageId": 2647515,
+      "title": "Falcon 9",
+      "url": "https://en.wikipedia.org/wiki/Falcon_9",
+      "firstRevisionAt": "2005-09-09T16:02:04Z",
+      "firstRevisionId": 22915627
+    },
+    "Fastenal": {
+      "pageId": 1615058,
+      "title": "Fastenal",
+      "url": "https://en.wikipedia.org/wiki/Fastenal",
+      "firstRevisionAt": "2005-03-17T17:38:40Z",
+      "firstRevisionId": 11218337
+    },
+    "Ferrovial": {
+      "pageId": 5184719,
+      "title": "Ferrovial",
+      "url": "https://en.wikipedia.org/wiki/Ferrovial",
+      "firstRevisionAt": "2006-05-17T21:54:16Z",
+      "firstRevisionId": 53755212
+    },
+    "Figure skating": {
+      "pageId": 11152,
+      "title": "Figure skating",
+      "url": "https://en.wikipedia.org/wiki/Figure_skating",
+      "firstRevisionAt": "2001-09-22T14:55:59Z",
+      "firstRevisionId": 251843
+    },
+    "Film distribution": {
+      "pageId": 4552880,
+      "title": "Film distribution",
+      "url": "https://en.wikipedia.org/wiki/Film_distribution",
+      "firstRevisionAt": "2006-03-29T05:33:57Z",
+      "firstRevisionId": 45969095
+    },
+    "Flash memory": {
+      "pageId": 50595,
+      "title": "Flash memory",
+      "url": "https://en.wikipedia.org/wiki/Flash_memory",
+      "firstRevisionAt": "2002-04-27T15:16:32Z",
+      "firstRevisionId": 668715
+    },
+    "Food industry": {
+      "pageId": 2437974,
+      "title": "Food industry",
+      "url": "https://en.wikipedia.org/wiki/Food_industry",
+      "firstRevisionAt": "2005-08-12T14:58:02Z",
+      "firstRevisionId": 20856586
+    },
+    "Fortinet": {
+      "pageId": 2093911,
+      "title": "Fortinet",
+      "url": "https://en.wikipedia.org/wiki/Fortinet",
+      "firstRevisionAt": "2005-06-22T17:35:39Z",
+      "firstRevisionId": 15636499
+    },
+    "Free trade agreement": {
+      "pageId": 2533562,
+      "title": "Free trade agreement",
+      "url": "https://en.wikipedia.org/wiki/Free_trade_agreement",
+      "firstRevisionAt": "2005-08-25T04:57:55Z",
+      "firstRevisionId": 21781391
+    },
+    "Freight transport": {
+      "pageId": 28362,
+      "title": "Freight transport",
+      "url": "https://en.wikipedia.org/wiki/Freight_transport",
+      "firstRevisionAt": "2001-10-10T20:59:52Z",
+      "firstRevisionId": 283081
+    },
+    "Fuel cell": {
+      "pageId": 11729,
+      "title": "Fuel cell",
+      "url": "https://en.wikipedia.org/wiki/Fuel_cell",
+      "firstRevisionAt": "2002-01-11T03:44:27Z",
+      "firstRevisionId": 252794
+    },
+    "GE HealthCare": {
+      "pageId": 877606,
+      "title": "GE HealthCare",
+      "url": "https://en.wikipedia.org/wiki/GE_HealthCare",
+      "firstRevisionAt": "2004-08-04T15:25:23Z",
+      "firstRevisionId": 4998450
+    },
+    "Game engine": {
+      "pageId": 170581,
+      "title": "Game engine",
+      "url": "https://en.wikipedia.org/wiki/Game_engine",
+      "firstRevisionAt": "2003-01-18T06:22:12Z",
+      "firstRevisionId": 596081
+    },
+    "Gemini (chatbot)": {
+      "pageId": 73363598,
+      "title": "Google Gemini",
+      "url": "https://en.wikipedia.org/wiki/Google_Gemini",
+      "firstRevisionAt": "2023-03-23T16:33:51Z",
+      "firstRevisionId": 1146238222
+    },
+    "Gene therapy": {
+      "pageId": 12891,
+      "title": "Gene therapy",
+      "url": "https://en.wikipedia.org/wiki/Gene_therapy",
+      "firstRevisionAt": "2001-11-28T20:47:26Z",
+      "firstRevisionId": 255482
+    },
+    "Generative artificial intelligence": {
+      "pageId": 73291755,
+      "title": "Generative AI",
+      "url": "https://en.wikipedia.org/wiki/Generative_AI",
+      "firstRevisionAt": "2023-03-14T23:22:04Z",
+      "firstRevisionId": 1144670280
+    },
+    "Gilead Sciences": {
+      "pageId": 978997,
+      "title": "Gilead Sciences",
+      "url": "https://en.wikipedia.org/wiki/Gilead_Sciences",
+      "firstRevisionAt": "2004-09-12T10:21:59Z",
+      "firstRevisionId": 7910729
+    },
+    "Global supply chain": {
+      "pageId": 41583575,
+      "title": "Global value chain",
+      "url": "https://en.wikipedia.org/wiki/Global_value_chain",
+      "firstRevisionAt": "2014-01-08T11:20:16Z",
+      "firstRevisionId": 589751777
+    },
+    "Grand Theft Auto VI": {
+      "pageId": 70042775,
+      "title": "Grand Theft Auto VI",
+      "url": "https://en.wikipedia.org/wiki/Grand_Theft_Auto_VI",
+      "firstRevisionAt": "2022-02-11T04:11:05Z",
+      "firstRevisionId": 1071151099
+    },
+    "Graphics processing unit": {
+      "pageId": 390214,
+      "title": "Graphics processing unit",
+      "url": "https://en.wikipedia.org/wiki/Graphics_processing_unit",
+      "firstRevisionAt": "2003-12-06T03:28:31Z",
+      "firstRevisionId": 1882941
+    },
+    "Graphite": {
+      "pageId": 12366,
+      "title": "Graphite",
+      "url": "https://en.wikipedia.org/wiki/Graphite",
+      "firstRevisionAt": "2001-07-26T22:25:59Z",
+      "firstRevisionId": 254343
+    },
+    "Green hydrogen": {
+      "pageId": 62943310,
+      "title": "Green hydrogen",
+      "url": "https://en.wikipedia.org/wiki/Green_hydrogen",
+      "firstRevisionAt": "2020-01-27T04:41:32Z",
+      "firstRevisionId": 937778267
+    },
+    "Greenhouse gas": {
+      "pageId": 21350772,
+      "title": "Greenhouse gas",
+      "url": "https://en.wikipedia.org/wiki/Greenhouse_gas",
+      "firstRevisionAt": "2002-02-01T13:46:41Z",
+      "firstRevisionId": 2889
+    },
+    "Grid energy storage": {
+      "pageId": 1646838,
+      "title": "Grid energy storage",
+      "url": "https://en.wikipedia.org/wiki/Grid_energy_storage",
+      "firstRevisionAt": "2005-03-25T08:34:16Z",
+      "firstRevisionId": 11500397
+    },
+    "HBO Max": {
+      "pageId": 61240499,
+      "title": "HBO Max",
+      "url": "https://en.wikipedia.org/wiki/HBO_Max",
+      "firstRevisionAt": "2019-07-08T23:08:41Z",
+      "firstRevisionId": 905409048
+    },
+    "High Bandwidth Memory": {
+      "pageId": 44636056,
+      "title": "High Bandwidth Memory",
+      "url": "https://en.wikipedia.org/wiki/High_Bandwidth_Memory",
+      "firstRevisionAt": "2014-12-08T13:10:01Z",
+      "firstRevisionId": 637162316
+    },
+    "Honeywell": {
+      "pageId": 225721,
+      "title": "Honeywell",
+      "url": "https://en.wikipedia.org/wiki/Honeywell",
+      "firstRevisionAt": "2003-05-12T11:57:31Z",
+      "firstRevisionId": 912453
+    },
+    "Honeywell Aerospace": {
+      "pageId": 20259869,
+      "title": "Honeywell Aerospace",
+      "url": "https://en.wikipedia.org/wiki/Honeywell_Aerospace",
+      "firstRevisionAt": "2008-11-17T18:48:02Z",
+      "firstRevisionId": 252410163
+    },
+    "Hotel": {
+      "pageId": 14276,
+      "title": "Hotel",
+      "url": "https://en.wikipedia.org/wiki/Hotel",
+      "firstRevisionAt": "2001-12-12T20:09:20Z",
+      "firstRevisionId": 257993
+    },
+    "Humanoid robot": {
+      "pageId": 48180,
+      "title": "Humanoid robot",
+      "url": "https://en.wikipedia.org/wiki/Humanoid_robot",
+      "firstRevisionAt": "2002-04-08T02:45:39Z",
+      "firstRevisionId": 48021
+    },
+    "Hydrogen": {
+      "pageId": 13255,
+      "title": "Hydrogen",
+      "url": "https://en.wikipedia.org/wiki/Hydrogen",
+      "firstRevisionAt": "2001-03-13T02:17:45Z",
+      "firstRevisionId": 355936384
+    },
+    "Ice hockey": {
+      "pageId": 14790,
+      "title": "Ice hockey",
+      "url": "https://en.wikipedia.org/wiki/Ice_hockey",
+      "firstRevisionAt": "2001-10-02T13:57:58Z",
+      "firstRevisionId": 259446
+    },
+    "Idexx Laboratories": {
+      "pageId": 6355410,
+      "title": "Idexx Laboratories",
+      "url": "https://en.wikipedia.org/wiki/Idexx_Laboratories",
+      "firstRevisionAt": "2006-08-09T19:16:07Z",
+      "firstRevisionId": 68668872
+    },
+    "Industrial automation": {
+      "pageId": 173354,
+      "title": "Automation",
+      "url": "https://en.wikipedia.org/wiki/Automation",
+      "firstRevisionAt": "2003-01-23T15:46:04Z",
+      "firstRevisionId": 611736
+    },
+    "Industrial gas": {
+      "pageId": 2861157,
+      "title": "Industrial gas",
+      "url": "https://en.wikipedia.org/wiki/Industrial_gas",
+      "firstRevisionAt": "2005-10-08T08:38:17Z",
+      "firstRevisionId": 25045287
+    },
+    "Industrial robot": {
+      "pageId": 147918,
+      "title": "Industrial robot",
+      "url": "https://en.wikipedia.org/wiki/Industrial_robot",
+      "firstRevisionAt": "2002-11-16T14:25:07Z",
+      "firstRevisionId": 440347
+    },
+    "Infrastructure": {
+      "pageId": 174521,
+      "title": "Infrastructure",
+      "url": "https://en.wikipedia.org/wiki/Infrastructure",
+      "firstRevisionAt": "2003-01-26T01:53:41Z",
+      "firstRevisionId": 801982
+    },
+    "Intel": {
+      "pageId": 14617,
+      "title": "Intel",
+      "url": "https://en.wikipedia.org/wiki/Intel",
+      "firstRevisionAt": "2001-11-05T14:49:56Z",
+      "firstRevisionId": 363374260
+    },
+    "Intermodal freight transport": {
+      "pageId": 361123,
+      "title": "Intermodal freight transport",
+      "url": "https://en.wikipedia.org/wiki/Intermodal_freight_transport",
+      "firstRevisionAt": "2003-11-09T08:23:41Z",
+      "firstRevisionId": 1698519
+    },
+    "International trade": {
+      "pageId": 14567,
+      "title": "International trade",
+      "url": "https://en.wikipedia.org/wiki/International_trade",
+      "firstRevisionAt": "2001-04-03T08:15:49Z",
+      "firstRevisionId": 258568
+    },
+    "Intuit": {
+      "pageId": 1184796,
+      "title": "Intuit",
+      "url": "https://en.wikipedia.org/wiki/Intuit",
+      "firstRevisionAt": "2001-03-28T19:36:34Z",
+      "firstRevisionId": 337165889
+    },
+    "Intuitive Surgical": {
+      "pageId": 3828482,
+      "title": "Intuitive Surgical",
+      "url": "https://en.wikipedia.org/wiki/Intuitive_Surgical",
+      "firstRevisionAt": "2006-01-24T09:18:10Z",
+      "firstRevisionId": 36480174
+    },
+    "Iran": {
+      "pageId": 14653,
+      "title": "Iran",
+      "url": "https://en.wikipedia.org/wiki/Iran",
+      "firstRevisionAt": "2001-05-05T02:41:59Z",
+      "firstRevisionId": 1322475960
+    },
+    "KLA Corporation": {
+      "pageId": 3168991,
+      "title": "KLA Corporation",
+      "url": "https://en.wikipedia.org/wiki/KLA_Corporation",
+      "firstRevisionAt": "2005-11-15T19:36:26Z",
+      "firstRevisionId": 28426729
+    },
+    "Keurig Dr Pepper": {
+      "pageId": 5311833,
+      "title": "Keurig Dr Pepper",
+      "url": "https://en.wikipedia.org/wiki/Keurig_Dr_Pepper",
+      "firstRevisionAt": "2006-05-27T13:24:01Z",
+      "firstRevisionId": 55411674
+    },
+    "Kraft Heinz": {
+      "pageId": 46223282,
+      "title": "Kraft Heinz",
+      "url": "https://en.wikipedia.org/wiki/Kraft_Heinz",
+      "firstRevisionAt": "2015-03-25T13:46:50Z",
+      "firstRevisionId": 653458104
+    },
+    "Lam Research": {
+      "pageId": 4841974,
+      "title": "Lam Research",
+      "url": "https://en.wikipedia.org/wiki/Lam_Research",
+      "firstRevisionAt": "2006-04-21T16:34:35Z",
+      "firstRevisionId": 49463496
+    },
+    "Large language model": {
+      "pageId": 73248112,
+      "title": "Large language model",
+      "url": "https://en.wikipedia.org/wiki/Large_language_model",
+      "firstRevisionAt": "2023-03-09T15:43:17Z",
+      "firstRevisionId": 1143737027
+    },
+    "Last mile (transportation)": {
+      "pageId": 33497982,
+      "title": "Last mile (transportation)",
+      "url": "https://en.wikipedia.org/wiki/Last_mile_(transportation)",
+      "firstRevisionAt": "2011-10-22T21:17:04Z",
+      "firstRevisionId": 456886599
+    },
+    "Law enforcement": {
+      "pageId": 18486,
+      "title": "Law enforcement",
+      "url": "https://en.wikipedia.org/wiki/Law_enforcement",
+      "firstRevisionAt": "2002-02-25T15:51:15Z",
+      "firstRevisionId": 24610
+    },
+    "Linde plc": {
+      "pageId": 1922948,
+      "title": "Linde plc",
+      "url": "https://en.wikipedia.org/wiki/Linde_plc",
+      "firstRevisionAt": "2005-05-22T03:25:56Z",
+      "firstRevisionId": 15046845
+    },
+    "Liquefied natural gas": {
+      "pageId": 832128,
+      "title": "Liquefied natural gas",
+      "url": "https://en.wikipedia.org/wiki/Liquefied_natural_gas",
+      "firstRevisionAt": "2004-07-16T14:08:40Z",
+      "firstRevisionId": 4671727
+    },
+    "Lithium": {
+      "pageId": 17561,
+      "title": "Lithium",
+      "url": "https://en.wikipedia.org/wiki/Lithium",
+      "firstRevisionAt": "2001-10-13T17:27:29Z",
+      "firstRevisionId": 346874613
+    },
+    "Lithium-ion battery": {
+      "pageId": 201485,
+      "title": "Lithium-ion battery",
+      "url": "https://en.wikipedia.org/wiki/Lithium-ion_battery",
+      "firstRevisionAt": "2003-03-26T01:21:03Z",
+      "firstRevisionId": 776381
+    },
+    "Logistics": {
+      "pageId": 77547,
+      "title": "Logistics",
+      "url": "https://en.wikipedia.org/wiki/Logistics",
+      "firstRevisionAt": "2002-08-29T14:08:43Z",
+      "firstRevisionId": 181807
+    },
+    "Low Earth orbit": {
+      "pageId": 47568,
+      "title": "Low Earth orbit",
+      "url": "https://en.wikipedia.org/wiki/Low_Earth_orbit",
+      "firstRevisionAt": "2002-04-04T02:56:16Z",
+      "firstRevisionId": 44498
+    },
+    "Lumentum": {
+      "pageId": 82554267,
+      "title": "Lumentum",
+      "url": "https://en.wikipedia.org/wiki/Lumentum",
+      "firstRevisionAt": "2026-03-02T16:03:01Z",
+      "firstRevisionId": 1341325838
+    },
+    "Machine vision": {
+      "pageId": 172088,
+      "title": "Machine vision",
+      "url": "https://en.wikipedia.org/wiki/Machine_vision",
+      "firstRevisionAt": "2003-01-21T05:30:06Z",
+      "firstRevisionId": 605619
+    },
+    "Marriott International": {
+      "pageId": 1189498,
+      "title": "Marriott International",
+      "url": "https://en.wikipedia.org/wiki/Marriott_International",
+      "firstRevisionAt": "2004-11-20T03:08:25Z",
+      "firstRevisionId": 7668622
+    },
+    "Marvell Technology": {
+      "pageId": 5276522,
+      "title": "Marvell Technology",
+      "url": "https://en.wikipedia.org/wiki/Marvell_Technology",
+      "firstRevisionAt": "2006-05-24T19:13:07Z",
+      "firstRevisionId": 54932806
+    },
+    "Medical imaging": {
+      "pageId": 234714,
+      "title": "Medical imaging",
+      "url": "https://en.wikipedia.org/wiki/Medical_imaging",
+      "firstRevisionAt": "2003-05-27T05:23:14Z",
+      "firstRevisionId": 1382099
+    },
+    "Mercado Libre": {
+      "pageId": 1727788,
+      "title": "MercadoLibre",
+      "url": "https://en.wikipedia.org/wiki/MercadoLibre",
+      "firstRevisionAt": "2005-04-12T11:45:07Z",
+      "firstRevisionId": 12204052
+    },
+    "Meta Platforms": {
+      "pageId": 62420226,
+      "title": "Meta Platforms",
+      "url": "https://en.wikipedia.org/wiki/Meta_Platforms",
+      "firstRevisionAt": "2006-03-01T07:51:15Z",
+      "firstRevisionId": 41721836
+    },
+    "MicroStrategy": {
+      "pageId": 1449636,
+      "title": "MicroStrategy",
+      "url": "https://en.wikipedia.org/wiki/MicroStrategy",
+      "firstRevisionAt": "2005-01-30T23:03:17Z",
+      "firstRevisionId": 9807305
+    },
+    "Microchip Technology": {
+      "pageId": 4504149,
+      "title": "Microchip Technology",
+      "url": "https://en.wikipedia.org/wiki/Microchip_Technology",
+      "firstRevisionAt": "2006-03-24T22:27:46Z",
+      "firstRevisionId": 45326237
+    },
+    "Microcontroller": {
+      "pageId": 21017,
+      "title": "Microcontroller",
+      "url": "https://en.wikipedia.org/wiki/Microcontroller",
+      "firstRevisionAt": "2002-02-25T15:43:11Z",
+      "firstRevisionId": 94597
+    },
+    "Micron Technology": {
+      "pageId": 487445,
+      "title": "Micron Technology",
+      "url": "https://en.wikipedia.org/wiki/Micron_Technology",
+      "firstRevisionAt": "2004-02-25T01:58:08Z",
+      "firstRevisionId": 2965739
+    },
+    "Microsoft": {
+      "pageId": 19001,
+      "title": "Microsoft",
+      "url": "https://en.wikipedia.org/wiki/Microsoft",
+      "firstRevisionAt": "2001-11-03T12:21:01Z",
+      "firstRevisionId": 266005
+    },
+    "Microsoft Azure": {
+      "pageId": 19961416,
+      "title": "Microsoft Azure",
+      "url": "https://en.wikipedia.org/wiki/Microsoft_Azure",
+      "firstRevisionAt": "2008-10-27T18:36:15Z",
+      "firstRevisionId": 248028174
+    },
+    "Microsoft Copilot": {
+      "pageId": 73312151,
+      "title": "Microsoft Copilot",
+      "url": "https://en.wikipedia.org/wiki/Microsoft_Copilot",
+      "firstRevisionAt": "2023-03-17T14:23:29Z",
+      "firstRevisionId": 1145143677
+    },
+    "Milan": {
+      "pageId": 36511,
+      "title": "Milan",
+      "url": "https://en.wikipedia.org/wiki/Milan",
+      "firstRevisionAt": "2002-02-04T12:17:13Z",
+      "firstRevisionId": 4710
+    },
+    "Mobile advertising": {
+      "pageId": 9882885,
+      "title": "Mobile advertising",
+      "url": "https://en.wikipedia.org/wiki/Mobile_advertising",
+      "firstRevisionAt": "2007-03-05T22:48:12Z",
+      "firstRevisionId": 112920768
+    },
+    "Mobile network operator": {
+      "pageId": 481601,
+      "title": "Mobile network operator",
+      "url": "https://en.wikipedia.org/wiki/Mobile_network_operator",
+      "firstRevisionAt": "2004-02-22T06:27:40Z",
+      "firstRevisionId": 2481316
+    },
+    "Mondelez International": {
+      "pageId": 37231747,
+      "title": "Mondelez International",
+      "url": "https://en.wikipedia.org/wiki/Mondelez_International",
+      "firstRevisionAt": "2012-10-05T08:58:19Z",
+      "firstRevisionId": 516117343
+    },
+    "Monolithic Power Systems": {
+      "pageId": 49064665,
+      "title": "Monolithic Power Systems",
+      "url": "https://en.wikipedia.org/wiki/Monolithic_Power_Systems",
+      "firstRevisionAt": "2016-01-11T05:30:05Z",
+      "firstRevisionId": 699251176
+    },
+    "Monster Beverage": {
+      "pageId": 6214025,
+      "title": "Monster Beverage",
+      "url": "https://en.wikipedia.org/wiki/Monster_Beverage",
+      "firstRevisionAt": "2006-08-01T15:39:47Z",
+      "firstRevisionId": 67055624
+    },
+    "Motion planning": {
+      "pageId": 4562875,
+      "title": "Motion planning",
+      "url": "https://en.wikipedia.org/wiki/Motion_planning",
+      "firstRevisionAt": "2006-03-30T02:23:04Z",
+      "firstRevisionId": 46104278
+    },
+    "NXP Semiconductors": {
+      "pageId": 6794062,
+      "title": "NXP Semiconductors",
+      "url": "https://en.wikipedia.org/wiki/NXP_Semiconductors",
+      "firstRevisionAt": "2006-09-01T07:10:13Z",
+      "firstRevisionId": 73182681
+    },
+    "Natural gas": {
+      "pageId": 22131,
+      "title": "Natural gas",
+      "url": "https://en.wikipedia.org/wiki/Natural_gas",
+      "firstRevisionAt": "2002-02-25T15:51:15Z",
+      "firstRevisionId": 61382
+    },
+    "Nebius Group": {
+      "pageId": 78184289,
+      "title": "Nebius Group",
+      "url": "https://en.wikipedia.org/wiki/Nebius_Group",
+      "firstRevisionAt": "2024-10-23T09:55:22Z",
+      "firstRevisionId": 1252881008
+    },
+    "Netflix": {
+      "pageId": 175537,
+      "title": "Netflix",
+      "url": "https://en.wikipedia.org/wiki/Netflix",
+      "firstRevisionAt": "2003-01-28T03:20:24Z",
+      "firstRevisionId": 625209
+    },
+    "Netflix, Inc.": {
+      "pageId": 62430075,
+      "title": "Netflix, Inc.",
+      "url": "https://en.wikipedia.org/wiki/Netflix,_Inc.",
+      "firstRevisionAt": "2019-11-25T18:40:42Z",
+      "firstRevisionId": 927932594
+    },
+    "Network switch": {
+      "pageId": 40614,
+      "title": "Network switch",
+      "url": "https://en.wikipedia.org/wiki/Network_switch",
+      "firstRevisionAt": "2002-02-25T15:51:15Z",
+      "firstRevisionId": 46233
+    },
+    "Neural processing unit": {
+      "pageId": 50827978,
+      "title": "Neural processing unit",
+      "url": "https://en.wikipedia.org/wiki/Neural_processing_unit",
+      "firstRevisionAt": "2016-06-16T16:06:32Z",
+      "firstRevisionId": 725586187
+    },
+    "Nuclear fuel cycle": {
+      "pageId": 194031,
+      "title": "Nuclear fuel cycle",
+      "url": "https://en.wikipedia.org/wiki/Nuclear_fuel_cycle",
+      "firstRevisionAt": "2003-03-09T17:50:40Z",
+      "firstRevisionId": 734839
+    },
+    "Nuclear power": {
+      "pageId": 22153,
+      "title": "Nuclear power",
+      "url": "https://en.wikipedia.org/wiki/Nuclear_power",
+      "firstRevisionAt": "2002-01-23T16:59:31Z",
+      "firstRevisionId": 271429
+    },
+    "Nuclear reactor": {
+      "pageId": 22151,
+      "title": "Nuclear reactor",
+      "url": "https://en.wikipedia.org/wiki/Nuclear_reactor",
+      "firstRevisionAt": "2002-01-22T21:11:36Z",
+      "firstRevisionId": 271415
+    },
+    "Nvidia": {
+      "pageId": 39120,
+      "title": "Nvidia",
+      "url": "https://en.wikipedia.org/wiki/Nvidia",
+      "firstRevisionAt": "2002-02-15T02:54:58Z",
+      "firstRevisionId": 11148
+    },
+    "O'Reilly Automotive": {
+      "pageId": 7173115,
+      "title": "O'Reilly Auto Parts",
+      "url": "https://en.wikipedia.org/wiki/O%27Reilly_Auto_Parts",
+      "firstRevisionAt": "2006-09-27T03:45:55Z",
+      "firstRevisionId": 78038285
+    },
+    "Oil tanker": {
+      "pageId": 15923603,
+      "title": "Oil tanker",
+      "url": "https://en.wikipedia.org/wiki/Oil_tanker",
+      "firstRevisionAt": "2003-02-15T02:53:43Z",
+      "firstRevisionId": 16068505
+    },
+    "Old Dominion Freight Line": {
+      "pageId": 37260080,
+      "title": "Old Dominion Freight Line",
+      "url": "https://en.wikipedia.org/wiki/Old_Dominion_Freight_Line",
+      "firstRevisionAt": "2012-10-08T12:41:02Z",
+      "firstRevisionId": 516628656
+    },
+    "Olympic Broadcasting Services": {
+      "pageId": 24958480,
+      "title": "Olympic Broadcasting Services",
+      "url": "https://en.wikipedia.org/wiki/Olympic_Broadcasting_Services",
+      "firstRevisionAt": "2009-11-04T09:54:29Z",
+      "firstRevisionId": 323867605
+    },
+    "Online advertising": {
+      "pageId": 1555671,
+      "title": "Online advertising",
+      "url": "https://en.wikipedia.org/wiki/Online_advertising",
+      "firstRevisionAt": "2005-02-28T23:42:16Z",
+      "firstRevisionId": 10656543
+    },
+    "Online travel agency": {
+      "pageId": 597759,
+      "title": "Travel agency",
+      "url": "https://en.wikipedia.org/wiki/Travel_agency",
+      "firstRevisionAt": "2004-04-15T08:10:35Z",
+      "firstRevisionId": 3195337
+    },
+    "OpenAI": {
+      "pageId": 48795986,
+      "title": "OpenAI",
+      "url": "https://en.wikipedia.org/wiki/OpenAI",
+      "firstRevisionAt": "2015-12-12T01:26:13Z",
+      "firstRevisionId": 694854430
+    },
+    "Optical communication": {
+      "pageId": 164174,
+      "title": "Optical communication",
+      "url": "https://en.wikipedia.org/wiki/Optical_communication",
+      "firstRevisionAt": "2003-01-02T18:36:19Z",
+      "firstRevisionId": 602532
+    },
+    "Optical fiber": {
+      "pageId": 3372377,
+      "title": "Optical fiber",
+      "url": "https://en.wikipedia.org/wiki/Optical_fiber",
+      "firstRevisionAt": "2001-07-28T10:59:14Z",
+      "firstRevisionId": 271766
+    },
+    "PDD Holdings": {
+      "pageId": 57983349,
+      "title": "Pinduoduo",
+      "url": "https://en.wikipedia.org/wiki/Pinduoduo",
+      "firstRevisionAt": "2018-07-24T20:33:42Z",
+      "firstRevisionId": 851820504
+    },
+    "Paccar": {
+      "pageId": 359885,
+      "title": "Paccar",
+      "url": "https://en.wikipedia.org/wiki/Paccar",
+      "firstRevisionAt": "2003-11-08T07:39:44Z",
+      "firstRevisionId": 1691959
+    },
+    "Palantir Technologies": {
+      "pageId": 27197818,
+      "title": "Palantir",
+      "url": "https://en.wikipedia.org/wiki/Palantir",
+      "firstRevisionAt": "2010-05-03T02:17:30Z",
+      "firstRevisionId": 359761151
+    },
+    "Palo Alto Networks": {
+      "pageId": 37486268,
+      "title": "Palo Alto Networks",
+      "url": "https://en.wikipedia.org/wiki/Palo_Alto_Networks",
+      "firstRevisionAt": "2012-10-29T16:58:24Z",
+      "firstRevisionId": 520451667
+    },
+    "Paris Agreement": {
+      "pageId": 30242372,
+      "title": "Paris Agreement",
+      "url": "https://en.wikipedia.org/wiki/Paris_Agreement",
+      "firstRevisionAt": "2010-12-30T02:17:55Z",
+      "firstRevisionId": 404921267
+    },
+    "PayPal": {
+      "pageId": 195809,
+      "title": "PayPal",
+      "url": "https://en.wikipedia.org/wiki/PayPal",
+      "firstRevisionAt": "2003-03-13T18:43:22Z",
+      "firstRevisionId": 744327
+    },
+    "Paychex": {
+      "pageId": 423357,
+      "title": "Paychex",
+      "url": "https://en.wikipedia.org/wiki/Paychex",
+      "firstRevisionAt": "2004-01-07T07:51:29Z",
+      "firstRevisionId": 2104346
+    },
+    "Peacock (streaming service)": {
+      "pageId": 61801244,
+      "title": "Peacock (streaming service)",
+      "url": "https://en.wikipedia.org/wiki/Peacock_(streaming_service)",
+      "firstRevisionAt": "2019-09-17T13:21:18Z",
+      "firstRevisionId": 916177548
+    },
+    "PepsiCo": {
+      "pageId": 1213210,
+      "title": "PepsiCo",
+      "url": "https://en.wikipedia.org/wiki/PepsiCo",
+      "firstRevisionAt": "2004-11-26T22:36:20Z",
+      "firstRevisionId": 7883566
+    },
+    "Persian Gulf": {
+      "pageId": 24761,
+      "title": "Persian Gulf",
+      "url": "https://en.wikipedia.org/wiki/Persian_Gulf",
+      "firstRevisionAt": "2001-11-30T01:48:23Z",
+      "firstRevisionId": 505070292
+    },
+    "Petroleum": {
+      "pageId": 23195,
+      "title": "Petroleum",
+      "url": "https://en.wikipedia.org/wiki/Petroleum",
+      "firstRevisionAt": "2001-10-01T17:12:54Z",
+      "firstRevisionId": 273426
+    },
+    "Photolithography": {
+      "pageId": 23748,
+      "title": "Photolithography",
+      "url": "https://en.wikipedia.org/wiki/Photolithography",
+      "firstRevisionAt": "2001-08-14T02:38:50Z",
+      "firstRevisionId": 274283
+    },
+    "Pinduoduo": {
+      "pageId": 57983349,
+      "title": "Pinduoduo",
+      "url": "https://en.wikipedia.org/wiki/Pinduoduo",
+      "firstRevisionAt": "2018-07-24T20:33:42Z",
+      "firstRevisionId": 851820504
+    },
+    "Power electronics": {
+      "pageId": 1001628,
+      "title": "Power electronics",
+      "url": "https://en.wikipedia.org/wiki/Power_electronics",
+      "firstRevisionAt": "2004-09-20T13:13:49Z",
+      "firstRevisionId": 6012836
+    },
+    "Protectionism": {
+      "pageId": 153023,
+      "title": "Protectionism",
+      "url": "https://en.wikipedia.org/wiki/Protectionism",
+      "firstRevisionAt": "2002-11-29T17:53:05Z",
+      "firstRevisionId": 544366
+    },
+    "Public safety": {
+      "pageId": 2623876,
+      "title": "Public security",
+      "url": "https://en.wikipedia.org/wiki/Public_security",
+      "firstRevisionAt": "2005-09-06T02:20:00Z",
+      "firstRevisionId": 22666368
+    },
+    "Qualcomm": {
+      "pageId": 256913,
+      "title": "Qualcomm",
+      "url": "https://en.wikipedia.org/wiki/Qualcomm",
+      "firstRevisionAt": "2003-07-02T22:27:21Z",
+      "firstRevisionId": 1162843
+    },
+    "RNA interference": {
+      "pageId": 29188721,
+      "title": "RNA interference",
+      "url": "https://en.wikipedia.org/wiki/RNA_interference",
+      "firstRevisionAt": "2002-10-21T15:21:45Z",
+      "firstRevisionId": 374671
+    },
+    "Radio spectrum": {
+      "pageId": 634183,
+      "title": "Radio spectrum",
+      "url": "https://en.wikipedia.org/wiki/Radio_spectrum",
+      "firstRevisionAt": "2004-05-04T07:01:38Z",
+      "firstRevisionId": 16458720
+    },
+    "Rail freight transport": {
+      "pageId": 2234123,
+      "title": "Rail freight transport",
+      "url": "https://en.wikipedia.org/wiki/Rail_freight_transport",
+      "firstRevisionAt": "2005-07-14T18:36:27Z",
+      "firstRevisionId": 18830707
+    },
+    "Ransomware": {
+      "pageId": 1906321,
+      "title": "Ransomware",
+      "url": "https://en.wikipedia.org/wiki/Ransomware",
+      "firstRevisionAt": "2005-05-18T21:36:13Z",
+      "firstRevisionId": 13901183
+    },
+    "Recommendation system": {
+      "pageId": 596646,
+      "title": "Recommender system",
+      "url": "https://en.wikipedia.org/wiki/Recommender_system",
+      "firstRevisionAt": "2004-02-21T16:37:14Z",
+      "firstRevisionId": 2821049
+    },
+    "Regeneron Pharmaceuticals": {
+      "pageId": 5617513,
+      "title": "Regeneron Pharmaceuticals",
+      "url": "https://en.wikipedia.org/wiki/Regeneron_Pharmaceuticals",
+      "firstRevisionAt": "2006-06-18T23:09:42Z",
+      "firstRevisionId": 59347081
+    },
+    "Regulation of artificial intelligence": {
+      "pageId": 63451675,
+      "title": "Regulation of artificial intelligence",
+      "url": "https://en.wikipedia.org/wiki/Regulation_of_artificial_intelligence",
+      "firstRevisionAt": "2020-03-23T11:03:11Z",
+      "firstRevisionId": 946950330
+    },
+    "Reinforcement learning": {
+      "pageId": 66294,
+      "title": "Reinforcement learning",
+      "url": "https://en.wikipedia.org/wiki/Reinforcement_learning",
+      "firstRevisionAt": "2002-07-31T13:24:55Z",
+      "firstRevisionId": 132543
+    },
+    "Renewable energy": {
+      "pageId": 25784,
+      "title": "Renewable energy",
+      "url": "https://en.wikipedia.org/wiki/Renewable_energy",
+      "firstRevisionAt": "2001-07-31T18:58:09Z",
+      "firstRevisionId": 855298975
+    },
+    "Retail": {
+      "pageId": 183515,
+      "title": "Retail",
+      "url": "https://en.wikipedia.org/wiki/Retail",
+      "firstRevisionAt": "2003-02-15T10:35:11Z",
+      "firstRevisionId": 672022
+    },
+    "Reusable launch vehicle": {
+      "pageId": 336014,
+      "title": "Reusable launch vehicle",
+      "url": "https://en.wikipedia.org/wiki/Reusable_launch_vehicle",
+      "firstRevisionAt": "2003-10-07T06:11:09Z",
+      "firstRevisionId": 1534312
+    },
+    "Robot-assisted surgery": {
+      "pageId": 2629669,
+      "title": "Robotic surgery",
+      "url": "https://en.wikipedia.org/wiki/Robotic_surgery",
+      "firstRevisionAt": "2005-09-06T22:21:26Z",
+      "firstRevisionId": 22728555
+    },
+    "Robotics": {
+      "pageId": 20903754,
+      "title": "Robotics",
+      "url": "https://en.wikipedia.org/wiki/Robotics",
+      "firstRevisionAt": "2002-03-30T01:04:29Z",
+      "firstRevisionId": 12673737
+    },
+    "Rocket Lab": {
+      "pageId": 25113585,
+      "title": "Rocket Lab",
+      "url": "https://en.wikipedia.org/wiki/Rocket_Lab",
+      "firstRevisionAt": "2009-11-17T18:56:07Z",
+      "firstRevisionId": 326389173
+    },
+    "Roper Technologies": {
+      "pageId": 3447877,
+      "title": "Roper Technologies",
+      "url": "https://en.wikipedia.org/wiki/Roper_Technologies",
+      "firstRevisionAt": "2005-12-17T04:18:04Z",
+      "firstRevisionId": 31695857
+    },
+    "Ross Stores": {
+      "pageId": 2886016,
+      "title": "Ross Stores",
+      "url": "https://en.wikipedia.org/wiki/Ross_Stores",
+      "firstRevisionAt": "2005-10-11T21:35:29Z",
+      "firstRevisionId": 25306221
+    },
+    "Sandisk": {
+      "pageId": 765690,
+      "title": "Sandisk",
+      "url": "https://en.wikipedia.org/wiki/Sandisk",
+      "firstRevisionAt": "2004-06-30T01:33:38Z",
+      "firstRevisionId": 6829046
+    },
+    "Satellite": {
+      "pageId": 27683,
+      "title": "Satellite",
+      "url": "https://en.wikipedia.org/wiki/Satellite",
+      "firstRevisionAt": "2001-07-26T21:38:58Z",
+      "firstRevisionId": 1355521030
+    },
+    "Satellite Internet access": {
+      "pageId": 769088,
+      "title": "Satellite Internet access",
+      "url": "https://en.wikipedia.org/wiki/Satellite_Internet_access",
+      "firstRevisionAt": "2004-06-30T16:04:53Z",
+      "firstRevisionId": 7586866
+    },
+    "Seagate Technology": {
+      "pageId": 328029,
+      "title": "Seagate Technology",
+      "url": "https://en.wikipedia.org/wiki/Seagate_Technology",
+      "firstRevisionAt": "2003-09-26T23:53:12Z",
+      "firstRevisionId": 1486438
+    },
+    "Self-driving car": {
+      "pageId": 245926,
+      "title": "Self-driving car",
+      "url": "https://en.wikipedia.org/wiki/Self-driving_car",
+      "firstRevisionAt": "2003-06-14T06:45:48Z",
+      "firstRevisionId": 1034656
+    },
+    "Semiconductor": {
+      "pageId": 27709,
+      "title": "Semiconductor",
+      "url": "https://en.wikipedia.org/wiki/Semiconductor",
+      "firstRevisionAt": "2001-07-27T15:35:39Z",
+      "firstRevisionId": 888464641
+    },
+    "Semiconductor device fabrication": {
+      "pageId": 27696,
+      "title": "Semiconductor device fabrication",
+      "url": "https://en.wikipedia.org/wiki/Semiconductor_device_fabrication",
+      "firstRevisionAt": "2001-07-30T19:30:40Z",
+      "firstRevisionId": 447466110
+    },
+    "Sensor": {
+      "pageId": 235757,
+      "title": "Sensor",
+      "url": "https://en.wikipedia.org/wiki/Sensor",
+      "firstRevisionAt": "2003-05-28T15:57:31Z",
+      "firstRevisionId": 972039
+    },
+    "Server (computing)": {
+      "pageId": 42116,
+      "title": "Server (computing)",
+      "url": "https://en.wikipedia.org/wiki/Server_(computing)",
+      "firstRevisionAt": "2002-02-27T13:39:01Z",
+      "firstRevisionId": 110774
+    },
+    "Shopify": {
+      "pageId": 26126491,
+      "title": "Shopify",
+      "url": "https://en.wikipedia.org/wiki/Shopify",
+      "firstRevisionAt": "2010-02-08T22:49:12Z",
+      "firstRevisionId": 342798041
+    },
+    "Small modular reactor": {
+      "pageId": 27850086,
+      "title": "Small modular reactor",
+      "url": "https://en.wikipedia.org/wiki/Small_modular_reactor",
+      "firstRevisionAt": "2010-06-25T18:19:56Z",
+      "firstRevisionId": 370129351
+    },
+    "Smartphone": {
+      "pageId": 167079,
+      "title": "Smartphone",
+      "url": "https://en.wikipedia.org/wiki/Smartphone",
+      "firstRevisionAt": "2003-01-09T02:17:25Z",
+      "firstRevisionId": 572888
+    },
+    "Social media": {
+      "pageId": 5897742,
+      "title": "Social media",
+      "url": "https://en.wikipedia.org/wiki/Social_media",
+      "firstRevisionAt": "2006-07-09T21:26:52Z",
+      "firstRevisionId": 62939074
+    },
+    "Solar power": {
+      "pageId": 13690575,
+      "title": "Solar power",
+      "url": "https://en.wikipedia.org/wiki/Solar_power",
+      "firstRevisionAt": "2007-10-12T08:02:02Z",
+      "firstRevisionId": 164000816
+    },
+    "Solid-state drive": {
+      "pageId": 7366298,
+      "title": "Solid-state drive",
+      "url": "https://en.wikipedia.org/wiki/Solid-state_drive",
+      "firstRevisionAt": "2006-10-09T15:16:32Z",
+      "firstRevisionId": 80426054
+    },
+    "Space launch": {
+      "pageId": 1348254,
+      "title": "Space launch",
+      "url": "https://en.wikipedia.org/wiki/Space_launch",
+      "firstRevisionAt": "2004-12-31T18:35:08Z",
+      "firstRevisionId": 17079109
+    },
+    "SpaceX": {
+      "pageId": 832774,
+      "title": "SpaceX",
+      "url": "https://en.wikipedia.org/wiki/SpaceX",
+      "firstRevisionAt": "2004-07-16T17:12:15Z",
+      "firstRevisionId": 4676131
+    },
+    "Sponsorship": {
+      "pageId": 545607,
+      "title": "Sponsor (commercial)",
+      "url": "https://en.wikipedia.org/wiki/Sponsor_(commercial)",
+      "firstRevisionAt": "2004-03-23T03:35:05Z",
+      "firstRevisionId": 3936177
+    },
+    "Sports broadcasting": {
+      "pageId": 3182739,
+      "title": "Broadcasting of sports events",
+      "url": "https://en.wikipedia.org/wiki/Broadcasting_of_sports_events",
+      "firstRevisionAt": "2005-11-17T11:20:39Z",
+      "firstRevisionId": 28585133
+    },
+    "Sports tourism": {
+      "pageId": 14334085,
+      "title": "Sports tourism",
+      "url": "https://en.wikipedia.org/wiki/Sports_tourism",
+      "firstRevisionAt": "2007-11-20T18:36:21Z",
+      "firstRevisionId": 172745378
+    },
+    "Stablecoin": {
+      "pageId": 57437562,
+      "title": "Stablecoin",
+      "url": "https://en.wikipedia.org/wiki/Stablecoin",
+      "firstRevisionAt": "2018-05-17T03:35:27Z",
+      "firstRevisionId": 841645916
+    },
+    "Stadium": {
+      "pageId": 185604,
+      "title": "Stadium",
+      "url": "https://en.wikipedia.org/wiki/Stadium",
+      "firstRevisionAt": "2003-02-20T08:17:17Z",
+      "firstRevisionId": 684358
+    },
+    "Starbucks": {
+      "pageId": 178771,
+      "title": "Starbucks",
+      "url": "https://en.wikipedia.org/wiki/Starbucks",
+      "firstRevisionAt": "2003-02-03T12:32:34Z",
+      "firstRevisionId": 697985
+    },
+    "Starlink": {
+      "pageId": 45111627,
+      "title": "Starlink",
+      "url": "https://en.wikipedia.org/wiki/Starlink",
+      "firstRevisionAt": "2015-01-19T05:30:57Z",
+      "firstRevisionId": 643161072
+    },
+    "Starship": {
+      "pageId": 56163,
+      "title": "Starship",
+      "url": "https://en.wikipedia.org/wiki/Starship",
+      "firstRevisionAt": "2002-06-11T12:49:24Z",
+      "firstRevisionId": 91761
+    },
+    "Strait of Hormuz": {
+      "pageId": 29005,
+      "title": "Strait of Hormuz",
+      "url": "https://en.wikipedia.org/wiki/Strait_of_Hormuz",
+      "firstRevisionAt": "2001-11-30T01:36:53Z",
+      "firstRevisionId": 840357704
+    },
+    "Strategy (company)": {
+      "pageId": 1449636,
+      "title": "MicroStrategy",
+      "url": "https://en.wikipedia.org/wiki/MicroStrategy",
+      "firstRevisionAt": "2005-01-30T23:03:17Z",
+      "firstRevisionId": 9807305
+    },
+    "Streaming media": {
+      "pageId": 28682,
+      "title": "Streaming media",
+      "url": "https://en.wikipedia.org/wiki/Streaming_media",
+      "firstRevisionAt": "2001-10-29T02:07:36Z",
+      "firstRevisionId": 283879
+    },
+    "Supply chain management": {
+      "pageId": 27995,
+      "title": "Supply chain management",
+      "url": "https://en.wikipedia.org/wiki/Supply_chain_management",
+      "firstRevisionAt": "2002-02-25T15:51:15Z",
+      "firstRevisionId": 1113964
+    },
+    "Sustainable tourism": {
+      "pageId": 4036973,
+      "title": "Sustainable tourism",
+      "url": "https://en.wikipedia.org/wiki/Sustainable_tourism",
+      "firstRevisionAt": "2006-02-11T12:13:23Z",
+      "firstRevisionId": 39198432
+    },
+    "Synopsys": {
+      "pageId": 424893,
+      "title": "Synopsys",
+      "url": "https://en.wikipedia.org/wiki/Synopsys",
+      "firstRevisionAt": "2004-01-09T00:02:31Z",
+      "firstRevisionId": 2115137
+    },
+    "System on a chip": {
+      "pageId": 100563,
+      "title": "System on a chip",
+      "url": "https://en.wikipedia.org/wiki/System_on_a_chip",
+      "firstRevisionAt": "2002-10-07T18:15:50Z",
+      "firstRevisionId": 2681996
+    },
+    "T-Mobile US": {
+      "pageId": 20563054,
+      "title": "T-Mobile US",
+      "url": "https://en.wikipedia.org/wiki/T-Mobile_US",
+      "firstRevisionAt": "2004-03-03T09:14:58Z",
+      "firstRevisionId": 2609172
+    },
+    "Take-Two Interactive": {
+      "pageId": 358390,
+      "title": "Take-Two Interactive",
+      "url": "https://en.wikipedia.org/wiki/Take-Two_Interactive",
+      "firstRevisionAt": "2003-11-06T18:59:09Z",
+      "firstRevisionId": 1682743
+    },
+    "Targeted advertising": {
+      "pageId": 16777474,
+      "title": "Targeted advertising",
+      "url": "https://en.wikipedia.org/wiki/Targeted_advertising",
+      "firstRevisionAt": "2008-04-05T12:39:28Z",
+      "firstRevisionId": 203507671
+    },
+    "Tariff": {
+      "pageId": 55551,
+      "title": "Tariff",
+      "url": "https://en.wikipedia.org/wiki/Tariff",
+      "firstRevisionAt": "2002-06-08T17:02:23Z",
+      "firstRevisionId": 89931
+    },
+    "Telecommunications": {
+      "pageId": 33094374,
+      "title": "Telecommunications",
+      "url": "https://en.wikipedia.org/wiki/Telecommunications",
+      "firstRevisionAt": "2001-11-04T14:28:22Z",
+      "firstRevisionId": 287689
+    },
+    "Teradyne": {
+      "pageId": 1156271,
+      "title": "Teradyne",
+      "url": "https://en.wikipedia.org/wiki/Teradyne",
+      "firstRevisionAt": "2004-11-11T01:49:19Z",
+      "firstRevisionId": 7321432
+    },
+    "Tesla, Inc.": {
+      "pageId": 5533631,
+      "title": "Tesla, Inc.",
+      "url": "https://en.wikipedia.org/wiki/Tesla,_Inc.",
+      "firstRevisionAt": "2006-06-12T17:34:14Z",
+      "firstRevisionId": 58236565
+    },
+    "Texas Instruments": {
+      "pageId": 47768,
+      "title": "Texas Instruments",
+      "url": "https://en.wikipedia.org/wiki/Texas_Instruments",
+      "firstRevisionAt": "2002-04-05T18:11:42Z",
+      "firstRevisionId": 45806
+    },
+    "Thomson Reuters": {
+      "pageId": 11271100,
+      "title": "Thomson Reuters",
+      "url": "https://en.wikipedia.org/wiki/Thomson_Reuters",
+      "firstRevisionAt": "2007-05-17T11:06:44Z",
+      "firstRevisionId": 131512792
+    },
+    "Tourism": {
+      "pageId": 29789,
+      "title": "Tourism",
+      "url": "https://en.wikipedia.org/wiki/Tourism",
+      "firstRevisionAt": "2001-11-14T17:26:42Z",
+      "firstRevisionId": 332499409
+    },
+    "Trade war": {
+      "pageId": 441392,
+      "title": "Trade war",
+      "url": "https://en.wikipedia.org/wiki/Trade_war",
+      "firstRevisionAt": "2004-01-25T03:52:49Z",
+      "firstRevisionId": 2224289
+    },
+    "Truck": {
+      "pageId": 31456,
+      "title": "Truck",
+      "url": "https://en.wikipedia.org/wiki/Truck",
+      "firstRevisionAt": "2002-01-07T02:06:01Z",
+      "firstRevisionId": 290933
+    },
+    "United Nations Framework Convention on Climate Change": {
+      "pageId": 31898,
+      "title": "United Nations Framework Convention on Climate Change",
+      "url": "https://en.wikipedia.org/wiki/United_Nations_Framework_Convention_on_Climate_Change",
+      "firstRevisionAt": "2001-08-04T05:40:31Z",
+      "firstRevisionId": 291994
+    },
+    "United States–China trade war": {
+      "pageId": 57055272,
+      "title": "China–United States trade war",
+      "url": "https://en.wikipedia.org/wiki/China%E2%80%93United_States_trade_war",
+      "firstRevisionAt": "2018-04-07T02:17:30Z",
+      "firstRevisionId": 835184514
+    },
+    "Uranium": {
+      "pageId": 31743,
+      "title": "Uranium",
+      "url": "https://en.wikipedia.org/wiki/Uranium",
+      "firstRevisionAt": "2001-05-17T13:53:38Z",
+      "firstRevisionId": 346877298
+    },
+    "Uranium enrichment": {
+      "pageId": 37555,
+      "title": "Enriched uranium",
+      "url": "https://en.wikipedia.org/wiki/Enriched_uranium",
+      "firstRevisionAt": "2002-02-04T08:12:51Z",
+      "firstRevisionId": 4582
+    },
+    "Vertex Pharmaceuticals": {
+      "pageId": 1913376,
+      "title": "Vertex Pharmaceuticals",
+      "url": "https://en.wikipedia.org/wiki/Vertex_Pharmaceuticals",
+      "firstRevisionAt": "2005-05-20T04:43:24Z",
+      "firstRevisionId": 14005985
+    },
+    "Veterinary medicine": {
+      "pageId": 32654,
+      "title": "Veterinary medicine",
+      "url": "https://en.wikipedia.org/wiki/Veterinary_medicine",
+      "firstRevisionAt": "2002-02-25T15:51:15Z",
+      "firstRevisionId": 75622
+    },
+    "Video game industry": {
+      "pageId": 372478,
+      "title": "Video game industry",
+      "url": "https://en.wikipedia.org/wiki/Video_game_industry",
+      "firstRevisionAt": "2003-11-19T18:21:44Z",
+      "firstRevisionId": 1779078
+    },
+    "Video on demand": {
+      "pageId": 147143,
+      "title": "Video on demand",
+      "url": "https://en.wikipedia.org/wiki/Video_on_demand",
+      "firstRevisionAt": "2002-11-14T11:31:53Z",
+      "firstRevisionId": 424146
+    },
+    "Video surveillance": {
+      "pageId": 87179,
+      "title": "Closed-circuit television",
+      "url": "https://en.wikipedia.org/wiki/Closed-circuit_television",
+      "firstRevisionAt": "2002-09-18T10:23:38Z",
+      "firstRevisionId": 226426
+    },
+    "Virtual reality": {
+      "pageId": 32612,
+      "title": "Virtual reality",
+      "url": "https://en.wikipedia.org/wiki/Virtual_reality",
+      "firstRevisionAt": "2001-10-03T21:57:44Z",
+      "firstRevisionId": 293532
+    },
+    "Virtualization": {
+      "pageId": 18311356,
+      "title": "Virtualization",
+      "url": "https://en.wikipedia.org/wiki/Virtualization",
+      "firstRevisionAt": "2008-07-06T10:38:58Z",
+      "firstRevisionId": 223890372
+    },
+    "Wafer (electronics)": {
+      "pageId": 41860,
+      "title": "Wafer (electronics)",
+      "url": "https://en.wikipedia.org/wiki/Wafer_(electronics)",
+      "firstRevisionAt": "2002-02-26T00:43:34Z",
+      "firstRevisionId": 18452
+    },
+    "Walmart": {
+      "pageId": 33589,
+      "title": "Walmart",
+      "url": "https://en.wikipedia.org/wiki/Walmart",
+      "firstRevisionAt": "2001-09-12T19:19:57Z",
+      "firstRevisionId": 332645463
+    },
+    "Warner Bros. Discovery": {
+      "pageId": 67824355,
+      "title": "Warner Bros. Discovery",
+      "url": "https://en.wikipedia.org/wiki/Warner_Bros._Discovery",
+      "firstRevisionAt": "2021-06-02T16:47:06Z",
+      "firstRevisionId": 1026497908
+    },
+    "Western Digital": {
+      "pageId": 222333,
+      "title": "Western Digital",
+      "url": "https://en.wikipedia.org/wiki/Western_Digital",
+      "firstRevisionAt": "2003-05-06T06:52:23Z",
+      "firstRevisionId": 894699
+    },
+    "Wind power": {
+      "pageId": 277289,
+      "title": "Wind power",
+      "url": "https://en.wikipedia.org/wiki/Wind_power",
+      "firstRevisionAt": "2003-07-25T19:05:35Z",
+      "firstRevisionId": 11951384
+    },
+    "Winter Olympic Games": {
+      "pageId": 34069,
+      "title": "Winter Olympic Games",
+      "url": "https://en.wikipedia.org/wiki/Winter_Olympic_Games",
+      "firstRevisionAt": "2002-01-07T16:51:49Z",
+      "firstRevisionId": 297684
+    },
+    "Wireless network": {
+      "pageId": 33172,
+      "title": "Wireless network",
+      "url": "https://en.wikipedia.org/wiki/Wireless_network",
+      "firstRevisionAt": "2001-05-19T16:35:25Z",
+      "firstRevisionId": 659449046
+    },
+    "Workday, Inc.": {
+      "pageId": 11501406,
+      "title": "Workday, Inc.",
+      "url": "https://en.wikipedia.org/wiki/Workday,_Inc.",
+      "firstRevisionAt": "2007-05-30T09:50:32Z",
+      "firstRevisionId": 134528641
+    },
+    "World Trade Organization": {
+      "pageId": 33873,
+      "title": "World Trade Organization",
+      "url": "https://en.wikipedia.org/wiki/World_Trade_Organization",
+      "firstRevisionAt": "2001-11-11T22:19:48Z",
+      "firstRevisionId": 334696356
+    },
+    "Xbox": {
+      "pageId": 38062234,
+      "title": "Xbox",
+      "url": "https://en.wikipedia.org/wiki/Xbox",
+      "firstRevisionAt": "2012-12-29T23:52:56Z",
+      "firstRevisionId": 530371814
+    },
+    "Xcel Energy": {
+      "pageId": 1511355,
+      "title": "Xcel Energy",
+      "url": "https://en.wikipedia.org/wiki/Xcel_Energy",
+      "firstRevisionAt": "2005-02-16T01:10:18Z",
+      "firstRevisionId": 10308257
+    },
+    "Zero trust architecture": {
+      "pageId": 65073375,
+      "title": "Zero trust architecture",
+      "url": "https://en.wikipedia.org/wiki/Zero_trust_architecture",
+      "firstRevisionAt": "2020-08-25T17:01:09Z",
+      "firstRevisionId": 974893380
+    },
+    "iPhone": {
+      "pageId": 8841749,
+      "title": "IPhone",
+      "url": "https://en.wikipedia.org/wiki/IPhone",
+      "firstRevisionAt": "2005-06-29T07:54:28Z",
+      "firstRevisionId": 17816485
+    }
+  }
+}

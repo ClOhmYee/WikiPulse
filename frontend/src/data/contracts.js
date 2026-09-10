@@ -30,7 +30,7 @@ export function describeSource(meta) {
     return {
       label: "데모 데이터",
       description:
-        "모든 사건·문서·뉴스·가격은 화면 체험을 위한 목데이터입니다.",
+        "실제 위키 문서와 현재 Nasdaq-100 목록을 사용합니다. 급증 수치·리포트·연결·가격은 시연용 합성 데이터이며 과거 지수 구성은 재현하지 않습니다.",
     };
   return {
     label: "출처 확인 필요",

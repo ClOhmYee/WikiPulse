@@ -52,8 +52,8 @@ npm.cmd run dev
 
 ## 데이터와 API 명세
 
-- 목데이터: [`src/data/mock/fixtures/catalog.js`](src/data/mock/fixtures/catalog.js), 사건 6개·문서 14개·종목 8개
-- 기준일: 2025-06-24, 일별 차트: 2025-06-01~24
+- 목데이터: [`src/data/mock/fixtures/history.js`](src/data/mock/fixtures/history.js), 실제 Wikipedia 문서 기반 36개 주제의 월별 리포트와 현재 Nasdaq-100 구성 증권
+- 기간: 2025-09-01~2026-09-10, 일별 스냅샷 375개. 출처·합성 범위·리포트 연결은 [목데이터 안내](../docs/frontend/MOCK_HISTORY.md)를 참고한다.
 - [프론트엔드 API 계약](docs/API_SPEC.md)
 - [OpenAPI 3.0 명세](docs/openapi.yaml)
 - [화면·컴포넌트 안내](docs/UI_GUIDE.md)

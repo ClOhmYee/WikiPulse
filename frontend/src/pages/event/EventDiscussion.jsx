@@ -38,6 +38,10 @@ const examples = {
 };
 
 function seedThreads(event) {
+  const reportTime = Date.parse(event.updatedAt || event.startAt);
+  const startTime = Date.parse(event.startAt);
+  const exampleTime = (minutes) =>
+    new Date(Math.max(startTime, reportTime - minutes * 60_000)).toISOString();
   const bodies = examples[event.id] || [
     `${event.keywords?.[0] || event.title}와 연결된 문서에서 어떤 내용이 달라졌는지 살펴보고 싶어요. 편집량과 함께 편집 전후의 근거를 비교해 보셨나요?`,
     `${event.keywords?.[1] || "이 사건"}의 맥락을 이해할 때 어떤 출처를 먼저 보면 좋을까요? 같은 시점의 변화라도 서로 다른 이유가 있을 수 있겠네요.`,
@@ -47,7 +51,7 @@ function seedThreads(event) {
     id: `${event.id}-discussion-example-${index + 1}`,
     author: `리서처 ${["A", "B", "C"][index]}`,
     body,
-    createdAt: `2025-06-24T${String(11 - index).padStart(2, "0")}:00:00+09:00`,
+    createdAt: exampleTime(60 + index * 60),
     isOwn: false,
     isSeed: true,
     likes: [4, 2, 1][index],
@@ -59,7 +63,7 @@ function seedThreads(event) {
               id: `${event.id}-reply-example`,
               author: "리서처 B",
               body: "근거 문서의 편집 전후와 출처를 같이 확인해 보면 좋겠어요. 이 글과 답글은 토론 기능을 보여 주는 예시입니다.",
-              createdAt: "2025-06-24T11:15:00+09:00",
+              createdAt: exampleTime(45),
               isOwn: false,
               isSeed: true,
             },

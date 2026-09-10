@@ -94,11 +94,6 @@ export default function PulsePage({ savedEvents, onToggleEvent, onSource }) {
   }
   const sourceItems = items?.filter((v) => v.source === target?.source) || [];
   const days = calendarDays(sourceItems);
-  const dayItems = target
-    ? sourceItems.filter(
-        (v) => kstDate(v.snapshotTs) === kstDate(target.snapshotTs),
-      )
-    : [];
   return (
     <div className="wp-page pulse-page">
       <div className="wp-page-header">
@@ -215,6 +210,12 @@ export default function PulsePage({ savedEvents, onToggleEvent, onSource }) {
             </span>
             <span>노드 크기 = 공통 척도의 급증도</span>
           </div>
+          <PulseTimeline
+            snapshots={sourceItems}
+            selected={target}
+            latest={latest}
+            onSelect={selectTime}
+          />
           <p className="pulse-notice" role="status">
             {notice ||
               (map.loading
@@ -309,12 +310,6 @@ export default function PulsePage({ savedEvents, onToggleEvent, onSource }) {
               </div>
             </>
           )}
-          <PulseTimeline
-            snapshots={dayItems}
-            selected={target}
-            latest={latest}
-            onSelect={selectTime}
-          />
         </>
       )}
     </div>

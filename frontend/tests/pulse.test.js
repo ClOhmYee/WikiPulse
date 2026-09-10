@@ -17,12 +17,15 @@ test('KST dates, missing dates, NEW boundary and real timestamp snapping', () =>
   assert.equal(calendarDays(points)[1].available, false);
   assert.equal(closestSnapshot(points, Date.parse('2025-06-22T04:00:00Z')), points[1]);
 });
-test('history and stress data validate; snapshots include completed empty results', async () => {
+test('daily history and stress data validate, including empty response support', async () => {
   const list = await mockClient.listSnapshots();
   validateSnapshots(list);
   for (const map of pulseMaps) validateMap(map);
-  assert.equal(pulseMaps[0].meta.clusterCount, 0);
-  assert.deepEqual((await mockClient.getPulseMap({ snapshotTs: list.data[0].snapshotTs })).data.clusters, []);
+  assert.equal(list.data.length, 375);
+  assert(pulseMaps.every(v => v.meta.clusterCount > 0));
+  const empty = structuredClone(pulseMaps[0]);
+  empty.data.clusters = []; Object.assign(empty.meta, { clusterCount: 0, nodeCount: 0, edgeCount: 0 });
+  validateMap(empty);
   const stress = validateMap(makeStressMap());
   assert.equal(stress.meta.nodeCount, 500);
   assert.equal(stress.meta.edgeCount, 1000);
@@ -35,8 +38,8 @@ test('invalid graph references, duplicates, future evidence and mixed snapshots 
     v => { v.data.clusters[0].edges[0].targetPageId = 'missing'; },
     v => { v.data.clusters[0].edges.push({ ...v.data.clusters[0].edges[0], id: 'duplicate' }); },
     v => { v.data.clusters[0].nodes[0].sizeScore = 2; },
-    v => { v.data.clusters[0].nodes[0].windowEnd = '2026-01-01T00:00:00Z'; },
-    v => { v.data.clusters[0].edges[0].evidence.month = '2025-07'; },
+    v => { v.data.clusters[0].nodes[0].windowEnd = '2027-01-01T00:00:00Z'; },
+    v => { v.data.clusters[0].edges[0].evidence.month = '2026-10'; },
     v => { v.meta.nodeCount++; },
   ]) {
     const copy = structuredClone(pulseMaps.at(-1)); mutate(copy);
