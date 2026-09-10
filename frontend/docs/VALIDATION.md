@@ -1,6 +1,102 @@
 # 프론트엔드 검증 기록
 
-> 2026-09-08 리팩토링 이후의 최신 결과는 [데이터 전환 검증](../../docs/frontend/DATA_SOURCE.md#검증과-실행)을 참고한다. 아래 내용은 기존 검증 기록으로 보존한다.
+## 2026-09-10 — 실제 Wikipedia 기반 연간 목데이터
+
+대상: WP-78. Windows · Node.js · Playwright Chromium. [데이터 구성과 파이프라인 차이](../../docs/frontend/MOCK_HISTORY.md)를 함께 참고한다.
+
+| 검사 | 결과 | 범위 |
+| --- | --- | --- |
+| 출처 갱신 스크립트 | 완료 | 공개 MediaWiki API로 요청 제목 298개의 정규 문서 ID·원문 URL·최초 리비전 확인, Nasdaq-100 증권 102개와 구성표 리비전 보관 |
+| `npm.cmd run test:data` | 15개 통과 | 고유 클러스터 문서 287개, 월별 리포트 468개, 375일의 클러스터 리포트 9,698개. 문서 생성일·동일 날짜 수치·합계·리포트·종목·저장 연결 검사 |
+| `npm.cmd run test:contract` | 통과 | 기존 계약 fixture 867개, 날짜별 지도 375개, 500노드·1,000간선 스트레스 fixture |
+| `npm.cmd run test:e2e` | 34개 통과 | 연간 슬라이더 양끝·연도 경계·날짜 선택, 과거 지도 → 리포트 → 종목, 모든 주제·대표 월·102개 종목 상세, 기존 화면 회귀 |
+| `npm.cmd run test:api` | 11개 통과 | HTTP 응답 가로채기, 페이지네이션·지연 응답·오류·재시도·대규모 지도 검사. 라이브 백엔드 검증 아님 |
+| `npm.cmd run lint` | 통과, 경고 0개 | 최종 모바일 배치 변경 포함 |
+| 변경 소스 Prettier 검사 | 통과 | 전체 `format:check`에는 이번에 수정하지 않은 기존 파일 45개의 형식 경고가 남아 있음 |
+| `npm.cmd run build` | 통과 | mock 클라이언트 95.78 kB, gzip 28.02 kB. 기존 온보딩 906.33 kB 청크 경고 유지 |
+
+1440px 데스크톱 전체/선택 화면과 390px 모바일 전체/선택 화면을 캡처해 확인했다. 모바일 36개 클러스터를 5열로 배치하고 선택한 묶음을 확대한다. 가로 넘침과 지도 아래 상세 패널 위치는 자동 검사했다. 캡처는 `test-results/pulse-desktop.png`, `pulse-desktop-selected.png`, `pulse-mobile.png`, `pulse-mobile-selected.png`이며 이후 테스트 실행 시 초기화될 수 있다. 전체 접근성 감사·실기기 GPU·Safari/Firefox는 이번 검증 범위에 없다.
+
+목 모드 검증은 포트 5184, API 모드는 5175를 사용했다. Windows에서 검사 종료 뒤 Vite 정리가 대기 상태로 남아, 이번 실행의 PID와 명령줄을 확인한 후 해당 Vite만 종료하고 각 테스트의 종료 코드 0을 회수했다. 기존 개발 서버 5174는 유지했다.
+
+실제 Wikipedia 본문·편집 기록·조회수·주가·자동 클러스터링 결과를 수집한 검사가 아니다. 문서 식별자는 실제이며, 급증 수치·관계·리포트·가격은 합성이다. 현재 Nasdaq-100 목록을 과거 전체 기간에도 고정 적용했다.
+
+## 2026-09-09 — 펄스맵 시간 탐색·문서 그래프
+
+대상: WP-37, WP-71, WP-72, WP-73. Windows · Node.js · Playwright Chromium에서 검증했다. 범위는 프론트·합성 mock·HTTP 계약이며, 실제 Spring API와 파이프라인 연결은 WP-74/75의 후속 작업이다. [구현·계약 설명](../../docs/frontend/PULSE_MAP.md)을 함께 참고한다.
+
+| 검사 | 결과 | 범위 |
+| --- | --- | --- |
+| `npm.cmd run lint` | 통과, 경고 0개 | 최종 SVG·컴포넌트 변경 포함 |
+| `npm.cmd run test:data` | 12개 통과 | 기존 데이터·라우팅 7개, 스냅샷/NEW/KST/무결성/API/배치 5개 |
+| `npm.cmd run test:contract` | 통과 | 기존 OpenAPI + Pulse OpenAPI 3.0.3, 7개 시점 및 대규모 fixture |
+| `npm.cmd run test:e2e` | 34개 통과 (30.5초) | 카드/리스트 상태 보존, 시간 이동, 지도 선택·확대·드래그, 기존 페이지 회귀 |
+| 지도 관련 E2E 재검증 | 3개 통과 (6.8초) | 최종 제목 줄바꿈 수정 후 모바일 제목 겹침, 선택·키보드·시점·확대 확인 |
+| `npm.cmd run test:api` | 11개 통과 | 실제 HTTP 클라이언트에 Playwright 응답 가로채기. 지연 응답 역전·실패·재시도·계약 오류·fixture 분리 |
+| `npm.cmd run build` | 종료 코드 0 | 최신 PulsePage 청크 34.12 kB. 기존 온보딩 청크 906.33 kB 경고 유지 |
+| 문서 정합 스캔 · `git diff --check` | 확인 완료 | 페이지 역할·API 현재 상태·폐기된 토글 및 변경 공백 확인 |
+
+20개 클러스터·500개 문서·1,000개 간선 fixture를 모두 렌더링했다. Node에서 초기 배치 계산 약 90ms를 관측했고, Chromium에서 지도 로딩·문서 선택·확대가 테스트의 3초 한도 안에 완료되었다. 특정 개발 환경의 합성 데이터 측정이며 실기기나 운영 데이터의 성능 보장은 아니다. 누락 지표는 0과 구분하고, 고립 노드는 유지하며 잘못된 참조·중복 간선·미래 지표는 응답 오류로 검증했다.
+
+1440×1000 데스크톱의 전체 지도·선택 상태와 390×844 모바일 화면을 직접 캡처해 확인했다. 모바일은 2열 그래프와 지도 아래 패널을 사용하며 긴 제목은 줄바꿈한다. 화면 가로 넘침과 제목끼리의 겹침을 검사했다. 파일은 `test-results/pulse-desktop.png`, `pulse-desktop-selected.png`, `pulse-mobile.png`이며 이후 Playwright 실행 시 초기화될 수 있다.
+
+전체 axe·프로덕션 smoke·실기기 GPU·Safari/Firefox는 이번 변경에서 다시 검증하지 않았다. API 모드는 `/issues/snapshots`와 `/issues/map`의 응답을 가로챈 검사이며 서버 구현 완료를 뜻하지 않는다. 실패 시 mock 자동 대체가 없음을 확인했다.
+
+테스트는 기존 5174 개발 서버와 별개로 mock 5176/API 5175를 사용했다. 재현은 아래 명령을 사용한다. 서버를 정리할 때는 이번 실행에서 시작한 프로세스인지 먼저 확인한다.
+
+```powershell
+npm.cmd --prefix frontend run lint
+npm.cmd --prefix frontend run test:data
+npm.cmd --prefix frontend run test:contract
+npm.cmd --prefix frontend run build
+$env:WIKIPULSE_E2E_PORT = '5176'
+npm.cmd --prefix frontend run test:e2e
+Remove-Item Env:WIKIPULSE_E2E_PORT
+npm.cmd --prefix frontend run test:api
+```
+
+## 2026-09-09 — 페이지 URL 재구성 검증
+
+대상: WP-70의 로컬 작업 트리, Windows · Node.js · Playwright Chromium. 페이지 구성의 정본은 [PAGES.md](../../docs/frontend/PAGES.md)다. 아래 결과는 2026-09-09 구현 작업에서 실행한 결과이며, 배포·병합 완료를 뜻하지 않는다.
+
+| 검사 | 결과 | 확인 범위 |
+| --- | --- | --- |
+| `npm.cmd run lint` | 통과 | `src` ESLint, 경고 0개 |
+| `npm.cmd run test:data` | 7개 통과 | 기존 데이터 계약 6개 + URL 정규화 1개 |
+| `npm.cmd run test:contract` | 통과 | 기존 OpenAPI 제안의 경로 13개·작업 14개·스키마 37개·참조 138개, fixture 34개 |
+| `npm.cmd run test:e2e` | 31개 통과 | 토론 6개·예외/데이터 7개·라우팅 4개·워크스페이스 14개 |
+| `npm.cmd run test:api` | 7개 통과 | Playwright가 응답을 대체하는 HTTP 모드. 실제 Spring 서버 연동 검증 아님 |
+| `npm.cmd run build` | 빌드 생성 확인 | 기존 온보딩 청크 약 906.30 kB, 500 kB 경고 유지 |
+| `node node_modules/vite/bin/vite.js build --logLevel error` | 종료 코드 0 | PowerShell의 stderr 경고 처리와 빌드 실패를 구분해 재확인 |
+| `git diff --check` | 통과 | 변경 파일 공백 검사 |
+
+라우팅 검증은 새 계정 경로의 직접 접속·새로고침·상호 이동, 티커 대문자 및 마지막 슬래시 정규화, 검색 쿼리 보존, 이슈→리포트→연관주식의 ID 유지, 뒤로·앞으로 이동을 포함한다. 이전 경로는 페이지 없음 안내로 복구하고, 리포트의 근거 링크는 위키백과 원문을 새 탭으로 가리킨다. 인증 안내 화면은 비밀번호를 받거나 쓰기 요청을 보내지 않는다.
+
+화면 캡처는 `test-results/routes-mobile.png`(390×844 마이페이지)와 `test-results/routes-desktop.png`(1440×1000 로그인)를 직접 확인했다. 모바일 5개 메뉴와 안내·이동 링크에 가로 넘침이 없었다. 실기기·전체 브라우저 시각 검증을 뜻하지 않는다. 캡처는 재생성 가능한 임시 산출물이며 이후 테스트 실행 시 삭제될 수 있다.
+
+이번 변경 후 `format:check`, 전체 axe 검사(`test:a11y`), 프로덕션 smoke(`test:production`)는 재실행하지 않았다. 해당 스크립트의 페이지 경로는 갱신했지만 아래 과거 통과 기록을 현재 버전의 통과 근거로 사용하지 않는다. 실제 API·인증·금융 데이터는 이번 검증 대상이 아니다.
+
+### 재현
+
+저장소 루트에서 실행한다. 기존 개발 서버가 5174를 사용하면 E2E 전용 포트를 지정한다.
+
+```powershell
+npm.cmd --prefix frontend run lint
+npm.cmd --prefix frontend run test:data
+npm.cmd --prefix frontend run test:contract
+npm.cmd --prefix frontend run build
+$env:WIKIPULSE_E2E_PORT = '5184'
+npm.cmd --prefix frontend run test:e2e
+Remove-Item Env:WIKIPULSE_E2E_PORT
+npm.cmd --prefix frontend run test:api
+```
+
+API 모드 테스트는 5175를 사용한다. 당시 Windows에서 테스트 종료 후 Vite 정리가 대기 상태로 남아, 이번 작업에서 시작한 프로세스의 PID·명령줄을 확인한 뒤 종료했다. 두 테스트 실행은 최종 종료 코드 0을 반환했고, 5175·5184 리스너가 해제됨을 확인했다. 기존 5174 개발 서버는 유지했다. 다른 실행에서 프로세스를 정리할 때는 기록된 PID를 재사용하지 않고 그 실행에서 생성한 프로세스를 확인한다.
+
+## 이전 검증 기록
+
+2026-09-08 데이터 계층 리팩터 검증은 [데이터 전환 검증](../../docs/frontend/DATA_SOURCE.md#검증과-실행)에 있다. 이하 내용은 2026-09-07의 이전 페이지 구성에서 얻은 기록으로 보존한다. 당시 단일 문서 상세 화면은 현재 제거되었다.
+
 검증일: 2026-09-07. 대상은 `frontend/`의 독립 React/Vite 앱이며 Windows, Node.js, Playwright Chromium에서 실행했다. 서비스 데이터는 합성 목데이터이고 토론 입력은 브라우저 안에서만 처리된다. 백엔드, 실제 수집 데이터, 다중 사용자 통신은 검증 범위가 아니다.
 
 ## 결과

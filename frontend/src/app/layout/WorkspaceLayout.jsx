@@ -69,7 +69,7 @@ export default function WorkspaceLayout({
               새로운 맥락이 보입니다.
             </p>
           </div>
-          <a href="#/onboarding">
+          <a href="#/">
             <CircleHelp size={16} />
             WikiPulse 소개
             <ArrowRight size={13} />

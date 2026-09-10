@@ -16,6 +16,8 @@ function getClient() {
 /** @type {import('./contracts.js').DataClient} */
 export const dataClient = Object.fromEntries(
   [
+    "listSnapshots",
+    "getPulseMap",
     "listCategories",
     "listEvents",
     "getEvent",

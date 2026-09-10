@@ -5,8 +5,9 @@ import ExplorePage from "../pages/explore/ExplorePage";
 import SavedPage from "../pages/saved/SavedPage";
 import { PageDataBoundary } from "../data/hooks/PageData";
 const EventPage = lazy(() => import("../pages/event/EventPage"));
-const EntityPage = lazy(() => import("../pages/entity/EntityPage"));
+const AccountPage = lazy(() => import("../pages/account/AccountPage"));
 const StocksPage = lazy(() => import("../pages/stocks/StocksPage"));
+const PulsePage = lazy(() => import("../pages/pulse/PulsePage"));
 export default function RouteContent({
   pathname,
   route,
@@ -22,17 +23,24 @@ export default function RouteContent({
     separator < 0 ? "" : route.slice(separator + 1),
   );
   let content;
-  if (pathname === "/pulse" || pathname === "/explore")
+  if (pathname === "/pulse")
+    content = (
+      <PulsePage
+        savedEvents={savedEvents}
+        onToggleEvent={onToggleEvent}
+        onSource={onSource}
+      />
+    );
+  else if (pathname === "/issues")
     content = (
       <ExplorePage
         key={route}
-        listView={pathname === "/explore"}
         initialQuery={queryParams.get("q") || ""}
         savedEvents={savedEvents}
         onToggleEvent={onToggleEvent}
       />
     );
-  else if (parts[0] === "events" && parts.length === 2)
+  else if (parts[0] === "issues" && parts.length === 2)
     content = (
       <EventPage
         eventId={parts[1]}
@@ -40,7 +48,7 @@ export default function RouteContent({
         onToggleEvent={onToggleEvent}
       />
     );
-  else if (parts[0] === "events" && parts.length === 3 && parts[2] === "stocks")
+  else if (parts[0] === "issues" && parts.length === 3 && parts[2] === "stocks")
     content = (
       <StocksPage
         eventId={parts[1]}
@@ -48,8 +56,8 @@ export default function RouteContent({
         onToggleStock={onToggleStock}
       />
     );
-  else if (parts[0] === "intelligence" && parts.length === 2)
-    content = <EntityPage entityId={parts[1]} />;
+  else if (["/mypage", "/login", "/signup"].includes(pathname))
+    content = <AccountPage page={parts[0]} />;
   else if (parts[0] === "stocks" && parts.length <= 2)
     content = (
       <StocksPage
@@ -81,21 +89,19 @@ export default function RouteContent({
       />
     );
   const resource =
-    pathname === "/pulse" || pathname === "/explore"
+    pathname === "/issues"
       ? "explore"
-      : parts[0] === "events" && parts.length === 2
+      : parts[0] === "issues" && parts.length === 2
         ? "event"
-        : parts[0] === "events" && parts.length === 3 && parts[2] === "stocks"
+        : parts[0] === "issues" && parts.length === 3 && parts[2] === "stocks"
           ? "eventStocks"
-          : parts[0] === "intelligence" && parts.length === 2
-            ? "entity"
-            : parts[0] === "stocks" && parts.length <= 2
-              ? parts[1]
-                ? "stock"
-                : "stocks"
-              : pathname === "/saved"
-                ? "saved"
-                : null;
+          : parts[0] === "stocks" && parts.length <= 2
+            ? parts[1]
+              ? "stock"
+              : "stocks"
+            : pathname === "/saved"
+              ? "saved"
+              : null;
   return resource ? (
     <PageDataBoundary
       resource={resource}

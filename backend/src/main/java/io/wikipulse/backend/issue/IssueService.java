@@ -1,12 +1,15 @@
 package io.wikipulse.backend.issue;
 
-import io.wikipulse.backend.common.NotFoundException;
+import io.wikipulse.backend.common.ApiException;
+import io.wikipulse.backend.common.ApiResponse;
+import io.wikipulse.backend.common.PageMeta;
+import io.wikipulse.backend.common.QueryParams;
 import io.wikipulse.backend.issue.dto.IssueCardResponse;
 import io.wikipulse.backend.issue.dto.IssueDetailResponse;
+import io.wikipulse.backend.issue.dto.IssueMemberResponse;
 import io.wikipulse.backend.stock.dto.RelatedStockResponse;
 import java.time.Instant;
 import java.util.List;
-import org.springframework.data.domain.Limit;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -14,7 +17,8 @@ import org.springframework.transaction.annotation.Transactional;
 @Transactional(readOnly = true)
 public class IssueService {
 
-    private static final int DEFAULT_FEED_LIMIT = 50;
+    /** 상세 진입 시 미리 담는 관련 종목 수 (명세 §2). 전체는 /issues/{id}/stocks. */
+    private static final int DETAIL_STOCK_PREVIEW = 5;
 
     private final IssueClusterRepository clusterRepository;
     private final IssueQueryRepository queryRepository;
@@ -25,37 +29,60 @@ public class IssueService {
         this.queryRepository = queryRepository;
     }
 
-    /**
-     * 이슈 피드. snapshotTs 를 주면 그 시점(리플레이), 안 주면 최근 LIVE 스냅샷.
-     * 아직 클러스터가 하나도 없으면 빈 리스트다.
-     */
-    public List<IssueCardResponse> feed(Instant snapshotTs, String status, Integer limit) {
+    /** 이슈 피드 / 버블맵. 봉투 + pagination·snapshotTs meta. */
+    public ApiResponse<List<IssueCardResponse>> feed(
+            Instant snapshotTs, String status, String source, Integer offset, Integer limit) {
+
         Instant target = (snapshotTs != null)
                 ? snapshotTs
                 : clusterRepository.findLatestLiveSnapshot().orElse(null);
+
+        int off = QueryParams.offset(offset);
+        int lim = QueryParams.limit(limit);
+        List<String> statuses = QueryParams.statuses(status);
+        String src = QueryParams.source(source);
+
+        // 아직 스냅샷이 하나도 없으면 빈 목록 + total 0.
         if (target == null) {
-            return List.of();
+            return ApiResponse.of(List.of(),
+                    PageMeta.of(PageMeta.Pagination.of(off, lim, 0, 0)));
         }
-        int cap = (limit != null && limit > 0) ? limit : DEFAULT_FEED_LIMIT;
-        return clusterRepository.findBySnapshot(target, status, Limit.of(cap))
-                .stream()
-                .map(IssueCardResponse::from)
-                .toList();
+
+        long total = clusterRepository.countCards(target, statuses, src);
+        List<IssueCardResponse> cards = clusterRepository
+                .findCards(target, statuses, src, off, lim)
+                .stream().map(IssueCardResponse::from).toList();
+
+        return ApiResponse.of(cards, new PageMeta(
+                PageMeta.Pagination.of(off, lim, total, cards.size()),
+                target.toString()));
     }
 
-    public IssueDetailResponse detail(Long id) {
+    public ApiResponse<IssueDetailResponse> detail(Long id) {
         IssueCluster cluster = clusterRepository.findById(id)
-                .orElseThrow(() -> new NotFoundException("이슈 %d 없음".formatted(id)));
+                .filter(c -> !"DISCARDED".equals(c.getStatus()))
+                .orElseThrow(() -> ApiException.notFound("issue %d not found".formatted(id)));
 
-        List<String> members = queryRepository.findMemberTitles(id);
+        List<IssueMemberResponse> members = queryRepository.findMembers(id).stream()
+                .map(IssueMemberResponse::from).toList();
         String summary = queryRepository.findSummary(id).orElse(null);
-        List<RelatedStockResponse> stocks = queryRepository.findVerifiedStocks(id).stream()
-                .map(p -> new RelatedStockResponse(
-                        p.getTicker(), p.getName(), p.getExchange(),
-                        p.getTier(), p.getMatchPath(),
-                        p.getSimilarity(), p.getGdeltLift(), p.getRationale()))
-                .toList();
+        String summaryModel = queryRepository.findSummaryModel(id).orElse(null);
+        List<RelatedStockResponse> stocks = queryRepository
+                .findVerifiedStocks(id, DETAIL_STOCK_PREVIEW)
+                .stream().map(RelatedStockResponse::from).toList();
 
-        return IssueDetailResponse.of(cluster, members, summary, stocks);
+        return ApiResponse.of(
+                IssueDetailResponse.of(cluster, summary, summaryModel, members, stocks));
+    }
+
+    /** /issues/{id}/stocks — 전체 관련 종목. */
+    public ApiResponse<List<RelatedStockResponse>> stocks(Long id, Integer limit) {
+        if (!clusterRepository.existsById(id)) {
+            throw ApiException.notFound("issue %d not found".formatted(id));
+        }
+        int lim = QueryParams.limit(limit);
+        List<RelatedStockResponse> stocks = queryRepository.findVerifiedStocks(id, lim)
+                .stream().map(RelatedStockResponse::from).toList();
+        return ApiResponse.of(stocks);
     }
 }

@@ -24,14 +24,17 @@ npm.cmd run dev
 
 | 경로 | 내용 |
 |---|---|
-| `#/`, `#/onboarding` | 기존 Track → Cluster → Match 온보딩 |
-| `#/pulse` | 사건 지도, 검색·주제·기간, 선택 사건 미리보기 |
-| `#/explore` | 사건 목록, 검색·주제·정렬 |
-| `#/events/iran-hormuz-2025` | 사건 개요, 타임라인, 뉴스 예시, 근거 문서, 토론 |
-| `#/intelligence/strait-of-hormuz` | 편집·조회 추이, 수정 전후 비교, 관련 문서 |
-| `#/events/iran-hormuz-2025/stocks` | 사건에 연결된 종목과 연결 유형 |
+| `#/` | 기존 Track → Cluster → Match 온보딩 |
+| `#/pulse` | 날짜·시점 탐색, HOT/NEW, 문서 그래프·근거 패널 ([계약](../docs/frontend/PULSE_MAP.md)) |
+| `#/issues` | 이슈 목록, 검색·주제·정렬 |
+| `#/issues/iran-hormuz-2025` | 이슈 리포트: 개요, 타임라인, 뉴스 예시, 근거 문서, 토론 |
+| `#/issues/iran-hormuz-2025/stocks` | 이슈에 연결된 종목과 연결 유형 |
 | `#/stocks`, `#/stocks/NVDA` | 종목 탐색, 관련 사건과 연결 경로, 가격 예시 |
 | `#/saved` | 저장한 사건과 관심 종목 |
+| `#/mypage` | 계정 관리 준비 안내, 보관함·로그인·회원가입 이동 |
+| `#/login`, `#/signup` | 각각 독립된 준비 안내 화면. 인증·계정 생성 기능 없음 |
+
+전체 11개 페이지와 URL 규칙은 [페이지 구성 정본](../docs/frontend/PAGES.md)을 참고하세요. 단일 위키 문서 상세는 제거했으며, 근거 문서는 위키백과 원문으로 연결됩니다.
 
 검색창은 `Ctrl/Cmd + K`로 이동하고, 결과는 방향키와 Enter로 선택합니다. 차트에 포커스를 두고 좌우 방향키를 누르면 날짜별 수치를 읽을 수 있습니다. 지도는 드래그·확대·축소·초기화를 지원하고, 사건 노드는 Enter/Space로 선택할 수 있습니다.
 
@@ -49,8 +52,8 @@ npm.cmd run dev
 
 ## 데이터와 API 명세
 
-- 목데이터: [`src/data/mock/fixtures/catalog.js`](src/data/mock/fixtures/catalog.js), 사건 6개·문서 14개·종목 8개
-- 기준일: 2025-06-24, 일별 차트: 2025-06-01~24
+- 목데이터: [`src/data/mock/fixtures/history.js`](src/data/mock/fixtures/history.js), 실제 Wikipedia 문서 기반 36개 주제의 월별 리포트와 현재 Nasdaq-100 구성 증권
+- 기간: 2025-09-01~2026-09-10, 일별 스냅샷 375개. 출처·합성 범위·리포트 연결은 [목데이터 안내](../docs/frontend/MOCK_HISTORY.md)를 참고한다.
 - [프론트엔드 API 계약](docs/API_SPEC.md)
 - [OpenAPI 3.0 명세](docs/openapi.yaml)
 - [화면·컴포넌트 안내](docs/UI_GUIDE.md)

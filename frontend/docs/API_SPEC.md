@@ -1,6 +1,10 @@
 # WikiPulse 프론트엔드 API 계약 제안
 
-작성 기준: 2026-09-07 · 프론트 조회 구현 갱신: 2026-09-08 · 계약 버전: `0.2.0-proposal` · 데모 기준일: `2025-06-24`
+작성 기준: 2026-09-07 · 프론트 조회 구현 갱신: 2026-09-10 · 계약 버전: `0.2.0-proposal` · 현재 데모 기준일: `2026-09-10`
+
+> 2026-09-10: 아래 날짜·숫자·단일 Event JSON은 이전 계약 설명용 예시다. 현재 mock 카탈로그는 [연간 목데이터](../../docs/frontend/MOCK_HISTORY.md)로 교체했다. `meta.asOf`는 목록의 2026-09-10 또는 상세 리포트의 해당 날짜이고 `availableRange`는 2025-09-01~2026-09-10이다. 이 문서의 과거 예시를 현재 데이터 개수·종목 목록·활동 수치로 사용하지 않는다.
+
+페이지 구성 갱신: 2026-09-09. 페이지 URL은 [PAGES.md](../../docs/frontend/PAGES.md), 향후 통합 API는 [저장소 API 명세](../../docs/api-v0.1.md)가 정본이다. 이 문서와 `openapi.yaml`은 현재 FE 클라이언트가 사용하는 이전 제안 계약을 설명하며, `/events`·`/entities` HTTP 계약을 이번 페이지 변경에서 갱신한 것은 아니다.
 
 이 문서는 **완성된 프론트엔드 화면에 데이터를 제공하기 위한 제안 계약**이다. 아래 API는 구현된 서버 엔드포인트가 아니다. 현재 페이지는 공통 비동기 조회 계층을 사용한다. `frontend/.env`의 mock 모드에서는 fixture를, api 모드에서는 이 제안 계약에 맞춘 HTTP 클라이언트를 사용한다. 실제 백엔드 연동은 아직 검증하지 않았다. 로그인, 데이터 수집, 분석 처리, 데이터베이스, 배포 방식은 이 문서의 범위에 포함하지 않는다.
 
@@ -10,20 +14,22 @@
 
 | 화면 | 브라우저 경로 | 현재 제공하는 동작 |
 |---|---|---|
-| 온보딩 | `#/`, `#/onboarding` | Track → Cluster → Match 소개, 탐색 진입 |
-| Pulse Map | `#/pulse` | 사건 검색·주제 필터, 기간별 누적 신호, 지도 선택·확대·축소·이동, 사건 미리보기·저장 |
-| 사건 탐색 | `#/explore` | 사건 검색·주제 필터, Pulse/시작 시점/문서 수 정렬 |
-| Event Brief | `#/events/{eventId}` | 개요·타임라인·관련 소식·근거 문서·토론 탭, 차트 범위·기준선, 문서 선택, 사건 저장 |
-| Wiki Intelligence | `#/intelligence/{entityId}` | 문서 지표, 편집/조회 차트, 편집 전후 비교·검색, 관련 사건·문서 이동 |
+| 온보딩 | `#/` | Track → Cluster → Match 소개, 탐색 진입 |
+| Pulse Map | `#/pulse` | 날짜·시점 선택, 문서 그래프·HOT/NEW·근거 패널. 별도 [Pulse 계약](pulse-openapi.json)과 [행동 명세](../../docs/frontend/PULSE_MAP.md) 사용 |
+| 이슈 탐색 | `#/issues` | 이슈 검색·주제 필터, Pulse/시작 시점/문서 수 정렬 |
+| 이슈 상세 = 리포트 | `#/issues/{issueId}` | 개요·타임라인·관련 소식·근거 문서·토론 탭, 차트 범위·기준선, 문서 선택, 이슈 저장 |
 | 종목 탐색 | `#/stocks` | 종목 검색·산업 필터·관심 종목 필터, 관련 사건 수/티커 정렬 |
-| 사건 관련 종목 | `#/events/{eventId}/stocks` | 해당 사건 종목, 산업·연결 유형·관심 종목 필터, 연결 설명 |
+| 연관주식 | `#/issues/{issueId}/stocks` | 해당 이슈 종목, 산업·연결 유형·관심 종목 필터, 연결 설명 |
 | 종목 상세 | `#/stocks/{symbol}` | 관련 사건과 연결 경로, 연결 유형 필터, 예시 가격 차트, 관심 종목 저장 |
 | 보관함 | `#/saved` | 저장 사건/관심 종목 탭, 보관함 내부 검색·저장 해제 |
-| 전체 검색 | 공통 헤더 | 사건·문서·종목 통합 검색, 최대 7개 결과, 키보드 선택 |
+| 마이페이지 | `#/mypage` | 준비 안내, 보관함·로그인·회원가입 이동 |
+| 로그인 | `#/login` | 준비 안내, 실제 인증 요청 없음 |
+| 회원가입 | `#/signup` | 준비 안내, 실제 계정 생성 요청 없음 |
+| 전체 검색 | 공통 헤더 | 조회 결과에서 이슈·종목만 페이지 이동 대상으로 표시, 키보드 선택 |
 
-사건 상세의 키워드 링크는 `#/explore?q={인코딩된 키워드}`로 이동해 사건 검색어를 초기화한다. URL query는 화면 상태이며 API 요청을 이미 보냈다는 의미가 아니다.
+이슈 상세의 키워드 링크는 `#/issues?q={인코딩된 키워드}`로 이동해 검색어를 초기화한다. URL query는 화면 상태이며 API 요청을 이미 보냈다는 의미가 아니다. 단일 문서 화면은 제거했고, 리포트의 문서 정보는 유지하며 원문 링크를 제공한다.
 
-현재 데이터는 주제 6개, 사건 6개, 문서 14개, 종목 8개로 구성된다. 모든 수치·편집자·편집 내역·소식 제목과 시각·가격·연결 관계는 합성 fixture다. 뉴스 카드의 외부 URL은 주제를 읽는 참고 링크이며 예시 제목과 요약을 뒷받침하는 기사 출처가 아니다.
+현재 공통 이슈 카테고리는 10개이며 기본 카탈로그는 사건 6개, 문서 14개, 종목 8개로 구성된다. 모든 수치·편집자·편집 내역·소식 제목과 시각·가격·연결 관계는 합성 fixture다. 뉴스 카드의 외부 URL은 주제를 읽는 참고 링크이며 예시 제목과 요약을 뒷받침하는 기사 출처가 아니다.
 
 토론은 사건별 예시 글과 브라우저에 입력한 글을 보여 준다. 작성·답글·공감은 현재 브라우저에만 반영되며 다른 사용자에게 전송되지 않는다. 예시 작성자와 실제 서비스 사용자를 혼동하지 않는다.
 
@@ -40,7 +46,7 @@
 
 ```js
 const url = `/api/v1/events/${encodeURIComponent(eventId)}`;
-const query = new URLSearchParams({ q: '호르무즈', category: 'geopolitics', window: '3d' });
+const query = new URLSearchParams({ q: '호르무즈', category: 'world', window: '3d' });
 const listUrl = `/api/v1/events?${query.toString()}`;
 ```
 
@@ -66,7 +72,7 @@ const listUrl = `/api/v1/events?${query.toString()}`;
 | `data` | 목록은 배열, 단건은 객체. 검색 결과가 없으면 `[]`. 존재하지 않는 단건은 `data: null`이 아닌 404 |
 | `included` | 해당 응답에서 ID로 참조하는 화면용 요약 객체. endpoint별로 정한 키를 사용하며 대상이 없으면 `[]`. 관계의 실제 증거를 의미하지 않음 |
 | `meta.dataMode` | 이 계약의 값은 `mock` 고정. 실제 수집·실시간 데이터를 의미하는 값을 임의로 사용하지 않음 |
-| `meta.asOf` | fixture 기준일 `2025-06-24`. 요청한 오늘 날짜가 아님 |
+| `meta.asOf` | 현재 fixture 기준일 `2026-09-10`. 과거 리포트/연결 종목 조회에서는 해당 리포트 날짜. 요청한 오늘 날짜가 아님 |
 | `meta.timezone` | 날짜와 일 단위 집계의 해석 기준 `Asia/Seoul` |
 | `meta.availableRange` | 차트에 실제로 들어 있는 전체 날짜 범위. 현재 24개의 **달력 날짜별** 포인트이며 거래일 시계열이 아님 |
 | `meta.window` | 응답 주요 편집 지표의 집계 기간. 사건 목록의 `window` 요청만 `3d`/`7d` 가능. 그 외는 `24h` |
@@ -92,7 +98,7 @@ const listUrl = `/api/v1/events?${query.toString()}`;
 
 | 데이터 | 의미와 형식 |
 |---|---|
-| `date`, 차트 `date` | `YYYY-MM-DD`, 일 단위. 현재 범위는 2025-06-01~24 |
+| `date`, 차트 `date` | `YYYY-MM-DD`, 일 단위. 현재 목데이터 범위는 2025-09-01~2026-09-10. 아래 2025-06 JSON은 계약 형식 예시로 보존 |
 | `startAt`, `updatedAt`, `time`, `publishedAt` | ISO 8601 offset 포함. 예: `2025-06-24T11:42:00+09:00`. 프론트 표시 시 같은 시간대로 변환해야 함 |
 | `edits` | 편집 횟수, 0 이상 정수. 사건은 포함 문서 값의 합 |
 | `baseline` | 같은 기간에 대응하는 비교용 편집 횟수, 현재 fixture는 양수. 실제 28일 평균에서 산출한 데이터가 아님 |
@@ -147,12 +153,16 @@ UI가 빈 상태를 지원하는 필드만 다음과 같이 허용한다.
 
 | id | 화면 이름 |
 |---|---|
-| `geopolitics` | 국제 정세 |
-| `technology` | AI · 반도체 |
-| `energy` | 에너지 |
-| `space` | 우주 · 항공 |
-| `materials` | 배터리 · 소재 |
-| `security` | 사이버 보안 |
+| `politics` | 정치 |
+| `world` | 국제 |
+| `society` | 사회 |
+| `economy` | 경제 |
+| `technology` | 기술 |
+| `science` | 과학 |
+| `culture` | 문화 |
+| `sports` | 스포츠 |
+| `environment` | 환경 |
+| `other` | 기타 |
 
 `color`는 `#RRGGBB` 표현용 색상이다. `all`은 UI/쿼리의 전체 선택 값이며 데이터의 `category` 값이 아니다.
 
@@ -246,7 +256,7 @@ StockRelation = { eventId, type, strength, explanation, path }
 
 `window`는 기준일을 포함하는 마지막 1/3/7개 **일 단위 포인트**를 사용한다. 반환 객체의 `edits`, `baseline`, `pageviews`는 선택 구간의 합, `pulse`는 합산 편집량/합산 기준선의 한 자리 반올림 값이다. `editors`는 기준일의 문서별 편집자 수 합계를 유지한다. `status`, `date`, `startAt`, `updatedAt`, ID 배열, `keywords`를 기간 선택 때문에 다시 만들지 않는다. `chart`는 전체 가용 날짜의 원래 일별 데이터를 유지한다.
 
-Pulse Map은 기간이 바뀌면 누적 지표와 정렬에 이 값을 사용한다. 사건 탐색은 `window=24h` 스냅샷을 사용한다. Map 차트는 날짜 간 흐름을 보여 주기 위해 24h/3d/7d에서 각각 마지막 2/4/8개 일별 포인트를 보여 준다. 이는 시간별 원시 데이터나 정확한 rolling 24시간 시계열이 아니다. 임의 시작일·종료일 선택, 상태 필터, 뉴스 유무 필터는 현재 UI에 없다.
+위 `window`는 기존 사건 목록 API 계약이다. 이슈 탐색은 기본 `24h`를 사용한다. 펄스맵의 24h/3d/7d 누적 전환은 2026-09-09 제거하고 실제 스냅샷 날짜·시각 선택으로 교체했다. 펄스맵은 이 이벤트 목록·차트에서 과거 그래프를 재구성하지 않는다.
 
 ### GET `/events/{eventId}`
 
@@ -262,6 +272,8 @@ Pulse Map은 기간이 바뀌면 누적 지표와 정렬에 이 값을 사용한
 
 ### GET `/entities`
 
+아래 `/entities` 계열은 기존 데이터 계약으로 보존한다. 단일 위키 문서 상세 페이지는 2026-09-09에 제외했다. 목록·상세 클라이언트의 존재가 해당 페이지나 편집 비교 UI의 존재를 의미하지 않는다.
+
 `q`, `offset`, `limit`을 받는다. `q`는 `name + title`에 대한 부분 일치. 기본 순서는 fixture 문서 순서. 응답 `data: EntitySummary[]`, `included` 없음.
 
 현재 독립적인 문서 목록 화면은 없다. 이 endpoint는 기존 전체 검색의 문서 조회 부분이나 문서 참조 획득에 사용할 수 있는 **연동 제안**이다. 문서별 주제·기간·인기 정렬 같은 새 화면 기능을 뜻하지 않는다. 현재 헤더의 실제 검색 동작을 한 번에 대체하려면 아래 `/search`를 사용한다.
@@ -270,7 +282,7 @@ Pulse Map은 기간이 바뀌면 누적 지표와 정렬에 이 값을 사용한
 
 쿼리 없음. `data: Entity`, `included.entities: EntitySummary[]`는 `relatedIds`, `included.events: EventSummary[]`는 `eventIds`를 해석한 결과다. 같은 참조는 같은 fixture ID를 유지한다.
 
-문서 차트 범위는 7/14/전체이고, 조회수/편집량 전환과 편집 기준선 토글은 로컬이다. 현재 차트는 24일이므로 전체는 24개 포인트다. 관련 문서 네트워크를 실제 링크·이동량 증거로 보장하는 필드는 없다.
+제거된 문서 상세 화면에서는 차트 범위 7/14/전체, 조회수/편집량 전환, 편집 기준선 토글을 제공했다. 이 문장의 화면 동작은 이전 구현 기록이다. 문서 fixture의 24일 차트 데이터와 계약은 유지하며, 관련 문서 네트워크를 실제 링크·이동량 증거로 보장하는 필드는 없다.
 
 ### GET `/entities/{entityId}/changes`
 
@@ -332,7 +344,7 @@ Pulse Map은 기간이 바뀌면 누적 지표와 정렬에 이 값을 사용한
 {
   "id": "iran-hormuz-2025",
   "title": "호르무즈 해협, 에너지 공급망으로 번지는 관심",
-  "category": "geopolitics",
+  "category": "world",
   "status": "rising",
   "date": "2025-06-24",
   "startAt": "2025-06-18T08:40:00+09:00",
@@ -369,19 +381,18 @@ NVDA의 예시 `price`는 `143.72`, `change`는 `2.14`, `currency`는 `USD`다. 
 | 동작 | 연동 시 조회 | 현재 구현 |
 |---|---|---|
 | 온보딩 진행·지도 이동/확대/초기화 | 없음 | 브라우저 로컬 UI 상태 |
-| Pulse Map 진입·검색·주제·기간·정렬 | `/categories`, `/events` | fixture 조회·필터·집계·정렬 |
-| 지도에서 사건 선택 | 추가 조회 불필요 | 목록 데이터와 문서 참조로 미리보기 |
+| Pulse Map 진입·시각 선택 | `/issues/snapshots`, `/issues/map` | 같은 계약의 합성 snapshot/HTTP 클라이언트 |
+| 지도 검색·주제·이슈·문서 선택 | 추가 조회 불필요 | 로드한 스냅샷의 노드·간선·요약 표시 |
 | 사건 상세 이동 | `/events/{eventId}` | `getEvent`와 참조 helper |
 | 상세 탭·차트·기준선·문서 선택 | 추가 조회 불필요 | 받은 필드의 표시 변경 |
 | 소식 검색·유형 변경 | 필요 시 `/events/{eventId}/news` | `event.news`를 로컬 필터 |
-| 문서 상세 이동 | `/entities/{entityId}` | `getEntity`와 참조 helper |
-| 편집 내역 검색 | 필요 시 `/entities/{entityId}/changes` | `entity.changes` 로컬 필터 |
-| 편집 내역 선택·전후 비교 | 추가 조회 불필요 | 선택 항목의 before/after |
+| 근거 문서 원문 이동 | 우리 API 추가 조회 없음 | 위키백과 원문을 새 탭으로 열기 |
+| 이전 문서 상세·편집 검색·비교 | `/entities/{entityId}`, `/entities/{entityId}/changes` 계약 보존 | 해당 독립 화면은 2026-09-09 제거. 리포트의 문서 참조 데이터는 유지 |
 | 전체 종목 탐색 | `/stocks` | 전체 stocks 필터 |
 | 특정 사건의 종목 탐색 | `/stocks?eventId=...` | 양쪽 사건·종목 참조로 집합 선택 |
 | 기업 상세 이동 | `/stocks/{symbol}` | `getStock`와 관련 events |
 | 기업 상세 연결 유형·가격 차트 | 추가 조회 불필요 | 관계 필터와 배열 자르기 |
-| 공통 헤더 검색 | `/search?q=...` | 공통 searchWorkspace 비동기 호출·250ms 입력 지연 |
+| 공통 헤더 검색 | `/search?q=...` | 공통 searchWorkspace 비동기 호출·250ms 입력 지연, 화면에는 이슈·종목만 표시 |
 | 저장·저장 해제·보관함 검색 | 저장은 API 없음; 표시는 ID별 단건 조회 | React 상태 + localStorage, 표시 데이터는 공통 조회 |
 | 토론 목록·최신순/공감순 | 향후 `/events/{eventId}/discussions` | 예시와 브라우저 저장 글 정렬 |
 | 토론·답글 등록·공감 | 11절의 향후 POST/PUT 계약 | 브라우저 로컬 상태만 변경, 외부 전송 없음 |
@@ -428,9 +439,11 @@ NVDA의 예시 `price`는 `143.72`, `change`는 `2.14`, `currency`는 `USD`다. 
 - `src/app/App.jsx`, `src/app/RouteContent.jsx`: 앱 조립과 라우트.
 - `src/features/`: 전체 검색과 로컬 저장.
 - `src/data/`: mock/API 공통 조회, 응답 어댑터, 페이지 데이터 로딩.
-- `src/pages/explore/ExplorePage.jsx`: 사건 검색·정렬·기간별 화면값.
+- `src/pages/explore/ExplorePage.jsx`: 이슈 검색·정렬·카드/리스트 표시 전환.
+- `src/pages/pulse/PulsePage.jsx`: 독립된 스냅샷 조회와 문서 그래프. [펄스맵 계약](pulse-openapi.json)을 사용한다.
 - `src/pages/event/EventPage.jsx`: 상세 탭, 뉴스 필터, 차트와 문서 참조.
-- `src/pages/entity/EntityPage.jsx`: 문서 지표, 변경 내역 검색·비교.
+- `src/pages/account/AccountPage.jsx`: 독립된 마이페이지·로그인·회원가입 준비 안내. 기존 `EntityPage.jsx`는 제거했다.
+- `src/lib/wiki.js`: 리포트와 펄스맵에서 사용하는 위키백과 원문 링크.
 - `src/pages/stocks/StocksPage.jsx`: 종목 검색·산업·연결 필터와 예시 가격.
 - `src/pages/saved/SavedPage.jsx`: 보관함 검색과 저장 항목 표시.
 - `src/pages/event/EventDiscussion.jsx`: 예시 토론, 로컬 글·답글·공감과 저장 검증.
@@ -497,7 +510,7 @@ DiscussionThread = {
 
 토론은 사건별 최대 200개(예시 포함), 답글은 글마다 최대 200개다. `latest`는 `createdAt` 내림차순, `popular`는 `likes` 내림차순 후 `createdAt` 내림차순이다. 동일 조건의 항목은 기존 순서를 유지한다. 답글은 배열에 추가된 순서로 표시한다.
 
-예시 글의 시각은 `2025-06-24`지만 사용자가 새로 작성한 글은 브라우저의 현재 시각을 `new Date().toISOString()`으로 기록한다. 따라서 토론의 `createdAt`이 사건 데이터의 `meta.asOf`보다 늦을 수 있다. `asOf`를 토론의 작성 가능 시점이나 마지막 갱신 시각으로 해석하지 않는다.
+예시 글의 시각은 리포트의 `startAt`~`updatedAt` 구간에 맞춘다(2026-09-10 변경). 사용자가 새로 작성한 글은 브라우저의 현재 시각을 `new Date().toISOString()`으로 기록한다. 따라서 토론의 `createdAt`이 사건 데이터의 `meta.asOf`보다 늦을 수 있다. `asOf`를 토론의 작성 가능 시점이나 마지막 갱신 시각으로 해석하지 않는다.
 
 ### GET `/events/{eventId}/discussions`
 

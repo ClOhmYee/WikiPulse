@@ -1,28 +1,37 @@
 package io.wikipulse.backend.issue.dto;
 
-import io.wikipulse.backend.issue.IssueCluster;
-import java.time.Instant;
-
 /**
- * 이슈 피드 카드 / 버블맵 버블 하나의 응답 형태.
+ * 이슈 피드 카드 / 버블맵 버블. API 명세 v0.1 §2 `GET /issues`.
  *
- * <p>FE 와의 계약이다. 엔티티를 그대로 내보내지 않는다 — 컬럼이 바뀌어도
- * 응답 형태를 여기서 지킨다. label 이 아직 없으면(확정 전) FE 가 대표 문서명을
- * 쓸 수 있게 null 을 그대로 보낸다.
+ * <p>memberCount·stockCount 는 버블 크기·배지용 집계다 — 목록에서 상세를 N번
+ * 부르지 않게 하려고 넣었다. label 은 LLM 이 붙기 전 null (FE 가 대표 문서명 사용).
  */
 public record IssueCardResponse(
-        Long id,
+        long id,
         String label,
         double pulseScore,
         String status,
-        Instant snapshotTs) {
+        String source,
+        String snapshotTs,
+        long memberCount,
+        long stockCount) {
 
-    public static IssueCardResponse from(IssueCluster cluster) {
+    /** 프로젝션에서 조립. snapshotTs 는 Instant 를 ISO 8601 UTC 문자열로. */
+    public interface Projection {
+        long getId();
+        String getLabel();
+        double getPulseScore();
+        String getStatus();
+        String getSource();
+        java.time.Instant getSnapshotTs();
+        long getMemberCount();
+        long getStockCount();
+    }
+
+    public static IssueCardResponse from(Projection p) {
         return new IssueCardResponse(
-                cluster.getId(),
-                cluster.getLabel(),
-                cluster.getPulseScore(),
-                cluster.getStatus(),
-                cluster.getSnapshotTs());
+                p.getId(), p.getLabel(), p.getPulseScore(), p.getStatus(),
+                p.getSource(), p.getSnapshotTs().toString(),
+                p.getMemberCount(), p.getStockCount());
     }
 }

@@ -1,41 +1,40 @@
 package io.wikipulse.backend.issue.dto;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
 import io.wikipulse.backend.issue.IssueCluster;
 import io.wikipulse.backend.stock.dto.RelatedStockResponse;
-import java.time.Instant;
 import java.util.List;
 
 /**
- * 이슈 상세 응답. 카드 정보 + 묶인 문서 + 관련 종목.
+ * 이슈 상세. API 명세 v0.1 §2 `GET /issues/{id}`.
  *
- * <p>members 와 relatedStocks 는 아직 파이프라인이 안 채워서 지금은 빈 리스트로
- * 나갈 수 있다. FE 는 빈 배열을 "없음"으로 처리하면 된다.
+ * <p>relatedStocks 는 `/issues/{id}/stocks` 와 같은 객체이며 상세 진입 시 왕복을
+ * 줄이려고 상위 5개만 미리 담는다. 전체는 그 endpoint 로 부른다.
+ * summary 는 issue_report — 아직 없으면 null.
  */
+@JsonInclude(JsonInclude.Include.NON_NULL)
 public record IssueDetailResponse(
-        Long id,
+        long id,
         String label,
         double pulseScore,
         String status,
         String source,
-        Instant snapshotTs,
-        List<String> memberTitles,
+        String snapshotTs,
         String summary,
+        String summaryModel,
+        List<IssueMemberResponse> members,
         List<RelatedStockResponse> relatedStocks) {
 
     public static IssueDetailResponse of(
             IssueCluster cluster,
-            List<String> memberTitles,
             String summary,
+            String summaryModel,
+            List<IssueMemberResponse> members,
             List<RelatedStockResponse> relatedStocks) {
         return new IssueDetailResponse(
-                cluster.getId(),
-                cluster.getLabel(),
-                cluster.getPulseScore(),
-                cluster.getStatus(),
-                cluster.getSource(),
-                cluster.getSnapshotTs(),
-                memberTitles,
-                summary,
-                relatedStocks);
+                cluster.getId(), cluster.getLabel(), cluster.getPulseScore(),
+                cluster.getStatus(), cluster.getSource(),
+                cluster.getSnapshotTs().toString(),
+                summary, summaryModel, members, relatedStocks);
     }
 }

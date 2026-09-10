@@ -12,7 +12,7 @@ export function EventRow({ event, saved, onToggle, category }) {
     <article className="event-row">
       <div className="event-row__main">
         <CategoryTag category={category} />
-        <a href={`#/events/${event.id}`} className="event-row__title">
+        <a href={`#/issues/${event.id}`} className="event-row__title">
           {event.title}
           <ArrowRight size={17} />
         </a>

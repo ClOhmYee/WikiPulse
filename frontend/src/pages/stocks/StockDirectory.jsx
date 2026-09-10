@@ -97,7 +97,7 @@ export default function StockDirectory({
           title="연결할 사건을 찾지 못했습니다."
           description="사건 탐색에서 다른 사건을 선택해 주세요."
           action={
-            <a href="#/explore" className="wp-button" data-variant="primary">
+            <a href="#/issues" className="wp-button" data-variant="primary">
               사건 탐색
             </a>
           }
@@ -109,7 +109,7 @@ export default function StockDirectory({
   return (
     <div className="wp-page st-page">
       {activeEvent && (
-        <a href={`#/events/${activeEvent.id}`} className="st-back">
+        <a href={`#/issues/${activeEvent.id}`} className="st-back">
           <ArrowLeft size={16} aria-hidden="true" /> 사건으로 돌아가기
         </a>
       )}
@@ -139,7 +139,7 @@ export default function StockDirectory({
             종목마다 <strong>어떤 경로로 연결되는지</strong>를 확인할 수
             있습니다.
           </p>
-          <a href={`#/events/${activeEvent.id}`}>
+          <a href={`#/issues/${activeEvent.id}`}>
             사건 요약
             <ArrowRight size={14} aria-hidden="true" />
           </a>

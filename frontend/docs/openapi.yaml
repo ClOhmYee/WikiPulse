@@ -54,12 +54,16 @@ paths:
             type: string
             enum:
               - all
-              - geopolitics
+              - politics
+              - world
+              - society
+              - economy
               - technology
-              - energy
-              - space
-              - materials
-              - security
+              - science
+              - culture
+              - sports
+              - environment
+              - other
             default: all
         - name: window
           in: query
@@ -607,12 +611,16 @@ components:
     CategoryId:
       type: string
       enum:
-        - geopolitics
+        - politics
+        - world
+        - society
+        - economy
         - technology
-        - energy
-        - space
-        - materials
-        - security
+        - science
+        - culture
+        - sports
+        - environment
+        - other
     Category:
       type: object
       required:
@@ -854,6 +862,7 @@ components:
           description: round(edits / baseline, 1). 단위는 배수이며 %가 아니다.
         editors:
           type: integer
+          nullable: true
           minimum: 0
           description: 기준일 문서별 편집자 수의 단순 합계. 문서 간 중복 제거 인원 및 3일·7일 고유 편집자 수가 아니다.
         pageviews:
@@ -902,7 +911,7 @@ components:
         id: iran-hormuz-2025
         title: 호르무즈 해협, 에너지 공급망으로 번지는 관심
         summary: 호르무즈 해협·이란·석유 문서의 편집이 함께 늘었습니다. 해상 운송에서 에너지 공급망까지 연결되는 맥락을 살펴보세요.
-        category: geopolitics
+        category: world
         status: rising
         startAt: "2025-06-18T08:40:00+09:00"
         updatedAt: "2025-06-24T11:42:00+09:00"
@@ -1116,6 +1125,7 @@ components:
           description: round(edits / baseline, 1). 단위는 배수이며 %가 아니다.
         editors:
           type: integer
+          nullable: true
           minimum: 0
           description: 문서의 기준일 편집자 수 예시.
         pageviews:

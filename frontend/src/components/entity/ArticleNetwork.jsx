@@ -1,11 +1,12 @@
 import { ArrowRight } from "lucide-react";
+import { wikipediaUrl } from "../../lib/wiki";
 export function ArticleNetwork({ articles = [], selectedId, onSelect }) {
   return (
     <div className="wp-article-network">
       <svg
         viewBox="0 0 560 230"
         role="img"
-        aria-label="사건을 구성하는 문서의 관계 예시"
+        aria-label="클러스터에 포함된 문서 구성"
       >
         {articles.slice(1).map((article, i) => {
           const angle = (i / Math.max(1, articles.length - 1)) * Math.PI * 2;
@@ -65,7 +66,10 @@ export function ArticleNetwork({ articles = [], selectedId, onSelect }) {
             <a
               key={article.id}
               className="wp-chip"
-              href={`#/intelligence/${article.id}`}
+              href={wikipediaUrl(article)}
+              target="_blank"
+              rel="noreferrer"
+              aria-label={`${article.name} 위키백과 원문 (새 탭)`}
             >
               {article.name}
               <ArrowRight size={12} />
@@ -74,7 +78,8 @@ export function ArticleNetwork({ articles = [], selectedId, onSelect }) {
         )}
       </div>
       <p className="wp-muted wp-small">
-        문서 연결 구조를 설명하기 위한 예시입니다.
+        클러스터에 포함된 문서 구성입니다. 선은 소속을 표현하며, 문서 쌍의 관계
+        근거는 펄스맵에서 확인하세요.
       </p>
     </div>
   );

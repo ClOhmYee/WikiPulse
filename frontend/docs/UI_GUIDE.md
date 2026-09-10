@@ -1,24 +1,26 @@
 # WikiPulse workspace UI guide
 
-This guide records the implemented post-onboarding frontend. Its interaction mode is **Operate** for searching, filtering, selecting and saving; event, document and stock detail surfaces use **Read** for following context and evidence. The existing four-scene onboarding remains a separate **Persuade** experience governed by [DESIGN.md](../DESIGN.md). This guide does not replace its composition or motion rules.
+This guide records the implemented post-onboarding frontend. Its interaction mode is **Operate** for searching, filtering, selecting and saving; issue report and stock detail surfaces use **Read** for following context and evidence. The existing four-scene onboarding remains a separate **Persuade** experience governed by [DESIGN.md](../DESIGN.md). This guide does not replace its composition or motion rules.
 
-The app is a standalone Vite/React frontend. Every displayed event, revision, news item, relationship and price comes from local fixtures. The future integration proposal is [API_SPEC.md](./API_SPEC.md), with [openapi.yaml](./openapi.yaml) as its machine-readable companion. Neither document represents a running backend.
+The app is a Vite/React frontend. Its default mock mode reads synthetic fixtures; its API mode reads HTTP responses through the existing client contract. Discussion and saved-item state remain local. [API_SPEC.md](./API_SPEC.md) and [openapi.yaml](./openapi.yaml) describe the older proposal still used by that client; future backend integration must follow the [repository API specification](../../docs/api-v0.1.md). Page URL changes do not change that HTTP contract or establish a live backend integration.
 
 ## User flow and routes
 
-The principal journey is onboarding → Pulse Map → event brief → supporting document and revision comparison → related stocks → locally saved items. Users can also begin with global search or the stock directory and follow links back to events. The event brief exposes **연관 주식** beside **토론 참여하기** near the report header: the former opens the event-scoped stock route; the latter selects and focuses the fifth, **토론**, tab. The same discussion board is available below the overview's timeline preview. Discussion selection remains local tab state and does not add a hash route.
+The principal journey is onboarding → Pulse Map or issue search → issue report → related stocks → locally saved items. Supporting document links open Wikipedia sources in a new tab; there is no standalone document detail page. Global search offers issue and stock destinations. The report retains its discussion tab and local discussion state. The canonical page inventory is [PAGES.md](../../docs/frontend/PAGES.md).
 
 | Hash route | Owner | Implemented purpose |
 |---|---|---|
-| `#/`, `#/onboarding` | `App.jsx`, `NodeField.jsx` | Existing introduction and entry into the workspace |
-| `#/pulse` | `ExplorePage.jsx`, `PulseMap.jsx` | Select a signal cluster, inspect its preview, search/filter events, change chart period, zoom/pan/reset the map |
-| `#/explore`, `#/explore?q=…` | `ExplorePage.jsx` | Search, category filtering and sorting by Pulse, start time or document count |
-| `#/events/{eventId}` | `EventPage.jsx` | Overview, timeline, related news, evidence and discussion tabs; chart range/baseline; document selection; related-stock entry; event saving |
-| `#/intelligence/{entityId}` | `EntityPage.jsx` | Document metrics, edits/pageviews chart, searchable revision selection and before/after comparison |
-| `#/events/{eventId}/stocks` | `StocksPage.jsx` | Event-scoped stock directory with industry and relationship filters |
+| `#/` | `App.jsx`, `NodeField.jsx` | Existing introduction and entry into the workspace |
+| `#/pulse` | `pages/pulse/PulsePage.jsx`, `PulseMap.jsx` | Date/snapshot selection, HOT/NEW, document graph, zoom/pan/reset, snapshot summary and document evidence |
+| `#/issues`, `#/issues?q=…` | `ExplorePage.jsx` | Card/list presentation switch (default list), search, category filtering and sorting; switching preserves state |
+| `#/issues/{issueId}` | `EventPage.jsx` | Report with overview, timeline, news, evidence and discussion; chart range/baseline; source selection; related stocks and saving |
+| `#/issues/{issueId}/stocks` | `StocksPage.jsx` | Issue-scoped stock directory with industry and relationship filters |
 | `#/stocks` | `StocksPage.jsx` | Stock search, industry and saved-only filters, sorting |
 | `#/stocks/{symbol}` | `StocksPage.jsx` | Related event timeline, relationship paths, example price chart and stock saving |
 | `#/saved` | `SavedPage.jsx` | Saved event/stock switches, local search and removal |
+| `#/mypage` | `AccountPage.jsx` | Account feature notice; links to saved items, login and signup |
+| `#/login` | `AccountPage.jsx` | Login availability notice; no authentication or credential input |
+| `#/signup` | `AccountPage.jsx` | Signup availability notice; no account creation or credential input |
 
 `app/App.jsx` with `app/router.js` reads `window.location.hash` and listens for `hashchange`; links use these hashes rather than server routes. It parses the optional query separately and supplies `q` as the initial explore search. Unrecognized routes and unknown fixture IDs have recovery links. Detail navigation selects the event-exploration menu context. Browser back/forward changes the hash normally; filters and detail tab state are React state, not a URL serialization contract.
 
@@ -44,7 +46,7 @@ The inherited typeface is `"Noto Sans KR Variable", "Noto Sans KR", sans-serif`,
 
 ## Layout, depth and shapes
 
-The desktop shell uses a fixed 214px left sidebar and a 78px top header containing breadcrumbs, global search and the demo-data disclosure. The header participates in page flow. The content column is capped at 1660px with default page padding `38px 36px 48px`. Pulse Map uses a flexible map beside a 304px preview; event rows remain divider-based lists. Event/document and stock details use a primary reading column with supporting information beside it until their responsive rules collapse the layout.
+The desktop shell uses a fixed 214px left sidebar and a 78px top header containing breadcrumbs, global search and the demo-data disclosure. The header participates in page flow. The content column is capped at 1660px with default page padding `38px 36px 48px`. Pulse Map uses a flexible map beside a 304px preview; event rows remain divider-based lists. Issue reports and stock details use a primary reading column with supporting information beside it until their responsive rules collapse the layout.
 
 | Viewport rule | Implemented adaptation |
 |---|---|
@@ -57,7 +59,7 @@ The desktop shell uses a fixed 214px left sidebar and a 78px top header containi
 
 Detail-specific responsive refinements are kept in `details.css`; use those selectors when extending detail pages rather than copying the shell's layout assumptions. The app's minimum viewport width is 320px. On mobile, search results become a fixed panel below the header, horizontally overflowing tab/filter rows can scroll, and toast placement clears bottom navigation.
 
-Depth comes mainly from dark surface changes and fine borders. The SVG map uses a radial atmosphere and translucent points; content panels stay restrained. Search results and feedback can use shadows, including the toast's `0 8px 24px #0006`. Common panels use 12px corners and 24px padding (20px padding on mobile); buttons use 6px corners, chips and icon buttons 5px, and map containers 12px/10px at desktop/mobile.
+Depth comes mainly from dark surface changes and fine borders. The SVG map uses faint cluster boundaries, individual document nodes and supplied relationship edges. Its layout is fixed after d3-force calculation and cached by identity. Search results and feedback can use shadows, including the toast's `0 8px 24px #0006`. Common panels use 12px corners and 24px padding (20px padding on mobile); buttons use 6px corners, chips and icon buttons 5px, and map containers 12px/10px at desktop/mobile. The map has a dedicated [snapshot/graph contract and handoff](../../docs/frontend/PULSE_MAP.md).
 
 ## Component ownership and reuse
 
@@ -72,13 +74,13 @@ Depth comes mainly from dark surface changes and fine borders. The SVG map uses 
 
 Common controls use CSS classes rather than a separate button library. `.wp-button` supports default, `data-variant="primary"` and `data-variant="ghost"`; primary uses teal with dark text. Default buttons have a 39px minimum height, rising to 43px on mobile. `.wp-chip` uses `data-active` for its selected treatment; interactive chips should retain the corresponding accessible state used by their owner. `.wp-icon-button` uses `aria-pressed` or `data-active` for saved emphasis. Common controls have hover styling and a 2px gold focus outline with 4px offset. Disabled controls reduce opacity and disable pointer actions through native button state.
 
-`TrendChart` accepts `data`, `valueKey`, `label`, `color`, `baseline` and `height`. It measures its container with `ResizeObserver`, exposes a date/value readout, and supports an optional dashed baseline. Price mode enlarges the vertical scale and explicitly labels that behavior. `ArticleNetwork` renders illustrative relationships plus ordinary document links or selection buttons; the companion controls carry navigation, not the drawn edges. `EmptyState` accepts a title, description and action for no matches, missing records or recovery.
+`TrendChart` accepts `data`, `valueKey`, `label`, `color`, `baseline` and `height`. It measures its container with `ResizeObserver`, exposes a date/value readout, and supports an optional dashed baseline. Price mode enlarges the vertical scale and explicitly labels that behavior. `ArticleNetwork` renders illustrative relationships plus external Wikipedia links or selection buttons; the companion controls carry navigation, not the drawn edges. `EmptyState` accepts a title, description and action for no matches, missing records or recovery.
 
 ## Mock storage and integration boundary
 
 The shell owns `savedEvents` and `savedStocks` and passes callbacks to pages. Browser storage keys are `wikipulse.savedEvents` and `wikipulse.savedStocks`, each containing a JSON array of fixture identifiers. Reads tolerate malformed JSON and remove duplicate or malformed IDs. Unknown IDs remain stored; only confirmed 404 records are omitted from the saved view. Writes update React state immediately; a storage exception produces a message explaining that the selection will be lost on refresh. A normal toast clears after 3.5 seconds. Saving does not create an account, synchronize devices or call an API.
 
-Pages consume a scoped data context loaded asynchronously through the selected mock/API client. Global search calls the common asynchronous search interface after 250ms, matching event titles/keywords, document names/titles and stock names/symbols with at most seven results. List filters, sorting, chart ranges and revisions remain local computations over loaded data. Map node positions and document edges are illustrative layouts. News links are topic references; their existence does not authenticate the synthetic news titles or summaries. Revision text/editor labels, generated summaries, stock paths, scores and prices remain examples even where they refer to real-world topics.
+Pages consume a scoped data context loaded asynchronously through the selected mock/API client. Global search calls the common asynchronous search interface after 250ms, matching event titles/keywords, document names/titles and stock names/symbols with at most seven results. Document results are omitted from page navigation. List filters, sorting and chart ranges remain local computations over loaded data. Map node positions and document edges are illustrative layouts. News links are topic references; their existence does not authenticate the synthetic news titles or summaries. Revision text/editor labels, generated summaries, stock paths, scores and prices remain examples even where they refer to real-world topics.
 
 Keep the visible demo disclosures and contextual example labels when changing fixture content. The API adapter implements the proposed read contract, loading/error states, cancellation and manual retry. This does not establish real backend availability. See [data switching](../../docs/frontend/DATA_SOURCE.md).
 

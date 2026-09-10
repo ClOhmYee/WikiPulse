@@ -22,6 +22,7 @@ import { EmptyState } from "../../components/ui/EmptyState";
 import { TrendChart } from "../../components/charts/TrendChart";
 import { Timeline, EventNews, Evidence } from "./EventSections";
 import EventDiscussion from "./EventDiscussion";
+import { wikipediaUrl } from "../../lib/wiki";
 import "../../styles/details.css";
 const tabs = [
   { id: "overview", label: "이벤트 개요" },
@@ -67,7 +68,7 @@ export default function EventPage({
           title="이벤트를 찾을 수 없어요"
           description="주소를 확인하거나 이벤트 탐색에서 다른 신호를 살펴보세요."
           action={
-            <a className="wp-button" data-variant="primary" href="#/explore">
+            <a className="wp-button" data-variant="primary" href="#/issues">
               이벤트 탐색으로
             </a>
           }
@@ -106,7 +107,7 @@ export default function EventPage({
 
   return (
     <div className="wp-page dt-page">
-      <a href="#/explore" className="dt-back">
+      <a href="#/issues" className="dt-back">
         <ArrowLeft size={16} />
         이벤트 탐색
       </a>
@@ -141,7 +142,7 @@ export default function EventPage({
         role="group"
         aria-label="리포트 관련 탐색"
       >
-        <a className="wp-button" href={`#/events/${event.id}/stocks`}>
+        <a className="wp-button" href={`#/issues/${event.id}/stocks`}>
           <Layers3 size={16} />
           연관 주식 {relatedStocks.length}
           <ArrowRight size={14} />
@@ -182,8 +183,8 @@ export default function EventPage({
         <div>
           <span>문서별 편집자 합계</span>
           <strong>
-            {formatNumber(event.editors)}
-            <small>명</small>
+            {event.editors === null ? "미제공" : formatNumber(event.editors)}
+            {event.editors !== null && <small>명</small>}
           </strong>
         </div>
       </div>
@@ -302,9 +303,12 @@ export default function EventPage({
                       </div>
                       <a
                         className="dt-text-link"
-                        href={`#/intelligence/${selected.id}`}
+                        href={wikipediaUrl(selected)}
+                        target="_blank"
+                        rel="noreferrer"
                       >
-                        문서 변화 분석 <ArrowRight size={16} />
+                        위키백과 원문 보기 <ArrowUpRight size={16} />
+                        <span className="dt-sr-only"> (새 탭)</span>
                       </a>
                     </div>
                   )}
@@ -351,7 +355,11 @@ export default function EventPage({
                     타임라인 전체 <ArrowRight size={16} />
                   </button>
                 </div>
-                <Timeline entries={timeline.slice(0, 3)} compact />
+                <Timeline
+                  entries={timeline.slice(0, 3)}
+                  articles={articles}
+                  compact
+                />
               </section>
               <EventDiscussion key={event.id} event={event} />
             </>
@@ -367,7 +375,7 @@ export default function EventPage({
                     : "각 기록의 기준 시각과 출처를 확인해 주세요."}
                 </p>
               </div>
-              <Timeline entries={timeline} />
+              <Timeline entries={timeline} articles={articles} />
             </section>
           )}
           {tab === "news" && (
@@ -446,7 +454,7 @@ export default function EventPage({
             )}
             <a
               className="wp-button dt-full-width"
-              href={`#/events/${event.id}/stocks`}
+              href={`#/issues/${event.id}/stocks`}
             >
               종목 연결 근거 보기 <ArrowRight size={16} />
             </a>
@@ -465,7 +473,7 @@ export default function EventPage({
               {(event.keywords || []).map((keyword) => (
                 <a
                   key={keyword}
-                  href={`#/explore?q=${encodeURIComponent(keyword)}`}
+                  href={`#/issues?q=${encodeURIComponent(keyword)}`}
                 >
                   #{keyword}
                 </a>

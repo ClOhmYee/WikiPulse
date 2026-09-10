@@ -1,0 +1,5 @@
+# GDELT producer 실행용. WebHDFS 도 requests 로 붙어 별도 hadoop 클라이언트가 없다.
+requests==2.32.3
+
+# 개발용
+pytest==8.3.4

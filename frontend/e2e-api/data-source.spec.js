@@ -1,6 +1,6 @@
 import { test, expect } from "@playwright/test";
 import { mockClient } from "../src/data/mock/client.js";
-import { events, entities, stocks } from "../src/data/mock/fixtures/catalog.js";
+import { events, stocks } from "../src/data/mock/fixtures/catalog.js";
 
 const pause = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 async function serve(page, override) {
@@ -13,7 +13,7 @@ async function serve(page, override) {
     const params = Object.fromEntries(url.searchParams);
     for (const key of ["offset", "limit"]) if (params[key] !== undefined) params[key] = Number(params[key]);
     // A deliberately small server page proves that every page is collected.
-    if (["events", "entities", "stocks"].includes(kind) && !id) params.limit = Math.min(params.limit || 50, 2);
+    if (["events", "entities", "stocks"].includes(kind) && !id) params.limit = Math.min(params.limit || 50, 40);
     try {
       const methods = { events: ["listEvents", "getEvent"], entities: ["listEntities", "getEntity"], stocks: ["listStocks", "getStock"] };
       const body = kind === "categories" ? await mockClient.listCategories()
@@ -31,14 +31,14 @@ test("same pages consume HTTP data including every list page and related objects
   const scripts = [];
   page.on("request", (request) => { if (request.resourceType() === "script") scripts.push(request.url()); });
   const calls = await serve(page);
-  await page.goto("/#/explore");
+  await page.goto("/#/issues");
   await expect(page.locator(".event-row")).toHaveCount(events.length);
-  expect(calls.filter((url) => url.pathname === "/api/v1/events").map((url) => url.searchParams.get("offset"))).toEqual(["0", "2", "4"]);
+  expect(calls.filter((url) => url.pathname === "/api/v1/events").map((url) => url.searchParams.get("offset"))).toEqual(Array.from({ length: Math.ceil(events.length / 40) }, (_, i) => String(i * 40)));
   await expect(page.getByRole("button", { name: "데모 데이터" })).toBeVisible();
   for (const [path, title] of [
-    [`/events/${events[0].id}`, events[0].title], [`/intelligence/${entities[0].id}`, entities[0].name],
+    [`/issues/${events[0].id}`, events[0].title],
     ["/stocks", "종목에서 사건의 맥락을 찾으세요."], [`/stocks/${stocks[0].symbol}`, stocks[0].name],
-    [`/events/${events[0].id}/stocks`, "이 사건과 연결된 종목"],
+    [`/issues/${events[0].id}/stocks`, "이 사건과 연결된 종목"],
   ]) {
     await page.goto(`/#${path}`);
     await expect(page.getByRole("heading", { name: title, exact: true })).toBeVisible();
@@ -56,7 +56,7 @@ test("server data changes reach the existing page and API transport does not imp
     body.meta.asOf = "2026-09-08";
     await route.fulfill({ json: body }); return true;
   });
-  await page.goto(`/#/events/${events[0].id}`);
+  await page.goto(`/#/issues/${events[0].id}`);
   await expect(page.getByRole("heading", { name: "서버에서 받은 사건 제목", exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "출처 확인 필요" })).toBeVisible();
   await expect(page.getByText("LIVE", { exact: true })).toHaveCount(0);
@@ -70,7 +70,7 @@ test("loading preserves saved IDs, 500 does not fall back, retry recovers", asyn
     await pause(500);
     await route.fulfill({ status: 500, json: { error: { code: "INTERNAL_ERROR" } } }); return true;
   });
-  await page.goto(`/#/events/${events[0].id}`);
+  await page.goto(`/#/issues/${events[0].id}`);
   await expect(page.getByRole("status", { name: "데이터 불러오는 중" })).toBeVisible();
   expect(await page.evaluate(() => JSON.parse(localStorage.getItem("wikipulse.savedEvents")))).toEqual([events[0].id, "missing-server-id"]);
   await expect(page.getByRole("heading", { name: "데이터를 불러오지 못했습니다" })).toBeVisible();
@@ -90,13 +90,13 @@ test("empty lists, 404 and offline errors have distinct recovery states", async 
     if (offline) { await route.abort("failed"); return true; }
     await route.fulfill({ json: await mockClient.listEvents({ q: "no-such-event" }) }); return true;
   });
-  await page.goto("/#/explore");
+  await page.goto("/#/issues");
   await expect(page.getByRole("heading", { name: "사건을 탐색하세요", exact: true })).toBeVisible();
   await expect(page.locator(".event-row")).toHaveCount(0);
-  await page.goto("/#/events/missing");
+  await page.goto("/#/issues/missing");
   await expect(page.getByRole("heading", { name: "이벤트를 찾을 수 없어요" })).toBeVisible();
   offline = true;
-  await page.goto("/#/explore");
+  await page.goto("/#/issues");
   await expect(page.getByRole("heading", { name: "데이터를 불러오지 못했습니다" })).toBeVisible();
 });
 
@@ -108,7 +108,7 @@ test("debounced search uses encoded query and ignores a slower previous response
     oldStarted(); await pause(800);
     await route.fulfill({ json: { data: [{ kind: "event", id: "old", title: "이전 검색 결과", detail: "사건" }], meta: { dataMode: "mock" } } }); return true;
   });
-  await page.goto("/#/explore");
+  await page.goto("/#/issues");
   const search = page.getByRole("combobox", { name: "전체 검색", exact: true });
   await search.fill("old & 한글");
   await started;
@@ -126,8 +126,8 @@ test("rapid route change cannot be overwritten by an older detail response", asy
     if (url.pathname !== `/api/v1/events/${events[0].id}`) return false;
     await pause(700); await route.fulfill({ json: await mockClient.getEvent(events[0].id) }); return true;
   });
-  await page.goto(`/#/events/${events[0].id}`);
-  await page.evaluate((id) => { window.location.hash = `/events/${id}`; }, events[1].id);
+  await page.goto(`/#/issues/${events[0].id}`);
+  await page.evaluate((id) => { window.location.hash = `/issues/${id}`; }, events[1].id);
   await expect(page.getByRole("heading", { name: events[1].title, exact: true })).toBeVisible();
   await pause(750);
   await expect(page.getByRole("heading", { name: events[0].title, exact: true })).toHaveCount(0);
@@ -138,7 +138,7 @@ test("mobile HTTP pages keep layout and local discussion performs no writes", as
   const methods = [];
   page.on("request", (request) => { if (request.url().includes("/api/v1/")) methods.push(request.method()); });
   await serve(page);
-  await page.goto(`/#/events/${events[0].id}`);
+  await page.goto(`/#/issues/${events[0].id}`);
   await expect(page.getByRole("heading", { name: events[0].title, exact: true })).toBeVisible();
   await page.getByRole("tab", { name: "토론", exact: true }).click();
   const board = page.getByRole("region", { name: "이 사건에 대한 토론" });

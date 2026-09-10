@@ -9,7 +9,7 @@ const results = [];
 for (const [device, width] of [['desktop', 1440], ['mobile', 390]]) {
   const context = await browser.newContext({ viewport: { width, height: 1000 }, reducedMotion: 'reduce' });
   const page = await context.newPage();
-  await page.goto('http://127.0.0.1:5174/#/events/iran-hormuz-2025');
+  await page.goto('http://127.0.0.1:5174/#/issues/iran-hormuz-2025');
   await page.getByRole('heading', { level: 1 }).waitFor();
   await page.evaluate(() => document.fonts.ready);
   await page.screenshot({ path: `${output}/report-overview-${device}.png`, fullPage: true, animations: 'disabled' });

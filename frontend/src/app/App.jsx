@@ -16,7 +16,7 @@ export default function App() {
   const searchRef = useRef(null);
   const mainRef = useRef(null);
   const previousRoute = useRef(route);
-  const onboarding = pathname === "/" || pathname === "/onboarding";
+  const onboarding = pathname === "/";
   useEffect(() => {
     const update = () => setRoute(readRoute());
     window.addEventListener("hashchange", update);
@@ -58,7 +58,7 @@ export default function App() {
       </PageBoundary>
     );
   const first = pathname.split("/")[1];
-  const active = ["events", "intelligence"].includes(first) ? "explore" : first;
+  const active = ["login", "signup"].includes(first) ? "mypage" : first;
   return (
     <WorkspaceLayout
       {...bookmarks}

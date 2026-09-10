@@ -1,9 +1,8 @@
 import { test, expect } from '@playwright/test'
-import { events, entities, stocks } from '../src/data/mock/fixtures/catalog.js'
+import { events, stocks } from '../src/data/mock/fixtures/catalog.js'
 
 const hormuz = events.find(event => event.id === 'iran-hormuz-2025')
 const chips = events.find(event => event.id === 'ai-chip-controls')
-const entity = entities.find(item => item.id === 'strait-of-hormuz')
 const nvidia = stocks.find(stock => stock.symbol === 'NVDA')
 
 // Each test uses a new browser context. Save tests explicitly exercise reloads;
@@ -42,54 +41,56 @@ test('onboarding CTA opens the workspace and releases onboarding scroll state', 
   await expect(page.getByRole('region', { name: '사건 관계 지도' })).toBeVisible()
 })
 
-test('map selection, zoom limits, dragging, reset and period controls change the view', async ({ page }) => {
-  await openWorkspace(page)
-  const map = page.getByRole('region', { name: '사건 관계 지도' })
-  const preview = page.getByRole('complementary', { name: '선택한 사건' })
-  await map.getByRole('button', { name: new RegExp(chips.title) }).click()
-  await expect(preview.getByRole('heading', { name: chips.title })).toBeVisible()
-  await expect(map.getByRole('button', { name: new RegExp(chips.title) })).toHaveAttribute('aria-pressed', 'true')
-  const transformGroup = map.locator('svg > g[transform]')
-  const initialTransform = await transformGroup.getAttribute('transform')
-  await page.getByRole('button', { name: '지도 확대', exact: true }).click()
-  await expect(transformGroup).not.toHaveAttribute('transform', initialTransform)
-  for (let step = 0; step < 5; step++) {
-    const zoomIn = page.getByRole('button', { name: '지도 확대', exact: true })
-    if (await zoomIn.isEnabled()) await zoomIn.click()
+test('map selection, zoom, pan, reset and snapshot selection update the same view', async ({ page }) => {
+  await openWorkspace(page);
+  const map = page.getByRole('region', { name: '사건 관계 지도' });
+  const preview = page.getByRole('complementary', { name: '선택한 사건' });
+  await map.getByRole('button', { name: new RegExp(chips.title) }).locator('.document-cluster__title').click();
+  await expect(preview.getByRole('heading', { name: chips.title })).toBeVisible();
+  const group = map.locator('svg > g[transform]');
+  await page.getByRole('button', { name: '지도 위치 초기화' }).click();
+  const initial = await group.getAttribute('transform');
+  await page.getByRole('button', { name: '지도 확대', exact: true }).click();
+  await expect(group).not.toHaveAttribute('transform', initial);
+  for (let i = 0; i < 24; i++) {
+    const control = page.getByRole('button', { name: '지도 확대', exact: true });
+    if (await control.isEnabled()) await control.click();
   }
-  await expect(page.getByRole('button', { name: '지도 확대', exact: true })).toBeDisabled()
-  await page.getByRole('button', { name: '지도 위치 초기화' }).click()
-  await expect(transformGroup).toHaveAttribute('transform', initialTransform)
-  const svgBox = await map.getByRole('img', { name: /사건을 선택하면.*요약을 볼 수 있습니다/ }).boundingBox()
-  await page.mouse.move(svgBox.x + 20, svgBox.y + svgBox.height * 0.25)
-  await page.mouse.down()
-  await page.mouse.move(svgBox.x + 72, svgBox.y + svgBox.height * 0.25 + 15, { steps: 4 })
-  await page.mouse.up()
-  await expect(transformGroup).not.toHaveAttribute('transform', initialTransform)
-  await page.getByRole('button', { name: '지도 위치 초기화' }).click()
-  await expect(transformGroup).toHaveAttribute('transform', initialTransform)
-  await page.getByRole('button', { name: '7일', exact: true }).click()
-  await expect(map).toContainText('7일 누적 편집')
-  await expect(preview.getByRole('img', { name: /편집 추이/ })).toHaveAttribute('aria-label', /8개 시점/)
-  await preview.getByRole('link', { name: '사건 자세히 보기' }).click()
-  await expect(page).toHaveURL(new RegExp(`#\\/events\\/${chips.id}$`))
-})
+  await expect(page.getByRole('button', { name: '지도 확대', exact: true })).toBeDisabled();
+  await page.getByRole('button', { name: '지도 위치 초기화' }).click();
+  await expect(group).toHaveAttribute('transform', initial);
+  await map.getByRole('group', { name: '이슈와 문서 관계 그래프' }).scrollIntoViewIfNeeded();
+  const box = await map.getByRole('group', { name: '이슈와 문서 관계 그래프' }).boundingBox();
+  await page.mouse.move(box.x + 8, box.y + 8);
+  await page.mouse.down();
+  await page.mouse.move(box.x + 58, box.y + 28, { steps: 4 });
+  await page.mouse.up();
+  await expect(group).not.toHaveAttribute('transform', initial);
+  await page.getByRole('button', { name: '지도 위치 초기화' }).click();
+  await expect(group).toHaveAttribute('transform', initial);
+  await page.getByRole('button', { name: '이전 시점', exact: true }).click();
+  await expect(map).toHaveAttribute('data-snapshot', '2026-09-09T00:00:00.000Z');
+  await expect(preview).toHaveAttribute('data-snapshot', '2026-09-09T00:00:00.000Z');
+  await expect(preview.getByRole('heading', { name: chips.title })).toBeVisible();
+  await preview.getByRole('link', { name: '사건 자세히 보기' }).click();
+  await expect(page).toHaveURL(/#\/issues\/ai-chip-controls~2026-09-09$/);
+  await expect(page.getByRole('heading', { level: 1, name: chips.title })).toBeVisible();
+});
 
 test('event query, category, sorting and empty-state reset return the right events', async ({ page }) => {
-  await openWorkspace(page, '/explore')
+  await openWorkspace(page, '/issues')
   await expect(page.locator('.event-row')).toHaveCount(events.length)
   await page.getByRole('textbox', { name: '사건 검색', exact: true }).fill('원자력')
-  await expect(page.locator('.event-row')).toHaveCount(1)
-  await expect(page.locator('.event-row')).toContainText('원자력 발전과 우라늄')
+  await expect(page.locator('.event-row')).toHaveCount(events.filter(e => `${e.title} ${e.summary} ${e.keywords.join(' ')}`.includes('원자력')).length)
+  await expect(page.locator('.event-row').first()).toContainText('원자력 발전과 우라늄')
   await page.getByRole('button', { name: '검색어 지우기', exact: true }).click()
-  await page.getByRole('button', { name: 'AI · 반도체', exact: true }).click()
-  await expect(page.locator('.event-row')).toHaveCount(1)
-  await expect(page.locator('.event-row')).toContainText(chips.title)
+  await page.getByRole('button', { name: '기술', exact: true }).click()
+  await expect(page.locator('.event-row')).toHaveCount(events.filter(e => e.category === 'technology').length)
   await page.getByRole('button', { name: /^전체/ }).click()
   await page.getByRole('combobox', { name: '사건 정렬' }).selectOption('recent')
-  await expect(page.locator('.event-row').first()).toContainText('클라우드 보안')
+  await expect(page.locator('.event-row').first()).toContainText([...events].sort((a,b) => b.startAt.localeCompare(a.startAt))[0].title)
   await page.getByRole('combobox', { name: '사건 정렬' }).selectOption('pulse')
-  await expect(page.locator('.event-row').first()).toContainText(hormuz.title)
+  await expect(page.locator('.event-row').first()).toContainText([...events].sort((a,b) => b.pulse-a.pulse)[0].title)
   await page.getByRole('textbox', { name: '사건 검색', exact: true }).fill('no-such-event-zz123')
   await expect(page.getByRole('heading', { name: '일치하는 사건이 없습니다' })).toBeVisible()
   await expect(page.locator('.event-row')).toHaveCount(0)
@@ -99,7 +100,7 @@ test('event query, category, sorting and empty-state reset return the right even
 })
 
 test('event tabs support keyboard navigation, news filters and evidence drilldown', async ({ page }) => {
-  await openWorkspace(page, `/events/${hormuz.id}`)
+  await openWorkspace(page, `/issues/${hormuz.id}`)
   await expect(page.getByRole('heading', { name: hormuz.title, exact: true })).toBeVisible()
   const overview = page.getByRole('tab', { name: '이벤트 개요' })
   await overview.focus()
@@ -113,21 +114,21 @@ test('event tabs support keyboard navigation, news filters and evidence drilldow
   await page.getByRole('tab', { name: '관련 소식' }).click()
   const news = page.getByRole('region', { name: '관련 소식 목록' })
   await expect(news.locator('.dt-news-item')).toHaveCount(hormuz.news.length)
-  await news.getByRole('button', { name: /^공식 자료/ }).click()
-  await expect(news.locator('.dt-news-item')).toHaveCount(hormuz.news.filter(item => item.type === 'official').length)
-  await expect(news.locator('.dt-news-item').first()).toContainText('공식 자료 예시')
+  await news.getByRole('button', { name: /^분석/ }).click()
+  await expect(news.locator('.dt-news-item')).toHaveCount(hormuz.news.filter(item => item.type === 'analysis').length)
+  await expect(news.locator('.dt-news-item').first()).toContainText('분석 예시')
   await news.getByRole('searchbox', { name: '관련 소식 검색' }).fill('no-such-news-zz123')
   await expect(news.getByRole('heading', { name: '조건에 맞는 소식이 없어요' })).toBeVisible()
   await news.getByRole('button', { name: '검색 조건 초기화' }).click()
   await expect(news.locator('.dt-news-item')).toHaveCount(hormuz.news.length)
   await page.getByRole('tab', { name: /^근거 문서/ }).click()
-  await page.locator('.dt-evidence-row').filter({ has: page.getByRole('heading', { name: '호르무즈 해협', exact: true }) }).click()
-  await expect(page).toHaveURL(/#\/intelligence\/strait-of-hormuz$/)
-  await expect(page.getByRole('heading', { name: '호르무즈 해협', exact: true })).toBeVisible()
+  const source = page.locator('.dt-evidence-row').filter({ has: page.getByRole('heading', { name: '호르무즈 해협', exact: true }) })
+  await expect(source).toHaveAttribute('href', 'https://en.wikipedia.org/wiki/Strait_of_Hormuz')
+  await expect(source).toHaveAttribute('target', '_blank')
 })
 
 test('event overview chart range, baseline and selected related document update', async ({ page }) => {
-  await openWorkspace(page, `/events/${hormuz.id}`)
+  await openWorkspace(page, `/issues/${hormuz.id}`)
   const chart = page.getByRole('img', { name: /이벤트 편집량 추이 예시/ })
   await expect(chart).toHaveAttribute('aria-label', /24개 시점/)
   await page.locator('[aria-label="편집 차트 기간"]').getByRole('button', { name: '7일', exact: true }).click()
@@ -140,48 +141,19 @@ test('event overview chart range, baseline and selected related document update'
   await expect(chart.locator('polyline[stroke-dasharray]')).toHaveCount(1)
   await page.locator('.wp-article-network__links').getByRole('button', { name: '이란', exact: true }).click()
   await expect(page.locator('.dt-network-detail').getByRole('heading', { name: '이란', exact: true })).toBeVisible()
-  await expect(page.locator('.dt-network-detail').getByRole('link', { name: '문서 변화 분석' })).toHaveAttribute('href', '#/intelligence/iran')
+  await expect(page.locator('.dt-network-detail').getByRole('link', { name: /위키백과 원문 보기/ })).toHaveAttribute('href', 'https://en.wikipedia.org/wiki/Iran')
 })
 
 test('event keyword links arrive in a filtered explorer and survive reload', async ({ page }) => {
-  await openWorkspace(page, `/events/${hormuz.id}`)
+  await openWorkspace(page, `/issues/${hormuz.id}`)
   const keyword = hormuz.keywords[0]
   await page.locator('.dt-keywords').getByRole('link', { name: `#${keyword}`, exact: true }).click()
   await expect(page.getByRole('heading', { name: '사건을 탐색하세요' })).toBeVisible()
   await expect(page.getByRole('textbox', { name: '사건 검색', exact: true })).toHaveValue(keyword)
-  await expect(page.locator('.event-row')).toHaveCount(1)
+  await expect(page.locator('.event-row')).toHaveCount(events.filter(e => e.keywords.includes(keyword)).length)
   await page.reload()
   await expect(page.getByRole('textbox', { name: '사건 검색', exact: true })).toHaveValue(keyword)
-  await expect(page.locator('.event-row')).toContainText(hormuz.title)
-})
-
-test('entity chart metrics and revision selection show distinct data, with search recovery', async ({ page }) => {
-  await openWorkspace(page, `/intelligence/${entity.id}`)
-  const activity = page.getByRole('region', { name: '문서 활동 차트' })
-  await activity.getByRole('button', { name: '조회수', exact: true }).click()
-  await expect(activity.getByRole('img', { name: /호르무즈 해협 조회수/ })).toHaveAttribute('aria-label', new RegExp(`2025-06-24 값 ${entity.pageviews}`))
-  await expect(activity.getByRole('checkbox', { name: '평소 편집량' })).toHaveCount(0)
-  await activity.getByRole('button', { name: '7일', exact: true }).click()
-  await expect(activity.getByRole('img', { name: /호르무즈 해협 조회수/ })).toHaveAttribute('aria-label', /7개 시점/)
-  await activity.getByRole('button', { name: '편집량', exact: true }).click()
-  const editsChart = activity.getByRole('img', { name: /호르무즈 해협 편집량/ })
-  await expect(editsChart).toHaveAttribute('aria-label', new RegExp(`2025-06-24 값 ${entity.edits}`))
-  await editsChart.focus()
-  await page.keyboard.press('ArrowLeft')
-  await expect(editsChart).toHaveAttribute('aria-label', new RegExp(`2025-06-23 값 ${entity.chart.at(-2).edits}`))
-  await page.keyboard.press('ArrowRight')
-  await expect(editsChart).toHaveAttribute('aria-label', new RegExp(`2025-06-24 값 ${entity.edits}`))
-  const revisions = page.getByRole('region', { name: '편집 내역 비교' })
-  await revisions.getByRole('button', { name: new RegExp(entity.changes[1].summary) }).click()
-  await expect(revisions.locator('.dt-diff-before')).toContainText(entity.changes[1].before)
-  await expect(revisions.locator('.dt-diff-after')).toContainText(entity.changes[1].after)
-  await revisions.getByRole('searchbox', { name: '편집 내역 검색' }).fill('중복')
-  await expect(revisions.locator('.dt-revision-option')).toHaveCount(1)
-  await expect(revisions.locator('.dt-diff-after')).toContainText(entity.changes[2].after)
-  await revisions.getByRole('searchbox', { name: '편집 내역 검색' }).fill('no-such-revision-zz123')
-  await expect(revisions.getByRole('heading', { name: '일치하는 편집 내역이 없어요' })).toBeVisible()
-  await revisions.getByRole('button', { name: '검색 초기화' }).click()
-  await expect(revisions.locator('.dt-revision-option')).toHaveCount(entity.changes.length)
+  await expect(page.locator('.event-row').first()).toContainText(hormuz.title)
 })
 
 test('stock directory filters and event-specific connection types select the right companies', async ({ page }) => {
@@ -191,42 +163,42 @@ test('stock directory filters and event-specific connection types select the rig
   await expect(page.locator('.st-stock-row')).toHaveCount(1)
   await expect(page.locator('.st-stock-row')).toContainText(nvidia.name)
   await page.getByRole('button', { name: '종목 검색어 지우기' }).click()
-  await page.getByRole('combobox', { name: '산업 필터' }).selectOption('반도체 장비')
-  await expect(page.locator('.st-stock-row')).toHaveCount(1)
-  await expect(page.locator('.st-stock-row')).toContainText('ASML')
+  await page.getByRole('combobox', { name: '산업 필터' }).selectOption('기술')
+  await expect(page.locator('.st-stock-row')).toHaveCount(stocks.filter(s => s.sector === '기술').length)
+  await expect(page.locator('.st-stock-row').filter({ hasText: 'ASML' })).toBeVisible()
   await page.getByRole('button', { name: '필터 초기화', exact: true }).click()
   await page.getByRole('textbox', { name: '종목 검색', exact: true }).fill('no-such-stock-zz123')
   await expect(page.getByRole('heading', { name: '조건에 맞는 종목이 없습니다.' })).toBeVisible()
   await page.getByRole('button', { name: '전체 종목 보기' }).click()
   await expect(page.locator('.st-stock-row')).toHaveCount(stocks.length)
-  await openWorkspace(page, `/events/${chips.id}/stocks`)
-  await expect(page.locator('.st-stock-row')).toHaveCount(2)
+  await openWorkspace(page, `/issues/${chips.id}/stocks`)
+  await expect(page.locator('.st-stock-row')).toHaveCount(chips.stockSymbols.length)
   await page.getByRole('combobox', { name: '연결 유형 필터' }).selectOption('supply')
-  await expect(page.locator('.st-stock-row')).toHaveCount(1)
-  await expect(page.locator('.st-stock-row')).toContainText('ASML')
+  await expect(page.locator('.st-stock-row')).toHaveCount(0)
   await page.getByRole('combobox', { name: '연결 유형 필터' }).selectOption('direct')
-  await expect(page.locator('.st-stock-row')).toHaveCount(1)
-  await expect(page.locator('.st-stock-row')).toContainText('NVDA')
-  await page.locator('.st-stock-identity').click()
+  await expect(page.locator('.st-stock-row')).toHaveCount(0)
+  await page.getByRole('combobox', { name: '연결 유형 필터' }).selectOption('industry')
+  await expect(page.locator('.st-stock-row')).toHaveCount(chips.stockSymbols.length)
+  await page.locator('.st-stock-identity').filter({ hasText: 'NVDA' }).click()
   await expect(page).toHaveURL(/#\/stocks\/NVDA$/)
   await expect(page.getByRole('heading', { name: nvidia.name, exact: true })).toBeVisible()
 })
 
 test('stock detail explains the path, offers example chart ranges and links back to its event', async ({ page }) => {
   await openWorkspace(page, '/stocks/NVDA')
-  await expect(page.getByRole('list', { name: '사건과 기업의 연결 경로' })).toContainText('엔비디아 문서')
-  await expect(page.locator('.st-relationship')).toContainText(nvidia.relations[0].explanation)
-  await page.getByRole('group', { name: '사건 연결 유형' }).getByRole('button', { name: '직접 언급' }).click()
-  await expect(page.locator('.st-timeline-event')).toHaveCount(1)
+  await expect(page.getByRole('list', { name: '사건과 기업의 연결 경로' }).first()).toContainText('엔비디아')
+  await expect(page.locator('.st-relationship').first()).toContainText(nvidia.relations[0].explanation)
+  await page.getByRole('group', { name: '사건 연결 유형' }).getByRole('button', { name: '산업·기술' }).click()
+  await expect(page.locator('.st-timeline-event')).toHaveCount(nvidia.eventIds.length)
   await page.getByRole('group', { name: '예시 가격 차트 기간' }).getByRole('button', { name: '7일', exact: true }).click()
   await expect(page.getByRole('img', { name: /NVDA 예시 가격/ })).toHaveAttribute('aria-label', /7개 시점/)
-  await page.getByRole('link', { name: '사건과 근거 살펴보기' }).click()
-  await expect(page).toHaveURL(new RegExp(`#\\/events\\/${chips.id}$`))
+  await page.locator(`a[href="#/issues/${chips.id}"]`).filter({ hasText: '사건과 근거 살펴보기' }).click()
+  await expect(page).toHaveURL(new RegExp(`#\\/issues\\/${chips.id}$`))
   await expect(page.getByRole('heading', { name: chips.title, exact: true })).toBeVisible()
 })
 
 test('saved events and stocks persist after reload and are removable from the collection', async ({ page }) => {
-  await openWorkspace(page, `/events/${hormuz.id}`)
+  await openWorkspace(page, `/issues/${hormuz.id}`)
   await page.getByRole('button', { name: '이벤트 저장', exact: true }).click()
   await expect(page.getByRole('button', { name: '저장됨', exact: true })).toHaveAttribute('aria-pressed', 'true')
   await openWorkspace(page, '/stocks/NVDA')
@@ -249,7 +221,7 @@ test('saved events and stocks persist after reload and are removable from the co
 })
 
 test('global keyboard search supports focus, result selection, Escape and an empty result', async ({ page }) => {
-  await openWorkspace(page, '/explore')
+  await openWorkspace(page, '/issues')
   await page.keyboard.press('Control+k')
   const search = page.getByRole('combobox', { name: '전체 검색', exact: true })
   await expect(search).toBeFocused()
@@ -269,11 +241,11 @@ test('global keyboard search supports focus, result selection, Escape and an emp
 })
 
 test('browser back and forward restore the visited event and stock routes', async ({ page }) => {
-  await openWorkspace(page, '/explore')
-  await page.locator('.event-row').getByRole('link', { name: hormuz.title, exact: true }).click()
-  await expect(page).toHaveURL(new RegExp(`#\\/events\\/${hormuz.id}$`))
+  await openWorkspace(page, '/issues')
+  await page.locator(`.event-row a[href="#/issues/${hormuz.id}"]`).click()
+  await expect(page).toHaveURL(new RegExp(`#\\/issues\\/${hormuz.id}$`))
   await page.getByRole('link', { name: '종목 연결 근거 보기' }).click()
-  await expect(page).toHaveURL(new RegExp(`#\\/events\\/${hormuz.id}\\/stocks$`))
+  await expect(page).toHaveURL(new RegExp(`#\\/issues\\/${hormuz.id}\\/stocks$`))
   await page.goBack()
   await expect(page.getByRole('heading', { name: hormuz.title, exact: true })).toBeVisible()
   await page.goBack()
@@ -282,12 +254,11 @@ test('browser back and forward restore the visited event and stock routes', asyn
   await expect(page.getByRole('heading', { name: hormuz.title, exact: true })).toBeVisible()
 })
 
-test('unknown event, entity, stock and route IDs show a usable recovery instead of crashing', async ({ page }) => {
+test('unknown issue, stock and route IDs show a usable recovery instead of crashing', async ({ page }) => {
   for (const [route, title] of [
-    ['/events/not-a-real-event', '이벤트를 찾을 수 없어요'],
-    ['/intelligence/not-a-real-document', '문서를 찾을 수 없어요'],
+    ['/issues/not-a-real-event', '이벤트를 찾을 수 없어요'],
     ['/stocks/NOTREAL', '종목을 찾지 못했습니다.'],
-    ['/events/not-a-real-event/stocks', '연결할 사건을 찾지 못했습니다.'],
+    ['/issues/not-a-real-event/stocks', '연결할 사건을 찾지 못했습니다.'],
     ['/does-not-exist', '페이지를 찾을 수 없습니다'],
   ]) {
     await openWorkspace(page, route)
@@ -303,10 +274,10 @@ test.describe('compact workspace', () => {
     await openWorkspace(page)
     await expectNoHorizontalOverflow(page)
     const navigation = page.getByRole('navigation', { name: '주 메뉴' })
-    await navigation.getByRole('link', { name: '사건 탐색', exact: true }).click()
+    await navigation.getByRole('link', { name: '이슈 탐색', exact: true }).click()
     await expect(page.getByRole('heading', { name: '사건을 탐색하세요' })).toBeVisible()
     await expectNoHorizontalOverflow(page)
-    await page.locator('.event-row').getByRole('link', { name: hormuz.title, exact: true }).click()
+    await page.locator('.event-row').getByRole('link', { name: hormuz.title, exact: true }).first().click()
     await expect(page.getByRole('heading', { name: hormuz.title, exact: true })).toBeVisible()
     await expectNoHorizontalOverflow(page)
     await page.getByRole('tab', { name: /^근거 문서/ }).click()
@@ -315,9 +286,9 @@ test.describe('compact workspace', () => {
     await navigation.getByRole('link', { name: '종목 탐색', exact: true }).click()
     await expect(page.locator('.st-stock-row')).toHaveCount(stocks.length)
     await expectNoHorizontalOverflow(page)
-    await page.getByRole('textbox', { name: '종목 검색', exact: true }).fill('한화')
+    await page.getByRole('textbox', { name: '종목 검색', exact: true }).fill('NVDA')
     await page.locator('.st-stock-identity').click()
-    await expect(page.getByRole('heading', { name: '한화에어로스페이스', exact: true })).toBeVisible()
+    await expect(page.getByRole('heading', { name: '엔비디아', exact: true })).toBeVisible()
     await expectNoHorizontalOverflow(page)
     await navigation.getByRole('link', { name: /^보관함/ }).click()
     await expect(page.getByRole('heading', { name: '관심의 흐름을 이어가세요' })).toBeVisible()

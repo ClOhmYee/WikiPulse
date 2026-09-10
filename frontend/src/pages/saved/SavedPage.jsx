@@ -91,7 +91,7 @@ export default function SavedPage({
                 : "사건의 북마크를 누르면 이곳에서 이어서 탐색할 수 있어요."
             }
             action={
-              <a className="wp-button" data-variant="primary" href="#/explore">
+              <a className="wp-button" data-variant="primary" href="#/issues">
                 사건 탐색하기
                 <ArrowRight size={16} />
               </a>

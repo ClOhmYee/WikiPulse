@@ -1,6 +1,6 @@
 import { formatNumber } from "../src/lib/format.js";
 import { test, expect } from '@playwright/test'
-import { events, entities, stocks } from '../src/data/mock/fixtures/catalog.js'
+import { events, stocks } from '../src/data/mock/fixtures/catalog.js'
 
 const hormuz = events.find(event => event.id === 'iran-hormuz-2025')
 const nvidia = stocks.find(stock => stock.symbol === 'NVDA')
@@ -14,8 +14,8 @@ test.afterEach(async ({ page }) => {
   expect(page.__robustnessErrors, 'No uncaught browser exceptions').toEqual([])
 })
 
-test('every event, entity and stock deep link renders its own title without backend requests', async ({ page }) => {
-  test.setTimeout(90_000)
+test('each topic, archive month and every stock deep link renders without backend requests', async ({ page }) => {
+  test.setTimeout(240_000)
   const dataRequests = []
   page.on('request', request => {
     const url = new URL(request.url())
@@ -24,11 +24,10 @@ test('every event, entity and stock deep link renders its own title without back
     }
   })
   const routes = [
-    ...events.map(event => [`/events/${event.id}`, event.title]),
-    ...entities.map(entity => [`/intelligence/${entity.id}`, entity.name]),
+    ...events.filter((event, i) => !event.id.includes('--') || i % 36 === 0).map(event => [`/issues/${event.id}`, event.title]),
     ...stocks.map(stock => [`/stocks/${stock.symbol}`, stock.name]),
   ]
-  expect(routes).toHaveLength(28)
+  expect(routes.length).toBeGreaterThan(stocks.length + 36)
   for (const [route, title] of routes) {
     await test.step(route, async () => {
       await page.goto(`/#${route}`)
@@ -38,7 +37,7 @@ test('every event, entity and stock deep link renders its own title without back
     })
   }
   // These are actual user links as well as direct document loads.
-  await page.goto('/#/events/ai-chip-controls')
+  await page.goto('/#/issues/ai-chip-controls')
   await page.getByRole('link', { name: '종목 연결 근거 보기' }).click()
   await page.locator('.st-stock-identity').filter({ hasText: 'NVDA' }).click()
   await expect(page.getByRole('heading', { level: 1, name: nvidia.name, exact: true })).toBeVisible()
@@ -73,7 +72,7 @@ test('storage write failures warn clearly while retaining a usable session colle
   await page.addInitScript(() => {
     Storage.prototype.setItem = function () { throw new DOMException('Storage quota unavailable', 'QuotaExceededError') }
   })
-  await page.goto(`/#/events/${hormuz.id}`)
+  await page.goto(`/#/issues/${hormuz.id}`)
   await page.getByRole('button', { name: '이벤트 저장', exact: true }).click()
   await expect(page.getByRole('button', { name: '저장됨', exact: true })).toHaveAttribute('aria-pressed', 'true')
   await expect(page.locator('.workspace-toast')).toContainText('브라우저 저장 공간을 사용할 수 없어 새로고침하면 사라집니다')
@@ -87,7 +86,7 @@ test('storage write failures warn clearly while retaining a usable session colle
 
 test('hash query preserves encoded Korean, ampersands, question marks and literal plus signs', async ({ page }) => {
   const query = 'AI & 기술? + 공급망'
-  await page.goto(`/#/explore?q=${encodeURIComponent(query)}`)
+  await page.goto(`/#/issues?q=${encodeURIComponent(query)}`)
   await expect(page.getByRole('heading', { name: '사건을 탐색하세요' })).toBeVisible()
   await expect(page.getByRole('textbox', { name: '사건 검색', exact: true })).toHaveValue(query)
   await expect(page.getByRole('heading', { name: '일치하는 사건이 없습니다' })).toBeVisible()
@@ -97,12 +96,13 @@ test('hash query preserves encoded Korean, ampersands, question marks and litera
   await expect(page.locator('.event-row')).toHaveCount(events.length)
 })
 
-test('820px tablet keeps all four navigation names and working destinations', async ({ page }) => {
+test('820px tablet keeps all five navigation names and working destinations', async ({ page }) => {
   await page.setViewportSize({ width: 820, height: 1180 })
   await page.goto('/#/pulse')
   const navigation = page.getByRole('navigation', { name: '주 메뉴' })
   for (const [name, route, title] of [
-    ['사건 탐색', '/explore', '사건을 탐색하세요'],
+    ['이슈 탐색', '/issues', '사건을 탐색하세요'],
+    ['마이페이지', '/mypage', '마이페이지'],
     ['종목 탐색', '/stocks', '종목에서 사건의 맥락을 찾으세요.'],
     ['보관함', '/saved', '관심의 흐름을 이어가세요'],
     ['Pulse Map', '/pulse', '세상의 변화가 모이는 곳'],
@@ -142,20 +142,7 @@ test('WebGL unavailable fallback retains the full story and a keyboard-operable 
   await expect(page.locator('html')).not.toHaveClass(/scene-snap-enabled/)
 })
 
-test('seven-day map values are accumulated correctly and fourteen-day stock charts retain exact prices', async ({ page }) => {
-  await page.goto('/#/pulse')
-  const map = page.getByRole('region', { name: '사건 관계 지도' })
-  await page.getByRole('button', { name: '7일', exact: true }).click()
-  for (const event of events) {
-    const points = event.chart.slice(-7)
-    const edits = points.reduce((sum, point) => sum + point.edits, 0)
-    const baseline = points.reduce((sum, point) => sum + point.baseline, 0)
-    const pulse = Math.round(edits / baseline * 10) / 10
-    await expect(map.getByRole('button', { name: `${event.title}, Pulse ${pulse}배`, exact: true })).toBeVisible()
-    const row = page.locator('.event-row').filter({ has: page.getByRole('link', { name: event.title, exact: true }) })
-    await expect(row.locator('.event-row__signal')).toContainText(`${pulse.toFixed(1)}×`)
-    await expect(row.locator('.event-row__edits')).toContainText(formatNumber(edits))
-  }
+test('fourteen-day stock charts retain exact prices', async ({ page }) => {
   await page.goto('/#/stocks/NVDA')
   await page.getByRole('group', { name: '예시 가격 차트 기간' }).getByRole('button', { name: '14일', exact: true }).click()
   const chart = page.getByRole('img', { name: /NVDA 예시 가격/ })

@@ -60,7 +60,7 @@ test("all pages and their included objects are merged without treating page one 
   const offsets = [];
   const list = (params, options) => { offsets.push(params.offset); return mockClient.listEvents({ ...params, limit: 2 }, options); };
   const response = await readAll(list, {}, {});
-  assert.deepEqual(offsets, [0, 2, 4]);
+  assert.deepEqual(offsets, Array.from({ length: Math.ceil(events.length / 2) }, (_, i) => i * 2));
   assert.equal(response.data.length, events.length);
   assert.equal(new Set(response.included.entities.map((item) => item.id)).size, response.included.entities.length);
   assert.equal(response.meta.pagination, undefined);
