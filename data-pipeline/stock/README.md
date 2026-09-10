@@ -1,14 +1,18 @@
-# stock — 종목 마스터·설명·임베딩 적재
+# stock — 종목 마스터·설명·임베딩·주가 적재
 
 - `WP-33` 종목 마스터 (SEC + NASDAQ Trader → PostgreSQL)
 - `WP-34` 사업 설명 수집 + 임베딩 (yfinance → text-embedding-3-small → pgvector)
+- `WP-64` 주가 일봉 적재 + 일별 증분 갱신 (yfinance → stock_price)
 
-명세: [docs/requirements-v0.1.md](../../docs/requirements-v0.1.md) §4, §5, §6
+명세: [docs/requirements-v0.1.md](../../docs/requirements-v0.1.md) §3.2 9번, §4, §5, §6
 
 ```
 종목 마스터 ──▶ 사업 설명 ──▶ 임베딩
  universe      summaries       embed
  (SEC+NASDAQ)  (yfinance)      (GATEWAY)
+      └──────▶ 주가 일봉
+               prices
+               (yfinance)
 ```
 
 세 단계를 나눴다. 뒤 단계는 "앞 단계가 채운 것 중 아직 안 한 것"부터
@@ -24,9 +28,33 @@ export LLM_GATEWAY_API_KEY=...            # .env 참고. 저장소에 넣지 않
 python -m stock.universe          # 1. 마스터 (약 5,400종목)
 python -m stock.summaries         # 2. 사업 설명
 python -m stock.embed             # 3. 임베딩
+python -m stock.prices            # 4. 주가 일봉 (첫 실행 5년, 이후 증분)
 
 python -m stock.universe --dry-run   # 적재 없이 개수만
 ```
+
+## 주가 (prices)
+
+한 코드 경로가 초기 적재와 일별 갱신을 둘 다 한다. 종목마다 `stock_price` 에
+마지막 `trade_date` 가 있으면 **그 날부터**(포함, upsert 로 정정도 반영), 없으면
+**5년 전체**를 받는다.
+
+```bash
+python -m stock.prices                       # 전 종목. 없으면 5년, 있으면 마지막 날부터
+python -m stock.prices --period 2y           # 기존 행 없는 종목의 초기 기간
+python -m stock.prices --tickers AAPL,MSFT   # 특정 종목만
+python -m stock.prices --limit 20 --dry-run  # DB 안 건드리고 20종목만 시험
+```
+
+- **첫 실행** = 전 종목 5년 초기 적재. **매일 cron** = 인자 없이 돌리면 마지막 날
+  이후만 받는 증분 갱신이다. **중간에 죽고 재실행** = 받은 종목은 마지막 날만,
+  못 받은 종목은 5년 — `summaries`·`embed` 와 같은 "이어서" 원리.
+- **재실행 안전**: `ON CONFLICT (ticker, trade_date) DO UPDATE` 라 중복 행이 안 생긴다.
+- **실패 격리**: 종목별 지수 백오프(2·4·8초, 최대 4시도) 후에도 실패하면 그 종목만
+  건너뛰고 나머지를 계속 적재한다. 끝에 `적재·데이터없음·실패` 개수를 보고한다.
+- 🔴 **raw(조정 안 함) OHLC 를 저장한다.** 조정가는 배당·분할마다 과거 전 구간이
+  다시 계산돼, 5년 초기분과 매일 증분분의 기준이 어긋난다. raw 는 날짜별 값이
+  안 변해 증분 append 와 정합하다. 분할일 차트 튐은 "참고 컨텍스트"라 허용한다.
 
 ## 규모 (2026-09-08 실측)
 
@@ -56,12 +84,15 @@ SEC 에 없으면 거래소 이름을 그대로 둔다.
 ## 검증
 
 ```bash
-python -m pytest tests/test_universe.py    # 파싱·필터, 네트워크 없이 8개
+python -m pytest                 # 파싱·필터·주가변환, 네트워크 없이 16개
 ```
 
-end-to-end 는 진짜 PostgreSQL 로 확인했다 (2026-09-08). 마스터 5,389종목 적재 →
-표본 12종목 설명 수집 → GATEWAY 임베딩(1536차원) → pgvector Top-K. XOM(엑손모빌)
-코사인 Top-5 에 CVX(셰브론) 0.62, FRO(유조선) 등 에너지가 뭉쳤다.
+마스터·설명·임베딩 end-to-end 는 진짜 PostgreSQL 로 확인했다 (2026-09-08). 마스터
+5,389종목 적재 → 표본 12종목 설명 수집 → GATEWAY 임베딩(1536차원) → pgvector Top-K.
+XOM(엑손모빌) 코사인 Top-5 에 CVX(셰브론) 0.62, FRO(유조선) 등 에너지가 뭉쳤다.
+
+주가 fetch 는 라이브 Yahoo 로 확인했다 (2026-09-10). AAPL 초기 period·MSFT 증분
+start·없는 티커 graceful 세 경로 모두 정상, raw OHLCV·정수 volume·거래일 날짜 확인.
 
 ## 함정
 
@@ -70,11 +101,14 @@ end-to-end 는 진짜 PostgreSQL 로 확인했다 (2026-09-08). 마스터 5,389�
   과 맞아야 한다. `embed.py` 가 응답 차원을 검사해서 다르면 멈춘다.
 - **yfinance 결측.** 표본 200종목 보유율 100% 였지만 전체에서 일부는 설명이
   없을 수 있다. `summaries.py` 가 없는 것을 세어 보고한다.
+- **⚠️ yfinance 버전.** `0.2.51` 은 `.history()` 가 현재 Yahoo 에서 깨져 전 종목
+  0행이 **조용히** 나온다 (크럼 단계 "Expecting value"). `1.7.0` 으로 올렸다
+  (2026-09-10). 다시 내리면 주가가 안 쌓이는데 에러가 안 나 늦게 발견된다.
 - **SEC 이름이 최신이다.** XOM 이 `ExxonMobil Holdings Corp` 로 나오는데
   (CIK 2115436) 이건 SEC 원본 그대로다 — 오류가 아니다.
 
 ## 미확정
 
-- **적재 스케줄.** 지금은 수동이다. 마스터는 자주 안 바뀌니 주 1회 cron 이면
-  되지만, 상장·폐지 반영 주기는 팀 결정 사항이다.
-- **주가 적재는 별도** (`WP-10` 에픽). 여기는 마스터·설명·임베딩까지다.
+- **적재 스케줄.** 지금은 수동이다. 마스터는 자주 안 바뀌니 주 1회 cron,
+  주가(`prices`)는 장 마감 후 일 1회 cron 이면 된다 — 스크립트 자체가 증분이라
+  인자 없이 반복하면 된다. 상장·폐지 반영 주기와 cron 배치 위치는 팀 결정 사항이다.

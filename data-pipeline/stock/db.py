@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import datetime as dt
 import os
 from collections.abc import Iterable, Sequence
 
@@ -91,3 +92,59 @@ def save_embeddings(
 def _vec_literal(vec: list[float]) -> str:
     """pgvector 는 '[1,2,3]' 형태 문자열을 받는다."""
     return "[" + ",".join(repr(float(x)) for x in vec) + "]"
+
+
+# --- 주가 (WP-64) ---------------------------------------------------
+
+# 일봉 한 행. open/high/low/volume 은 yfinance 결측 시 None 일 수 있다.
+# close 는 스키마에서 NOT NULL 이라 값이 없는 행은 prices.py 가 버린다.
+PriceRow = tuple[
+    str, dt.date, float | None, float | None, float | None, float, int | None
+]
+
+
+def all_tickers(conn: psycopg.Connection) -> list[str]:
+    """마스터의 전 종목. 주가 적재 대상이다."""
+    with conn.cursor() as cur:
+        cur.execute("SELECT ticker FROM stock ORDER BY ticker")
+        return [r[0] for r in cur.fetchall()]
+
+
+def last_trade_dates(conn: psycopg.Connection) -> dict[str, dt.date]:
+    """종목별 가장 최근 trade_date. 증분 갱신이 여기 다음 날부터 받는다.
+
+    한 행도 없는 종목은 결과에 없다 — prices.py 가 그런 종목은 5년 전체를 받는다.
+    """
+    with conn.cursor() as cur:
+        cur.execute(
+            "SELECT ticker, max(trade_date) FROM stock_price GROUP BY ticker"
+        )
+        return {ticker: last for ticker, last in cur.fetchall()}
+
+
+def save_prices(conn: psycopg.Connection, prices: Iterable[PriceRow]) -> int:
+    """일봉을 upsert 한다. 같은 (ticker, trade_date) 면 값을 덮는다.
+
+    재실행·증분 재적재에서 중복 행이 안 생긴다 (PK ticker, trade_date). 덮어쓰기는
+    장 마감 후 확정값 정정(late correction)도 반영한다.
+    """
+    rows = list(prices)
+    if not rows:
+        return 0
+    with conn.cursor() as cur:
+        cur.executemany(
+            """
+            INSERT INTO stock_price
+                (ticker, trade_date, open, high, low, close, volume)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
+            ON CONFLICT (ticker, trade_date) DO UPDATE
+              SET open = EXCLUDED.open,
+                  high = EXCLUDED.high,
+                  low = EXCLUDED.low,
+                  close = EXCLUDED.close,
+                  volume = EXCLUDED.volume
+            """,
+            rows,
+        )
+        conn.commit()
+    return len(rows)
