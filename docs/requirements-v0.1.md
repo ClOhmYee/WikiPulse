@@ -208,7 +208,7 @@ RAM 16 GB에서 Kafka + Spark + HDFS 데몬을 올리면 Spark executor 몫은 8
 - [ ] 비-seed 클러스터 멤버 기준 — 기존 문서가 사건으로 재조명될 때(예: `Mojtaba_Khamenei`) 딸려 들어갈 조건. Clickstream 존재만으로는 후보가 너무 넓음(§3.2 4번 참조). **편집 재급증 비율(사건기간 편집 수 / 동일 길이 직전 기준기간 편집 수) 예비 검증** — `Mojtaba_Khamenei` 17.9배(재조명, 포함돼야 함) vs `Saffir–Simpson_scale` 6.1배(Milton과 무관, 태풍 시즌 전체가 겹쳐 편집이 몰린 계절성 오염 — 배제돼야 함) vs `Hurricane_Katrina` 1.0배·`Persian_Gulf` 0.7배(배경, 정상 배제). 신호는 있으나 6.1배와 17.9배 사이 어디서 끊을지는 표본 4~5개로는 못 정한다. 후속 이슈로 분리(WP-77) — 근거는 §11 "편집 재급증 비율, 예비 표본" 행
 - [ ] 리플레이 시연 구간 — 어느 사건·며칠. GDELT 결손(2025-06-13~07-04) 밖에서
 - [ ] Top-K의 K (임베딩·GDELT 각각), 3등급 검증 발동 기준 N, 노출 개수 상한 — 지금은 없음. 정답셋 결과 보고
-- [ ] 임베딩 교집합 재측정 — 로컬 MiniLM이 아니라 실제 쓸 `text-embedding-3-small`로, 이슈 텍스트는 실시간 클러스터 요약으로
+- [x] ~~임베딩 교집합 재측정~~ — **재측정 완료 (2026-09-10, WP-48).** 확정 이슈 텍스트 규칙(§6.2 D) + `text-embedding-3-small` + 정답셋 5사례로 S&P 500 대상 재측정. 임베딩∩GDELT 겹침은 K=10에서 0~2개(합집합이 맞다는 §6.3 재확인), 임베딩 단독 후보는 70~100%가 노이즈(3등급 조건부 검증의 근거), GDELT는 임베딩이 못 잡는 2차 효과 정답(CrowdStrike의 DAL, IBM의 MU)을 데려옴. 단 GDELT 제목-그렙 근사는 "회사=2차 영향"인 사건(Milton·은행위기)에서 죽음 — 실제 파이프라인의 GKG 기관명 필드로는 재측정 필요. 근거: `ai/candidate-overlap/RESULT.md`, §11
 - [ ] GDELT 기관명 → 종목 정규화 — 부분문자열 매칭은 News Corp·Meta 같은 오탐이 남. 별칭 테이블 필요
 - [ ] 알림 수단 — 웹 내 배지 / 브라우저 푸시 / 이메일
 - [ ] 토론방 — 실시간(WebSocket) 필수인지, 모더레이션
@@ -227,6 +227,7 @@ RAM 16 GB에서 Kafka + Spark + HDFS 데몬을 올리면 Spark executor 몫은 8
 | GDELT lift, Milton | I=`HURRICANE ∧ florida` 10,707건. FPL 10.5 · Generac 9.3 · Duke 8.4 · Publix 7.0 · United 6.3 · Disney 4.7 · Nvidia 0.4 · MSFT 0.3 | 2026-09-07 |
 | GDELT lift, Iran | I=`iran` 35% → 석유 메이저 0.5 / I=`iran ∧ ENV_OIL` 6% → Chevron 3.6 · Exxon 2.6 | 2026-09-07 |
 | 임베딩 vs GDELT 후보 교집합 | 풀 S&P 500, 이슈=위키 intro. **`text-embedding-3-small`(GATEWAY)**: Milton K=10/20/30 → 1/1/3개, Iran+Hormuz → 2/4/5개, Jaccard ≤0.11. 로컬 MiniLM도 같은 범위(0/1/3, 1/3/3). 임베딩 Top-20에 NEE·Home Depot·Lennar·Eaton·Generac(정답)과 Monster Beverage·Intel·Nike(노이즈)가 섞임, 코사인 0.17~0.30. GDELT Top-20은 NEE·Duke·Generac·Mosaic·Progressive·Allstate·United·Disney — 정답 밀도 높음 | 2026-09-07 |
+| 임베딩 vs GDELT 후보 교집합, 확정 규칙 재측정 | S&P 500(504종목), 이슈=§6.2 확정 규칙(D), 정답셋 5사례(§39). 임베딩∩GDELT K=10에서 Milton 0·CrowdStrike 2·은행위기 0·IBM 1·PayPal 1개 (K=30까지 키워도 1~4개 — 합집합이 맞다). 임베딩 단독 후보 노이즈율 K=10에서 70~100%(3등급 조건부 검증의 근거). GDELT가 임베딩이 못 잡은 정답 데려옴: CrowdStrike DAL·IBM MU. ⚠️ GDELT를 DOC API 제목-그렙으로 근사 → Milton·은행위기(회사가 2차 영향)는 제목에 회사명이 안 실려 신호 0. 실제 파이프라인 GKG 기관명 필드로는 재측정 필요 | 2026-09-10 |
 | 이슈 대표 텍스트 방식 비교 | 클러스터 3건(Milton·Hormuz·Nvidia) × 종목 32개(정답 20 + 노이즈 12). 대표문서 도입부 / 제목+요약 나열 / LLM 요약 / 문서수 적응 나열의 정답 평균순위가 각각 10.6·10.5·11.0·10.5(Milton), 6.6·7.8·6.9·7.8(Hormuz), 4.0·5.0·3.3·4.0(Nvidia)로 **사실상 동률**. LLM 요약은 한국어로 생성 시 정답 평균 코사인 0.160 → 0.081로 반토막, 단일 문서에서 거부 응답이 그대로 임베딩됨. 정답-노이즈 분리도는 사건형 +0.05~0.15 / 기업형 +0.26 — 임베딩 단독이 사건형에 약하다는 §6 전제와 일치 | 2026-09-08 |
 | 매칭 정답셋 등급 채점 | 5사례(사건형 3+기업형 2) K=10. CrowdStrike 등급1 정답 3/3(노이즈57%)·등급3 정답 0. IBM 등급1 정답 2/2(노이즈75%)·등급2에서 MU(이슈 본문엔 없는 인과 후보) 발견. Milton·2023은행위기는 GDELT 제목-그렙 근사가 "회사=사건 당사자"가 아닌 사례에서 신호 0(방법론 한계, 실제 파이프라인의 GKG 기관명 추출과 다름) | 2026-09-10 |
 | 위키 링크 그래프 → 상장기업 | Hormuz 1,358 이웃 중 0 · Milton 3 · Iran 4 · Nvidia 507(목록 문서 노이즈) | 2026-09-04 |
