@@ -55,7 +55,6 @@ CASES = {
         "answers": [
             ("WAL", "strong", "Western Alliance — 3/13 최대 65% 장중 급락, 예금 이탈 우려 최대 피해주 (Fortune·Yahoo Finance 2023-03-13)"),
             ("ZION", "strong", "Zions Bancorp — 3/13 개장 직후 20%+ 급락, 5월에도 9~12%대 추가 급락 (Fortune)"),
-            ("CMA", "strong", "Comerica — 프리마켓 7% 하락 후 5월 추가 급락 9~12%대 (Fortune)"),
             ("KEY", "strong", "KeyCorp — 5월 추가 국면에서 9~12%대 급락 (Forbes)"),
             ("SCHW", "strong", "Charles Schwab — 프리마켓 20% 하락, 대차대조표 미실현 채권 손실 우려로 은행 아니지만 같이 휩쓸림 (Fortune)"),
             ("FITB", "strong", "Fifth Third Bancorp — 2023-05 국면에서 Zions·Comerica·KeyCorp과 함께 9~12%대 급락한 지역은행 바스켓의 일원 (Fortune). ~~Comerica(CMA)~~ → 2026-02-02 Comerica가 Fifth Third에 흡수합병·상장폐지되어(TipRanks·투자은행 8-K, 2026-09-10 확인) 이 정답셋에서는 CMA 대신 FITB로 표기 — 2023년 당시엔 별개 법인이었지만 지금은 이게 유일하게 조회 가능한 실체"),

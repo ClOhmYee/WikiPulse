@@ -1,0 +1,3 @@
+# 재실행 산출물 / 큰 캐시 (sp500.json·summaries.json은 RESULT.md 수치의 입력이라 커밋함)
+result.txt
+embeddings.json
