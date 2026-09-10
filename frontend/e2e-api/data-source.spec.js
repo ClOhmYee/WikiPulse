@@ -13,7 +13,7 @@ async function serve(page, override) {
     const params = Object.fromEntries(url.searchParams);
     for (const key of ["offset", "limit"]) if (params[key] !== undefined) params[key] = Number(params[key]);
     // A deliberately small server page proves that every page is collected.
-    if (["events", "entities", "stocks"].includes(kind) && !id) params.limit = Math.min(params.limit || 50, 2);
+    if (["events", "entities", "stocks"].includes(kind) && !id) params.limit = Math.min(params.limit || 50, 40);
     try {
       const methods = { events: ["listEvents", "getEvent"], entities: ["listEntities", "getEntity"], stocks: ["listStocks", "getStock"] };
       const body = kind === "categories" ? await mockClient.listCategories()
@@ -33,7 +33,7 @@ test("same pages consume HTTP data including every list page and related objects
   const calls = await serve(page);
   await page.goto("/#/issues");
   await expect(page.locator(".event-row")).toHaveCount(events.length);
-  expect(calls.filter((url) => url.pathname === "/api/v1/events").map((url) => url.searchParams.get("offset"))).toEqual(["0", "2", "4"]);
+  expect(calls.filter((url) => url.pathname === "/api/v1/events").map((url) => url.searchParams.get("offset"))).toEqual(Array.from({ length: Math.ceil(events.length / 40) }, (_, i) => String(i * 40)));
   await expect(page.getByRole("button", { name: "데모 데이터" })).toBeVisible();
   for (const [path, title] of [
     [`/issues/${events[0].id}`, events[0].title],

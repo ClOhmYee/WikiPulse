@@ -30,4 +30,4 @@ for (const item of pulseSnapshots.data) {
   const map = pulseMaps.find(v => v.meta.snapshotTs === item.snapshotTs && v.meta.source === item.source);
   assert.equal(map.data.clusters.length, item.clusterCount);
 }
-console.log('Pulse OpenAPI 3.0.3: 7 historical snapshots + 20 clusters / 500 nodes / 1000 edges validated. No live backend was called.');
+console.log(`Pulse OpenAPI 3.0.3: ${pulseMaps.length} daily snapshots + 20 clusters / 500 nodes / 1000 edges validated. No live backend was called.`);

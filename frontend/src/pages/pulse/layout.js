@@ -13,6 +13,7 @@ const hash = (text) =>
 export function createLayoutEngine() {
   const clusters = new Map();
   let cellSize = 365;
+  let columns = 3;
   return (input) => {
     for (const cluster of [...input].sort((a, b) =>
       a.issueKey.localeCompare(b.issueKey),
@@ -89,16 +90,17 @@ export function createLayoutEngine() {
       };
     });
     cellSize = Math.max(cellSize, ...scene.map((v) => v.radius * 2 + 100));
+    columns = Math.max(columns, Math.ceil(Math.sqrt(clusters.size)));
     return {
       clusters: scene.map((v) => ({
         ...v,
-        x: ((v.slot % 3) + 0.5) * cellSize,
-        y: (Math.floor(v.slot / 3) + 0.5) * cellSize,
+        x: ((v.slot % columns) + 0.5) * cellSize,
+        y: (Math.floor(v.slot / columns) + 0.5) * cellSize,
       })),
       cellSize,
       totalSlots: clusters.size,
-      width: cellSize * 3,
-      height: Math.max(2, Math.ceil(clusters.size / 3)) * cellSize,
+      width: cellSize * columns,
+      height: Math.max(2, Math.ceil(clusters.size / columns)) * cellSize,
     };
   };
 }

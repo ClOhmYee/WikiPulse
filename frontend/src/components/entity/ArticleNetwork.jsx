@@ -6,7 +6,7 @@ export function ArticleNetwork({ articles = [], selectedId, onSelect }) {
       <svg
         viewBox="0 0 560 230"
         role="img"
-        aria-label="사건을 구성하는 문서의 관계 예시"
+        aria-label="클러스터에 포함된 문서 구성"
       >
         {articles.slice(1).map((article, i) => {
           const angle = (i / Math.max(1, articles.length - 1)) * Math.PI * 2;
@@ -78,7 +78,8 @@ export function ArticleNetwork({ articles = [], selectedId, onSelect }) {
         )}
       </div>
       <p className="wp-muted wp-small">
-        문서 연결 구조를 설명하기 위한 예시입니다.
+        클러스터에 포함된 문서 구성입니다. 선은 소속을 표현하며, 문서 쌍의 관계
+        근거는 펄스맵에서 확인하세요.
       </p>
     </div>
   );

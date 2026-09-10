@@ -1,11 +1,12 @@
 import { test, expect } from '@playwright/test';
+import { events } from '../src/data/mock/fixtures/catalog.js';
 
 test('issue presentation preserves query, sorting and saved state', async ({ page }) => {
   await page.goto('/#/issues');
   await page.getByRole('textbox', { name: '사건 검색', exact: true }).fill('호르무즈');
   await page.getByRole('combobox', { name: '사건 정렬' }).selectOption('recent');
-  const row = page.locator('.event-row');
-  await expect(row).toHaveCount(1);
+  await expect(page.locator('.event-row')).toHaveCount(events.filter(e => e.title.includes('호르무즈')).length);
+  const row = page.locator('.event-row').first();
   await row.getByRole('button', { name: /저장/ }).click();
   await page.getByRole('button', { name: '카드', exact: true }).click();
   await expect(page.locator('.event-list')).toHaveAttribute('data-view', 'card');

@@ -2,6 +2,7 @@ import { ChevronLeft, ChevronRight, RotateCcw } from "lucide-react";
 import {
   closestSnapshot,
   kstTime,
+  kstDate,
   kstTimestamp,
   snapshotKey,
 } from "../../data/pulse/time.js";
@@ -18,6 +19,17 @@ export default function PulseTimeline({
   const start = Date.parse(snapshots[0].snapshotTs);
   const end = Date.parse(snapshots.at(-1).snapshotTs);
   const at = Date.parse(selected.snapshotTs);
+  const multiDay =
+    kstDate(snapshots[0].snapshotTs) !== kstDate(snapshots.at(-1).snapshotTs);
+  const ticks = snapshots.filter(
+    (item, i) =>
+      i === 0 ||
+      i === snapshots.length - 1 ||
+      (multiDay
+        ? kstDate(item.snapshotTs).slice(0, 7) !==
+          kstDate(snapshots[i - 1].snapshotTs).slice(0, 7)
+        : true),
+  );
   return (
     <section className="pulse-timeline" aria-label="스냅샷 시간 탐색">
       <div className="pulse-timeline__heading">
@@ -75,7 +87,7 @@ export default function PulseTimeline({
             }}
           />
           <div className="pulse-timeline__ticks" aria-hidden="true">
-            {snapshots.map((item) => (
+            {ticks.map((item) => (
               <i
                 key={snapshotKey(item)}
                 style={{
@@ -85,8 +97,16 @@ export default function PulseTimeline({
             ))}
           </div>
           <div className="pulse-timeline__labels">
-            <span>{kstTime(snapshots[0].snapshotTs)}</span>
-            <span>{kstTime(snapshots.at(-1).snapshotTs)}</span>
+            <span>
+              {multiDay
+                ? kstDate(snapshots[0].snapshotTs)
+                : kstTime(snapshots[0].snapshotTs)}
+            </span>
+            <span>
+              {multiDay
+                ? kstDate(snapshots.at(-1).snapshotTs)
+                : kstTime(snapshots.at(-1).snapshotTs)}
+            </span>
           </div>
         </div>
         <button

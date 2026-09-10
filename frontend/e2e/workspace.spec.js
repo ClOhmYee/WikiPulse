@@ -52,7 +52,7 @@ test('map selection, zoom, pan, reset and snapshot selection update the same vie
   const initial = await group.getAttribute('transform');
   await page.getByRole('button', { name: '지도 확대', exact: true }).click();
   await expect(group).not.toHaveAttribute('transform', initial);
-  for (let i = 0; i < 6; i++) {
+  for (let i = 0; i < 24; i++) {
     const control = page.getByRole('button', { name: '지도 확대', exact: true });
     if (await control.isEnabled()) await control.click();
   }
@@ -69,11 +69,11 @@ test('map selection, zoom, pan, reset and snapshot selection update the same vie
   await page.getByRole('button', { name: '지도 위치 초기화' }).click();
   await expect(group).toHaveAttribute('transform', initial);
   await page.getByRole('button', { name: '이전 시점', exact: true }).click();
-  await expect(map).toHaveAttribute('data-snapshot', '2025-06-23T15:00:00Z');
-  await expect(preview).toHaveAttribute('data-snapshot', '2025-06-23T15:00:00Z');
+  await expect(map).toHaveAttribute('data-snapshot', '2026-09-09T00:00:00.000Z');
+  await expect(preview).toHaveAttribute('data-snapshot', '2026-09-09T00:00:00.000Z');
   await expect(preview.getByRole('heading', { name: chips.title })).toBeVisible();
   await preview.getByRole('link', { name: '사건 자세히 보기' }).click();
-  await expect(page).toHaveURL(/#\/issues\/ai-chip-controls~5$/);
+  await expect(page).toHaveURL(/#\/issues\/ai-chip-controls~2026-09-09$/);
   await expect(page.getByRole('heading', { level: 1, name: chips.title })).toBeVisible();
 });
 
@@ -81,17 +81,16 @@ test('event query, category, sorting and empty-state reset return the right even
   await openWorkspace(page, '/issues')
   await expect(page.locator('.event-row')).toHaveCount(events.length)
   await page.getByRole('textbox', { name: '사건 검색', exact: true }).fill('원자력')
-  await expect(page.locator('.event-row')).toHaveCount(1)
-  await expect(page.locator('.event-row')).toContainText('원자력 발전과 우라늄')
+  await expect(page.locator('.event-row')).toHaveCount(events.filter(e => `${e.title} ${e.summary} ${e.keywords.join(' ')}`.includes('원자력')).length)
+  await expect(page.locator('.event-row').first()).toContainText('원자력 발전과 우라늄')
   await page.getByRole('button', { name: '검색어 지우기', exact: true }).click()
   await page.getByRole('button', { name: '기술', exact: true }).click()
-  await expect(page.locator('.event-row')).toHaveCount(1)
-  await expect(page.locator('.event-row')).toContainText(chips.title)
+  await expect(page.locator('.event-row')).toHaveCount(events.filter(e => e.category === 'technology').length)
   await page.getByRole('button', { name: /^전체/ }).click()
   await page.getByRole('combobox', { name: '사건 정렬' }).selectOption('recent')
-  await expect(page.locator('.event-row').first()).toContainText('클라우드 보안')
+  await expect(page.locator('.event-row').first()).toContainText([...events].sort((a,b) => b.startAt.localeCompare(a.startAt))[0].title)
   await page.getByRole('combobox', { name: '사건 정렬' }).selectOption('pulse')
-  await expect(page.locator('.event-row').first()).toContainText(hormuz.title)
+  await expect(page.locator('.event-row').first()).toContainText([...events].sort((a,b) => b.pulse-a.pulse)[0].title)
   await page.getByRole('textbox', { name: '사건 검색', exact: true }).fill('no-such-event-zz123')
   await expect(page.getByRole('heading', { name: '일치하는 사건이 없습니다' })).toBeVisible()
   await expect(page.locator('.event-row')).toHaveCount(0)
@@ -115,9 +114,9 @@ test('event tabs support keyboard navigation, news filters and evidence drilldow
   await page.getByRole('tab', { name: '관련 소식' }).click()
   const news = page.getByRole('region', { name: '관련 소식 목록' })
   await expect(news.locator('.dt-news-item')).toHaveCount(hormuz.news.length)
-  await news.getByRole('button', { name: /^공식 자료/ }).click()
-  await expect(news.locator('.dt-news-item')).toHaveCount(hormuz.news.filter(item => item.type === 'official').length)
-  await expect(news.locator('.dt-news-item').first()).toContainText('공식 자료 예시')
+  await news.getByRole('button', { name: /^분석/ }).click()
+  await expect(news.locator('.dt-news-item')).toHaveCount(hormuz.news.filter(item => item.type === 'analysis').length)
+  await expect(news.locator('.dt-news-item').first()).toContainText('분석 예시')
   await news.getByRole('searchbox', { name: '관련 소식 검색' }).fill('no-such-news-zz123')
   await expect(news.getByRole('heading', { name: '조건에 맞는 소식이 없어요' })).toBeVisible()
   await news.getByRole('button', { name: '검색 조건 초기화' }).click()
@@ -151,10 +150,10 @@ test('event keyword links arrive in a filtered explorer and survive reload', asy
   await page.locator('.dt-keywords').getByRole('link', { name: `#${keyword}`, exact: true }).click()
   await expect(page.getByRole('heading', { name: '사건을 탐색하세요' })).toBeVisible()
   await expect(page.getByRole('textbox', { name: '사건 검색', exact: true })).toHaveValue(keyword)
-  await expect(page.locator('.event-row')).toHaveCount(1)
+  await expect(page.locator('.event-row')).toHaveCount(events.filter(e => e.keywords.includes(keyword)).length)
   await page.reload()
   await expect(page.getByRole('textbox', { name: '사건 검색', exact: true })).toHaveValue(keyword)
-  await expect(page.locator('.event-row')).toContainText(hormuz.title)
+  await expect(page.locator('.event-row').first()).toContainText(hormuz.title)
 })
 
 test('stock directory filters and event-specific connection types select the right companies', async ({ page }) => {
@@ -164,36 +163,36 @@ test('stock directory filters and event-specific connection types select the rig
   await expect(page.locator('.st-stock-row')).toHaveCount(1)
   await expect(page.locator('.st-stock-row')).toContainText(nvidia.name)
   await page.getByRole('button', { name: '종목 검색어 지우기' }).click()
-  await page.getByRole('combobox', { name: '산업 필터' }).selectOption('반도체 장비')
-  await expect(page.locator('.st-stock-row')).toHaveCount(1)
-  await expect(page.locator('.st-stock-row')).toContainText('ASML')
+  await page.getByRole('combobox', { name: '산업 필터' }).selectOption('기술')
+  await expect(page.locator('.st-stock-row')).toHaveCount(stocks.filter(s => s.sector === '기술').length)
+  await expect(page.locator('.st-stock-row').filter({ hasText: 'ASML' })).toBeVisible()
   await page.getByRole('button', { name: '필터 초기화', exact: true }).click()
   await page.getByRole('textbox', { name: '종목 검색', exact: true }).fill('no-such-stock-zz123')
   await expect(page.getByRole('heading', { name: '조건에 맞는 종목이 없습니다.' })).toBeVisible()
   await page.getByRole('button', { name: '전체 종목 보기' }).click()
   await expect(page.locator('.st-stock-row')).toHaveCount(stocks.length)
   await openWorkspace(page, `/issues/${chips.id}/stocks`)
-  await expect(page.locator('.st-stock-row')).toHaveCount(2)
+  await expect(page.locator('.st-stock-row')).toHaveCount(chips.stockSymbols.length)
   await page.getByRole('combobox', { name: '연결 유형 필터' }).selectOption('supply')
-  await expect(page.locator('.st-stock-row')).toHaveCount(1)
-  await expect(page.locator('.st-stock-row')).toContainText('ASML')
+  await expect(page.locator('.st-stock-row')).toHaveCount(0)
   await page.getByRole('combobox', { name: '연결 유형 필터' }).selectOption('direct')
-  await expect(page.locator('.st-stock-row')).toHaveCount(1)
-  await expect(page.locator('.st-stock-row')).toContainText('NVDA')
-  await page.locator('.st-stock-identity').click()
+  await expect(page.locator('.st-stock-row')).toHaveCount(0)
+  await page.getByRole('combobox', { name: '연결 유형 필터' }).selectOption('industry')
+  await expect(page.locator('.st-stock-row')).toHaveCount(chips.stockSymbols.length)
+  await page.locator('.st-stock-identity').filter({ hasText: 'NVDA' }).click()
   await expect(page).toHaveURL(/#\/stocks\/NVDA$/)
   await expect(page.getByRole('heading', { name: nvidia.name, exact: true })).toBeVisible()
 })
 
 test('stock detail explains the path, offers example chart ranges and links back to its event', async ({ page }) => {
   await openWorkspace(page, '/stocks/NVDA')
-  await expect(page.getByRole('list', { name: '사건과 기업의 연결 경로' })).toContainText('엔비디아 문서')
-  await expect(page.locator('.st-relationship')).toContainText(nvidia.relations[0].explanation)
-  await page.getByRole('group', { name: '사건 연결 유형' }).getByRole('button', { name: '직접 언급' }).click()
-  await expect(page.locator('.st-timeline-event')).toHaveCount(1)
+  await expect(page.getByRole('list', { name: '사건과 기업의 연결 경로' }).first()).toContainText('엔비디아')
+  await expect(page.locator('.st-relationship').first()).toContainText(nvidia.relations[0].explanation)
+  await page.getByRole('group', { name: '사건 연결 유형' }).getByRole('button', { name: '산업·기술' }).click()
+  await expect(page.locator('.st-timeline-event')).toHaveCount(nvidia.eventIds.length)
   await page.getByRole('group', { name: '예시 가격 차트 기간' }).getByRole('button', { name: '7일', exact: true }).click()
   await expect(page.getByRole('img', { name: /NVDA 예시 가격/ })).toHaveAttribute('aria-label', /7개 시점/)
-  await page.getByRole('link', { name: '사건과 근거 살펴보기' }).click()
+  await page.locator(`a[href="#/issues/${chips.id}"]`).filter({ hasText: '사건과 근거 살펴보기' }).click()
   await expect(page).toHaveURL(new RegExp(`#\\/issues\\/${chips.id}$`))
   await expect(page.getByRole('heading', { name: chips.title, exact: true })).toBeVisible()
 })
@@ -243,7 +242,7 @@ test('global keyboard search supports focus, result selection, Escape and an emp
 
 test('browser back and forward restore the visited event and stock routes', async ({ page }) => {
   await openWorkspace(page, '/issues')
-  await page.locator('.event-row').getByRole('link', { name: hormuz.title, exact: true }).click()
+  await page.locator(`.event-row a[href="#/issues/${hormuz.id}"]`).click()
   await expect(page).toHaveURL(new RegExp(`#\\/issues\\/${hormuz.id}$`))
   await page.getByRole('link', { name: '종목 연결 근거 보기' }).click()
   await expect(page).toHaveURL(new RegExp(`#\\/issues\\/${hormuz.id}\\/stocks$`))
@@ -278,7 +277,7 @@ test.describe('compact workspace', () => {
     await navigation.getByRole('link', { name: '이슈 탐색', exact: true }).click()
     await expect(page.getByRole('heading', { name: '사건을 탐색하세요' })).toBeVisible()
     await expectNoHorizontalOverflow(page)
-    await page.locator('.event-row').getByRole('link', { name: hormuz.title, exact: true }).click()
+    await page.locator('.event-row').getByRole('link', { name: hormuz.title, exact: true }).first().click()
     await expect(page.getByRole('heading', { name: hormuz.title, exact: true })).toBeVisible()
     await expectNoHorizontalOverflow(page)
     await page.getByRole('tab', { name: /^근거 문서/ }).click()
@@ -287,9 +286,9 @@ test.describe('compact workspace', () => {
     await navigation.getByRole('link', { name: '종목 탐색', exact: true }).click()
     await expect(page.locator('.st-stock-row')).toHaveCount(stocks.length)
     await expectNoHorizontalOverflow(page)
-    await page.getByRole('textbox', { name: '종목 검색', exact: true }).fill('한화')
+    await page.getByRole('textbox', { name: '종목 검색', exact: true }).fill('NVDA')
     await page.locator('.st-stock-identity').click()
-    await expect(page.getByRole('heading', { name: '한화에어로스페이스', exact: true })).toBeVisible()
+    await expect(page.getByRole('heading', { name: '엔비디아', exact: true })).toBeVisible()
     await expectNoHorizontalOverflow(page)
     await navigation.getByRole('link', { name: /^보관함/ }).click()
     await expect(page.getByRole('heading', { name: '관심의 흐름을 이어가세요' })).toBeVisible()

@@ -1,5 +1,26 @@
 # 프론트엔드 검증 기록
 
+## 2026-09-10 — 실제 Wikipedia 기반 연간 목데이터
+
+대상: WP-78. Windows · Node.js · Playwright Chromium. [데이터 구성과 파이프라인 차이](../../docs/frontend/MOCK_HISTORY.md)를 함께 참고한다.
+
+| 검사 | 결과 | 범위 |
+| --- | --- | --- |
+| 출처 갱신 스크립트 | 완료 | 공개 MediaWiki API로 요청 제목 298개의 정규 문서 ID·원문 URL·최초 리비전 확인, Nasdaq-100 증권 102개와 구성표 리비전 보관 |
+| `npm.cmd run test:data` | 15개 통과 | 고유 클러스터 문서 287개, 월별 리포트 468개, 375일의 클러스터 리포트 9,698개. 문서 생성일·동일 날짜 수치·합계·리포트·종목·저장 연결 검사 |
+| `npm.cmd run test:contract` | 통과 | 기존 계약 fixture 867개, 날짜별 지도 375개, 500노드·1,000간선 스트레스 fixture |
+| `npm.cmd run test:e2e` | 34개 통과 | 연간 슬라이더 양끝·연도 경계·날짜 선택, 과거 지도 → 리포트 → 종목, 모든 주제·대표 월·102개 종목 상세, 기존 화면 회귀 |
+| `npm.cmd run test:api` | 11개 통과 | HTTP 응답 가로채기, 페이지네이션·지연 응답·오류·재시도·대규모 지도 검사. 라이브 백엔드 검증 아님 |
+| `npm.cmd run lint` | 통과, 경고 0개 | 최종 모바일 배치 변경 포함 |
+| 변경 소스 Prettier 검사 | 통과 | 전체 `format:check`에는 이번에 수정하지 않은 기존 파일 45개의 형식 경고가 남아 있음 |
+| `npm.cmd run build` | 통과 | mock 클라이언트 95.78 kB, gzip 28.02 kB. 기존 온보딩 906.33 kB 청크 경고 유지 |
+
+1440px 데스크톱 전체/선택 화면과 390px 모바일 전체/선택 화면을 캡처해 확인했다. 모바일 36개 클러스터를 5열로 배치하고 선택한 묶음을 확대한다. 가로 넘침과 지도 아래 상세 패널 위치는 자동 검사했다. 캡처는 `test-results/pulse-desktop.png`, `pulse-desktop-selected.png`, `pulse-mobile.png`, `pulse-mobile-selected.png`이며 이후 테스트 실행 시 초기화될 수 있다. 전체 접근성 감사·실기기 GPU·Safari/Firefox는 이번 검증 범위에 없다.
+
+목 모드 검증은 포트 5184, API 모드는 5175를 사용했다. Windows에서 검사 종료 뒤 Vite 정리가 대기 상태로 남아, 이번 실행의 PID와 명령줄을 확인한 후 해당 Vite만 종료하고 각 테스트의 종료 코드 0을 회수했다. 기존 개발 서버 5174는 유지했다.
+
+실제 Wikipedia 본문·편집 기록·조회수·주가·자동 클러스터링 결과를 수집한 검사가 아니다. 문서 식별자는 실제이며, 급증 수치·관계·리포트·가격은 합성이다. 현재 Nasdaq-100 목록을 과거 전체 기간에도 고정 적용했다.
+
 ## 2026-09-09 — 펄스맵 시간 탐색·문서 그래프
 
 대상: WP-37, WP-71, WP-72, WP-73. Windows · Node.js · Playwright Chromium에서 검증했다. 범위는 프론트·합성 mock·HTTP 계약이며, 실제 Spring API와 파이프라인 연결은 WP-74/75의 후속 작업이다. [구현·계약 설명](../../docs/frontend/PULSE_MAP.md)을 함께 참고한다.

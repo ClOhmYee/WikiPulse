@@ -25,16 +25,20 @@ export default function PulseMap({
     media.addEventListener("change", update);
     return () => media.removeEventListener("change", update);
   }, []);
-  const width = compact ? scene.cellSize * 2 : scene.width;
+  const compactColumns = Math.max(
+    2,
+    Math.ceil(Math.sqrt(scene.totalSlots * 0.65)),
+  );
+  const width = compact ? scene.cellSize * compactColumns : scene.width;
   const height = compact
-    ? Math.max(2, Math.ceil(scene.totalSlots / 2)) * scene.cellSize
+    ? Math.max(2, Math.ceil(scene.totalSlots / compactColumns)) * scene.cellSize
     : scene.height;
   const displayClusters = scene.clusters.map((v) =>
     compact
       ? {
           ...v,
-          x: ((v.slot % 2) + 0.5) * scene.cellSize,
-          y: (Math.floor(v.slot / 2) + 0.5) * scene.cellSize,
+          x: ((v.slot % compactColumns) + 0.5) * scene.cellSize,
+          y: (Math.floor(v.slot / compactColumns) + 0.5) * scene.cellSize,
         }
       : v,
   );
@@ -42,16 +46,32 @@ export default function PulseMap({
   const selectedX = selected?.x,
     selectedY = selected?.y;
   useEffect(() => {
-    if (selectedX !== undefined)
+    if (selectedX !== undefined) {
+      const focusZoom = Math.max(
+        2,
+        Math.min(
+          10,
+          Math.min(width, height) / (scene.cellSize * (compact ? 1.25 : 1.8)),
+        ),
+      );
       setCamera({
-        zoom: 2,
-        x: width / 2 - selectedX * 2,
-        y: height / 2 - selectedY * 2,
+        zoom: focusZoom,
+        x: width / 2 - selectedX * focusZoom,
+        y: height / 2 - selectedY * focusZoom,
       });
-  }, [selectedKey, selectedX, selectedY, width, height]);
+    }
+  }, [
+    selectedKey,
+    selectedX,
+    selectedY,
+    width,
+    height,
+    scene.cellSize,
+    compact,
+  ]);
   function zoomTo(next) {
     setCamera((old) => {
-      const zoom = Math.max(0.6, Math.min(4, next)),
+      const zoom = Math.max(0.6, Math.min(12, next)),
         factor = zoom / old.zoom;
       return {
         zoom,
@@ -331,7 +351,7 @@ export default function PulseMap({
           <button
             className="wp-icon-button"
             aria-label="지도 확대"
-            disabled={camera.zoom >= 4}
+            disabled={camera.zoom >= 12}
             onClick={() => zoomTo(camera.zoom + 0.5)}
           >
             <Plus size={17} />
