@@ -214,7 +214,7 @@ RAM 16 GB에서 Kafka + Spark + HDFS 데몬을 올리면 Spark executor 몫은 8
 - [ ] 토론방 — 실시간(WebSocket) 필수인지, 모더레이션
 - [ ] GDELT·리플레이 덤프 보존 기간 — 디스크 307 GB × 2, GDELT 1년 zip 100~230 GB
 - [ ] 2노드 RAM 배분 — 서비스 박스에 DataNode·Worker를 얹을 때 Spring·PG와 나누는 기준
-- [ ] 매칭 정확도 정답셋 — 기업 문서(IBM 07-14, PayPal 08-28)뿐 아니라 사건 문서 최소 1건 (Hurricane Milton 2024-10-10 후보)
+- [x] ~~매칭 정확도 정답셋~~ — **확정 (2026-09-10, WP-39).** 사건형 3(Milton·CrowdStrike·2023 은행위기) + 기업형 2(IBM 실적 경고·PayPal 인수 무산) = 5건, 정답 20종목에 근거 기사를 달았다. 등급(§6.3) 채점 결과 CrowdStrike·IBM은 정답이 등급1(교집합)에서 다 잡히고 등급3(임베딩 단독)엔 정답이 0개 — §6.3 우선순위가 실측으로 확인됐다. 자세한 결과·GDELT 방식의 한계는 `ai/matching-goldset/RESULT.md`
 - [ ] 면책 문구 법적 검토
 
 ## 11. 근거 수치 (실측)
@@ -228,6 +228,7 @@ RAM 16 GB에서 Kafka + Spark + HDFS 데몬을 올리면 Spark executor 몫은 8
 | GDELT lift, Iran | I=`iran` 35% → 석유 메이저 0.5 / I=`iran ∧ ENV_OIL` 6% → Chevron 3.6 · Exxon 2.6 | 2026-09-07 |
 | 임베딩 vs GDELT 후보 교집합 | 풀 S&P 500, 이슈=위키 intro. **`text-embedding-3-small`(GATEWAY)**: Milton K=10/20/30 → 1/1/3개, Iran+Hormuz → 2/4/5개, Jaccard ≤0.11. 로컬 MiniLM도 같은 범위(0/1/3, 1/3/3). 임베딩 Top-20에 NEE·Home Depot·Lennar·Eaton·Generac(정답)과 Monster Beverage·Intel·Nike(노이즈)가 섞임, 코사인 0.17~0.30. GDELT Top-20은 NEE·Duke·Generac·Mosaic·Progressive·Allstate·United·Disney — 정답 밀도 높음 | 2026-09-07 |
 | 이슈 대표 텍스트 방식 비교 | 클러스터 3건(Milton·Hormuz·Nvidia) × 종목 32개(정답 20 + 노이즈 12). 대표문서 도입부 / 제목+요약 나열 / LLM 요약 / 문서수 적응 나열의 정답 평균순위가 각각 10.6·10.5·11.0·10.5(Milton), 6.6·7.8·6.9·7.8(Hormuz), 4.0·5.0·3.3·4.0(Nvidia)로 **사실상 동률**. LLM 요약은 한국어로 생성 시 정답 평균 코사인 0.160 → 0.081로 반토막, 단일 문서에서 거부 응답이 그대로 임베딩됨. 정답-노이즈 분리도는 사건형 +0.05~0.15 / 기업형 +0.26 — 임베딩 단독이 사건형에 약하다는 §6 전제와 일치 | 2026-09-08 |
+| 매칭 정답셋 등급 채점 | 5사례(사건형 3+기업형 2) K=10. CrowdStrike 등급1 정답 3/3(노이즈57%)·등급3 정답 0. IBM 등급1 정답 2/2(노이즈75%)·등급2에서 MU(이슈 본문엔 없는 인과 후보) 발견. Milton·2023은행위기는 GDELT 제목-그렙 근사가 "회사=사건 당사자"가 아닌 사례에서 신호 0(방법론 한계, 실제 파이프라인의 GKG 기관명 추출과 다름) | 2026-09-10 |
 | 위키 링크 그래프 → 상장기업 | Hormuz 1,358 이웃 중 0 · Milton 3 · Iran 4 · Nvidia 507(목록 문서 노이즈) | 2026-09-04 |
 | Wikidata 티커 | `wdt:P249` 40건 / `p:P414 → pq:P249` 15,875건 / NYSE+NASDAQ 3,905 | 2026-09-04 |
 | Wikimedia 덤프 | pageview_complete 일 user 677 MB bz2 · mediawiki_history enwiki 월 520~585 MB · clickstream enwiki 월 471 MB | 2026-09-04 |
