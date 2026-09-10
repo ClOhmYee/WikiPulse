@@ -6,11 +6,13 @@
 #   docker compose up -d postgres kafka        # 인프라만 (백엔드·파이썬 로컬 개발)
 #   docker compose up -d                        # 전체 스택
 #   docker compose --profile pipeline up -d     # 파이프라인(producer·spark)까지
+#   docker compose --profile gdelt up -d        # GDELT 수집(HDFS namenode·datanode)까지
 #   docker compose down                         # 정지
 #   docker compose down -v                      # 정지 + 데이터 삭제(스키마 재적재)
 #
-# EC2 실물 구축(WP-26·-29)과 별개다. 이건 개발용이라 전부 단일
-# 인스턴스·복제 1이고 운영 구성과 다르다.
+# EC2 실물 구축(WP-26·-29·-28)과 별개다. 이건 개발용이라 전부 단일
+# 인스턴스·복제 1이고 운영 구성과 다르다. HDFS 도 개발용 단일 datanode 라
+# 2노드·복제 2 인 EC2 구성(WP-28)과 다르다.
 
 name: wikipulse
 
@@ -132,7 +134,95 @@ services:
         --conf spark.jars.ivy=/tmp/ivy
         streaming/edit_windows.py
 
+  # ------------------------------------------------------- GDELT 수집 (선택)
+  # 개발용 단일노드 HDFS. GDELT GKG 원본을 여기에 적재해 WebHDFS 싱크를
+  # 로컬에서 실제로 검증한다 (WP-32). EC2 실물(-28)은 2노드·복제 2.
+  #
+  # 공식 apache/hadoop 이미지는 env 로 하둡 설정 파일을 만든다.
+  # `CORE-SITE.XML_<속성>` -> core-site.xml, `HDFS-SITE.XML_<속성>` -> hdfs-site.xml.
+  #
+  # WebHDFS 쓰기는 namenode(9870)가 클라이언트를 datanode 호스트로 리다이렉트한다.
+  # gdelt-producer 를 compose 네트워크 안에서 돌리면 `hdfs-datanode` 가 그대로
+  # 해석돼 매끄럽다. 호스트에서 직접 돌리면 그 호스트명을 못 찾는다 — README 참고.
+  hdfs-namenode:
+    image: apache/hadoop:3.4.1
+    container_name: wikipulse-hdfs-namenode
+    hostname: hdfs-namenode
+    profiles: ["gdelt"]
+    command: ["hdfs", "namenode"]
+    ports:
+      - "9870:9870"   # NameNode Web UI / WebHDFS 진입점
+    environment:
+      CORE-SITE.XML_fs.defaultFS: hdfs://hdfs-namenode:8020
+      HDFS-SITE.XML_dfs.replication: "1"
+      HDFS-SITE.XML_dfs.namenode.name.dir: file:///data/name
+      HDFS-SITE.XML_dfs.webhdfs.enabled: "true"
+      # 이미지 starter.sh 가 이 디렉터리가 "없을" 때만 자동 포맷한다.
+      # 그래서 볼륨은 name.dir(/data/name)이 아니라 그 부모(/data)에 건다 —
+      # name.dir 자체에 걸면 디렉터리가 늘 존재해 포맷이 영영 안 돈다.
+      # /data 는 starter.sh 가 chmod o+rwx 해줘 hadoop 유저가 쓸 수 있다.
+      ENSURE_NAMENODE_DIR: /data/name
+    volumes:
+      - hdfs-namenode:/data
+    healthcheck:
+      # 세이프모드가 풀려야(단일 datanode 가 블록 보고를 마쳐야) 쓰기가 된다.
+      # 그 전까지는 unhealthy 로 두어 producer 의 depends_on 이 기다리게 한다.
+      test: ["CMD-SHELL", "hdfs dfsadmin -safemode get | grep -q 'Safe mode is OFF'"]
+      interval: 10s
+      timeout: 10s
+      retries: 20
+      start_period: 40s
+
+  hdfs-datanode:
+    image: apache/hadoop:3.4.1
+    container_name: wikipulse-hdfs-datanode
+    hostname: hdfs-datanode
+    profiles: ["gdelt"]
+    command: ["hdfs", "datanode"]
+    depends_on:
+      - hdfs-namenode
+    environment:
+      CORE-SITE.XML_fs.defaultFS: hdfs://hdfs-namenode:8020
+      HDFS-SITE.XML_dfs.replication: "1"
+      HDFS-SITE.XML_dfs.datanode.data.dir: file:///data/dfs
+      HDFS-SITE.XML_dfs.webhdfs.enabled: "true"
+    volumes:
+      - hdfs-datanode:/data
+
+  # GDELT GKG 15분 폴링 -> HDFS 적재 producer (WP-32).
+  # 파이프라인 이미지(requests 포함)를 재사용하고 gdelt 소스는 마운트한다
+  # (spark 가 streaming 을 마운트하는 것과 같은 패턴 — 코드 바꿔도 재빌드 불필요).
+  # compose 네트워크 안에서 돌아 WebHDFS 의 datanode 리다이렉트(hdfs-datanode)가
+  # 그대로 해석된다. namenode 가 healthy(세이프모드 OFF)가 된 뒤 시작한다.
+  gdelt-producer:
+    build:
+      context: ./data-pipeline
+    container_name: wikipulse-gdelt-producer
+    profiles: ["gdelt"]
+    depends_on:
+      hdfs-namenode:
+        condition: service_healthy
+    environment:
+      GDELT_SINK: webhdfs
+      WEBHDFS_URL: http://hdfs-namenode:9870
+      WEBHDFS_USER: hadoop
+      HDFS_BASE_PATH: /gdelt/gkg
+      GDELT_SELFHEAL_HOURS: ${GDELT_SELFHEAL_HOURS:-6}
+      GDELT_GAPS_PATH: /app/gdelt-data/gaps.json
+      CONTACT_EMAIL: ${CONTACT_EMAIL:-}
+    volumes:
+      # 소스는 읽기 전용 마운트(코드 바꿔도 재빌드 불필요).
+      - ./data-pipeline/gdelt:/app/gdelt:ro
+      # 결손 기록(gaps.json)은 named 볼륨에 둔다 — down/재생성 후에도 유지되고,
+      # 필요하면 Spark 컨테이너가 같은 볼륨을 마운트해 읽을 수 있다. (영속화가
+      # 목적이면 이후 HDFS 로 옮기는 것도 대안 — gdelt/README 참고.)
+      - gdelt-gaps:/app/gdelt-data
+    command: ["python", "-m", "gdelt.producer"]
+
 volumes:
   postgres-data:
   kafka-data:
   spark-checkpoint:
+  hdfs-namenode:
+  hdfs-datanode:
+  gdelt-gaps:
