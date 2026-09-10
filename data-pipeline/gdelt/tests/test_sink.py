@@ -149,3 +149,27 @@ def test_webhdfs_write_rename_거부시_예외():
     sink = WebHdfsSink("http://hdfs-namenode:9870", "/gdelt/gkg", session=sess)
     with pytest.raises(WebHdfsError):
         sink.write(REL, b"x")
+
+
+def _webhdfs_write_with_rename_response(rename_resp):
+    sess = FakeSession(
+        put_responses=[
+            FakeResponse(307, headers={"Location": "http://dn/x"}),
+            FakeResponse(201),
+            rename_resp,
+        ]
+    )
+    sink = WebHdfsSink("http://hdfs-namenode:9870", "/gdelt/gkg", session=sess)
+    sink.write(REL, b"x")
+
+
+def test_webhdfs_rename_200이어도_json파싱_실패면_예외():
+    # 프록시 빈 본문·HTML 등 200 인데 계약이 아닌 응답을 성공으로 넘기지 않는다
+    # (fail-open 금지). json_body 없음 -> json() 이 예외.
+    with pytest.raises(WebHdfsError):
+        _webhdfs_write_with_rename_response(FakeResponse(200))
+
+
+def test_webhdfs_rename_boolean_누락이면_예외():
+    with pytest.raises(WebHdfsError):
+        _webhdfs_write_with_rename_response(FakeResponse(200, json_body={}))

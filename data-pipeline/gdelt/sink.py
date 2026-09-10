@@ -156,9 +156,15 @@ class WebHdfsSink:
         if resp.status_code != 200:
             resp.raise_for_status()
             raise WebHdfsError(f"RENAME 실패: {resp.status_code}")
+        # 200 이어도 계약({"boolean": true})을 확인한다. 프록시의 빈 본문·HTML·
+        # 깨진 JSON 을 성공으로 넘기면(fail-open) 최종 파일이 없는데 write 가
+        # 성공하고, backfill 이 written 으로 집계해 조용히 누락된다(.part 만 남음).
+        # 그래서 boolean is True 일 때만 성공으로 본다(fail-closed).
         try:
-            ok = bool(resp.json().get("boolean", False))
-        except Exception:
-            ok = True  # 본문 파싱 불가 시 상태코드만 신뢰
-        if not ok:
-            raise WebHdfsError(f"RENAME 거부됨: {src_relpath} -> {dst_relpath}")
+            body = resp.json()
+        except Exception as exc:
+            raise WebHdfsError(f"RENAME 응답 본문 파싱 실패: {exc}")
+        if body.get("boolean") is not True:
+            raise WebHdfsError(
+                f"RENAME 확인 실패(boolean != true): {src_relpath} -> {dst_relpath}"
+            )
