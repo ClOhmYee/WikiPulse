@@ -68,8 +68,8 @@ def rows_from_history(ticker: str, df) -> list[db.PriceRow]:
         if close is None:
             continue
         trade_date = index.date() if hasattr(index, "date") else index
-        volume = row.get("Volume")
-        volume = None if volume is None or (isinstance(volume, float) and math.isnan(volume)) else int(volume)
+        vol = _clean(row.get("Volume"))  # None·NaN·inf 를 걸러 int(inf) 예외를 막는다
+        volume = None if vol is None else int(vol)
         rows.append(
             (
                 ticker,
@@ -112,6 +112,27 @@ def fetch_history(ticker: str, start: dt.date | None, period: str):
     raise last_err
 
 
+def select_targets(
+    master: list[str], tickers: list[str] | None, limit: int | None
+) -> tuple[list[str], list[str]]:
+    """적재 대상과 '마스터에 없어 제외된 티커'를 가른다. 순수 함수(테스트용).
+
+    tickers 가 None 이면 마스터 전체. 지정하면 마스터에 실재하는 것만 남긴다 —
+    stock_price.ticker 는 stock 을 FK 참조하므로, 없는 심볼을 넣으면 save 가 FK
+    위반으로 run 전체를 중단시킨다. 여기서 미리 걸러 그 경로를 막는다.
+    """
+    if tickers is None:
+        targets = list(master)
+        unknown: list[str] = []
+    else:
+        mset = set(master)
+        targets = [t for t in tickers if t in mset]
+        unknown = [t for t in tickers if t not in mset]
+    if limit is not None:
+        targets = targets[:limit]
+    return targets, unknown
+
+
 def run(
     *,
     period: str = DEFAULT_PERIOD,
@@ -120,15 +141,18 @@ def run(
     dry_run: bool = False,
 ) -> int:
     with psycopg.connect(db.dsn()) as conn:
-        targets = tickers or db.all_tickers(conn)
+        targets, unknown = select_targets(db.all_tickers(conn), tickers, limit)
+        if unknown:
+            print(
+                f"마스터에 없어 제외: {', '.join(unknown)}",
+                file=sys.stderr,
+            )
         if not targets:
             print(
                 "적재할 종목이 없다. 마스터(universe)를 먼저 돌렸는가?",
                 file=sys.stderr,
             )
             return 0
-        if limit is not None:
-            targets = targets[:limit]
 
         last = db.last_trade_dates(conn)
         print(
@@ -139,7 +163,7 @@ def run(
 
         buffer: list[db.PriceRow] = []
         inserted = 0
-        ok = empty = failed = 0
+        ok = empty = failed = empty_new = 0
 
         for i, ticker in enumerate(targets, 1):
             start = last.get(ticker)  # 있으면 그 날부터(포함), 없으면 None → period 전체
@@ -152,12 +176,24 @@ def run(
 
             rows = rows_from_history(ticker, df)
             if rows:
-                buffer.extend(rows)
                 ok += 1
+                if not dry_run:
+                    buffer.extend(rows)
             else:
                 empty += 1
+                if start is None:
+                    # 초기 적재(마지막 trade_date 없음)인데 0행이면 정상적인 "신규
+                    # 거래일 없음"이 아니라 스로틀·차단·상장전 의심 신호다. 증분의
+                    # 정상 빈 결과와 구분해 센다 (조용한 대량 실패 감지).
+                    empty_new += 1
+                    print(
+                        f"  주의 {ticker}: 초기 적재인데 0행 (차단·상장전 의심)",
+                        file=sys.stderr,
+                    )
 
-            if not dry_run and (len(buffer) >= CHUNK or i == len(targets)):
+            # 청크가 차면 저장. 마지막 flush 는 루프 밖에서 무조건 한 번 더 한다 —
+            # 마지막 종목이 실패로 continue 하거나 빈 결과여도 잔여 버퍼가 남지 않게.
+            if not dry_run and len(buffer) >= CHUNK:
                 inserted += db.save_prices(conn, buffer)
                 buffer.clear()
 
@@ -168,6 +204,11 @@ def run(
                 )
             time.sleep(THROTTLE)
 
+        # 루프 후 무조건 최종 flush (P1-A). continue·빈결과로 끝나도 여기서 저장된다.
+        if not dry_run and buffer:
+            inserted += db.save_prices(conn, buffer)
+            buffer.clear()
+
         if dry_run:
             print(
                 f"[dry-run] 저장 안 함. 받은 종목 {ok} · 데이터없음 {empty} · 실패 {failed}",
@@ -175,9 +216,19 @@ def run(
             )
         else:
             print(
-                f"주가 적재 완료: 종목 {ok} · 데이터없음 {empty} · 실패 {failed} · 행 {inserted}",
+                f"주가 적재 완료: 종목 {ok} · 데이터없음 {empty}"
+                f"(초기적재 빈결과 {empty_new}) · 실패 {failed} · 행 {inserted}",
                 file=sys.stderr,
             )
+
+    # 한 종목도 못 받았는데 대상은 있었다면 프로바이더 전면 장애로 본다 — 종료코드를
+    # 1 로 올려 cron 이 성공(0)으로 오인하지 않게 한다 (P1-B, 조용한 대량 실패).
+    if not dry_run and ok == 0 and len(targets) > 0:
+        print(
+            "한 종목도 적재하지 못했다 — 야후 차단·네트워크 장애 의심. 종료코드 1.",
+            file=sys.stderr,
+        )
+        return 1
     return 0
 
 

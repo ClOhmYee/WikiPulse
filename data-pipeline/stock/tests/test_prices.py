@@ -10,7 +10,7 @@ import datetime as dt
 
 import pandas as pd
 
-from stock.prices import _clean, rows_from_history
+from stock.prices import _clean, rows_from_history, select_targets
 
 
 def _df(records: list[dict]) -> pd.DataFrame:
@@ -88,3 +88,38 @@ def test_clean_filters_nan_and_inf():
     assert _clean(float("inf")) is None
     assert _clean(3) == 3.0
     assert isinstance(_clean(3), float)
+
+
+def test_volume_inf_becomes_none():
+    # int(inf) 는 OverflowError 라 그 종목 처리가 죽는다 — _clean 으로 막았는지 확인.
+    df = _df([{"date": "2026-09-05", "Open": 10, "High": 11, "Low": 9, "Close": 10.5, "Volume": float("inf")}])
+    (row,) = rows_from_history("T", df)
+    assert row[6] is None
+
+
+# --- select_targets (P2-D: --tickers FK 가드) ---
+
+MASTER = ["AAPL", "MSFT", "NVDA"]
+
+
+def test_select_targets_none_is_full_master():
+    targets, unknown = select_targets(MASTER, None, None)
+    assert targets == MASTER
+    assert unknown == []
+
+
+def test_select_targets_filters_unknown():
+    targets, unknown = select_targets(MASTER, ["AAPL", "FAKE", "NVDA"], None)
+    assert targets == ["AAPL", "NVDA"]  # 마스터에 있는 것만, 순서 보존
+    assert unknown == ["FAKE"]
+
+
+def test_select_targets_all_unknown_gives_empty():
+    targets, unknown = select_targets(MASTER, ["FAKE", "NOPE"], None)
+    assert targets == []
+    assert unknown == ["FAKE", "NOPE"]
+
+
+def test_select_targets_limit_applies():
+    targets, _ = select_targets(MASTER, None, 2)
+    assert targets == ["AAPL", "MSFT"]
