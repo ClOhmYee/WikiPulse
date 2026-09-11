@@ -28,7 +28,10 @@ LIVE 와 리플레이가 같은 build_snapshot 을 쓴다. LIVE 는 현재 시�
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
+from pathlib import Path
+
+from batch.clickstream import NeighborRef, neighbors_for, read_shards
 
 from .snapshot import Neighbor, Seed
 
@@ -38,9 +41,47 @@ def load_seeds_from_spike(conn, snapshot_ts: datetime, source: str) -> list[Seed
     raise NotImplementedError("spike 조회 어댑터는 소스 배선 시 구현한다")
 
 
-def load_clickstream_neighbors(seed: Seed, month: str) -> list[Neighbor]:
-    """Clickstream 월별 덤프에서 씨드의 이웃을 읽는다. (미구현 — 인제스트 선행)"""
-    raise NotImplementedError("Clickstream 인제스트가 선행되어야 한다")
+def load_clickstream_neighbors(
+    shards_dir: str | Path, seeds: list[Seed]
+) -> dict[str, list[NeighborRef]]:
+    """적재본(WP-81)에서 각 씨드의 Clickstream 이웃을 한 번의 순회로 읽는다.
+
+    씨드 제목 → 이웃(title, n, directed) 목록. 반환값의 title/n/directed 를
+    build_clusters 가 page_id·생성일과 합쳐 cluster.snapshot.Neighbor 로 만든다
+    (아래 build_neighbor_inputs). 덤프가 수백만 행이라 씨드별 재스캔은 하지 않는다.
+    """
+    seed_titles = {s.title for s in seeds}
+    return neighbors_for(read_shards(shards_dir), seed_titles)
+
+
+def build_neighbor_inputs(
+    refs: list[NeighborRef],
+    month: str,
+    page_of_title: dict[str, tuple[int, str]],
+    created_of_page: dict[int, date | None],
+) -> list[Neighbor]:
+    """NeighborRef 를 cluster.snapshot.Neighbor 로 변환한다.
+
+    page_of_title: 이웃 제목 → (page_id, wiki)   — wiki_page 조회(미배선)
+    created_of_page: page_id → 생성일             — mediawiki_history(WP-56, 미배선)
+    두 소스가 아직 없으면 그 이웃은 건너뛴다(생성일 미상은 게이트가 어차피 탈락시킨다).
+    """
+    out: list[Neighbor] = []
+    for ref in refs:
+        page = page_of_title.get(ref.title)
+        if page is None:
+            continue
+        page_id, wiki = page
+        out.append(Neighbor(
+            page_id=page_id,
+            wiki=wiki,
+            title=ref.title,
+            clickstream_n=ref.n,
+            clickstream_month=month,
+            created_at=created_of_page.get(page_id),
+            directed=ref.directed,
+        ))
+    return out
 
 
 def load_creation_dates(page_ids: list[int]) -> dict[int, object]:
