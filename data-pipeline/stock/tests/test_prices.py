@@ -10,7 +10,7 @@ import datetime as dt
 
 import pandas as pd
 
-from stock.prices import _clean, rows_from_history, select_targets
+from stock.prices import _clean, _yahoo_symbol, rows_from_history, select_targets
 
 
 def _df(records: list[dict]) -> pd.DataFrame:
@@ -123,3 +123,14 @@ def test_select_targets_all_unknown_gives_empty():
 def test_select_targets_limit_applies():
     targets, _ = select_targets(MASTER, None, 2)
     assert targets == ["AAPL", "MSFT"]
+
+
+# --- _yahoo_symbol (클래스주 . → -) ---
+
+def test_yahoo_symbol_converts_class_shares():
+    assert _yahoo_symbol("BRK.A") == "BRK-A"
+    assert _yahoo_symbol("BF.B") == "BF-B"
+
+
+def test_yahoo_symbol_leaves_plain_ticker():
+    assert _yahoo_symbol("AAPL") == "AAPL"

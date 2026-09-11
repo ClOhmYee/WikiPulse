@@ -50,6 +50,17 @@ THROTTLE = 0.15    # 종목 사이 간격(초). yfinance 를 몰아치지 않는
 CIRCUIT_BREAK = 25
 
 
+def _yahoo_symbol(ticker: str) -> str:
+    """마스터 티커를 Yahoo 심볼로. Yahoo 는 클래스주를 '-' 로 쓴다 (BRK.A → BRK-A).
+
+    마스터는 NASDAQ Trader 형식이라 '.' 를 쓴다. 이 변환을 안 하면 BRK.A·BF.B 같은
+    클래스주가 Yahoo 에서 조용히 0행이 된다 (2026-09-11 검증런에서 실측). 저장은
+    원래 마스터 티커로 하고(FK), Yahoo 호출만 변환한다. 워런트(.W)는 Yahoo 에
+    데이터가 없어 변환해도 빈 결과다 — 그건 형식 문제가 아니다.
+    """
+    return ticker.replace(".", "-")
+
+
 def _clean(value) -> float | None:
     """NaN·inf 를 None 으로. psycopg 가 NaN 을 그대로 넣으면 숫자 컬럼이 더럽다."""
     if value is None:
@@ -96,10 +107,11 @@ def fetch_history(ticker: str, start: dt.date | None, period: str):
     """
     import yfinance as yf
 
+    symbol = _yahoo_symbol(ticker)
     last_err: Exception | None = None
     for attempt in range(MAX_RETRIES):
         try:
-            t = yf.Ticker(ticker)
+            t = yf.Ticker(symbol)
             if start is not None:
                 df = t.history(
                     start=start.isoformat(), auto_adjust=False, actions=False
