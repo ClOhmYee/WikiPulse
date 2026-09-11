@@ -3,6 +3,8 @@ package io.wikipulse.backend.issue;
 import io.wikipulse.backend.common.ApiResponse;
 import io.wikipulse.backend.issue.dto.IssueCardResponse;
 import io.wikipulse.backend.issue.dto.IssueDetailResponse;
+import io.wikipulse.backend.issue.dto.pulse.PulseMap;
+import io.wikipulse.backend.issue.dto.pulse.SnapshotView;
 import io.wikipulse.backend.stock.dto.RelatedStockResponse;
 import java.time.Instant;
 import java.util.List;
@@ -24,9 +26,34 @@ import org.springframework.web.bind.annotation.RestController;
 public class IssueController {
 
     private final IssueService service;
+    private final PulseMapService pulseMapService;
 
-    public IssueController(IssueService service) {
+    public IssueController(IssueService service, PulseMapService pulseMapService) {
         this.service = service;
+        this.pulseMapService = pulseMapService;
+    }
+
+    /** GET /api/v1/issues/snapshots?from=&to=&source= — 선택 가능한 완료 스냅샷 목록. */
+    @GetMapping("/snapshots")
+    public ApiResponse<List<SnapshotView>> snapshots(
+            @RequestParam(required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant from,
+            @RequestParam(required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant to,
+            @RequestParam(required = false) String source) {
+        return pulseMapService.snapshots(from, to, source);
+    }
+
+    /**
+     * GET /api/v1/issues/map?snapshotTs=&source= — 한 스냅샷의 원자적 그래프.
+     * 시각 미지정이면 최신 LIVE(없으면 최신 replay). 없는 시점은 404.
+     */
+    @GetMapping("/map")
+    public ApiResponse<PulseMap.Data> map(
+            @RequestParam(required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant snapshotTs,
+            @RequestParam(required = false) String source) {
+        return pulseMapService.map(snapshotTs, source);
     }
 
     /** GET /api/v1/issues?snapshotTs=&status=&source=&offset=&limit= */
