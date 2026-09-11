@@ -4,7 +4,7 @@
 아래 소스 어댑터는 선행 이슈의 산출물이 붙은 뒤 채운다.
 
     - 씨드: spike 테이블(WP-38 detector 출력) 조회
-    - Clickstream 이웃: 월별 덤프 적재(아직 이슈 없음 — Clickstream 인제스트 선행 필요)
+    - Clickstream 이웃: 월별 덤프 적재본(WP-81) — load_clickstream_neighbors 로 조회
     - 문서 생성일: mediawiki_history page_creation_timestamp(WP-56 적재본)
     - Wikidata 관계: wbgetentities/SPARQL(선택 — 없으면 clickstream 간선만)
     - 이전 first_detected_at: issue_cluster 에서 issue_key 별 min(snapshot_ts)
@@ -14,9 +14,17 @@ LIVE 와 리플레이가 같은 build_snapshot 을 쓴다. LIVE 는 현재 시�
 
     # LIVE 예시(의사코드)
     seeds = load_seeds_from_spike(conn, snapshot_ts)
-    neighbors = {s.page_id: load_clickstream_neighbors(s, month_before(snapshot_ts))
-                 for s in seeds}
-    created = load_creation_dates([n.page_id for ns in neighbors.values() for n in ns])
+    # 적재본을 한 번 훑어 씨드 제목 -> [NeighborRef] 를 얻는다.
+    refs_by_title = load_clickstream_neighbors(shards_dir, seeds)
+    # 이웃 제목을 page_id·생성일로 해석한다(wiki_page, mediawiki_history — 아직 미배선).
+    page_of_title = load_pages_by_title(conn, all_titles(refs_by_title))
+    created = load_creation_dates([pid for pid, _ in page_of_title.values()])
+    # NeighborRef -> Neighbor 로 바꾸고 build_snapshot 계약대로 seed.page_id 로 재키한다.
+    neighbors = {
+        s.page_id: build_neighbor_inputs(
+            refs_by_title.get(s.title, []), month, page_of_title, created)
+        for s in seeds
+    }
     prior = load_prior_first_detected(conn, source="live")
     snap = build_snapshot(snapshot_ts, "live", seeds, neighbors,
                           prior_first_detected=prior)
