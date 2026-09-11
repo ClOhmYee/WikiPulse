@@ -36,7 +36,7 @@
 | Spark | **3.5.3** (`apache/spark:3.5.3-python3`) | 같은 파일 (저장소) — **로컬 개발용** |
 | Kafka 커넥터 | `spark-sql-kafka-0-10_2.12:3.5.3` | 같은 파일 |
 | Producer | `confluent-kafka==2.6.1`, `requests==2.32.3` | `data-pipeline/requirements.txt` |
-| 종목 적재 | `yfinance==0.2.51`, `psycopg[binary]==3.3.5` | `data-pipeline/stock/requirements.txt` |
+| 종목 적재 | `yfinance==1.7.0`, `psycopg[binary]==3.3.5` | `data-pipeline/stock/requirements.txt` — ~~0.2.51~~ → 1.7.0 (2026-09-10, WP-64). 0.2.51 은 `.history()` 가 현재 Yahoo 에서 깨져 전 종목 0행이 조용히 나온다. 1.7.0 은 `.history()`·`.info` 둘 다 실측 정상 |
 | 스키마 테스트 | `pgserver==0.1.4` | `db/requirements-test.txt` — Docker 없이 PG를 띄운다 |
 | 테스트 | `pytest==8.3.4` (전 모듈 동일) | |
 

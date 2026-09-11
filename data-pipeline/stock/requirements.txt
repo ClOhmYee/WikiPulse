@@ -1,6 +1,9 @@
-# 종목 마스터·설명·임베딩 적재용
+# 종목 마스터·설명·임베딩·주가 적재용
 requests==2.32.3
-yfinance==0.2.51
+# ⚠️ 0.2.51 은 .history() 가 현재 Yahoo 에서 깨진다 — 크럼 단계에서
+# "Expecting value: line 1 column 1" 로 전 종목 0행이 조용히 나온다 (2026-09-10 실측).
+# 1.7.0 은 .history() 와 summaries.py 의 .info 경로 둘 다 정상 (2026-09-10 확인).
+yfinance==1.7.0
 psycopg[binary]==3.3.5
 
 # 개발용 (파싱 테스트만. pgserver 는 db/ 에서 온다)
