@@ -198,3 +198,53 @@ peak 31 MB 는 491 MB bz2 를 줄 단위로 흘리는 설계가 실제로 동작
 - **조회수 덤프** — `pageview_complete` 는 별도 스토리
 - **Spark 에서의 실제 읽기** — shard 개수가 태스크 수에 어떻게 걸리는지는
   `WP-58` 에서 잰다. 위 로컬 수치만으로 shard 기본값을 확정하지 않는다
+
+---
+
+# Clickstream 적재 (WP-81)
+
+`clickstream.py` + `clickstream_ingest.py`. Wikipedia Clickstream 월별 덤프를 받아
+문서 간 이동(`link`)만 `(prev, curr, n)` 로 적재한다. 펄스맵 클러스터링
+(`data-pipeline/cluster`, `WP-75`)의 이웃 후보·간선·가중치 원천이다.
+
+```
+clickstream-{wiki}-{YYYY-MM}.tsv.gz  ──▶  (prev, curr, n) JSONL.gz (shard)
+  prev curr type n · 헤더 없음            link 행만 · 제목 공백 정규화
+  n>=10 (덤프 자체 하한)                   clickstream_ingest.py
+```
+
+## 실행
+
+```bash
+export CONTACT_EMAIL=you@example.com      # 새로 받을 때만 필요
+
+python -m batch.clickstream_ingest --wiki enwiki --month 2025-06            # 적재
+python -m batch.clickstream_ingest --wiki enwiki --month 2025-06 --dry-run  # 건수만
+```
+
+출력: `data/clickstream/{wiki}/{month}/part-*.jsonl.gz` + `_manifest.json`.
+다운로드·shard·매니페스트 장치는 위 mediawiki 적재와 같은 것을 재사용한다
+(`ShardWriter`·`download`·재실행 skip).
+
+## 무엇을 남기나
+
+- **`type='link'` 만.** `external`(검색·외부 유입)·`other`(같은 문서)는 문서 간
+  이동이 아니라 이웃 신호가 아니다.
+- **문턱 없음.** 위키미디어가 이미 `n>=10` 만 공개한다. `n` 은 `cluster_member.weight`
+  로만 쓰고, 클러스터 포함 여부는 생성일 창이 정한다 (명세 §3.2 4번·§10 폐기 절).
+- **제목 정규화.** Clickstream 밑줄 → `wiki_page` 공백. ⚠️ 두 소스 canonical 통일은
+  `WP-79` — 확정되면 `canonical_title` 을 그 규칙으로 교체한다.
+
+## 이웃 조회
+
+`clickstream.neighbors_for(rows, seeds)` 가 덤프를 **한 번** 훑어 씨드별 이웃을 모은다.
+씨드가 `prev` 면 나가는 이웃, `curr` 면 들어오는 이웃이고, 양방향은 `n` 을 합쳐
+동시 열람 강도 하나로 본다. `cluster/driver.py` 가 이걸 읽어
+`cluster.snapshot.Neighbor`(+ `wiki_page` page_id·`mediawiki_history` 생성일)로 만든다.
+
+## 아직 안 한 것
+
+- **실 덤프 적재·HDFS** — `WP-28` 완료 후. enwiki 월 ~471 MB gz, 실측 크기·
+  건수는 그때 명세 §11 에 적는다. 위 오프라인 스모크(가짜 덤프)로 CLI 흐름만 검증했다.
+- **page_id·생성일 조인** — `driver.build_neighbor_inputs` 가 자리는 잡았고, `wiki_page`
+  조회와 `mediawiki_history`(`WP-56`) 생성일 어댑터가 붙으면 실데이터로 흐른다.
