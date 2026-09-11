@@ -118,3 +118,25 @@ LIMIT :k;
 - **`page_edit_window` 보존 기간** — 정해지면 파티션·삭제 잡이 붙는다
 - **마이그레이션 도구** — 파일명만 Flyway 규칙(`V1__`)을 따랐다. Flyway/Liquibase 확정은 백엔드 합의 사항
 - **인증 컬럼** — `member.password_hash`가 nullable인 건 OAuth 가능성 때문이다. 정해지면 NOT NULL이 되거나 `oauth_provider` 컬럼이 붙는다
+
+## 6. V2 — 펄스맵 스냅샷·문서 그래프 (WP-75)
+
+`db/migrations/V2__pulse_snapshot_graph.sql`. 버블맵 조회 API(WP-74)가 한 스냅샷을 통째로 그리도록, V1 위에 **additive**로 추가한다(기존 컬럼·제약 불변, V1 적재본과 리플레이 재계산 호환). 컬럼 정본은 여전히 `db/migrations`다.
+
+**컬럼 추가**
+
+| 테이블 | 추가 컬럼 | 이유 |
+| --- | --- | --- |
+| `issue_cluster` | `issue_key`, `first_detected_at`, `hot`, `category` | 시점 간 추적(`id`는 스냅샷마다 새로 생김)·최초 감지·급증·뉴스형 카테고리 |
+| `cluster_member` | `edit_count`, `views`, `edit_baseline`, `view_baseline`, `spike_score`, `size_score`(0~1), `completeness`, `window_start/end` | 시점별 지표를 **고정** 저장 — 리플레이가 현재 `spike`를 다시 읽으면 과거·현재가 섞인다 |
+
+**테이블 추가**
+
+| 테이블 | PK | 밖으로 나가는 FK | 비고 |
+| --- | --- | --- | --- |
+| `cluster_edge` | `id` | `cluster_id`, `source_page_id`, `target_page_id` | 문서 쌍 간선. `clickstream`(실선·방향·이동량·기준 월) / `wikidata`(점선·관계·관측 시각). membership weight 로 만들지 않는다 |
+| `cluster_snapshot` | `(source, snapshot_ts)` | — | 완료된 스냅샷 레지스트리(0개 포함). `score_version`·`new_window_hours` 보관 |
+
+- 삭제 전파: `issue_cluster` 삭제 시 `cluster_edge`도 CASCADE. `cluster_snapshot`은 `issue_cluster`와 FK로 엮지 않는다(0개 스냅샷이 있어야 해서 논리적 연결만).
+- `cluster_edge` 양 끝이 같은 클러스터 멤버여야 한다는 제약은 복합키라 DB로 직접 못 걸어 생산 파이프라인(`data-pipeline/cluster`)이 보장한다.
+- Wikidata 는 클러스터링 게이트에서 빠졌지만(§3.2 4번) 화면 근거 간선으로는 그린다 — `cluster_edge.kind='wikidata'`.

@@ -13,45 +13,12 @@ pgvector 확장도 들어 있다.
 
 from __future__ import annotations
 
-import pathlib
-import tempfile
-
 import pytest
 
-pgserver = pytest.importorskip("pgserver", reason="pgserver 미설치 — 이 파일은 건너뛴다")
+# 공용 픽스처(conn·rollback)와 헬퍼(q·x)는 conftest.py 가 제공한다.
+from conftest import q, x
+
 psycopg = pytest.importorskip("psycopg", reason="psycopg 미설치 — 이 파일은 건너뛴다")
-
-MIGRATION = pathlib.Path(__file__).resolve().parents[1] / "migrations" / "V1__initial_schema.sql"
-
-
-@pytest.fixture(scope="module")
-def conn():
-    data_dir = tempfile.mkdtemp(prefix="wikipulse-pg-test-")
-    server = pgserver.get_server(data_dir)
-    server.psql(MIGRATION.read_text(encoding="utf-8"))
-
-    connection = psycopg.connect(server.get_uri())
-    connection.autocommit = False
-    yield connection
-    connection.close()
-
-
-@pytest.fixture(autouse=True)
-def rollback(conn):
-    """테스트마다 롤백해서 서로 간섭하지 않게 한다."""
-    yield
-    conn.rollback()
-
-
-def q(conn, sql, *args):
-    with conn.cursor() as cur:
-        cur.execute(sql, args or None)
-        return cur.fetchall() if cur.description else None
-
-
-def x(conn, sql, *args):
-    with conn.cursor() as cur:
-        cur.execute(sql, args or None)
 
 
 # ---------------------------------------------------------------- 구조
@@ -72,6 +39,8 @@ def test_명세에_적힌_테이블이_모두_있다(conn):
         "wiki_page", "page_edit_window", "page_view_hourly", "page_baseline", "spike",
         # 이슈
         "issue_cluster", "cluster_member", "issue_report",
+        # 펄스맵 스냅샷·그래프 (V2)
+        "cluster_edge", "cluster_snapshot",
         # 종목
         "stock", "stock_price", "cluster_stock", "cluster_org_mention",
         # 사용자
