@@ -1,6 +1,7 @@
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { useEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
+import { createFieldPointer } from "./fieldPointer";
 
 const COLORS = {
   dim: new THREE.Color("#365d69"),
@@ -584,6 +585,8 @@ function Field({ scrollMotionRef, isMobile, reducedMotion }) {
   const lineRef = useRef(null);
   const previousPointer = useRef({ x: 0, y: 0 });
   const pointerVelocity = useRef(0);
+  const fieldPointer = useMemo(() => createFieldPointer(), []);
+  const localPointer = useMemo(() => new THREE.Vector3(), []);
   const renderedPositions = useRef(data.positions[0].slice());
   const currentColors = useRef(data.colors[0].slice());
   const glowCount = Math.ceil(data.clusterCount / 4);
@@ -656,8 +659,6 @@ function Field({ scrollMotionRef, isMobile, reducedMotion }) {
     const fromColors = data.colors[fromScene];
     const toColors = data.colors[toScene];
     const elapsed = state.clock.getElapsedTime();
-    const pointerX = state.pointer.x * state.viewport.width * 0.5;
-    const pointerY = state.pointer.y * state.viewport.height * 0.5;
     const interactionRadius = isMobile ? 1.45 : 2.75;
     const interpolateSceneValue = (values) =>
       THREE.MathUtils.lerp(values[fromScene], values[toScene], segmentProgress);
@@ -700,6 +701,89 @@ function Field({ scrollMotionRef, isMobile, reducedMotion }) {
     previousPointer.current.y = state.pointer.y;
 
     const scrollEnergy = reducedMotion ? 0 : scrollMotionRef.current.velocity;
+    if (groupRef.current) {
+      const pointerEnergy =
+        reducedMotion || coarsePointer ? 0 : pointerVelocity.current;
+      const trackOrbitY = trackArrival * 0.62 + trackBurst * 0.18;
+      const trackOrbitX = trackBurst * -0.16;
+      const targetRotationY = reducedMotion
+        ? 0
+        : heroInfluence *
+          (state.pointer.x * 0.5 * (1.15 + pointerEnergy * 0.8) +
+            0.028 +
+            trackOrbitY);
+      const targetRotationX = reducedMotion
+        ? 0
+        : heroInfluence *
+          (-state.pointer.y * 0.5 * (0.85 + pointerEnergy * 0.6) + trackOrbitX);
+      const targetRotationZ = reducedMotion
+        ? 0
+        : heroInfluence * trackBurst * 0.08;
+      const heroPositionX = isFPlusCompact ? 0 : 1.7;
+      const targetPositionX = heroPositionX * heroInfluence;
+      const targetPositionY = reducedMotion
+        ? 0
+        : heroInfluence * Math.sin(elapsed * 0.8) * 0.07;
+      const heroScale = isFPlusCompact ? 0.55 : 1;
+      const transitionScale = reducedMotion
+        ? 1
+        : 1 + trackBurst * (0.1 + scrollEnergy * 0.05);
+      const settledScale = isMobile ? 0.46 : 0.54;
+      const targetScale = THREE.MathUtils.lerp(
+        settledScale,
+        heroScale * transitionScale,
+        heroInfluence,
+      );
+
+      if (reducedMotion) {
+        groupRef.current.rotation.set(0, 0, 0);
+        groupRef.current.position.set(targetPositionX, 0, 0);
+        groupRef.current.scale.setScalar(targetScale);
+      } else {
+        groupRef.current.rotation.y = THREE.MathUtils.damp(
+          groupRef.current.rotation.y,
+          targetRotationY,
+          3.08,
+          delta,
+        );
+        groupRef.current.rotation.x = THREE.MathUtils.damp(
+          groupRef.current.rotation.x,
+          targetRotationX,
+          3.08,
+          delta,
+        );
+        groupRef.current.rotation.z = THREE.MathUtils.damp(
+          groupRef.current.rotation.z,
+          targetRotationZ,
+          3.08,
+          delta,
+        );
+        groupRef.current.position.x = THREE.MathUtils.damp(
+          groupRef.current.position.x,
+          targetPositionX,
+          3.7,
+          delta,
+        );
+        groupRef.current.position.y = THREE.MathUtils.damp(
+          groupRef.current.position.y,
+          targetPositionY,
+          3.7,
+          delta,
+        );
+        const nextScale = THREE.MathUtils.damp(
+          groupRef.current.scale.x,
+          targetScale,
+          3.7,
+          delta,
+        );
+        groupRef.current.scale.setScalar(nextScale);
+      }
+    }
+
+    // Use the same transform for hit coordinates and this frame's render.
+    groupRef.current.updateWorldMatrix(true, false);
+    fieldPointer.update(state.pointer, state.camera, groupRef.current.matrixWorld);
+
     const rawMatchPriceColorProgress = THREE.MathUtils.clamp(
       (rawSegmentProgress - MATCH_PRICE_COLOR_START) /
         (1 - MATCH_PRICE_COLOR_START),
@@ -804,9 +888,12 @@ function Field({ scrollMotionRef, isMobile, reducedMotion }) {
           0.36 *
           burstEnergy;
       }
-      const pointerDeltaX = renderedX - pointerX;
-      const pointerDeltaY = renderedY - pointerY;
-      const pointerDistance = Math.hypot(pointerDeltaX, pointerDeltaY);
+      const hasPointer = fieldPointer.atDepth(renderedZ, localPointer);
+      const pointerDeltaX = renderedX - localPointer.x;
+      const pointerDeltaY = renderedY - localPointer.y;
+      const pointerDistance = hasPointer
+        ? Math.hypot(pointerDeltaX, pointerDeltaY)
+        : Infinity;
 
       if (interactionStrength > 0 && pointerDistance < interactionRadius) {
         const safeDistance = Math.max(pointerDistance, 0.001);
@@ -933,85 +1020,6 @@ function Field({ scrollMotionRef, isMobile, reducedMotion }) {
     lines.geometry.setDrawRange(0, edgeCursor * 2);
     lines.geometry.attributes.position.needsUpdate = true;
     lines.geometry.attributes.color.needsUpdate = true;
-
-    if (groupRef.current) {
-      const pointerEnergy =
-        reducedMotion || coarsePointer ? 0 : pointerVelocity.current;
-      const trackOrbitY = trackArrival * 0.62 + trackBurst * 0.18;
-      const trackOrbitX = trackBurst * -0.16;
-      const targetRotationY = reducedMotion
-        ? 0
-        : heroInfluence *
-          (state.pointer.x * 0.5 * (1.15 + pointerEnergy * 0.8) +
-            0.028 +
-            trackOrbitY);
-      const targetRotationX = reducedMotion
-        ? 0
-        : heroInfluence *
-          (-state.pointer.y * 0.5 * (0.85 + pointerEnergy * 0.6) + trackOrbitX);
-      const targetRotationZ = reducedMotion
-        ? 0
-        : heroInfluence * trackBurst * 0.08;
-      const heroPositionX = isFPlusCompact ? 0 : 1.7;
-      const targetPositionX = heroPositionX * heroInfluence;
-      const targetPositionY = reducedMotion
-        ? 0
-        : heroInfluence * Math.sin(elapsed * 0.8) * 0.07;
-      const heroScale = isFPlusCompact ? 0.55 : 1;
-      const transitionScale = reducedMotion
-        ? 1
-        : 1 + trackBurst * (0.1 + scrollEnergy * 0.05);
-      const settledScale = isMobile ? 0.46 : 0.54;
-      const targetScale = THREE.MathUtils.lerp(
-        settledScale,
-        heroScale * transitionScale,
-        heroInfluence,
-      );
-
-      if (reducedMotion) {
-        groupRef.current.rotation.set(0, 0, 0);
-        groupRef.current.position.set(targetPositionX, 0, 0);
-        groupRef.current.scale.setScalar(targetScale);
-      } else {
-        groupRef.current.rotation.y = THREE.MathUtils.damp(
-          groupRef.current.rotation.y,
-          targetRotationY,
-          3.08,
-          delta,
-        );
-        groupRef.current.rotation.x = THREE.MathUtils.damp(
-          groupRef.current.rotation.x,
-          targetRotationX,
-          3.08,
-          delta,
-        );
-        groupRef.current.rotation.z = THREE.MathUtils.damp(
-          groupRef.current.rotation.z,
-          targetRotationZ,
-          3.08,
-          delta,
-        );
-        groupRef.current.position.x = THREE.MathUtils.damp(
-          groupRef.current.position.x,
-          targetPositionX,
-          3.7,
-          delta,
-        );
-        groupRef.current.position.y = THREE.MathUtils.damp(
-          groupRef.current.position.y,
-          targetPositionY,
-          3.7,
-          delta,
-        );
-        const nextScale = THREE.MathUtils.damp(
-          groupRef.current.scale.x,
-          targetScale,
-          3.7,
-          delta,
-        );
-        groupRef.current.scale.setScalar(nextScale);
-      }
-    }
   });
 
   return (
