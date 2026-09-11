@@ -71,16 +71,32 @@ def _clean(value) -> float | None:
     return f
 
 
+# stock_price 의 open/high/low/close 는 NUMERIC(14,4) — 반올림 절대값이 10^10 미만이라야
+# 저장된다. Yahoo 가 리버스 스플릿 등에서 조용히 뱉는 글리치 값(예: WHLR ~1,475억,
+# 2026-09-11 전수 백필에서 실측)이 이 범위를 넘어 save 를 통째로 터뜨렸다. 여기서
+# 범위 밖 값을 걸러 데이터 글리치가 적재 전체를 중단시키지 않게 한다.
+NUMERIC_MAX = 10**10
+
+
+def _price(value) -> float | None:
+    """가격 한 칸. None·NaN·inf 이거나 NUMERIC(14,4) 범위를 넘으면 None."""
+    v = _clean(value)
+    if v is None or abs(v) >= NUMERIC_MAX:
+        return None
+    return v
+
+
 def rows_from_history(ticker: str, df) -> list[db.PriceRow]:
     """yfinance history DataFrame 을 stock_price 행으로 바꾼다.
 
-    close 가 결측인 날은 버린다 (스키마 NOT NULL). volume 은 없으면 None.
-    네트워크 없이 테스트되는 순수 함수다.
+    close 가 결측이거나 범위를 벗어난 날은 버린다 (스키마 NOT NULL·NUMERIC(14,4)).
+    open/high/low 는 범위 밖이면 None(nullable)으로 두고 행은 남긴다. volume 은
+    없으면 None. 네트워크 없이 테스트되는 순수 함수다.
     """
     rows: list[db.PriceRow] = []
     for index, row in df.iterrows():
-        close = _clean(row.get("Close"))
-        if close is None:
+        close = _price(row.get("Close"))
+        if close is None:  # 결측 또는 글리치(범위 초과) → 이 날은 버린다
             continue
         trade_date = index.date() if hasattr(index, "date") else index
         vol = _clean(row.get("Volume"))  # None·NaN·inf 를 걸러 int(inf) 예외를 막는다
@@ -89,9 +105,9 @@ def rows_from_history(ticker: str, df) -> list[db.PriceRow]:
             (
                 ticker,
                 trade_date,
-                _clean(row.get("Open")),
-                _clean(row.get("High")),
-                _clean(row.get("Low")),
+                _price(row.get("Open")),
+                _price(row.get("High")),
+                _price(row.get("Low")),
                 close,
                 volume,
             )

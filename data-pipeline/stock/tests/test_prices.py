@@ -82,6 +82,27 @@ def test_empty_dataframe():
     assert rows_from_history("T", df) == []
 
 
+def test_out_of_range_close_row_dropped():
+    # NUMERIC(14,4) 범위 초과(글리치, 예: WHLR ~1,475억) close → 그 날 버린다.
+    df = _df(
+        [
+            {"date": "2026-09-04", "Open": 1, "High": 1, "Low": 1, "Close": 147532496896.0, "Volume": 100},
+            {"date": "2026-09-05", "Open": 1, "High": 1, "Low": 1, "Close": 10.5, "Volume": 100},
+        ]
+    )
+    rows = rows_from_history("WHLR", df)
+    assert len(rows) == 1
+    assert rows[0][1] == dt.date(2026, 9, 5)
+
+
+def test_out_of_range_ohl_becomes_none_row_kept():
+    # open/high/low 만 범위 초과면 None 으로 두고 행은 남긴다(close 가 정상이므로).
+    df = _df([{"date": "2026-09-05", "Open": 1e11, "High": 1e11, "Low": 9.0, "Close": 10.5, "Volume": 100}])
+    (row,) = rows_from_history("T", df)
+    assert row[2] is None and row[3] is None  # open, high
+    assert row[4] == 9.0 and row[5] == 10.5   # low, close
+
+
 def test_clean_filters_nan_and_inf():
     assert _clean(None) is None
     assert _clean(float("nan")) is None
