@@ -33,6 +33,9 @@ class IssueControllerTest {
     @MockitoBean
     IssueService service;
 
+    @MockitoBean
+    PulseMapService pulseMapService;
+
     @Test
     void 피드는_data_봉투와_pagination_meta로_준다() throws Exception {
         var card = new IssueCardResponse(42, "Strait of Hormuz tension", 8.4,
