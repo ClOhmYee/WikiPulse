@@ -43,7 +43,11 @@ DEFAULT_PERIOD = "5y"
 CHUNK = 200        # 이 행 수마다 DB 에 저장. 중간에 죽어도 여기까지는 남는다
 MAX_RETRIES = 4    # 종목당 최대 시도 횟수
 BASE_DELAY = 2.0   # 지수 백오프 기준(초): 2, 4, 8 ...
-THROTTLE = 0.15    # 종목 사이 간격(초). yfinance 를 몰아치지 않는다
+THROTTLE = 0.15    # 종목 사이 간격(초). yfinance 를 몰아치지 않는다. --throttle 로 조정
+# 서킷 브레이커: 연속으로 이만큼 "받지 못하면"(실패 또는 초기적재 0행) 야후가
+# 전면 차단한 것으로 보고 조기 중단한다. 차단 상태에서 5,100종목을 각 ~14초씩
+# 헛도는 것(P2-F)을 막는다. 증분의 정상 빈결과(start 있음)는 카운트하지 않는다.
+CIRCUIT_BREAK = 25
 
 
 def _clean(value) -> float | None:
@@ -139,6 +143,7 @@ def run(
     tickers: list[str] | None = None,
     limit: int | None = None,
     dry_run: bool = False,
+    throttle: float = THROTTLE,
 ) -> int:
     with psycopg.connect(db.dsn()) as conn:
         targets, unknown = select_targets(db.all_tickers(conn), tickers, limit)
@@ -161,9 +166,12 @@ def run(
             file=sys.stderr,
         )
 
+        attempted_new = sum(1 for t in targets if t not in last)
         buffer: list[db.PriceRow] = []
         inserted = 0
         ok = empty = failed = empty_new = 0
+        consecutive_bad = 0  # 서킷 브레이커: 연속으로 못 받은 횟수
+        tripped = False
 
         for i, ticker in enumerate(targets, 1):
             start = last.get(ticker)  # 있으면 그 날부터(포함), 없으면 None → period 전체
@@ -171,12 +179,18 @@ def run(
                 df = fetch_history(ticker, start, period)
             except Exception as exc:  # noqa: BLE001
                 failed += 1
+                consecutive_bad += 1
                 print(f"  건너뜀 {ticker}: {exc}", file=sys.stderr)
+                if consecutive_bad >= CIRCUIT_BREAK:
+                    tripped = True
+                    break
+                time.sleep(throttle)
                 continue
 
             rows = rows_from_history(ticker, df)
             if rows:
                 ok += 1
+                consecutive_bad = 0  # 하나라도 받으면 리셋
                 if not dry_run:
                     buffer.extend(rows)
             else:
@@ -186,10 +200,12 @@ def run(
                     # 거래일 없음"이 아니라 스로틀·차단·상장전 의심 신호다. 증분의
                     # 정상 빈 결과와 구분해 센다 (조용한 대량 실패 감지).
                     empty_new += 1
+                    consecutive_bad += 1
                     print(
                         f"  주의 {ticker}: 초기 적재인데 0행 (차단·상장전 의심)",
                         file=sys.stderr,
                     )
+                # 증분의 정상 빈결과(start 있음)는 서킷 브레이커에 카운트하지 않는다.
 
             # 청크가 차면 저장. 마지막 flush 는 루프 밖에서 무조건 한 번 더 한다 —
             # 마지막 종목이 실패로 continue 하거나 빈 결과여도 잔여 버퍼가 남지 않게.
@@ -202,7 +218,18 @@ def run(
                     f"  {i}/{len(targets)}  적재 {ok} · 신규데이터없음 {empty} · 실패 {failed} · 행 {inserted}",
                     file=sys.stderr,
                 )
-            time.sleep(THROTTLE)
+
+            if consecutive_bad >= CIRCUIT_BREAK:
+                tripped = True
+                break
+            time.sleep(throttle)
+
+        if tripped:
+            print(
+                f"서킷 브레이커: {consecutive_bad}종목 연속 실패 — 야후 전면 차단 의심. "
+                f"{i}/{len(targets)}에서 중단한다. throttle 을 올려(--throttle) 나중에 재실행하라.",
+                file=sys.stderr,
+            )
 
         # 루프 후 무조건 최종 flush (P1-A). continue·빈결과로 끝나도 여기서 저장된다.
         if not dry_run and buffer:
@@ -221,11 +248,20 @@ def run(
                 file=sys.stderr,
             )
 
-    # 한 종목도 못 받았는데 대상은 있었다면 프로바이더 전면 장애로 본다 — 종료코드를
-    # 1 로 올려 cron 이 성공(0)으로 오인하지 않게 한다 (P1-B, 조용한 대량 실패).
-    if not dry_run and ok == 0 and len(targets) > 0:
+    # 종료코드 1 조건 (P1-B, 조용한 대량 실패). cron 이 성공(0)으로 오인하면 안 되는
+    # 경우만 1 을 낸다:
+    #   - 서킷 브레이커가 걸렸다(야후 전면 차단), 또는
+    #   - 하드 실패가 있었는데 하나도 못 받았다, 또는
+    #   - 초기 적재 대상이 있었는데 그게 전부 0행이었다.
+    # ⚠️ 주말·휴장일 증분 실행은 정상적으로 ok==0(신규 거래일 없음)이다 — 이건
+    # 실패가 아니므로 0 을 낸다. start 있는 증분 빈결과는 위 조건에 안 걸린다.
+    if not dry_run and (
+        tripped
+        or (ok == 0 and failed > 0)
+        or (attempted_new > 0 and empty_new == attempted_new)
+    ):
         print(
-            "한 종목도 적재하지 못했다 — 야후 차단·네트워크 장애 의심. 종료코드 1.",
+            "대량 실패 의심(야후 차단·네트워크 장애). 종료코드 1.",
             file=sys.stderr,
         )
         return 1
@@ -247,6 +283,12 @@ def main() -> int:
     parser.add_argument(
         "--dry-run", action="store_true", help="DB 에 저장하지 않고 받기만"
     )
+    parser.add_argument(
+        "--throttle",
+        type=float,
+        default=THROTTLE,
+        help=f"종목 사이 간격(초). 야후에 차단당하면 올린다 (기본 {THROTTLE})",
+    )
     args = parser.parse_args()
 
     tickers = None
@@ -258,6 +300,7 @@ def main() -> int:
         tickers=tickers,
         limit=args.limit,
         dry_run=args.dry_run,
+        throttle=args.throttle,
     )
 
 
