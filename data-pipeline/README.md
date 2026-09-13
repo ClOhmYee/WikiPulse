@@ -118,6 +118,13 @@ docker compose run --rm spark
 `source` 는 리플레이 경로(`mediawiki_history` 덤프)가 붙을 자리다. 실시간과
 리플레이가 같은 형태로 들어와야 급증 탐지 로직을 한 벌만 짠다. 명세 §3.2.
 
+🔴 **`title` 은 공백형이 canonical 이다** (`Hurricane Milton`). 덤프는 밑줄형
+(`Hurricane_Milton`)으로 오는데, 그대로 두면 같은 문서가 `(wiki, title)` 두 개로
+갈라진다. historical baseline 조회에서 LIVE 제목이 miss 하면 **기존 문서가 신규
+문서로 잘못 판정**되는데 예외는 안 난다. 변환은 `producer/normalize.py` 의
+`canonical_title()` **한 곳**이다 — 경로마다 따로 구현하지 않는다.
+규칙·근거·비적용 항목은 그 함수 docstring 과 명세 §5.1 (WP-79).
+
 ## 원본 스키마에서 알게 된 것 (2026-09-08 실측)
 
 recentchange 이벤트를 실제로 받아 확인한 것들이다.

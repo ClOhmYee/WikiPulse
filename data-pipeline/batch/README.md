@@ -166,6 +166,8 @@ cd data-pipeline/batch
   skip 되어 계약이 깨져도 아무도 모른다
 - 컬럼이 78개가 아니면 멈추는지 — 위치가 하나만 밀려도 전부 틀린 값이 된다
 - 네임스페이스·제목·봇 판정이 **과거 값**으로 되는지
+- **덤프 밑줄 제목과 실시간 공백 제목이 같은 `(wiki, title)`·같은 파티션 키가
+  되는지** (WP-79). 갈라지면 baseline 조회가 조용히 miss 한다
 - 두 번 돌려도 이벤트가 늘지 않는지, 반쪽 출력이 완료본으로 안 보이는지
 - dry-run 이 파일을 안 만드는지, shard 가 이벤트를 잃지 않는지
 
@@ -232,8 +234,11 @@ python -m batch.clickstream_ingest --wiki enwiki --month 2025-06 --dry-run  # �
   이동이 아니라 이웃 신호가 아니다.
 - **문턱 없음.** 위키미디어가 이미 `n>=10` 만 공개한다. `n` 은 `cluster_member.weight`
   로만 쓰고, 클러스터 포함 여부는 생성일 창이 정한다 (명세 §3.2 4번·§10 폐기 절).
-- **제목 정규화.** Clickstream 밑줄 → `wiki_page` 공백. ⚠️ 두 소스 canonical 통일은
-  `WP-79` — 확정되면 `canonical_title` 을 그 규칙으로 교체한다.
+- **제목 정규화.** Clickstream 밑줄 → `wiki_page` 공백. ~~두 소스 canonical 통일은
+  `WP-79`~~ → **공백형으로 확정** (2026-09-13, 명세 §5.1). 지금 이 파일의
+  자체 `canonical_title` 도 결과는 같다(밑줄→공백). ⚠️ **공통 함수
+  (`producer/normalize.py`)로 통합하는 것은 아직 안 했다** — `batch/pageviews.py`
+  (WP-57) 적용까지 끝난 뒤 마지막에 정리한다.
 
 ## 이웃 조회
 
