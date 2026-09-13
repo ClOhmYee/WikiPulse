@@ -14,6 +14,9 @@ WP-56. `producer/normalize.py` 의 실시간 경로와 **같은 15필드**를 �
     - **타임스탬프가 초 정밀도다.** 표본 전부 `.0` 으로 끝난다. 실시간 경로는
       `meta.dt`(ms)를 쓰는데 덤프에는 그 정밀도가 아예 없다 — 리플레이 데이터는
       시간 해상도가 구조적으로 낮다. 윈도우 집계에는 영향 없다.
+    - **제목이 밑줄형이다.** `page_title_historical` 은 `Hurricane_Milton` 처럼 온다.
+      실시간(EventStreams)은 공백형이라 그대로 두면 같은 문서가 두 키로 갈라진다.
+      `canonical_title` 로 공백형에 맞춘다 — 규칙과 근거는 그 함수, 명세 §5.1.
     - **증분을 덤프가 직접 준다.** `revision_text_bytes_diff` 는 결측 0, 음수 정상.
       실시간처럼 new - old 를 계산하지 않는다.
 
@@ -33,7 +36,12 @@ from collections.abc import Sequence
 from datetime import datetime, timezone
 from typing import Any
 
-from producer.normalize import ARTICLE_NAMESPACE, EDIT_TYPES, SkipEvent
+from producer.normalize import (
+    ARTICLE_NAMESPACE,
+    EDIT_TYPES,
+    SkipEvent,
+    canonical_title,
+)
 
 from .schema import field
 
@@ -193,7 +201,9 @@ def normalize_dump(
         # 식별
         "wiki": wiki,
         "domain": domain_for(wiki),
-        "title": field(row, "page_title_historical"),
+        # 덤프는 밑줄형(`Hurricane_Milton`), 실시간은 공백형이다. 같은 문서가
+        # 다른 (wiki, title) 키로 갈라지지 않게 여기서 맞춘다 (WP-79).
+        "title": canonical_title(field(row, "page_title_historical")),
         # 편집 내용
         "event_type": event_type,
         "rev_id": revision_id,

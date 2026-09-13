@@ -15,6 +15,8 @@
       categorize는 문서 편집이 아니라 분류 자동 갱신이라 반드시 걸러야 한다.
     - meta.dt 는 ms 정밀도 ISO8601, 최상위 timestamp 는 초 단위. dt 를 쓴다.
     - type=new 는 length.old / revision.old 가 없다.
+    - **title 이 공백형이다.** 75초 표본 2,496건에 밑줄 제목이 0건이었다
+      (2026-09-13 재측정). 덤프는 밑줄형이라 canonical_title 로 맞춘다 — §5.1.
 """
 
 from __future__ import annotations
@@ -122,7 +124,8 @@ def normalize(raw: dict[str, Any], *, wikis: frozenset[str] | None = None) -> di
         # 식별
         "wiki": wiki,
         "domain": meta.get("domain"),
-        "title": raw["title"],
+        # canonical 형태로 맞춰 내보낸다 — 덤프 경로와 같은 키가 되게 (WP-79)
+        "title": canonical_title(raw["title"]),
         # 편집 내용
         "event_type": event_type,
         "rev_id": revision.get("new"),
@@ -150,5 +153,8 @@ def partition_key(event: dict[str, Any]) -> bytes:
     Spark 윈도우 집계가 문서 단위라, 한 문서의 이벤트가 여러 파티션에 흩어지면
     순서 보장이 깨진다. page_id 가 스트림에 없어서 (wiki, title) 을 키로 쓴다.
     문서 이동(rename)이 일어나면 키가 바뀌지만 MVP 범위에서는 감수한다.
+
+    title 은 normalize() 가 이미 canonical 로 맞춰 놓은 값이다. 덤프 경로도 같은
+    함수를 쓰므로 같은 문서는 실시간·리플레이가 같은 파티션으로 간다.
     """
     return f"{event['wiki']}:{event['title']}".encode("utf-8")

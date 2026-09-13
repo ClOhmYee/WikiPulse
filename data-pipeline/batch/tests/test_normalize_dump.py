@@ -140,7 +140,8 @@ def test_다른_네임스페이스는_거른다():
 def test_네임스페이스는_현재값이_아니라_과거값으로_판정한다():
     """삭제된 문서는 page_namespace 가 비어 있다. 현재값을 보면 절반이 사라진다."""
     event = normalize_dump(row(page_namespace_historical="0", page_namespace=""))
-    assert event["title"] == "Main_Page"
+    # 덤프 입력은 `Main_Page`(밑줄), 출력은 canonical 공백형이다 — WP-79.
+    assert event["title"] == "Main Page"
 
 
 def test_제목도_과거값을_쓴다():
