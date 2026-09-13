@@ -26,8 +26,8 @@ from batch.normalize_dump import (
     meta_id_for,
     normalize_dump,
 )
-from batch.schema import COLUMN_COUNT, COLUMNS, SchemaMismatch, split_row
-from producer.normalize import SkipEvent, normalize
+from batch.schema import COLUMN_COUNT, COLUMNS, SchemaMismatch, field, split_row
+from producer.normalize import SkipEvent, normalize, partition_key
 
 # --- 표본 행 만들기 -----------------------------------------------------
 
@@ -293,3 +293,76 @@ def test_파생_필드에_None_을_넣지_않는다():
     """domain·meta_id 는 기본값 None 을 쓰지 않기로 했다 (2026-09-08 결정)."""
     event = normalize_dump(row())
     assert event["domain"] and event["meta_id"]
+
+
+# --- canonical title: 두 경로가 같은 키를 내는가 (WP-79) ----------
+#
+# 이 파일이 이 검사를 두는 이유: 실시간·덤프 두 경로를 한 자리에서 import 하는
+# 유일한 테스트 파일이다. 여기가 깨지면 같은 문서가 (wiki, title) 두 개로 갈라진 것이다.
+#
+# 왜 중요한가 — historical baseline 조회는 title 로 과거 기록을 찾는다. LIVE 제목이
+# miss 하면 "기준선이 없다" = "처음 보는 문서" 로 읽혀 기존 문서가 신규로 잘못
+# 판정된다. 예외는 안 나고 판정만 틀린다.
+
+
+def live_titled(title: str) -> dict:
+    """제목만 바꾼 실시간 edit_event."""
+    return normalize(
+        {
+            "meta": {
+                "domain": "en.wikipedia.org",
+                "id": "b18aa477-0c22-4475-9416-23367a447b2b",
+                "dt": "2026-09-08T00:24:20.990Z",
+            },
+            "type": "edit",
+            "namespace": 0,
+            "title": title,
+            "user": "Alice",
+            "bot": False,
+            "minor": False,
+            "length": {"old": 1000, "new": 1100},
+            "revision": {"old": 10, "new": 11},
+            "wiki": "enwiki",
+        }
+    )
+
+
+def dump_titled(title: str) -> dict:
+    """제목만 바꾼 덤프 edit_event. 덤프는 enwiki 행으로 만든다."""
+    return normalize_dump(row(wiki_db="enwiki", page_title_historical=title))
+
+
+def test_밑줄_제목과_공백_제목이_같은_키가_된다():
+    """핵심 회귀. HDFS historical 은 `Hurricane_Milton`, LIVE 는 `Hurricane Milton`."""
+    # 전제: 덤프 입력이 정말 밑줄형이어야 이 테스트가 의미 있다.
+    # (픽스처가 이미 공백형이면 아무것도 검증하지 않는 테스트가 된다)
+    raw = row(wiki_db="enwiki", page_title_historical="Hurricane_Milton")
+    assert field(raw, "page_title_historical") == "Hurricane_Milton"
+
+    dump = dump_titled("Hurricane_Milton")
+    live = live_titled("Hurricane Milton")
+
+    assert dump["title"] == live["title"] == "Hurricane Milton"
+    assert (dump["wiki"], dump["title"]) == (live["wiki"], live["title"])
+
+
+def test_두_경로가_같은_파티션_키를_낸다():
+    """Kafka 파티션이 갈라지면 윈도우 집계가 문서 단위로 안 묶인다."""
+    dump = partition_key(dump_titled("Strait_of_Hormuz"))
+    live = partition_key(live_titled("Strait of Hormuz"))
+    assert dump == live == b"enwiki:Strait of Hormuz"
+
+
+@pytest.mark.parametrize(
+    "dump_title",
+    ["Hurricane_Milton", "Hurricane__Milton", "_Hurricane_Milton_"],
+)
+def test_덤프_제목_표기가_흔들려도_같은_키로_모인다(dump_title):
+    """연속·앞뒤 밑줄은 덤프 표본에서 본 적 없다. 봐도 키가 안 갈라지게 방어한다."""
+    assert dump_titled(dump_title)["title"] == "Hurricane Milton"
+
+
+def test_다른_문서는_여전히_다른_키다():
+    """정규화가 서로 다른 문서를 뭉쳐버리지 않는지. 반대 방향 확인."""
+    assert dump_titled("Hurricane_Milton")["title"] != dump_titled("Hurricane_Helene")["title"]
+
