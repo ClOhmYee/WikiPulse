@@ -47,10 +47,7 @@ def convert(lines, writer: ShardWriter | None, counts: Counts) -> None:
         if not line.strip():
             continue
         counts.read += 1
-        try:
-            row = parse_row(line)
-        except SchemaMismatch:
-            raise
+        row = parse_row(line)          # SchemaMismatch 는 main 이 잡는다
         if row is None:
             counts.skip("type")          # external·other
             continue
@@ -83,18 +80,23 @@ def main(argv: list[str] | None = None) -> int:
     dump = download(dump_url(args.month, args.wiki), cache)
 
     counts = Counts()
-    if args.dry_run:
-        convert(read_lines(dump), None, counts)
-        print(f"[dry-run] read={counts.read:,} link={counts.written:,} "
-              f"skipped={counts.skipped}")
-        return 0
+    try:
+        if args.dry_run:
+            convert(read_lines(dump), None, counts)
+            print(f"[dry-run] read={counts.read:,} link={counts.written:,} "
+                  f"skipped={counts.skipped}")
+            return 0
 
-    # 형제 .partial 디렉터리에 다 쓴 뒤 통째로 rename — 반쪽 출력이 완료본으로 안 보이게.
-    staging = out_dir.with_name(out_dir.name + ".partial")
-    if staging.exists():
-        shutil.rmtree(staging)
-    with ShardWriter(staging, args.shard_records) as writer:
-        convert(read_lines(dump), writer, counts)
+        # 형제 .partial 디렉터리에 다 쓴 뒤 통째로 rename — 반쪽 출력이 완료본으로 안 보이게.
+        staging = out_dir.with_name(out_dir.name + ".partial")
+        if staging.exists():
+            shutil.rmtree(staging)
+        with ShardWriter(staging, args.shard_records) as writer:
+            convert(read_lines(dump), writer, counts)
+    except SchemaMismatch as mismatch:
+        # 위치가 하나만 밀려도 전부 틀린 값이 된다. 조용히 넘기지 않는다.
+        print(f"스키마 불일치 — 덤프 컬럼이 바뀌었을 수 있다: {mismatch}", file=sys.stderr)
+        return 2
     if out_dir.exists():
         shutil.rmtree(out_dir)
     staging.rename(out_dir)

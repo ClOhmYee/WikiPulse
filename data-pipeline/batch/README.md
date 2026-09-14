@@ -154,7 +154,7 @@ shard 개수가 곧 Spark 태스크 수의 상한인데, **실제 Spark 실행 �
 
 ```bash
 cd data-pipeline/batch
-../.venv/Scripts/python.exe -m pytest       # 49개, 네트워크 없이
+../.venv/Scripts/python.exe -m pytest       # 62개 (mediawiki + clickstream), 네트워크 없이
 ```
 
 확인하는 것:
