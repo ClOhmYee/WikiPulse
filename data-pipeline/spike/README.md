@@ -49,7 +49,7 @@ baseline이 없다 — z를 못 낸다. 신규 문서는 절대 편집수로만 
 
 ```bash
 cd data-pipeline/spike
-python -m pytest        # 45개. 35개는 Spark·DB 없이, 5개는 실 PostgreSQL, 5개는 Spark 대조
+python -m pytest        # 56개. 46개는 Spark·DB 없이, 5개는 실 PostgreSQL, 5개는 Spark 대조
                         # (PG·Spark 가 없으면 그 10개는 skip 된다)
 ```
 
@@ -142,15 +142,42 @@ upsert 가 필요해 `baseline_sink.py` 가 맡는다. 거기 `SINK` 는 진단 
 옮긴다. `hour_of_week` 가 0 대신 159 가 되는데 **에러가 안 난다.** 타임스탬프는
 tz-aware 로 넘긴다.
 
-## 아직 안 한 것
+## 리플레이 회귀 검증 (WP-61)
 
-- 🔴 **결측 실측 미수집.** 실데이터에서 `edit_stddev` NULL 비율·`sample_days<7` 비율을
-  재서 백엔드·프론트에 넘기는 건 실덤프(`-56`·`-57`) 적재 뒤다. `--dry-run` 이 두 수치를
-  찍는다. `frontend/docs/API_SPEC.md` L108 결측 계약의 입력이 이 값이다.
-- **실규모 Spark 실행** — 위 대조는 로컬 `local[1]` 소표본이다. Spark 2노드
-  (`WP-27`)·HDFS(`-28`)에서의 태스크 수·소요 시간은 그때 잰다.
+편집 적재본(WP-56)을 1시간 윈도우로 재생하고, 각 시점마다 **그 이전 28일**로
+기준선을 만들어 `detect()` 를 돌린다. baseline 파라미터를 바꿀 때마다 다시 돌린다.
 
-### 실 PostgreSQL 검증 (2026-09-14 통과)
+```bash
+python -m spike.replay --edits ./out/enwiki/2025-06 \
+    --title Strait_of_Hormuz --control Association_football
+```
+
+`--title` 은 잡혀야 하는 문서, `--control` 은 오탐이 나면 안 되는 문서다. 제목은 덤프
+원형(밑줄)으로 준다. 로직 자체는 `tests/test_replay.py` 가 합성 데이터로 고정한다(실덤프 불필요).
+
+### 🔴 2026-09-14 실덤프 결과 — 확정 임계가 흔들렸다
+
+WP-38 의 임계는 **조회수**로 정한 것이고 편집 분포로는 검증된 적이 없었다.
+실덤프로 재생하니 양방향으로 틀렸다. **임계는 확정 자산이라 고치지 않았다 — 이슈로 올렸다.**
+
+| 대상 | 윈도우 | 총 편집 | 시간 최대 | 급증 판정 |
+| --- | --- | --- | --- | --- |
+| `Hurricane_Milton` (2024-10, 신규) | 272 | 1,405 | 44 | **48건 ✅** |
+| `Strait_of_Hormuz` (2025-06, 기존) | 38 | 71 | 8 | **0건 (미탐)** |
+| `2025_Iran_threat_..._closure` | 8 | 17 | 6 | **0건 (미탐)** |
+| `Association_football` (대조군) | 8 | — | 12 | **1건 (오탐)** |
+
+- **Milton 최초 탐지** `2024-10-06T19:00Z` 편집 10·편집자 7·`is_new_page=True`·score 26.46
+- **Hormuz 미탐** — 사건 정점에도 시간당 최대 8편집으로 `MIN_ABSOLUTE_EDITS=10` 미달.
+  같은 구간 조회수는 **746배** 폭증했다. 사건 유형에 따라 편집·조회 반응이 자릿수로 다르다
+- **대조군 오탐** — 편집 12지만 **편집자 1명**(1인 연속 편집). `editor_count` 는 판정에
+  안 쓰이고 점수 계산에만 들어간다
+- ⚠️ **`hour_of_week` 슬롯은 주 1회라 28일 창 관측이 최대 4개** → `sample_days ≤ 4 <
+  MIN_BASELINE_SAMPLE_DAYS=7` → 기존 문서도 항상 `is_thin` → **z 경로가 한 번도 실행되지 않는다**
+
+→ **WP-84**(sample_days 구조적 미달)·**WP-85**(임계 재검토). 근거는 명세 §11.
+
+## 실 PostgreSQL 검증 (2026-09-14 통과)
 
 upsert 멱등성은 실 DB 로 확인했다 — `tests/test_baseline_sink_pg.py`.
 
@@ -162,6 +189,15 @@ cd data-pipeline && .venv/Scripts/python.exe -m pytest spike/tests/test_baseline
 확인한 것: 같은 입력 두 번에 행이 안 늘어남 · 재적재가 값과 `updated_at` 을 갱신 ·
 `wiki_page` 자연키 중복 없음 · 슬롯당 한 행 · `view_ewma` 결측이 NULL 로 들어감.
 `DATABASE_URL` 이 있으면 그걸 쓰고, 없으면 compose 기본 DSN 으로 붙는다. 못 붙으면 skip.
+
+## 아직 안 한 것
+
+- 🔴 **결측 실측 미수집.** 실데이터에서 `edit_stddev` NULL 비율·`sample_days<7` 비율을
+  재서 백엔드·프론트에 넘기는 건 실덤프(`-56`·`-57`) 적재 뒤다. `--dry-run` 이 두 수치를
+  찍는다. `frontend/docs/API_SPEC.md` L108 결측 계약의 입력이 이 값이다.
+- **실규모 Spark 실행** — 위 대조는 로컬 `local[1]` 소표본이다. Spark 2노드
+  (`WP-27`)·HDFS(`-28`)에서의 태스크 수·소요 시간은 그때 잰다.
+
 - **Streaming 연결.** `streaming/edit_windows.py` 가 윈도우 집계까지 하고,
   거기에 `detect()` 를 붙여 spike 테이블에 쓰는 건 데이터 모델(-35)·기준선
   적재가 develop 에 들어간 뒤다.
