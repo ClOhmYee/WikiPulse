@@ -26,3 +26,18 @@ management:
     web:
       exposure:
         include: health
+
+# 이슈-종목 후보 생성 워커 (WP-67, 명세 §6.3).
+# K·lift 컷은 WP-22 확정값(임베딩 20 / GDELT 10). 폴러는 기본 꺼짐 —
+# 서버에서 LLM_GATEWAY_KEY 를 넣고 scheduler.enabled=true 로 켠다.
+wikipulse:
+  matching:
+    embedding-top-k: 20
+    gdelt-top-k: 10
+    max-chars: 2000
+    gateway:
+      api-key: ${LLM_GATEWAY_KEY:}
+    scheduler:
+      enabled: ${WIKIPULSE_MATCHING_SCHEDULER_ENABLED:false}
+      fixed-delay: PT5M
+      batch-size: 20
