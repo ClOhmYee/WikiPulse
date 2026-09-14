@@ -1,0 +1,11 @@
+# GKG lift 배치.
+#
+# parse.py·lift.py·match.py 는 순수 표준 라이브러리라 런타임 의존이 없다.
+# driver.py(Spark 배치)는 apache/spark 이미지의 pyspark 를 쓴다(compose 참고) —
+# 여기 고정하지 않는다. writer.py·driver 의 DB 접근은 psycopg 를 쓴다.
+psycopg[binary]==3.3.5
+
+# 개발용
+pytest==8.3.4
+# writer 왕복 테스트용 번들 PostgreSQL(Docker 불필요). 없으면 그 테스트만 건너뜀.
+pgserver==0.1.4
