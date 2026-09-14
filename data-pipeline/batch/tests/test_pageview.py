@@ -148,3 +148,33 @@ def test_ingest_agent_404는_결손(tmp_path, monkeypatch):
         "2025-06-12", "enwiki", "en.wikipedia", "spider",
         tmp_path, None, Counts())
     assert status == "missing"
+
+
+# ---------------------------------------------------------------- 월 루프
+
+def test_dates_in_month_윤년():
+    from batch.pageview_ingest import dates_in_month
+    feb = dates_in_month("2024-02")               # 윤년 29일
+    assert feb[0] == "2024-02-01" and feb[-1] == "2024-02-29" and len(feb) == 29
+    assert len(dates_in_month("2025-06")) == 30
+
+
+def test_main_월루프_전날짜_순회_요약(monkeypatch):
+    from batch import pageview_ingest
+
+    seen = []
+
+    def fake_ingest_date(date, *a, **k):
+        seen.append(date)
+        return "missing" if date.endswith("-15") else "ok"
+
+    monkeypatch.setattr(pageview_ingest, "ingest_date", fake_ingest_date)
+    rc = pageview_ingest.main(["--wiki", "enwiki", "--month", "2025-06"])
+    assert rc == 0 and len(seen) == 30            # 30일 전부 순회
+    assert seen[0] == "2025-06-01" and "2025-06-15" in seen
+
+
+def test_main_전부결손이면_3(monkeypatch):
+    from batch import pageview_ingest
+    monkeypatch.setattr(pageview_ingest, "ingest_date", lambda *a, **k: "missing")
+    assert pageview_ingest.main(["--date", "2025-06-12"]) == 3

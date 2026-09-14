@@ -154,7 +154,7 @@ shard 개수가 곧 Spark 태스크 수의 상한인데, **실제 Spark 실행 �
 
 ```bash
 cd data-pipeline/batch
-../.venv/Scripts/python.exe -m pytest       # 75개 (mediawiki + clickstream + pageview), 네트워크 없이
+../.venv/Scripts/python.exe -m pytest       # 78개 (mediawiki + clickstream + pageview), 네트워크 없이
 ```
 
 확인하는 것:
@@ -297,5 +297,7 @@ python -m batch.pageview_ingest --wiki enwiki --date 2025-06-12 --agents user,au
 
 - **실 덤프 적재·HDFS** — WP-28 완료 후. 하루 user 542 MiB + automated 706 MiB ≈ 1.2 GiB
   (스펙 실측). 실측 크기·소요는 그때 명세 §11 에. 위 오프라인 테스트로 파싱·필터·합산·CLI 배선만 검증했다.
-- **월 단위 일괄** — 지금은 `--date` 하루씩. 검증 구간이 월이라 날짜 루프는 후속.
 - **`wiki_page.id` 해석** — 스펙대로 `(wiki, title)` 로만 적재. id 해석은 후속 적재 단계 책임.
+
+월 단위는 `--month YYYY-MM` 로 하루씩 순회한다(일별 매니페스트로 이어받기, 결손일 기록, 다 되면
+요약 출력). `SchemaMismatch` 는 전체 실행을 멈춘다(형식 손상은 하루 문제가 아니다).

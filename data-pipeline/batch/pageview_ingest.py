@@ -1,6 +1,7 @@
 """pageview_complete 일별 덤프를 받아 시간별 조회수 JSONL.gz 로 적재한다. WP-57.
 
     python -m batch.pageview_ingest --wiki enwiki --date 2025-06-12
+    python -m batch.pageview_ingest --wiki enwiki --month 2025-06              # 그 달 전체
     python -m batch.pageview_ingest --wiki enwiki --date 2025-06-12 --dry-run   # 세기만
     python -m batch.pageview_ingest --wiki enwiki --date 2025-06-12 --agents user,automated
 
@@ -22,6 +23,7 @@ import json
 import shutil
 import sys
 import urllib.error
+from calendar import monthrange
 from dataclasses import asdict
 from pathlib import Path
 
@@ -76,10 +78,18 @@ def ingest_agent(
     return "ok"
 
 
+def dates_in_month(month: str) -> list[str]:
+    """YYYY-MM → 그 달의 모든 날짜 리스트 ["YYYY-MM-01", …]."""
+    year, mon = (int(x) for x in month.split("-"))
+    return [f"{month}-{day:02d}" for day in range(1, monthrange(year, mon)[1] + 1)]
+
+
 def build_arg_parser() -> argparse.ArgumentParser:
-    p = argparse.ArgumentParser(description="pageview_complete 일별 덤프 적재 (WP-57)")
+    p = argparse.ArgumentParser(description="pageview_complete 덤프 적재 (WP-57)")
     p.add_argument("--wiki", default="enwiki")
-    p.add_argument("--date", required=True, help="YYYY-MM-DD")
+    group = p.add_mutually_exclusive_group(required=True)
+    group.add_argument("--date", help="하루만: YYYY-MM-DD")
+    group.add_argument("--month", help="한 달 전체: YYYY-MM (하루씩 순회)")
     p.add_argument("--agents", default=",".join(CANDIDATE_AGENTS),
                    help="순회할 agent 후보 (쉼표 구분). 없는 건 결손 기록")
     p.add_argument("--out", default=env("PAGEVIEW_OUT", "./data/pageview"))
@@ -89,67 +99,85 @@ def build_arg_parser() -> argparse.ArgumentParser:
     return p
 
 
-def main(argv: list[str] | None = None) -> int:
-    args = build_arg_parser().parse_args(argv)
-    project = project_for(args.wiki)
-    agents = [a.strip() for a in args.agents.split(",") if a.strip()]
+def ingest_date(
+    date: str, wiki: str, project: str, agents: list[str],
+    out_root: Path, cache_dir: Path, shard_records: int, dry_run: bool,
+) -> str:
+    """하루를 적재한다. 반환: "ok" | "skip"(이미 적재) | "missing"(그날 agent 파일 0).
 
-    out_dir = Path(args.out) / args.wiki / args.date
-    manifest = out_dir / MANIFEST_NAME
-    if manifest.exists() and not args.dry_run:
-        print(f"이미 적재됨: {manifest} (건너뛴다)")
-        return 0
+    SchemaMismatch 는 잡지 않고 위로 던진다 — 형식 손상은 전체 실행을 멈춰야 한다.
+    """
+    out_dir = out_root / wiki / date
+    if (out_dir / MANIFEST_NAME).exists() and not dry_run:
+        print(f"이미 적재됨: {date} (건너뛴다)")
+        return "skip"
 
-    cache_dir = Path(args.cache)
-    cache_dir.mkdir(parents=True, exist_ok=True)
     counts = Counts()
     present: list[str] = []
     missing: list[str] = []
 
-    try:
-        if args.dry_run:
-            for agent in agents:
-                status = ingest_agent(args.date, args.wiki, project, agent,
-                                      cache_dir, None, counts)
-                (present if status == "ok" else missing).append(agent)
-            print(f"[dry-run] agents={present} missing={missing} "
-                  f"records={counts.written:,}")
-            return 0
+    if dry_run:
+        for agent in agents:
+            status = ingest_agent(date, wiki, project, agent, cache_dir, None, counts)
+            (present if status == "ok" else missing).append(agent)
+        print(f"[dry-run] {date} agents={present} missing={missing} "
+              f"records={counts.written:,}")
+        return "ok" if present else "missing"
 
-        # 형제 .partial 에 다 쓴 뒤 통째로 rename — 반쪽 출력이 완료본으로 안 보이게.
-        staging = out_dir.with_name(out_dir.name + ".partial")
-        if staging.exists():
-            shutil.rmtree(staging)
-        with ShardWriter(staging, args.shard_records) as writer:
-            for agent in agents:
-                status = ingest_agent(args.date, args.wiki, project, agent,
-                                      cache_dir, writer, counts)
-                (present if status == "ok" else missing).append(agent)
+    # 형제 .partial 에 다 쓴 뒤 통째로 rename — 반쪽 출력이 완료본으로 안 보이게.
+    staging = out_dir.with_name(out_dir.name + ".partial")
+    if staging.exists():
+        shutil.rmtree(staging)
+    with ShardWriter(staging, shard_records) as writer:
+        for agent in agents:
+            status = ingest_agent(date, wiki, project, agent, cache_dir, writer, counts)
+            (present if status == "ok" else missing).append(agent)
+
+    if not present:
+        # agent 파일이 하나도 없으면 그날 자체가 결손이다. 빈 완료본을 만들지 않는다.
+        print(f"결손 날짜: {date} — 적재할 agent 파일이 없다 {missing}", file=sys.stderr)
+        shutil.rmtree(staging, ignore_errors=True)
+        return "missing"
+
+    if out_dir.exists():
+        shutil.rmtree(out_dir)
+    staging.rename(out_dir)
+    (out_dir / MANIFEST_NAME).write_text(
+        json.dumps({"wiki": wiki, "date": date, "project": project,
+                    "agents_present": present, "agents_missing": missing,
+                    "shards": writer.shards, "records": counts.written},
+                   ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8")
+    print(f"적재 완료: {out_dir}  agents={present} missing={missing} "
+          f"records={counts.written:,}")
+    return "ok"
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = build_arg_parser().parse_args(argv)
+    project = project_for(args.wiki)
+    agents = [a.strip() for a in args.agents.split(",") if a.strip()]
+    dates = [args.date] if args.date else dates_in_month(args.month)
+
+    out_root = Path(args.out)
+    cache_dir = Path(args.cache)
+    cache_dir.mkdir(parents=True, exist_ok=True)
+
+    tally = {"ok": 0, "skip": 0, "missing": 0}
+    try:
+        for date in dates:
+            tally[ingest_date(date, args.wiki, project, agents,
+                              out_root, cache_dir, args.shard_records, args.dry_run)] += 1
     except SchemaMismatch as mismatch:
         # 위치가 하나만 밀려도 전부 틀린 값이 된다. 조용히 넘기지 않는다.
         print(f"스키마 불일치 — 덤프 형식이 바뀌었을 수 있다: {mismatch}", file=sys.stderr)
         return 2
 
-    if not present:
-        # agent 파일이 하나도 없으면 그 날짜 자체가 결손이다. 빈 완료본을 만들지 않는다.
-        print(f"결손 날짜: {args.date} — 적재할 agent 파일이 없다 {missing}", file=sys.stderr)
-        shutil.rmtree(staging, ignore_errors=True)
-        return 3
-
-    if out_dir.exists():
-        shutil.rmtree(out_dir)
-    staging.rename(out_dir)
-
-    (out_dir / MANIFEST_NAME).write_text(
-        json.dumps({"wiki": args.wiki, "date": args.date, "project": project,
-                    "agents_present": present, "agents_missing": missing,
-                    "shards": writer.shards, "records": counts.written},
-                   ensure_ascii=False, indent=2) + "\n",
-        encoding="utf-8")
-
-    print(f"적재 완료: {out_dir}  agents={present} missing={missing} "
-          f"records={counts.written:,}")
-    return 0
+    if args.month:
+        print(f"월 적재 요약 {args.month}: 적재 {tally['ok']} · 건너뜀 {tally['skip']} · "
+              f"결손 {tally['missing']} (총 {len(dates)}일)")
+    # 하루라도 실제로 적재됐거나 이미 있으면 성공. 전부 결손이면 3.
+    return 0 if (tally["ok"] or tally["skip"]) else 3
 
 
 if __name__ == "__main__":
