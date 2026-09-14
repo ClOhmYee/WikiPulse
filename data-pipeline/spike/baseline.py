@@ -14,11 +14,18 @@
     hour_of_week, edit_count, views). 문서 키는 **(wiki, title)** 이다 — 파이프라인
     전체가 그렇고, wiki_page.id 해석은 적재 시점(baseline_sink.py)에 한다.
 
-⚠️ 이 Spark 판은 로컬에서 검증되지 않았다
-    PySpark 3.5 워커가 3.12+ 에서 죽어(tests/conftest.py) 개발 PC 에서 돌릴 수 없고,
-    Spark 2노드(WP-27)·HDFS(-28)도 아직 없다. 실동작이 검증된 경로는
-    같은 수식의 순수 파이썬 판(baseline_rows.py + baseline_sink.py)이다.
-    🔴 두 판이 갈리면 기준선이 조용히 달라진다 — 가중 정의는 ewma.py 한 곳에서만 온다.
+두 판이 같은 값을 낸다 (2026-09-14 실측)
+    같은 계산이 순수 파이썬(baseline_rows.build_rows)에도 있다. 적재 경로는 순수 판이
+    쓰고, 대량 처리는 이 Spark 판이 쓴다. 🔴 둘이 갈리면 기준선이 에러 없이 달라지고
+    edit_z 가 통째로 틀린다 — tests/test_baseline_spark.py 가 edit_ewma·edit_stddev·
+    view_ewma·sample_days·28일 경계까지 같은지 고정한다(로컬 Spark 로 실제 통과).
+    가중 정의는 ewma.py 한 곳에서만 온다.
+
+⚠️ 입력 window_start 는 UTC 다
+    세션 timeZone 을 UTC 로 두는 것만으로는 부족하다. 파이썬에서 **naive** datetime 을
+    createDataFrame 에 주면 Spark 가 드라이버의 로컬 시간대로 해석해 UTC 로 옮긴다 —
+    KST 에서는 9시간 밀려 hour_of_week 가 통째로 어긋나는데 에러가 안 난다
+    (2026-09-14 실제로 겪음). 타임스탬프는 tz-aware 로 넘긴다.
 """
 
 from __future__ import annotations
