@@ -154,7 +154,7 @@ shard 개수가 곧 Spark 태스크 수의 상한인데, **실제 Spark 실행 �
 
 ```bash
 cd data-pipeline/batch
-../.venv/Scripts/python.exe -m pytest       # 62개 (mediawiki + clickstream), 네트워크 없이
+../.venv/Scripts/python.exe -m pytest       # 78개 (mediawiki + clickstream + pageview), 네트워크 없이
 ```
 
 확인하는 것:
@@ -248,3 +248,56 @@ python -m batch.clickstream_ingest --wiki enwiki --month 2025-06 --dry-run  # �
   건수는 그때 명세 §11 에 적는다. 위 오프라인 스모크(가짜 덤프)로 CLI 흐름만 검증했다.
 - **page_id·생성일 조인** — `driver.build_neighbor_inputs` 가 자리는 잡았고, `wiki_page`
   조회와 `mediawiki_history`(`WP-56`) 생성일 어댑터가 붙으면 실데이터로 흐른다.
+
+---
+
+# 조회수 적재 (WP-57)
+
+`pageview.py` + `pageview_ingest.py`. Wikipedia `pageview_complete` 일별 덤프를 받아
+시간별 조회수를 `(wiki, title, ts_hour, agent, views)` 로 적재한다. baseline `view_ewma`
+(WP-58/-60)와 급증 2차 판정(조회수) 입력이다.
+
+```
+pageviews-{YYYYMMDD}-{agent}.bz2  ──▶  (wiki, title, ts_hour, agent, views) JSONL.gz (shard)
+  project title page_id access daily hourly     대상 project·ns0 만 · access·page_id 가로질러 합산
+  희소 시간 인코딩 A=0시…X=23시                   pageview_ingest.py
+```
+
+## 실행
+
+```bash
+export CONTACT_EMAIL=you@example.com      # 새로 받을 때만 필요
+
+python -m batch.pageview_ingest --wiki enwiki --date 2025-06-12            # 적재
+python -m batch.pageview_ingest --wiki enwiki --date 2025-06-12 --dry-run  # 건수만
+python -m batch.pageview_ingest --wiki enwiki --date 2025-06-12 --agents user,automated
+```
+
+출력: `data/pageview/{wiki}/{date}/part-*.jsonl.gz` + `_manifest.json`(존재·결손 agent 기록).
+
+## 함정 (2026-09-09 실측, 스펙 기준)
+
+- **agent 는 파일명에** 있고 시기마다 구성이 다르다 — 2019 user·spider / 2020 +automated /
+  2025 user·automated(spider 404). 🔴 하드코딩하지 않고 후보를 순회해 **있는 것만** 적재,
+  404 는 결손으로 매니페스트에 남긴다. agent 끼리 합치거나 없는 agent 를 0 으로 채우지 않는다.
+- **dump page_id 를 키로 쓰지 않는다.** `-` title 337,394행이 제각각 page_id 로 뭉쳐 있고,
+  정상 ns0 문서도 page_id 가 수십 개로 갈린다(null 10.56%). `(wiki, title, ts_hour, agent)`
+  로만 합산한다.
+- **위키 코드가 다르다** — 덤프는 `en.wikipedia`, mediawiki_history 는 `enwiki`. `project_for`
+  가 역매핑하고, 미등록 위키는 `UnsupportedWiki` 로 멈춘다(조용히 틀린 위키 방지).
+- **`:` 단순 필터 금지.** 정상 제목에 콜론이 들어간다. 알려진 namespace prefix 집합만 제외한다.
+- **시간별 합 != daily_total 이면 `SchemaMismatch`.** 형식 손상·인코딩 오류를 조용히 넘기지 않는다.
+
+## 메모리
+
+`aggregate()` 는 한 agent-일 파일을 dict 로 누적한다. 전체 enwiki 는 Spark 경로(WP-58)가
+맡고, 이 CLI 는 **검증 슬라이스**(Hormuz 2025-06·Milton 2024-10 등)용이다.
+
+## 아직 안 한 것
+
+- **실 덤프 적재·HDFS** — WP-28 완료 후. 하루 user 542 MiB + automated 706 MiB ≈ 1.2 GiB
+  (스펙 실측). 실측 크기·소요는 그때 명세 §11 에. 위 오프라인 테스트로 파싱·필터·합산·CLI 배선만 검증했다.
+- **`wiki_page.id` 해석** — 스펙대로 `(wiki, title)` 로만 적재. id 해석은 후속 적재 단계 책임.
+
+월 단위는 `--month YYYY-MM` 로 하루씩 순회한다(일별 매니페스트로 이어받기, 결손일 기록, 다 되면
+요약 출력). `SchemaMismatch` 는 전체 실행을 멈춘다(형식 손상은 하루 문제가 아니다).
