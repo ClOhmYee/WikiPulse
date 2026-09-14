@@ -352,9 +352,23 @@ python -m batch.historical_windows_ingest \
 
 ## 아직 안 한 것
 
-- **Spark parquet 출력·"배치 == 스트리밍" 표본 대조** — Spark 2노드(WP-27)·HDFS
-  (WP-28)가 서면 잇는다. 지금은 형제 적재(-56·-57)와 같은 순수 파이썬·JSONL.gz 경로다
-  (venv 3.14 에서 PySpark 워커가 죽어 로컬 실행 불가 — conftest 참고). 집계 semantics 는
-  순수 함수로 한 벌 고정해 두었으니 Spark 판이 같은 계약을 부르게 한다.
+- **Spark parquet 출력·"배치 == 스트리밍" 표본 대조** — 지금은 형제 적재(-56·-57)와 같은
+  순수 파이썬·JSONL.gz 경로다. 집계 semantics 는 순수 함수로 한 벌 고정해 두었으니 Spark
+  판이 같은 계약을 부르게 한다. 실규모 실행은 Spark 2노드(WP-27)·HDFS
+  (WP-28)가 서면 잇는다.
+  - ~~venv 3.14 에서 PySpark 워커가 죽어 로컬 실행 불가~~ → **로컬에서 돈다** (2026-09-14
+    정정, WP-82). venv 는 **3.11.15** 로 PySpark 3.5 지원 범위(3.8~3.11) 안이다 —
+    시스템 파이썬(3.14)을 보고 venv 도 그럴 것이라 단정한 서술이었다. 워커가 죽은 실제
+    원인은 버전이 아니라 `PYSPARK_PYTHON` 미설정이고, 증상은 `CreateProcess error=2`
+    (워커로 띄울 파이썬 **경로**를 못 찾음)다. `conftest.py` 가 그걸 고정하면 실제로 돈다 —
+    WP-60 이 로컬 Spark 로 `build_baseline` 을 돌려 순수 판과 값 일치를 확인했다
+    (`spike/tests/test_baseline_spark.py`).
+  - ⚠️ **자체 `pytest.ini` 를 쓰는 패키지는 바깥 `conftest.py` 가 로드되지 않는다.** rootdir 이
+    그 패키지로 잡혀서다. `spike/` 가 그래서 `spike/tests/conftest.py` 를 따로 둔다. 여기
+    `batch/` 도 자체 `pytest.ini` 가 있으니 Spark 를 쓰는 테스트를 추가하면 같은 게 필요하다.
+  - ⚠️ **naive `datetime` 을 `createDataFrame` 에 주면 드라이버 로컬 시간대(KST)로 해석돼
+    9시간 밀린다.** 세션 `timeZone=UTC` 로도 안 막힌다. `hour_of_week` 가 통째로 어긋나는데
+    **에러가 안 난다** — 타임스탬프는 tz-aware 로 넘긴다 (2026-09-14 실제로 겪음).
+  - 🔴 "배치 == 스트리밍" 대조 자체는 이 README 정정 범위 밖이다 — 별건 이슈다.
 - **실데이터 규모 집계** — Hormuz 2025-06·Milton 2024-10 실적재는 -56·-57 실덤프 뒤. `aggregate_*`
   가 dict 누적이라 검증 슬라이스용이다(전체 enwiki 는 Spark).
