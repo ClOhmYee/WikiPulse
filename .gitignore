@@ -40,3 +40,9 @@ spark-warehouse/
 # Gradle / Java 빌드
 backend/.gradle/
 backend/build/
+
+# 덤프 원본·적재 산출물 (WP-61 에서 실적재하며 발견 — 1.4 GB 가 untracked 로
+# 노출돼 있었다). 저장소에 들어가면 안 된다 — 받아서 만드는 것이지 버전 관리 대상이 아니다.
+data-pipeline/dumps/
+data-pipeline/out/
+data-pipeline/data/
