@@ -30,7 +30,7 @@ lift 는 최대 `코퍼스 수 / 이슈 수` 까지 오른다(그 기관이 이�
 | `driver.py` | Spark 배선 + CLI — `binaryFiles` 로 zip 분산 파싱 | `test_driver.py` |
 
 ```
-pytest gkg/tests    # 36개. Docker 불필요(pgserver 번들 PostgreSQL)
+pytest gkg/tests    # 50개. Docker 불필요(pgserver 번들 PostgreSQL)
 ```
 
 ## 실행
@@ -48,8 +48,10 @@ spark-submit gkg/driver.py --cluster-id 42 --start ... --end ... \
     --theme HURRICANE --location florida --dry-run
 ```
 
-- `--theme` / `--location` 은 반복 가능(한 차원 안은 OR, 차원끼리는 AND). 부분일치다
-  (`HURRICANE` ⊂ 테마코드 `NATURAL_DISASTER_HURRICANE`, `florida` ⊂ 지역 풀네임).
+- `--theme` / `--location` 은 반복 가능(한 차원 안은 OR, 차원끼리는 AND). theme 는
+  부분일치(`HURRICANE` ⊂ 테마코드 `NATURAL_DISASTER_HURRICANE`), location 은
+  **단어경계** 매칭(`florida` 는 `florida, united states` 를 잡고 실지명
+  `floridablanca` 는 뺀다 — free-form 풀네임이라 부분일치면 오탐).
 - `--base-dir` 는 `GDELT_LOCAL_DIR`(gdelt 싱크와 같은 `YYYY/MM/DD/<ts>.gkg.csv.zip`).
 - `DATABASE_URL` 이 있으면 ticker 를 붙이고 저장한다. 없으면 ticker 전부 NULL·저장 생략.
 
@@ -76,6 +78,9 @@ spark-submit gkg/driver.py --cluster-id 42 --start ... --end ... \
   `missing` 으로 세고 배치는 멈추지 않는다.
 - `from_zip_bytes` 가 손상 zip(HTML 오류 페이지·잘린 파일·빈 아카이브)을 빈 결과로
   흘려 한 파일이 잡 전체를 죽이지 않는다.
+- 단, 손상 파일은 조용히 0행이 되어 코퍼스를 과소집계할 수 있다 — `fold_file` 이
+  0행을 낸 파일을 `empty_files` 로 세어, 결손(404)과 나란히 `run()` 이 경고를 찍는다.
+  "깨끗하게 다 읽음"과 "N개 파일 유실"을 운영자가 구분하게 한다.
 
 ## §11 재현 (인수 조건 3) — 실 데이터 실측 2026-09-14
 

@@ -14,6 +14,7 @@ Aggregate 는 병합 가능하다(merge). Spark 는 파일별 부분합을 reduc
 
 from __future__ import annotations
 
+import re
 from collections import Counter
 from collections.abc import Iterable
 from dataclasses import dataclass, field
@@ -25,14 +26,21 @@ from .parse import Record
 class IssuePredicate:
     """이슈 기사를 코퍼스에서 골라내는 술어.
 
-    themes·locations 각각은 "부분일치할 문자열들"이다. 지정된 차원끼리는 AND,
+    themes·locations 각각은 "일치할 문자열들"이다. 지정된 차원끼리는 AND,
     한 차원 안의 여러 항목은 OR 다 — `themes=("HURRICANE",), locations=("florida",)`
     는 "테마에 HURRICANE 이 있고 그리고 지역에 florida 가 있는" 기사(§11 Milton).
 
     - theme 매칭: 기사 테마 코드에 term 이 부분문자열로 있으면 참
-      (term "HURRICANE" ⊂ 코드 "NATURAL_DISASTER_HURRICANE").
-    - location 매칭: 기사 지역 풀네임에 term 이 부분문자열로 있으면 참.
+      (term "HURRICANE" ⊂ 코드 "NATURAL_DISASTER_HURRICANE"). 테마 코드는 대문자
+      `_` 어휘라 부분일치가 안전하다.
+    - location 매칭: 기사 지역 풀네임에 term 이 **단어 경계**로 있으면 참.
+      ⚠️ 지역 풀네임은 free-form 이라 부분문자열이면 `florida` 가 실지명
+      `floridablanca`(콜롬비아·필리핀)를 오탐해 이슈 집합을 오염시킨다. `\bterm\b`
+      로 토큰 경계를 요구해 `florida, united states` 는 잡고 `floridablanca` 는 뺀다.
     비교는 대소문자 무시(테마는 대문자, 지역은 소문자로 정규화해 둠).
+
+    술어당 한 번만 term 을 정규화·컴파일해 둔다 — matches() 가 코퍼스 전 레코드
+    (수백만)마다 불리므로 매 호출 재생성은 낭비다.
     """
 
     themes: tuple[str, ...] = ()
@@ -44,21 +52,21 @@ class IssuePredicate:
                 "IssuePredicate 는 themes 나 locations 중 최소 하나가 필요하다. "
                 "둘 다 비면 모든 기사가 이슈가 되어 lift 가 전부 1 이 된다."
             )
-
-    def _theme_terms(self) -> tuple[str, ...]:
-        return tuple(t.upper() for t in self.themes)
-
-    def _location_terms(self) -> tuple[str, ...]:
-        return tuple(l.lower() for l in self.locations)
+        # frozen dataclass 라 object.__setattr__ 로 파생 캐시를 심는다.
+        object.__setattr__(self, "_theme_terms", tuple(t.upper() for t in self.themes))
+        object.__setattr__(
+            self, "_location_res",
+            tuple(re.compile(r"\b" + re.escape(l.lower()) + r"\b") for l in self.locations),
+        )
 
     def matches(self, record: Record) -> bool:
         if self.themes:
-            terms = self._theme_terms()
+            terms = self._theme_terms
             if not any(term in code for code in record.themes for term in terms):
                 return False
         if self.locations:
-            terms = self._location_terms()
-            if not any(term in loc for loc in record.locations for term in terms):
+            res = self._location_res
+            if not any(pat.search(loc) for loc in record.locations for pat in res):
                 return False
         return True
 
@@ -68,13 +76,17 @@ class Aggregate:
     """기관명 문서빈도 부분합. 병합 가능(Spark reduce 용).
 
     n_issue/n_corpus 는 기사 수(문서 빈도의 분모). org_issue/org_corpus 는 기관명별
-    "그 기관이 나온 기사 수"다.
+    "그 기관이 나온 기사 수"다. files/empty_files 는 파일 단위 회계로, driver 가
+    파일별 부분합에 채운다(0행을 낸 파일 = 손상·빈 zip). 결손(404)과 나란히 세어
+    "조용히 유실된 파일"을 운영자가 볼 수 있게 한다 — add() 로는 안 채운다.
     """
 
     n_issue: int = 0
     n_corpus: int = 0
     org_issue: Counter = field(default_factory=Counter)
     org_corpus: Counter = field(default_factory=Counter)
+    files: int = 0
+    empty_files: int = 0
 
     def add(self, record: Record, is_issue: bool) -> None:
         self.n_corpus += 1
@@ -91,6 +103,8 @@ class Aggregate:
         self.n_corpus += other.n_corpus
         self.org_issue.update(other.org_issue)
         self.org_corpus.update(other.org_corpus)
+        self.files += other.files
+        self.empty_files += other.empty_files
         return self
 
 

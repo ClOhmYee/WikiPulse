@@ -114,7 +114,9 @@ def parse_lines(lines: Iterable[str]) -> Iterator[Record]:
     줄 이터러블을 받아 파일 전체를 메모리에 올리지 않는다(하루치가 1.9 GB).
     """
     for line in lines:
-        line = line.rstrip("\n")
+        # CRLF 파일이면 \r 이 마지막 컬럼에 남는다. 지금 쓰는 인덱스(≤14)엔 무해하나
+        # 뒤 컬럼을 읽게 되면 깨지므로 여기서 함께 벗긴다.
+        line = line.rstrip("\r\n")
         if not line:
             continue
         record = parse_row(line.split("\t"))

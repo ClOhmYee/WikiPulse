@@ -38,6 +38,7 @@ import zipfile
 from collections.abc import Callable, Iterator
 
 from gdelt.catalog import GkgFile, iter_slots, parse_ts
+from gdelt.sink import LocalSink
 
 from .lift import Aggregate, IssuePredicate, OrgLift, aggregate, rank
 from .match import build_ticker_index, match_ticker
@@ -92,12 +93,6 @@ def from_zip_bytes(data: bytes) -> Iterator[Record]:
 # --- 로컬 파일 접근 --------------------------------------------------------
 
 
-def local_exists(base_dir: str) -> Callable[[str], bool]:
-    def _exists(relpath: str) -> bool:
-        return os.path.exists(os.path.join(base_dir, *relpath.split("/")))
-    return _exists
-
-
 def local_uri(base_dir: str, relpath: str) -> str:
     """binaryFiles 용 file:// URI. Spark 는 스킴 없는 경로를 HDFS 로 볼 수 있어 명시."""
     abspath = os.path.abspath(os.path.join(base_dir, *relpath.split("/")))
@@ -113,12 +108,26 @@ def spark_aggregate(spark, uris: list[str], predicate: IssuePredicate) -> Aggreg
     파일별로 풀고 파싱해 부분합을 내고 reduce 로 병합한다 — 원본을 드라이버로
     모으지 않는다(하루치 1.9 GB). predicate 는 클로저로 실려 executor 로 간다.
     """
-    def fold(_key_bytes) -> Aggregate:
-        _, data = _key_bytes
-        return aggregate(from_zip_bytes(data), predicate)
-
     rdd = spark.sparkContext.binaryFiles(",".join(uris))
-    return rdd.map(fold).reduce(lambda a, b: a.merge(b))
+    return rdd.map(fold_file(predicate)).reduce(lambda a, b: a.merge(b))
+
+
+def fold_file(predicate: IssuePredicate) -> Callable[[tuple[str, bytes]], Aggregate]:
+    """(경로, 바이트) 하나를 파일 단위 부분합으로. driver 와 테스트가 같이 쓴다.
+
+    파일마다 files=1 을 세고, 0행을 낸 파일(손상·잘린 zip·HTML 오류 페이지)은
+    empty_files=1 로 표시한다 — reduce 로 합쳐 run() 이 결손과 나란히 출력해,
+    "조용히 유실된 파일"이 lift 를 과소집계하는 걸 운영자가 보게 한다(인수 조건 4).
+    """
+    def fold(key_bytes: tuple[str, bytes]) -> Aggregate:
+        _, data = key_bytes
+        agg = aggregate(from_zip_bytes(data), predicate)
+        agg.files = 1
+        if agg.n_corpus == 0:
+            agg.empty_files = 1
+        return agg
+
+    return fold
 
 
 # --- ticker 매칭 -----------------------------------------------------------
@@ -152,8 +161,10 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--theme", action="append", default=[],
                    help="이슈 테마 부분일치(반복 가능). 예: HURRICANE")
     p.add_argument("--location", action="append", default=[],
-                   help="이슈 지역 부분일치(반복 가능). 예: florida")
-    p.add_argument("--min-issue-count", type=int, default=int(env("GKG_MIN_ISSUE_COUNT", "3")),
+                   help="이슈 지역 단어경계 매칭(반복 가능). 예: florida")
+    # env 기본값은 문자열로 두고 argparse type=int 가 변환한다 — GKG_MIN_ISSUE_COUNT
+    # 오설정 시 build_parser 시점 raw ValueError 대신 깔끔한 argparse 에러가 난다.
+    p.add_argument("--min-issue-count", type=int, default=env("GKG_MIN_ISSUE_COUNT", "3"),
                    help="이 미만 이슈 기사에 나온 기관은 버린다(잡음 컷, 기본 3)")
     p.add_argument("--top", type=int, default=None, help="상위 N 만 저장(기본: 전부)")
     p.add_argument("--base-dir", default=env("GDELT_LOCAL_DIR", "gdelt-data"),
@@ -165,10 +176,16 @@ def build_parser() -> argparse.ArgumentParser:
     return p
 
 
-def run(args) -> int:
+def run(args: argparse.Namespace) -> int:
     predicate = IssuePredicate(themes=tuple(args.theme), locations=tuple(args.location))
 
-    present, missing = plan_slots(args.start, args.end, local_exists(args.base_dir))
+    # 저장이 목적인데 DSN 이 없으면 수 분짜리 Spark 집계 전에 막는다(fail-fast).
+    if not args.dry_run and not args.database_url:
+        print("DATABASE_URL 이 없다 — 저장할 수 없어 중단. 집계만 하려면 --dry-run.",
+              file=sys.stderr)
+        return 1
+
+    present, missing = plan_slots(args.start, args.end, LocalSink(args.base_dir).exists)
     print(f"슬롯: 존재 {len(present)} / 결손 {len(missing)} "
           f"(구간 {args.start}~{args.end})")
     if not present:
@@ -177,20 +194,25 @@ def run(args) -> int:
 
     from pyspark.sql import SparkSession
 
-    spark = (
-        SparkSession.builder.appName(f"wikipulse-gkg-lift-{args.cluster_id}")
-        .config("spark.sql.session.timeZone", "UTC")
-        .getOrCreate()
-    )
-    spark.sparkContext.setLogLevel(env("SPARK_LOG_LEVEL", "WARN"))
+    spark = None
     try:
+        spark = (
+            SparkSession.builder.appName(f"wikipulse-gkg-lift-{args.cluster_id}")
+            .config("spark.sql.session.timeZone", "UTC")
+            .getOrCreate()
+        )
+        spark.sparkContext.setLogLevel(env("SPARK_LOG_LEVEL", "WARN"))
         uris = [local_uri(args.base_dir, rp) for rp in present]
         agg = spark_aggregate(spark, uris, predicate)
     finally:
-        spark.stop()
+        if spark is not None:
+            spark.stop()
 
     lifts = rank(agg, min_issue_count=args.min_issue_count, top=args.top)
     print(f"이슈 기사 {agg.n_issue:,} / 코퍼스 {agg.n_corpus:,} / 기관 {len(lifts):,}건")
+    if agg.empty_files:
+        print(f"⚠️ 손상·빈 파일 {agg.empty_files}/{agg.files}건 — 코퍼스가 그만큼 "
+              f"과소집계됐다(lift 신뢰 저하). 수집측 재적재 확인.", file=sys.stderr)
 
     index = load_ticker_index(args.database_url) if args.database_url else {}
     if not index:
@@ -205,9 +227,6 @@ def run(args) -> int:
     if args.dry_run:
         print("dry-run — 저장하지 않음.")
         return 0
-    if not args.database_url:
-        print("DATABASE_URL 이 없어 저장을 건너뛴다.", file=sys.stderr)
-        return 1
 
     import psycopg
 
