@@ -1,5 +1,6 @@
 package io.wikipulse.backend.matching;
 
+import java.time.Duration;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 /**
@@ -66,6 +67,9 @@ public class CandidateProperties {
         private String apiUrl = "https://en.wikipedia.org/w/api.php";
         /** 위키미디어 API 예절 — 연락처를 담은 User-Agent 를 붙인다. */
         private String userAgent = "WikiPulse/0.1 (https://github.com/ClOhmYee/WikiPulse)";
+        /** 🔴 타임아웃 필수 — 없으면 소켓 hang 이 단일 스케줄러 스레드를 영구 정지시킨다. */
+        private Duration connectTimeout = Duration.ofSeconds(5);
+        private Duration readTimeout = Duration.ofSeconds(10);
 
         public String getApiUrl() {
             return apiUrl;
@@ -82,6 +86,22 @@ public class CandidateProperties {
         public void setUserAgent(String userAgent) {
             this.userAgent = userAgent;
         }
+
+        public Duration getConnectTimeout() {
+            return connectTimeout;
+        }
+
+        public void setConnectTimeout(Duration connectTimeout) {
+            this.connectTimeout = connectTimeout;
+        }
+
+        public Duration getReadTimeout() {
+            return readTimeout;
+        }
+
+        public void setReadTimeout(Duration readTimeout) {
+            this.readTimeout = readTimeout;
+        }
     }
 
     /** LLM 게이트웨이 (명세 §4). text-embedding-3-small, Authorization: Bearer. */
@@ -90,6 +110,9 @@ public class CandidateProperties {
         private String embeddingModel = "text-embedding-3-small";
         /** 🔴 환경변수 LLM_GATEWAY_KEY. 저장소에 넣지 않는다. */
         private String apiKey = "";
+        /** 🔴 타임아웃 필수. read 는 게이트웨이 p99 지연을 덮게 잡는다(페이로드는 항상 작다). */
+        private Duration connectTimeout = Duration.ofSeconds(5);
+        private Duration readTimeout = Duration.ofSeconds(30);
 
         public String getBaseUrl() {
             return baseUrl;
@@ -114,6 +137,22 @@ public class CandidateProperties {
         public void setApiKey(String apiKey) {
             this.apiKey = apiKey;
         }
+
+        public Duration getConnectTimeout() {
+            return connectTimeout;
+        }
+
+        public void setConnectTimeout(Duration connectTimeout) {
+            this.connectTimeout = connectTimeout;
+        }
+
+        public Duration getReadTimeout() {
+            return readTimeout;
+        }
+
+        public void setReadTimeout(Duration readTimeout) {
+            this.readTimeout = readTimeout;
+        }
     }
 
     /**
@@ -122,7 +161,11 @@ public class CandidateProperties {
      */
     public static class Scheduler {
         private boolean enabled = false;
-        /** 폴 간격 (ISO-8601 Duration). */
+        /**
+         * 폴 간격 (ISO-8601 Duration). ⚠️ 실제 바인딩은 {@code @Scheduled(fixedDelayString=...)}
+         * SpEL 이 프로퍼티 키를 직접 읽어 한다(어노테이션은 상수식만 받아 게터를 못 쓴다).
+         * 이 필드는 문서·기본값 정의용이며, 어노테이션 기본값과 값을 맞춰 둔다.
+         */
         private String fixedDelay = "PT5M";
         /** 한 번에 처리할 클러스터 수 상한. */
         private int batchSize = 20;

@@ -3,6 +3,7 @@ package io.wikipulse.backend.matching;
 import com.fasterxml.jackson.databind.JsonNode;
 import java.util.Map;
 import org.springframework.http.MediaType;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 
@@ -22,8 +23,14 @@ public class GatewayEmbeddingClient {
 
     public GatewayEmbeddingClient(CandidateProperties props) {
         this.gateway = props.getGateway();
+        // 🔴 타임아웃 필수 — 없으면 소켓 hang 이 단일 스케줄러 스레드를 영구 정지시킨다.
+        // 정적 RestClient.builder 는 Boot 의 spring.http.client 자동설정을 안 타므로 여기서 명시한다.
+        SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
+        factory.setConnectTimeout(gateway.getConnectTimeout());
+        factory.setReadTimeout(gateway.getReadTimeout());
         this.client = RestClient.builder()
                 .baseUrl(gateway.getBaseUrl())
+                .requestFactory(factory)
                 .build();
     }
 
@@ -49,7 +56,8 @@ public class GatewayEmbeddingClient {
 
         JsonNode vector = root == null ? null : root.path("data").path(0).path("embedding");
         if (vector == null || !vector.isArray() || vector.isEmpty()) {
-            throw new IllegalStateException("GATEWAY 임베딩 응답에 벡터가 없다: " + root);
+            // 응답 본문 전체를 메시지에 싣지 않는다 — 로그 비대·장래 에코형 게이트웨이의 위험 표면.
+            throw new IllegalStateException("GATEWAY 임베딩 응답에 벡터가 없다 (data[0].embedding 누락/빈 배열)");
         }
         float[] out = new float[vector.size()];
         for (int i = 0; i < out.length; i++) {

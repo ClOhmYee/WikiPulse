@@ -92,7 +92,7 @@ public class CandidateRepository {
                   FROM cluster_org_mention
                  WHERE cluster_id = :cid AND ticker IS NOT NULL
                  GROUP BY ticker
-                 ORDER BY lift DESC
+                 ORDER BY MAX(lift) DESC
                  LIMIT :k
                 """, params, rs -> {
             out.put(rs.getString("ticker"), rs.getDouble("lift"));

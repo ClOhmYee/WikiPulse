@@ -30,13 +30,21 @@ management:
 # 이슈-종목 후보 생성 워커 (WP-67, 명세 §6.3).
 # K·lift 컷은 WP-22 확정값(임베딩 20 / GDELT 10). 폴러는 기본 꺼짐 —
 # 서버에서 LLM_GATEWAY_KEY 를 넣고 scheduler.enabled=true 로 켠다.
+# 🔴 폴러는 종목 임베딩(WP-34) 전량 적재 후에 켠다(StockCandidateWorker 순서 계약).
 wikipulse:
   matching:
     embedding-top-k: 20
     gdelt-top-k: 10
     max-chars: 2000
+    wikipedia:
+      # 🔴 타임아웃 필수 — 소켓 hang 이 단일 스케줄러 스레드를 영구 정지시킨다.
+      connect-timeout: 5s
+      read-timeout: 10s
     gateway:
       api-key: ${LLM_GATEWAY_KEY:}
+      connect-timeout: 5s
+      # read 는 게이트웨이 p99 지연을 덮게(페이로드는 항상 작다).
+      read-timeout: 30s
     scheduler:
       enabled: ${WIKIPULSE_MATCHING_SCHEDULER_ENABLED:false}
       fixed-delay: PT5M

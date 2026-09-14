@@ -63,6 +63,21 @@ class StockCandidateServiceTest {
     }
 
     @Test
+    void 임베딩_경로_예외는_전파되어_클러스터가_미완료로_남는다() {
+        // GATEWAY·위키 전이성 실패는 삼키지 않는다(fix-impact 반려안 B). 예외가 전파되면
+        // replaceCandidates 에 도달하지 못해 아무 행도 안 쓰이고, 폴러가 다음 주기에 재시도한다.
+        when(repository.memberTitlesByPulse(9L)).thenReturn(List.of("Some Title"));
+        when(embeddingSource.embed(List.of("Some Title")))
+                .thenThrow(new org.springframework.web.client.RestClientException("503"));
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> service().generateFor(9L))
+                .isInstanceOf(org.springframework.web.client.RestClientException.class);
+
+        verify(repository, never()).replaceCandidates(org.mockito.ArgumentMatchers.anyLong(),
+                org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test
     void 대표_텍스트가_비면_임베딩_경로를_건너뛰고_GDELT만으로_적재한다() {
         when(repository.memberTitlesByPulse(7L)).thenReturn(List.of("Some Title"));
         when(embeddingSource.embed(List.of("Some Title"))).thenReturn(Optional.empty());
