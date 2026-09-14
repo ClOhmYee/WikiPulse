@@ -49,7 +49,7 @@ baseline이 없다 — z를 못 낸다. 신규 문서는 절대 편집수로만 
 
 ```bash
 cd data-pipeline/spike
-python -m pytest        # 13개, Spark 없이
+python -m pytest        # 22개 (detector + ewma), Spark 없이
 ```
 
 - 평상시 조회수가 z 임계 아래인지 (오탐)
@@ -59,12 +59,33 @@ python -m pytest        # 13개, Spark 없이
 - 신규 문서가 절대 편집수로 잡히는지
 - 극단값(z=5311)이 점수를 지배하지 않는지 (log 압축)
 
+## EWMA 가중치 (WP-59)
+
+기준선은 슬롯(문서×요일·시간대)마다 지난 28일 관측치(≈4주)를 **최근에 더 무게** 두어
+평균·표준편차를 낸다. 가중 방식·감쇠는 `ewma.py` 가 정한다:
+
+```
+weight = 0.5 ** (age_days / 반감기)      # 반감기 H일 → H일 전 관측치 무게 절반
+```
+
+- 반감기가 크면 단순평균에 수렴하고, 작으면 최근값이 지배한다. 후보 `7 / 14 / 28`일.
+- 🔴 **잠정 기본값 `DEFAULT_HALFLIFE_DAYS = 14`.** 실측 확정 아님. 실덤프(-56·-57)·
+  HDFS(-28)가 서면 `ewma_compare.py` 로 -58 산출물에 후보를 돌려 고르고, 근거를
+  명세 §11 에 날짜와 함께 기록한다.
+- 판정 임계(z≥3 등, WP-38 확정)는 -59 에서 바꾸지 않는다. 확정 반감기가 -38
+  판정을 뒤집으면 임의로 고치지 말고 팀에 올린다.
+- 실제 EWMA 구현·`page_baseline` 적재는 WP-60 이 `ewma.py` 를 불러 `build_baseline`
+  에 넣는다. 지금 `build_baseline` 은 아직 산술평균 골격이다.
+
+```bash
+python -m spike.ewma_compare --input ./data/baseline-input/enwiki/2025-06   # 후보 비교
+```
+
 ## 아직 안 한 것
 
-- **baseline.py 는 골격이다.** 집계 스키마와 형태만 잡았다. EWMA 가중·스케줄은
-  기준선 소스(Pageviews·mediawiki_history 덤프)가 HDFS 에 적재된 뒤 붙인다.
+- **baseline.py 는 골격이다.** 집계 스키마·형태만 잡았다. EWMA 실구현·적재는 -60.
 - **Streaming 연결.** `streaming/edit_windows.py` 가 윈도우 집계까지 하고,
   거기에 `detect()` 를 붙여 spike 테이블에 쓰는 건 데이터 모델(-35)·기준선
   적재가 develop 에 들어간 뒤다.
-- **윈도우 길이·EWMA 가중·봇 필터 강도** 는 실데이터로 튜닝. 지금 임계는
-  Strait of Hormuz 한 사건 기준이라 여러 사건으로 넓혀야 한다.
+- **윈도우 길이·봇 필터 강도** 는 실데이터로 튜닝. 지금 임계는 Strait of Hormuz 한
+  사건 기준이라 여러 사건으로 넓혀야 한다. (EWMA 반감기는 위 -59 참조.)

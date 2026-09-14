@@ -38,8 +38,10 @@ def build_baseline(edit_windows):
     """문서 × 요일·시간대 편집 EWMA·표준편차.
 
     입력: (page_id, window_start, edit_count, views) 형태의 과거 28일.
-    실제로는 여기에 지수가중을 넣지만, 골격에서는 평균·표준편차로 둔다 —
-    EWMA 가중치는 데이터가 붙은 뒤 튜닝한다.
+    골격은 아직 F.avg/F.stddev_pop 산술평균이다. 지수가중 방식과 반감기는
+    ewma.py 가 정한다(WP-59: weight = 0.5**(age/반감기), 잠정
+    DEFAULT_HALFLIFE_DAYS=14). 실제 EWMA 구현·적재는 WP-60 이 ewma.py 를
+    불러 여기에 넣는다. 반감기 확정값은 ewma_compare.py 로 실데이터에 돌려 §11 에 기록한다.
     """
     return (
         edit_windows
