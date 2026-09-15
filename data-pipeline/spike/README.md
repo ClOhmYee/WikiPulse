@@ -6,7 +6,7 @@
 
 ```
 28일 기준선 (baseline.py, Spark 배치)
-   문서 × 요일·시간대(0..167) EWMA
+   문서 × 시간대(0..23, UTC) EWMA
         │
         ▼
 급증 판정 (detector.py, 순수 함수)
@@ -55,7 +55,7 @@ baseline이 없다 — z를 못 낸다. 신규 문서는 절대 편집수로만 
 🔴 **임계는 안 건드렸다.** `EDIT_Z_THRESHOLD`(3)·`MIN_ABSOLUTE_EDITS`(10)·
 `MIN_BASELINE_SAMPLE_DAYS`(7)는 WP-38 확정 자산 그대로다.
 
-⚠️ 남은 후속: 슬롯 정의(`hour_of_week`→`hour_of_day`, WP-84)와 **6시간 창**
+⚠️ 남은 후속: **6시간 창**
 (재현율 92%·오탐 40건). 창 길이는 스트리밍 `WINDOW_SIZE` 와 함께 움직여야 해서
 **WP-83 이 선행**이다 — 배치만 바꾸면 `edit_z` 가 에러 없이 어긋난다.
 
@@ -87,7 +87,7 @@ python -m pytest        # 57개. 47개는 Spark·DB 없이, 5개는 실 PostgreS
 
 ## EWMA 가중치 (WP-59)
 
-기준선은 슬롯(문서×요일·시간대)마다 지난 28일 관측치(≈4주)를 **최근에 더 무게** 두어
+기준선은 슬롯(문서×시간대)마다 지난 28일 관측치(최대 28개)를 **최근에 더 무게** 두어
 평균·표준편차를 낸다. 가중 방식·감쇠는 `ewma.py` 가 정한다:
 
 ```
@@ -112,13 +112,13 @@ python -m spike.ewma_compare --input ./data/baseline-input/enwiki/2025-06   # �
 Historical Window 산출물(WP-58)에서 `page_baseline` 행을 만들어 적재한다.
 
 ```
-(wiki,title,window_start,hour_of_week,edit_count,views)   ← -58 산출물
+(wiki,title,window_start,hour_of_day,edit_count,editor_count,views)   ← -58 산출물
         │  baseline_rows.py  — 28일 창 · ewma.py 가중 · sample_days
         ▼
-(wiki,title,hour_of_week, edit_ewma, edit_stddev, view_ewma, sample_days)
+(wiki,title,hour_of_day, edit_ewma, edit_stddev, view_ewma, sample_days)
         │  baseline_sink.py  — (wiki,title) → wiki_page.id · upsert
         ▼
-page_baseline  PK (page_id, hour_of_week)
+page_baseline  PK (page_id, hour_of_day)
 ```
 
 ```bash
@@ -164,7 +164,7 @@ upsert 가 필요해 `baseline_sink.py` 가 맡는다. 거기 `SINK` 는 진단 
 
 **naive datetime 을 `createDataFrame` 에 주면 9시간 밀린다.** 세션
 `timeZone=UTC` 는 이걸 막아주지 않는다 — 드라이버의 로컬 시간대(KST)로 해석해 UTC 로
-옮긴다. `hour_of_week` 가 0 대신 159 가 되는데 **에러가 안 난다.** 타임스탬프는
+옮긴다. `hour_of_day` 가 0 대신 15 가 되는데 **에러가 안 난다.** 타임스탬프는
 tz-aware 로 넘긴다.
 
 ## 리플레이 회귀 검증 (WP-61)
@@ -200,6 +200,8 @@ WP-38 의 임계는 **조회수**로 정한 것이고 편집 분포로는 검증
   위 "편집자 하한" 절 참고
 - ⚠️ **`hour_of_week` 슬롯은 주 1회라 28일 창 관측이 최대 4개** → `sample_days ≤ 4 <
   MIN_BASELINE_SAMPLE_DAYS=7` → 기존 문서도 항상 `is_thin` → **z 경로가 한 번도 실행되지 않는다**
+  → ✅ **해소됨** (2026-09-15, WP-84). 슬롯을 `hour_of_day`(0~23)로 바꿔 같은 슬롯이
+  매일 오므로 28일 창에서 최대 28관측이 된다. `V3__baseline_hour_of_day.sql`
 
 → **WP-84**(sample_days 구조적 미달)·**WP-85**(임계 재검토). 근거는 명세 §11.
 

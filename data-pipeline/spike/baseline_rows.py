@@ -5,7 +5,7 @@ Historical Window 산출물(WP-58)을 읽어 `page_baseline` 한 행에 해당�
 🔴 여기서 가중치를 새로 정하지 않는다.
 
 산출 형태 (page_baseline 컬럼과 1:1)
-    (wiki, title, hour_of_week, edit_ewma, edit_stddev, view_ewma, sample_days)
+    (wiki, title, hour_of_day, edit_ewma, edit_stddev, view_ewma, sample_days)
     page_id 는 여기 없다 — (wiki, title) → wiki_page.id 해석은 적재 시점
     (baseline_sink.py) 책임이다. 덤프 page_id 를 쓰지 않는 -56·-57·-58 과 같은 키다.
 
@@ -43,7 +43,7 @@ class BaselineRow:
     """page_baseline 한 행. page_id 는 적재 시점에 붙는다."""
     wiki: str
     title: str
-    hour_of_week: int
+    hour_of_day: int
     edit_ewma: float
     edit_stddev: float | None
     view_ewma: float | None
@@ -70,7 +70,7 @@ def build_rows(
 ) -> list[BaselineRow]:
     """Historical Window 행들에서 기준선 행을 만든다.
 
-    windows: -58 산출물 레코드 (wiki, title, window_start, hour_of_week, edit_count, views)
+    windows: -58 산출물 레코드 (wiki, title, window_start, hour_of_day, edit_count, views)
     as_of  : 창의 끝(포함). None 이면 관측 중 가장 최근 날짜.
 
     [as_of-window_days, as_of] 밖의 관측은 버린다. 창 안에 관측이 하나도 없는
@@ -85,14 +85,14 @@ def build_rows(
 
     oldest = as_of.toordinal() - window_days
 
-    # (wiki, title, hour_of_week) -> [(관측일, 편집수, 조회수)]
+    # (wiki, title, hour_of_day) -> [(관측일, 편집수, 조회수)]
     slots: dict[tuple[str, str, int], list[tuple[date, float, float | None]]] = defaultdict(list)
     for row in rows:
         day = _day(row["window_start"])
         if not (oldest < day.toordinal() <= as_of.toordinal()):
             continue          # 28일 창 밖
         views = row.get("views")
-        slots[(row["wiki"], row["title"], int(row["hour_of_week"]))].append(
+        slots[(row["wiki"], row["title"], int(row["hour_of_day"]))].append(
             (day, float(row["edit_count"]), None if views is None else float(views))
         )
 
@@ -111,7 +111,7 @@ def build_rows(
         out.append(BaselineRow(
             wiki=wiki,
             title=title,
-            hour_of_week=hour,
+            hour_of_day=hour,
             edit_ewma=edit_ewma,
             edit_stddev=edit_stddev,
             view_ewma=view_ewma,

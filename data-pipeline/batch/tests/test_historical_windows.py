@@ -10,7 +10,7 @@ from batch.historical_windows import (
     aggregate_edits,
     build_windows,
     floor_to_hour,
-    hour_of_week,
+    hour_of_day,
     is_bot_edit,
     join_windows,
     sum_views,
@@ -33,12 +33,16 @@ def test_정각으로_내린다():
     assert floor_to_hour("2025-06-12T14:00:00Z") == "2025-06-12T14:00:00"
 
 
-def test_hour_of_week_월요일_0():
-    # 2025-06-09 은 월요일 (baseline.py Spark 판과 같은 정의: 월=0)
-    assert hour_of_week("2025-06-09T00:00:00") == 0
-    assert hour_of_week("2025-06-09T05:00:00") == 5
-    assert hour_of_week("2025-06-10T00:00:00") == 24     # 화요일 00시
-    assert hour_of_week("2025-06-15T23:00:00") == 167    # 일요일 23시 (마지막 슬롯)
+def test_hour_of_day는_요일과_무관하다():
+    """0..23 (UTC 시). baseline.py Spark 판(F.hour)과 같은 정의.
+
+    ~~요일×시간 0..167~~ -> 시간 0..23 (2026-09-15, WP-84). 요일 축을 뺐으므로
+    **다른 요일의 같은 시각은 같은 슬롯**이다 — 그래야 28일 창에 관측이 28개 쌓인다.
+    """
+    assert hour_of_day("2025-06-09T00:00:00") == 0      # 월 00시
+    assert hour_of_day("2025-06-09T05:00:00") == 5
+    assert hour_of_day("2025-06-10T00:00:00") == 0      # 화 00시 — 월요일과 같은 슬롯
+    assert hour_of_day("2025-06-15T23:00:00") == 23     # 일 23시 (마지막 슬롯)
 
 
 # ---------------------------------------------------------------- 편집 집계
@@ -110,7 +114,7 @@ def test_build_windows_정렬_결합():
         [view("enwiki", "Iran", "2025-06-09T00:00:00", "user", 40)],
     )
     assert rows == [WindowRow(
-        "enwiki", "Iran", "2025-06-09T00:00:00", hour_of_week("2025-06-09T00:00:00"),
+        "enwiki", "Iran", "2025-06-09T00:00:00", hour_of_day("2025-06-09T00:00:00"),
         edit_count=1, editor_count=1, views=40)]
 
 

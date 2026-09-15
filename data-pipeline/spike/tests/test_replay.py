@@ -131,21 +131,18 @@ def test_first_detection은_가장_이른_급증():
 
 # ---------------------------------------------------------------- 알려진 한계
 
-def test_슬롯당_관측은_28일에_최대_4개다():
-    """🔴 회귀로 고정하는 **알려진 불일치** (WP-61 에서 발견).
+def test_슬롯이_매일_와서_sample_days가_쌓인다():
+    """WP-84 로 해소된 구조 문제의 회귀 테스트.
 
-    hour_of_week 슬롯은 주에 한 번만 온다. 그래서 28일 창에서 한 슬롯의 관측은
-    아무리 많아야 4개이고 `sample_days <= 4` 다. 그런데 detector 의
-    MIN_BASELINE_SAMPLE_DAYS 는 7 이라 **조건이 영원히 충족되지 않는다** —
-    기존 문서도 항상 is_thin 으로 판정돼 z 경로 대신 절대 편집수 경로로 간다.
-
-    ⚠️ 여기서 임계를 고치지 않는다. WP-38 확정 자산이라 별건 이슈다.
+    ~~hour_of_week 슬롯은 주 1회라 28일 창 관측이 최대 4개이고 sample_days 가
+    MIN_BASELINE_SAMPLE_DAYS(7) 에 영원히 도달하지 못했다~~ → hour_of_day 로 바꿔
+    같은 슬롯이 **매일** 온다 (2026-09-15). 이제 7일이면 문턱을 넘어 z 경로가 산다.
     """
-    days = ["2025-05-19", "2025-05-26", "2025-06-02", "2025-06-09"]   # 월요일 4주
+    days = [f"2025-06-{d:02d}" for d in range(2, 10)]    # 8일 연속, 같은 00시 슬롯
     observations = [obs("Iran", f"{d}T00:00:00", 1) for d in days]
-    target = obs("Iran", "2025-06-16T00:00:00", 40)
+    target = obs("Iran", "2025-06-10T00:00:00", 40)
     baseline = baseline_at(observations + [target], target, halflife_days=1e9)
 
-    assert baseline.sample_days == 4                     # 4주치가 최대
-    assert baseline.sample_days < MIN_BASELINE_SAMPLE_DAYS
-    assert baseline.is_thin is True                      # -> 신규 문서 경로로 빠진다
+    assert baseline.sample_days == 8                     # 주 1회가 아니라 매일
+    assert baseline.sample_days >= MIN_BASELINE_SAMPLE_DAYS
+    assert baseline.is_thin is False                     # -> z 경로가 실제로 돈다

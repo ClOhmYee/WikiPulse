@@ -45,7 +45,7 @@ MIN_DISTINCT_EDITORS = 2
 
 @dataclass(frozen=True)
 class Baseline:
-    """문서 × 요일·시간대 기준선. page_baseline 테이블 한 행."""
+    """문서 × 시간대(0~23, UTC) 기준선. page_baseline 테이블 한 행."""
     edit_ewma: float
     edit_stddev: float | None
     view_ewma: float | None

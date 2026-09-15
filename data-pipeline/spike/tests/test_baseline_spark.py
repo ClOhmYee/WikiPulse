@@ -66,7 +66,7 @@ def utc(*args) -> datetime:
     """UTC 로 못박은 datetime.
 
     ⚠️ naive datetime 을 createDataFrame 에 주면 Spark 가 **드라이버의 로컬 시간대**로
-    해석해 UTC 로 옮긴다. KST 개발 PC 에서는 9시간 밀려 hour_of_week 가 0 대신 159 가
+    해석해 UTC 로 옮긴다. KST 개발 PC 에서는 9시간 밀려 hour_of_day 가 0 대신 15 가
     되는데, 에러 없이 슬롯만 조용히 틀린다(2026-09-14 실제로 겪음).
     세션 timeZone=UTC 는 이걸 막아주지 않는다 — 입력을 aware 로 준다.
     """
@@ -74,28 +74,28 @@ def utc(*args) -> datetime:
 
 
 def sample():
-    """같은 슬롯(월 00시)에 2주치 관측 + 다른 슬롯 하나."""
+    """같은 슬롯(00시)에 2주치 관측 + 다른 슬롯(05시) 하나."""
     return [
         ("enwiki", "Iran", utc(2025, 6, 9, 0, 30), 10, 100.0),   # age 0
         ("enwiki", "Iran", utc(2025, 6, 2, 0, 15), 2, 20.0),     # age 7
-        ("enwiki", "Iran", utc(2025, 6, 9, 5, 0), 4, 40.0),      # 다른 슬롯(월 05시)
+        ("enwiki", "Iran", utc(2025, 6, 9, 5, 0), 4, 40.0),      # 다른 슬롯(05시)
     ]
 
 
 def pure_rows():
     windows = [
         {"wiki": w, "title": t, "window_start": ts.strftime("%Y-%m-%dT%H:00:00"),
-         "hour_of_week": ts.weekday() * 24 + ts.hour, "edit_count": e, "views": v}
+         "hour_of_day": ts.hour, "edit_count": e, "views": v}
         for w, t, ts, e, v in sample()
     ]
-    return {(r.hour_of_week): r for r in build_rows(
+    return {(r.hour_of_day): r for r in build_rows(
         windows, as_of=date.fromisoformat(AS_OF), halflife_days=HALFLIFE)}
 
 
 def spark_rows(spark):
     df = spark.createDataFrame(sample(), SCHEMA)
     out = build_baseline(df, AS_OF, halflife_days=HALFLIFE)
-    return {r["hour_of_week"]: r for r in out.collect()}
+    return {r["hour_of_day"]: r for r in out.collect()}
 
 
 def test_두_판이_같은_슬롯을_만든다(spark):
@@ -126,7 +126,7 @@ def test_28일_경계가_양쪽_모두_적용된다(spark):
     """창 밖(29일 전) 관측은 두 판 모두 버려야 한다."""
     rows = sample() + [("enwiki", "Iran", utc(2025, 5, 1, 0, 0), 9999, 9999.0)]
     df = spark.createDataFrame(rows, SCHEMA)
-    sp = {r["hour_of_week"]: r for r in
+    sp = {r["hour_of_day"]: r for r in
           build_baseline(df, AS_OF, halflife_days=HALFLIFE).collect()}
     # 창 밖 값(9999)이 섞였다면 edit_ewma 가 폭발한다
     assert sp[0]["edit_ewma"] == pytest.approx(pure_rows()[0].edit_ewma, rel=1e-9)

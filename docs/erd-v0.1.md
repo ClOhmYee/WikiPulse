@@ -13,7 +13,7 @@
 erDiagram
     wiki_page          ||--o{ page_edit_window   : "윈도우 집계"
     wiki_page          ||--o{ page_view_hourly   : "조회수"
-    wiki_page          ||--o{ page_baseline      : "요일·시간대 기준선"
+    wiki_page          ||--o{ page_baseline      : "시간대 기준선"
     wiki_page          ||--o{ spike              : "급증 판정 통과"
     wiki_page          ||--o{ cluster_member     : "클러스터 편입"
 
@@ -57,7 +57,7 @@ spike → issue_cluster ─┬─ cluster_member   (어떤 문서가 묶였나)
 | `wiki_page` | `id` (대리키) | — | 자연키는 `UNIQUE (wiki, title)`. EventStreams에 `page_id`가 없다 |
 | `page_edit_window` | `(page_id, window_start)` | `page_id` | 슬라이딩이라 편집 1건이 여러 행에 걸린다 |
 | `page_view_hourly` | `(page_id, ts_hour)` | `page_id` | |
-| `page_baseline` | `(page_id, hour_of_week)` | `page_id` | `hour_of_week` 0~167 |
+| `page_baseline` | `(page_id, hour_of_day)` | `page_id` | `hour_of_day` 0~23 (UTC 시). ~~`hour_of_week` 0~167~~ → 2026-09-15 (WP-84, `V3__baseline_hour_of_day.sql`) |
 | `spike` | `id` | `page_id` | `UNIQUE (page_id, window_start)` — 같은 창을 두 번 못 넣는다 |
 | `issue_cluster` | `id` | — | `snapshot_ts` 가 시점을 가른다 |
 | `cluster_member` | `(cluster_id, page_id)` | `cluster_id`, `page_id` | 한 문서가 여러 클러스터에 들어갈 수 있다 |
