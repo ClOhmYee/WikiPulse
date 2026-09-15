@@ -38,6 +38,27 @@ def test_제목_밑줄을_공백으로_정규화():
     assert row.prev == "2025 Iran war" and row.curr == "Sinking of IRIS Dena"
 
 
+def test_연속_구분자와_앞뒤_구분자도_접는다():
+    """🔴 여기 있던 자체 `canonical_title` 은 `raw.replace("_", " ")` 뿐이라
+    `Hurricane__Milton` 이 공백 두 개짜리가 됐다 — producer 판과 결과가 달랐다.
+    같은 이름·다른 동작이라 (wiki, title) 자연키가 조용히 갈라진다 (WP-91).
+
+    이제 `producer.normalize.canonical_title` 한 곳에서만 온다.
+    """
+    row = parse_row(tsv("_Hurricane__Milton_", "Strait  of _ Hormuz", "link", "7"))
+    assert row.prev == "Hurricane Milton"
+    assert row.curr == "Strait of Hormuz"
+
+
+def test_정규화는_한_곳에서만_온다():
+    """import 경로가 유지되는지도 같이 본다 — 기존 코드가 batch.clickstream 에서
+    이 이름을 가져다 쓴다."""
+    from batch import clickstream
+    from producer.normalize import canonical_title as source
+
+    assert clickstream.canonical_title is source
+
+
 def test_컬럼_수가_다르면_SchemaMismatch():
     with pytest.raises(SchemaMismatch):
         parse_row("only\ttwo")

@@ -42,6 +42,7 @@ from datetime import date, timedelta
 from pathlib import Path
 
 from batch.historical_windows import floor_to_hour, hour_of_day, is_bot_edit
+from producer.normalize import canonical_title
 from .baseline_rows import BASELINE_WINDOW_DAYS, build_rows
 from .detector import Baseline, SpikeDecision, Window, detect
 from .ewma import DEFAULT_HALFLIFE_DAYS
@@ -88,14 +89,24 @@ def read_edit_events(edits_dir: Path) -> Iterator[dict]:
 def aggregate(events: Iterable[dict], titles: set[str]) -> dict[str, list[Observation]]:
     """관심 문서만 (wiki, title, 정각) 으로 집계한다. 봇은 제외 — 스트리밍과 같은 판정.
 
-    제목은 덤프 원형(밑줄)이다. titles 도 같은 형태로 준다.
+    제목은 **밑줄·공백 아무 형태로나** 줘도 된다. 요청 제목과 레코드 제목을 둘 다
+    `canonical_title` 로 맞춘 뒤 비교하고, 결과 키도 canonical(공백형)로 낸다.
+
+    ~~제목은 덤프 원형(밑줄)이다~~ → 덤프 세대가 둘이다 (2026-09-15, WP-91).
+    `normalize_dump` 가 WP-79 부터 공백형을 내므로, 재생성 전 적재본(밑줄)과
+    재생성 후 적재본(공백)이 섞여 돈다. 형식이 어긋나면 **"관측 없음"** 으로 끝나는데,
+    그게 "그 문서는 급증이 없었다" 로 읽히기 쉽다 — 조용히 틀리는 쪽이라 여기서 흡수한다.
     """
     # (wiki, title, hour) -> [편집 수, {편집자}]
     acc: dict[tuple[str, str, str], tuple[list[int], set[str]]] = defaultdict(
         lambda: ([0], set()))
+    wanted = {canonical_title(t) for t in titles}
     for rec in events:
-        title = rec.get("title")
-        if title not in titles or is_bot_edit(rec):
+        raw_title = rec.get("title")
+        if raw_title is None:
+            continue
+        title = canonical_title(raw_title)
+        if title not in wanted or is_bot_edit(rec):
             continue
         key = (rec["wiki"], title, floor_to_hour(rec["event_ts"]))
         count, editors = acc[key]
@@ -183,7 +194,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(description="과거 사건 리플레이 회귀 검증 (WP-61)")
     p.add_argument("--edits", required=True, help="편집 적재본 디렉터리 (-56)")
     p.add_argument("--title", action="append", default=[],
-                   help="검증할 문서(덤프 원형, 밑줄). 여러 번 줄 수 있다")
+                   help="검증할 문서. 밑줄·공백 아무 형태로나 준다. 여러 번 줄 수 있다")
     p.add_argument("--control", action="append", default=[],
                    help="대조군 문서. 오탐이 나면 안 되는 쪽")
     p.add_argument("--halflife-days", type=float, default=DEFAULT_HALFLIFE_DAYS)
@@ -209,7 +220,8 @@ def main(argv: list[str] | None = None) -> int:
     exit_code = 0
     for title in targets:
         kind = "대조군" if title in args.control else "검증"
-        observations = by_title.get(title, [])
+        # by_title 키는 canonical(공백형)이다 — 사용자가 밑줄로 줬어도 찾아진다.
+        observations = by_title.get(canonical_title(title), [])
         if not observations:
             print(f"\n[{kind}] {title} - 관측 없음 (제목/구간 확인)")
             exit_code = 1

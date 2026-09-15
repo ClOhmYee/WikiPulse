@@ -224,8 +224,12 @@ python -m spike.replay --edits ./out/enwiki/2025-06 \
     --title Strait_of_Hormuz --control Association_football
 ```
 
-`--title` 은 잡혀야 하는 문서, `--control` 은 오탐이 나면 안 되는 문서다. 제목은 덤프
-원형(밑줄)으로 준다. 로직 자체는 `tests/test_replay.py` 가 합성 데이터로 고정한다(실덤프 불필요).
+`--title` 은 잡혀야 하는 문서, `--control` 은 오탐이 나면 안 되는 문서다. 제목은 **밑줄·공백
+아무 형태로나** 준다 — `aggregate` 가 요청 제목과 레코드 제목을 둘 다 canonical 로 맞춘다
+(WP-91). ~~덤프 원형(밑줄)으로 준다~~ → 덤프 세대가 둘이다: `normalize_dump` 가
+WP-79 부터 공백형을 내므로 재생성 전(밑줄)·후(공백) 적재본이 섞여 돈다. 형식이
+어긋나면 "관측 없음" 으로 끝나는데 그게 "급증이 없었다" 로 읽힌다. 로직 자체는
+`tests/test_replay.py` 가 합성 데이터로 고정한다(실덤프 불필요).
 
 ### 🔴 2026-09-14 실덤프 결과 — 확정 임계가 흔들렸다
 
