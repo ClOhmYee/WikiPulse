@@ -25,8 +25,18 @@
       통째로 어긋나는데 에러 없이 숫자만 틀린다. baseline 은 24 슬롯(hour_of_day)이라
       1시간이 자연스러운 정합값이다.
     - **봇 필터 = is_bot 참인 편집 제외.** 스트리밍의 `~coalesce(is_bot, False)` 와 같다.
-    - **문서 키 = (wiki, title).** -56·-57 과 같다. dump page_id 는 쓰지 않는다 —
-      wiki_page.id 해석은 적재(WP-60) 책임.
+    - **문서 키 = (wiki, title), title 은 canonical 공백형.** -56·-57 과 같다.
+      dump page_id 는 쓰지 않는다 — wiki_page.id 해석은 적재(WP-60) 책임.
+
+🔴 제목은 **읽는 지점에서** canonical 로 맞춘다 (WP-92)
+    ~~샤드 title 을 그대로 키로 썼다~~ → 샤드 세대가 둘이라 그러면 안 된다.
+    WP-79 부터 normalize_dump·pageview 가 공백형을 내지만, 그 전에 만든 -56
+    편집 샤드는 밑줄형이다. 세대가 섞이면 join_windows 의 (wiki, title, hour) 가
+    **한 건도 안 맞아** 같은 문서·같은 시각이 views=0 행과 edit_count=0 행 둘로 쪼개진다.
+    view_ewma 가 전부 비고, 조회수 단독 발동(WP-90)이 통째로 죽는다 —
+    **에러는 안 나고 행 수만 는다.**
+    canonical_title 은 멱등이라 신세대 샤드에는 아무 영향이 없다.
+    db/README.md 가 정한 규칙 그대로다: 집계가 끝난 뒤가 아니라 읽는 지점에서 맞춘다.
 
 왜 순수 파이썬인가 (Spark 아님)
     HDFS 2노드(WP-28)·Spark 2노드(WP-27)가 아직 없다. 형제 적재
@@ -40,6 +50,8 @@ from __future__ import annotations
 from collections.abc import Iterable, Iterator
 from dataclasses import dataclass
 from datetime import datetime
+
+from producer.normalize import canonical_title
 
 #: 집계 윈도우(시간). 스트리밍 WINDOW_SIZE 와 맞춘다. baseline 24 슬롯의 입도.
 WINDOW_HOURS = 1
@@ -100,7 +112,8 @@ def aggregate_edits(
     for rec in edit_events:
         if not keep_bots and is_bot_edit(rec):
             continue
-        key = (rec["wiki"], rec["title"], floor_to_hour(rec["event_ts"]))
+        key = (rec["wiki"], canonical_title(rec["title"]),
+               floor_to_hour(rec["event_ts"]))
         counts[key] = counts.get(key, 0) + 1
         user = rec.get("user")
         if user:
@@ -120,7 +133,7 @@ def sum_views(
     for rec in pageviews:
         if agents is not None and rec["agent"] not in agents:
             continue
-        key = (rec["wiki"], rec["title"], rec["ts_hour"])
+        key = (rec["wiki"], canonical_title(rec["title"]), rec["ts_hour"])
         totals[key] = totals.get(key, 0) + int(rec["views"])
     return totals
 

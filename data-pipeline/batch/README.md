@@ -363,8 +363,15 @@ python -m batch.historical_windows_ingest \
   ~~편집자 1~10명 구간에서 불일치 0건~~ → 표본을 200,000 events 로 키우니 **21건 불일치**,
   그중 13건이 `2 → 1` 로 편집자 하한을 뒤집었다 (2026-09-15, WP-83).
   `rsd=0.01` 이면 0건 — `streaming.EDITOR_COUNT_RSD` 주석 참고.
-- **문서 키 = `(wiki, title)`.** -56·-57 과 같다. dump page_id 는 안 쓴다 — `wiki_page.id`
-  해석은 적재(WP-60) 책임.
+- **문서 키 = `(wiki, title)`, title 은 canonical 공백형.** -56·-57 과 같다. dump page_id 는
+  안 쓴다 — `wiki_page.id` 해석은 적재(WP-60) 책임.
+  🔴 **읽는 지점에서 `canonical_title` 을 통과시킨다** (WP-92). -79 이전에 만든
+  편집 샤드가 밑줄형이라 세대가 섞이는데, 안 맞추면 편집·조회수 join 이 **한 건도 안 맞고**
+  같은 문서·같은 시각이 `views=0` 행과 `edit_count=0` 행 둘로 쪼개진다. 멱등이라 신세대
+  샤드에는 무영향이다.
+  ⚠️ **스트리밍은 이 보정을 안 한다** — `producer/normalize.py` 가 Kafka 에 넣기 전에 이미
+  맞춘다. 규칙을 Spark 표현식으로 또 구현하면 파이썬 판과 갈릴 수 있어서 한 곳에만 둔다.
+  이 비대칭은 `tests/test_stream_batch_parity.py` 가 명시적으로 고정한다.
 - **`hour_of_day` 정의(UTC 시 0~23)는 `spike/baseline.py` 의 Spark 판과 같아야 한다.**
   Python `weekday()` 월=0 == Spark `(dayofweek+5)%7` 월=0. 테스트로 알려진 날짜를 고정했다.
 - 편집·조회는 `(wiki,title,hour)` 기준 **full outer join** — 한쪽만 있는 시간도 0 으로 남긴다

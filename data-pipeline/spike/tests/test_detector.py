@@ -168,6 +168,43 @@ def test_조회수_단독_통과의_점수는_조회수만으로_낸다():
     assert d.is_spike and d.spike_score > 0
 
 
+def test_확정_급증이_비슷한_세기의_조회수_단독보다_높다():
+    """🔴 WP-93 회귀.
+
+    ~~조회수 단독 점수만 배수(log1p(ratio))로 냈다~~ → z 와 배수는 자릿수가 달라서
+    **미확정 건이 확정 건을 밀어냈다**: 확정(edit_z=3·배수=2)=2.91 < 미확정(배수=20)=3.04.
+    `spike_score` 는 `pulse_score` 를 거쳐 피드 정렬·버블 크기를 정한다(명세 §7).
+
+    두 신호를 같은 z 단위로 놓으면 같은 세기끼리 제대로 비교된다.
+    """
+    baseline = Baseline(edit_ewma=100, edit_stddev=10, view_ewma=100,
+                        sample_days=28, view_stddev=10)
+
+    # 편집 z=3·조회수 z=3 (둘 다 임계 딱 통과, 배수도 2배 이상)
+    confirmed = detect(Window(edit_count=130, editor_count=5, views=230), baseline)
+    # 조회수만 z=3 대로 통과. 편집은 하한 미달
+    view_only = detect(Window(edit_count=2, editor_count=1, views=230), baseline)
+
+    assert "확정" in confirmed.reason
+    assert view_only.is_spike and "조회수 통과" in view_only.reason
+    assert confirmed.spike_score > view_only.spike_score
+
+
+def test_한쪽만_통과한_점수는_양쪽_통과_식과_이어진다():
+    """한쪽이 0 이면 둘 다 식이 나머지 log1p 와 같아야 한다 — 경계에서 튀면
+    한쪽만 통과한 건과 둘 다 통과한 건의 순서가 뒤집힌다."""
+    import math
+
+    from spike.detector import _score
+
+    assert _score(3.0, None) == pytest.approx(math.log1p(3.0), abs=5e-4)
+    assert _score(None, 3.0) == pytest.approx(math.log1p(3.0), abs=5e-4)
+    # 둘 다: (1+log1p(3))*(1+log1p(3)) - 1
+    both = (1 + math.log1p(3.0)) ** 2 - 1
+    assert _score(3.0, 3.0) == pytest.approx(both, abs=5e-4)
+    assert _score(3.0, 3.0) > _score(3.0, None) > _score(0.0, None)
+
+
 def test_얇은_baseline_은_절대하한이_막는다():
     """평소 편집 0~1 인 문서가 2건에 z 폭발하는 걸 절대 하한으로 막는다.
 

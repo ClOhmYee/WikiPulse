@@ -177,7 +177,7 @@ def _detect_existing_page(window: Window, baseline: Baseline) -> SpikeDecision:
         view_ratio=view_ratio,
         # 점수는 통과한 신호만으로 낸다. 미달 신호를 섞으면 확정 건과 뒤섞여 정렬이 흐려진다.
         spike_score=_score(edit_z if edit_pass else None,
-                           view_ratio if view_pass else None),
+                           view_z if view_pass else None),
         reason=reason,
     )
 
@@ -192,20 +192,42 @@ def _view_signal(
     return ratio, _z(window.views, baseline.view_ewma, baseline.view_stddev)
 
 
-def _score(edit_z: float | None, view_ratio: float | None) -> float:
-    """급등도. 버블맵 버블 크기·피드 정렬에 쓴다.
+def _score(edit_z: float | None, view_z: float | None) -> float:
+    """급등도. 버블맵 버블 크기·피드 정렬에 쓴다. 통과한 신호만 넣는다(미통과는 None).
 
-    편집 z 와 조회수 배수를 로그로 눌러 곱한다 — z 5311 같은 값이 그대로면
-    한 버블이 화면을 다 먹는다. log1p 로 완만하게.
+    두 신호를 **같은 단위(z)** 로 놓는다 (2026-09-15, WP-93).
+    ~~조회수 쪽만 배수(view_ratio)를 썼다~~ → z 와 배수는 자릿수가 달라서, 조회수
+    단독으로 통과한 **미확정** 건이 편집·조회수 다 통과한 **확정** 건을 밀어냈다:
+
+        확정   edit_z=3, 배수=2   log1p(3)*(1+log1p(2)) = 2.91
+        미확정 배수=20            log1p(20)             = 3.04   ← 더 높다
+
+    `spike_score` 는 `cluster_member` 를 거쳐 `pulse_score` 가 되고 피드 정렬·버블
+    크기를 정한다(명세 §7). 조회수 절대 하한이 아직 없어(WP-87) 평소 10회짜리
+    꼬리 문서도 배수 수십이 쉽게 나오는데, 그런 게 상단을 먹었다.
+    `view_stddev` 가 생겨(WP-90) 조회수도 z 를 낼 수 있게 된 게 전제다.
+
+    식
+        한쪽만  : log1p(z)
+        둘 다   : (1+log1p(edit_z)) * (1+log1p(view_z)) - 1
+
+    둘 다인 경우가 한쪽만인 경우로 **연속적으로 이어진다** — 한쪽이 0 이면 나머지
+    log1p 와 같아진다. log1p 로 누르는 이유는 그대로다: z 5311 이 날것으로 들어가면
+    버블 하나가 화면을 다 먹는다.
+
+    ⚠️ **"확정이 항상 미확정보다 위"는 이 점수 하나로 보장되지 않는다.** 조회수 z 가
+    압도적으로 크면 여전히 위로 갈 수 있다 — 다만 이제 같은 단위끼리의 비교다.
+    그 보장이 필요하면 정렬 키를 `(상태, 점수)` 로 두는 게 맞다(§3.2 7번 3단계 상태).
+    서빙 쪽 결정이라 여기서 정하지 않는다.
+
+    ⚠️ **신규 문서 경로는 아예 다른 식이다** — `edit_count * sqrt(editor_count)`.
+    Milton 최초 탐지가 26.46 인데 기존 문서 경로는 2~6 범위다. 원래부터 두 축이
+    달랐고 -93 에서 건드리지 않았다(WP-93 "범위 밖").
     """
     import math
 
     edit_part = math.log1p(max(0.0, edit_z)) if edit_z is not None else 0.0
-    view_part = math.log1p(max(0.0, view_ratio)) if view_ratio is not None else 0.0
-    # 한쪽만 통과했으면 그쪽만으로. 둘 다면 곱(둘 다 커야 크다).
-    # ⚠️ 조회수 단독 통과가 가능해졌다 (WP-90) — edit_z 가 None 일 수 있다.
-    if view_ratio is None:
-        return round(edit_part, 3)
-    if edit_z is None:
-        return round(view_part, 3)
-    return round(edit_part * (1.0 + view_part), 3)
+    view_part = math.log1p(max(0.0, view_z)) if view_z is not None else 0.0
+    if edit_part and view_part:
+        return round((1.0 + edit_part) * (1.0 + view_part) - 1.0, 3)
+    return round(edit_part + view_part, 3)
