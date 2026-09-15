@@ -50,6 +50,10 @@ class Baseline:
     edit_stddev: float | None
     view_ewma: float | None
     sample_days: int
+    #: 조회수 가중 표준편차. None 이면 조회수 z 를 못 낸다 -> 조회수 단독 발동 안 함
+    #: (WP-90). 기본값 None 인 이유는 -90 이전에 적재된 baseline 행에 이 값이
+    #: 없어서다 — 그런 행은 조회수 관문이 닫힌 채로 동작한다(안전한 쪽).
+    view_stddev: float | None = None
 
     @property
     def is_thin(self) -> bool:
@@ -115,49 +119,80 @@ def _detect_new_page(window: Window) -> SpikeDecision:
 
 
 def _detect_existing_page(window: Window, baseline: Baseline) -> SpikeDecision:
-    edit_z = _z(window.edit_count, baseline.edit_ewma, baseline.edit_stddev)
+    """기존 문서: **편집 통과 OR 조회수 통과** (2026-09-15, WP-90).
 
-    # 편집 1차 관문: z 임계 AND 절대 하한 AND 편집자 하한. 셋 다 넘어야 한다.
+    ~~편집 통과 AND 조회수 통과~~ → OR. 사건 10건 실측(WP-86)에서 두 신호가
+    서로 다른 문서 유형을 맡는 게 드러났다 — 기존 문서는 사람들이 **읽으러** 와서
+    편집이 안 는다(조회수 6/6 · 편집 4/6, 그중 하나는 9일 지연). AND 면 그 2건을
+    영영 못 잡는다.
+
+    ⚠️ 잃는 것: "편집만 튀고 조회수가 안 따라오면 편집 전쟁·정리 작업으로 보고 버린다"는
+    컷이 없어진다. **그 일은 편집자 하한(MIN_DISTINCT_EDITORS, WP-85)이 맡는다** —
+    1인 연속 편집 오탐을 395건 → 101건으로 줄인 게 그 게이트다. 다만 이 대체는 리플레이로
+    확인이 안 된다(편집 덤프에 조회수가 없어 views=None) — 조회수가 붙은 실환경에서 재확인.
+
+    신규 문서 경로는 안 바뀐다. 조회수 baseline 이 **원리적으로 없어서**다(문서가 사건
+    당일 생겨 이전 관측이 없다) — Milton·Air India 의 조회수 미탐은 임계 문제가 아니다.
+    """
+    edit_z = _z(window.edit_count, baseline.edit_ewma, baseline.edit_stddev)
     edit_pass = (
         edit_z is not None
         and edit_z >= EDIT_Z_THRESHOLD
         and window.edit_count >= MIN_ABSOLUTE_EDITS
         and window.editor_count >= MIN_DISTINCT_EDITORS
     )
-    if not edit_pass:
+
+    view_ratio, view_z = _view_signal(window, baseline)
+    # 조회수 관문 = z AND 배수. 명세 §3.2 3번 문구 그대로다 —
+    # ~~배수만 봤다~~ → view_stddev 가 생겨 z 를 낼 수 있게 됐다 (WP-90).
+    view_pass = (
+        view_ratio is not None
+        and view_ratio >= MIN_VIEW_RATIO
+        and view_z is not None
+        and view_z >= VIEW_Z_THRESHOLD
+    )
+
+    if not (edit_pass or view_pass):
         return SpikeDecision(
-            is_spike=False, is_new_page=False, edit_z=edit_z, view_ratio=None,
+            is_spike=False, is_new_page=False, edit_z=edit_z, view_ratio=view_ratio,
             spike_score=0.0,
-            reason=(f"편집 미달 (z={edit_z}, count={window.edit_count}, "
-                    f"editors={window.editor_count})"),
+            reason=(f"편집·조회수 둘 다 미달 (편집 z={edit_z}, count={window.edit_count}, "
+                    f"editors={window.editor_count} / 조회수 배수={view_ratio}, z={view_z})"),
         )
 
-    # 조회수 2차 관문. 아직 조회수가 안 왔으면(None) 보류 — 편집만 통과한 상태.
-    view_ratio = None
-    if window.views is not None and baseline.view_ewma and baseline.view_ewma > 0:
-        view_ratio = window.views / baseline.view_ewma
+    if edit_pass and view_pass:
+        reason = "편집·조회수 모두 통과(확정)"
+    elif edit_pass:
+        # 조회수가 아직 안 왔거나(None) 임계 미달. 둘을 구분해 적는다 —
+        # 앞은 시간이 해결하고, 뒤는 이 윈도우에서 확정이 안 된다.
+        reason = ("편집 통과, 조회수 판정 대기(감지됨)" if window.views is None
+                  else f"편집 통과, 조회수 미달(배수={view_ratio}, z={view_z})")
+    else:
+        reason = "조회수 통과, 편집 판정 대기(감지됨)"
 
-    if view_ratio is None:
-        # 편집은 통과, 조회수 대기. 감지됨 상태로 내보내되 아직 확정 아님.
-        return SpikeDecision(
-            is_spike=True, is_new_page=False, edit_z=edit_z, view_ratio=None,
-            spike_score=_score(edit_z, None),
-            reason="편집 통과, 조회수 판정 대기(감지됨)",
-        )
-
-    view_pass = view_ratio >= MIN_VIEW_RATIO
     return SpikeDecision(
-        is_spike=view_pass,
+        is_spike=True,
         is_new_page=False,
         edit_z=edit_z,
         view_ratio=view_ratio,
-        spike_score=_score(edit_z, view_ratio) if view_pass else 0.0,
-        reason=("편집·조회수 모두 통과(확정)" if view_pass
-                else f"편집 통과했으나 조회수 배수 {view_ratio:.1f} < {MIN_VIEW_RATIO}"),
+        # 점수는 통과한 신호만으로 낸다. 미달 신호를 섞으면 확정 건과 뒤섞여 정렬이 흐려진다.
+        spike_score=_score(edit_z if edit_pass else None,
+                           view_ratio if view_pass else None),
+        reason=reason,
     )
 
 
-def _score(edit_z: float, view_ratio: float | None) -> float:
+def _view_signal(
+    window: Window, baseline: Baseline
+) -> tuple[float | None, float | None]:
+    """조회수 배수와 z. 조회수가 없거나 기준선이 없으면 (None, None) 쪽으로 닫힌다."""
+    if window.views is None or not baseline.view_ewma or baseline.view_ewma <= 0:
+        return None, None
+    ratio = window.views / baseline.view_ewma
+    return ratio, _z(window.views, baseline.view_ewma, baseline.view_stddev)
+
+
+def _score(edit_z: float | None, view_ratio: float | None) -> float:
     """급등도. 버블맵 버블 크기·피드 정렬에 쓴다.
 
     편집 z 와 조회수 배수를 로그로 눌러 곱한다 — z 5311 같은 값이 그대로면
@@ -165,9 +200,12 @@ def _score(edit_z: float, view_ratio: float | None) -> float:
     """
     import math
 
-    edit_part = math.log1p(max(0.0, edit_z))
+    edit_part = math.log1p(max(0.0, edit_z)) if edit_z is not None else 0.0
     view_part = math.log1p(max(0.0, view_ratio)) if view_ratio is not None else 0.0
-    # 조회수가 아직 없으면 편집만으로. 있으면 두 신호의 곱(둘 다 커야 크다).
+    # 한쪽만 통과했으면 그쪽만으로. 둘 다면 곱(둘 다 커야 크다).
+    # ⚠️ 조회수 단독 통과가 가능해졌다 (WP-90) — edit_z 가 None 일 수 있다.
     if view_ratio is None:
         return round(edit_part, 3)
+    if edit_z is None:
+        return round(view_part, 3)
     return round(edit_part * (1.0 + view_part), 3)

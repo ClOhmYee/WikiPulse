@@ -137,7 +137,8 @@ def baseline_at(
     if not rows:
         return None
     row = rows[0]
-    return Baseline(row.edit_ewma, row.edit_stddev, row.view_ewma, row.sample_days)
+    return Baseline(row.edit_ewma, row.edit_stddev, row.view_ewma, row.sample_days,
+                    row.view_stddev)
 
 
 def replay_title(
@@ -146,7 +147,11 @@ def replay_title(
     """한 문서의 모든 관측 윈도우를 시간순으로 판정한다.
 
     조회수는 없다(편집 덤프만 재생) — detect() 는 views=None 이면 편집만으로 '감지됨'
-    까지 낸다. 조회수 2차 판정(확정)은 이 경로 밖이다.
+    까지 낸다. 조회수 판정(확정)은 이 경로 밖이다.
+
+    ⚠️ 기존 문서 경로가 AND -> OR 로 바뀌었지만(WP-90) **이 재생 결과는 안 변한다** —
+    views=None 이면 조회수 관문이 닫혀 편집 단독 판정과 같아지기 때문이다. 바꾼 뒤 숫자가
+    변했다면 OR 구현이 틀린 것이다(회귀 확인점).
     """
     results = []
     for obs in observations:

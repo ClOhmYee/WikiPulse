@@ -43,12 +43,14 @@ RETURNING id
 
 UPSERT_BASELINE_SQL = """
 INSERT INTO page_baseline
-    (page_id, hour_of_day, edit_ewma, edit_stddev, view_ewma, sample_days, updated_at)
-VALUES (%s, %s, %s, %s, %s, %s, now())
+    (page_id, hour_of_day, edit_ewma, edit_stddev, view_ewma, view_stddev,
+     sample_days, updated_at)
+VALUES (%s, %s, %s, %s, %s, %s, %s, now())
 ON CONFLICT (page_id, hour_of_day) DO UPDATE SET
     edit_ewma   = EXCLUDED.edit_ewma,
     edit_stddev = EXCLUDED.edit_stddev,
     view_ewma   = EXCLUDED.view_ewma,
+    view_stddev = EXCLUDED.view_stddev,
     sample_days = EXCLUDED.sample_days,
     updated_at  = now()
 """
@@ -79,7 +81,8 @@ def upsert_rows(cur, rows: Iterable[BaselineRow], page_ids: dict[tuple[str, str]
     """기준선 행들을 page_baseline 에 upsert 한다. 반환: 쓴 행 수."""
     params = [
         (page_ids[(row.wiki, row.title)], row.hour_of_day,
-         row.edit_ewma, row.edit_stddev, row.view_ewma, row.sample_days)
+         row.edit_ewma, row.edit_stddev, row.view_ewma, row.view_stddev,
+         row.sample_days)
         for row in rows
     ]
     if params:
