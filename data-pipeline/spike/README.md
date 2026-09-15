@@ -164,12 +164,12 @@ z 를 못 내면 "평소의 2배"만으로 발동해서다 — 여태 `VIEW_Z_TH
 
 ```bash
 cd data-pipeline/spike
-python -m pytest        # 95개는 Spark·DB 없이, 15개는 실 PostgreSQL
+python -m pytest        # 101개는 Spark·DB 없이, 15개는 실 PostgreSQL
                         # (test_baseline_spark.py 는 pyspark 가 있어야 돈다 — 없으면 skip)
 ```
 
-측정 2026-09-15 (WP-94): psycopg 있는 venv 에서 `110 passed, 1 skipped`
-(skip 은 pyspark 없는 `test_baseline_spark.py`), psycopg 없는 venv 에서 `95 passed, 3 skipped`.
+측정 2026-09-15 (WP-94, develop 병합 후): psycopg 있는 venv 에서 `116 passed, 1 skipped`
+(skip 은 pyspark 없는 `test_baseline_spark.py`), psycopg 없는 venv 에서 `101 passed, 3 skipped`.
 
 - 평상시 조회수가 z 임계 아래인지 (오탐)
 - 사건 첫날부터 임계를 넘는지 (미탐)
