@@ -145,7 +145,7 @@ test("layout preserves identity and fixed score scale and handles 500 nodes", ()
   const duration = performance.now() - start;
   assert(duration < 2000, `layout took ${duration}ms`);
   const filtered = layout([graph.data.clusters[3]]);
-  assert.deepEqual(filtered.clusters[0], first.clusters[3]);
+  assert.deepEqual(filtered.clusters[0].nodes, first.clusters[3].nodes);
   const next = structuredClone(graph.data.clusters);
   next[3].nodes[0].sizeScore = 0.8;
   const changed = layout(next).clusters[3].nodes[0];
@@ -156,4 +156,33 @@ test("layout preserves identity and fixed score scale and handles 500 nodes", ()
     for (const n of c.nodes)
       assert(Number.isFinite(n.x) && Number.isFinite(n.y));
   console.log(`500 nodes / 1000 edges layout: ${duration.toFixed(1)}ms`);
+});
+
+test("cluster importance decreases with distance, packing does not overlap, and history cannot change ranking", () => {
+  const input = makeStressMap().data.clusters;
+  const engine = createLayoutEngine();
+  const first = engine(input).clusters;
+  const ranked = [...first].sort((a, b) => b.pulseScore - a.pulseScore);
+  assert.equal(ranked[0].x, 0);
+  assert.equal(ranked[0].y, 0);
+  for (let i = 1; i < ranked.length; i++) {
+    assert(
+      Math.hypot(ranked[i].x, ranked[i].y) >
+        Math.hypot(ranked[i - 1].x, ranked[i - 1].y),
+    );
+    for (let j = 0; j < i; j++) {
+      assert(
+        Math.hypot(ranked[i].x - ranked[j].x, ranked[i].y - ranked[j].y) >=
+          ranked[i].radius + ranked[j].radius + 119,
+      );
+    }
+  }
+  const changed = input.map((c, i) => ({ ...c, pulseScore: i }));
+  const after = engine(changed).clusters;
+  assert.equal(after.at(-1).x, 0);
+  assert.equal(after.at(-1).y, 0);
+  assert.deepEqual(after, createLayoutEngine()(changed).clusters);
+  assert.equal(nodeRadius(0), 12);
+  assert.equal(nodeRadius(1), 40);
+  assert.deepEqual(engine([]).clusters, []);
 });

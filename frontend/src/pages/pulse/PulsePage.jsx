@@ -5,11 +5,13 @@ import { useAsyncResource } from "../../data/hooks/useAsyncResource.js";
 import { issueCategories } from "../../data/categories.js";
 import {
   calendarDays,
+  isNewIssue,
   kstDate,
   kstTimestamp,
   snapshotKey,
 } from "../../data/pulse/time.js";
 import PulseMap from "./PulseMap";
+import PulseMapFrame from "./PulseMapFrame";
 import PulseTimeline from "./PulseTimeline";
 import PulsePreview, { SignalBadges } from "./PulsePreview";
 import "./pulse.css";
@@ -26,6 +28,7 @@ export default function PulsePage({ savedEvents, onToggleEvent, onSource }) {
   const [nodeId, setNodeId] = useState(null);
   const [notice, setNotice] = useState("");
   const [query, setQuery] = useState("");
+  const [expanded, setExpanded] = useState(false);
   const [category, setCategory] = useState("all");
   const items = index.data?.data;
   const latest =
@@ -47,12 +50,23 @@ export default function PulsePage({ savedEvents, onToggleEvent, onSource }) {
   );
   const map = useAsyncResource(loadMap, key);
   const clusters = map.data?.data.clusters;
+  const newClusters = useMemo(
+    () =>
+      clusters?.filter((v) =>
+        isNewIssue(
+          v.firstDetectedAt,
+          map.data.meta.snapshotTs,
+          map.data.meta.newWindowHours,
+        ),
+      ) || [],
+    [clusters, map.data?.meta.snapshotTs, map.data?.meta.newWindowHours],
+  );
   const [layoutEngine] = useState(() => createLayoutEngine());
   const scene = useMemo(
-    () => layoutEngine(clusters || []),
-    [layoutEngine, clusters],
+    () => layoutEngine(newClusters),
+    [layoutEngine, newClusters],
   );
-  const selected = clusters?.find((v) => v.issueKey === selectedKey);
+  const selected = newClusters.find((v) => v.issueKey === selectedKey);
   useEffect(() => {
     if (map.data) onSource?.(map.data.meta);
   }, [map.data, onSource]);
@@ -73,14 +87,14 @@ export default function PulsePage({ savedEvents, onToggleEvent, onSource }) {
   }, [clusters, selected, selectedKey, nodeId]);
   const filtered = useMemo(
     () =>
-      clusters?.filter(
+      newClusters.filter(
         (v) =>
           (category === "all" || v.category === category) &&
           `${v.label} ${v.summary || ""} ${v.nodes.map((n) => n.title).join(" ")}`
             .toLowerCase()
             .includes(query.trim().toLowerCase()),
       ) || [],
-    [clusters, category, query],
+    [newClusters, category, query],
   );
   const visibleSelected = filtered.find((v) => v.issueKey === selectedKey);
   function selectCluster(issueKey) {
@@ -203,16 +217,14 @@ export default function PulsePage({ savedEvents, onToggleEvent, onSource }) {
           </div>
           <div className="pulse-reading-guide">
             <span>
-              <b>HOT</b> 이 시점에 급증
-            </span>
-            <span>
               <b>NEW</b> {map.data?.meta.newWindowHours || 24}시간 내 최초 감지
             </span>
             <span>노드 크기 = 공통 척도의 급증도</span>
           </div>
           <p className="data-scope">
-            급증 점수와 HOT은 제공된 판정을 표시합니다. AI 검증 상태와 탐지
-            신호의 충족 여부는 별개입니다. 점수는 편집 배수나 확률이 아닙니다.
+            중앙에는 이슈 급증 점수가 높은 클러스터가 배치됩니다. AI 검증 상태와
+            탐지 신호의 충족 여부는 별개입니다. 점수는 편집 배수나 확률이
+            아닙니다.
             {map.data?.meta.scoreVersion &&
               ` 점수 척도 ${map.data.meta.scoreVersion}`}
           </p>
@@ -254,53 +266,71 @@ export default function PulsePage({ savedEvents, onToggleEvent, onSource }) {
                   개를 표시합니다. 서버에서 일부 데이터만 제공했습니다.
                 </p>
               )}
-              <div
-                className="explore-map-layout pulse-layout"
-                data-snapshot={map.data.meta.snapshotTs}
+              <PulseMapFrame
+                expanded={expanded}
+                onClose={() => setExpanded(false)}
               >
-                {filtered.length ? (
-                  <PulseMap
-                    scene={scene}
-                    visibleKeys={new Set(filtered.map((v) => v.issueKey))}
-                    selectedKey={visibleSelected?.issueKey}
-                    nodeId={nodeId}
-                    meta={map.data.meta}
-                    onSelect={selectCluster}
-                    onNodeSelect={(issueKey, pageId) => {
-                      setSelectedKey(issueKey);
-                      setNodeId(pageId);
-                      setNotice("");
-                    }}
-                  />
-                ) : (
-                  <div className="pulse-empty">
-                    <h2>
-                      {clusters.length
-                        ? "일치하는 사건이 없습니다"
-                        : "이 시점에 포착된 이슈가 없습니다"}
-                    </h2>
-                    {clusters.length > 0 && (
-                      <button
-                        className="wp-button"
-                        onClick={() => {
-                          setCategory("all");
-                          setQuery("");
-                        }}
-                      >
-                        필터 초기화
-                      </button>
-                    )}
-                  </div>
-                )}
-                <PulsePreview
-                  cluster={visibleSelected}
-                  meta={map.data.meta}
-                  nodeId={nodeId}
-                  onNodeSelect={setNodeId}
-                  savedEvents={savedEvents}
-                  onToggleEvent={onToggleEvent}
-                />
-              </div>
+                <div
+                  className="explore-map-layout pulse-layout"
+                  data-snapshot={map.data.meta.snapshotTs}
+                  data-has-selection={Boolean(visibleSelected)}
+                >
+                  {filtered.length ? (
+                    <PulseMap
+                      scene={scene}
+                      expanded={expanded}
+                      onToggleExpanded={() => setExpanded((value) => !value)}
+                      visibleKeys={new Set(filtered.map((v) => v.issueKey))}
+                      selectedKey={visibleSelected?.issueKey}
+                      nodeId={nodeId}
+                      meta={map.data.meta}
+                      onSelect={selectCluster}
+                      onNodeSelect={(issueKey, pageId) => {
+                        setSelectedKey(issueKey);
+                        setNodeId(pageId);
+                        setNotice("");
+                      }}
+                    />
+                  ) : (
+                    <div className="pulse-empty">
+                      <h2>
+                        {newClusters.length
+                          ? "일치하는 사건이 없습니다"
+                          : "이 시점에 새로 감지된 이슈가 없습니다"}
+                      </h2>
+                      {newClusters.length > 0 && (
+                        <button
+                          className="wp-button"
+                          onClick={() => {
+                            setCategory("all");
+                            setQuery("");
+                          }}
+                        >
+                          필터 초기화
+                        </button>
+                      )}
+                    </div>
+                  )}
+                  {(!expanded || visibleSelected) && (
+                    <PulsePreview
+                      cluster={visibleSelected}
+                      meta={map.data.meta}
+                      nodeId={nodeId}
+                      onNodeSelect={setNodeId}
+                      savedEvents={savedEvents}
+                      onToggleEvent={onToggleEvent}
+                      onClose={
+                        expanded
+                          ? () => {
+                              setSelectedKey(null);
+                              setNodeId(null);
+                            }
+                          : undefined
+                      }
+                    />
+                  )}
+                </div>
+              </PulseMapFrame>
               <div className="pulse-cluster-list" aria-label="이슈 선택">
                 {filtered.map((v) => (
                   <button

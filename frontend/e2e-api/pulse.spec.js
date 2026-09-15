@@ -1,7 +1,7 @@
 import { test, expect } from "@playwright/test";
 import { mockClient } from "../src/data/mock/client.js";
 import { makeStressMap } from "../src/data/mock/fixtures/pulse.js";
-import { kstTimestamp } from "../src/data/pulse/time.js";
+import { isNewIssue, kstTimestamp } from "../src/data/pulse/time.js";
 import { serve } from "./server.js";
 
 const snapshots = (await mockClient.listSnapshots()).data;
@@ -22,7 +22,12 @@ test("pulse uses the graph contract without downloading catalogue fixtures", asy
   const calls = await serve(page);
   await page.goto("/#/pulse");
   await expect(page.locator(".document-node")).toHaveCount(
-    pulseMaps.at(-1).meta.nodeCount,
+    pulseMaps
+      .at(-1)
+      .data.clusters.filter((c) =>
+        isNewIssue(c.firstDetectedAt, pulseMaps.at(-1).meta.snapshotTs),
+      )
+      .reduce((sum, c) => sum + c.nodes.length, 0),
   );
   await expect(
     page.getByRole("button", { name: "API 데이터", exact: true }),
@@ -37,7 +42,9 @@ test("nullable graph labels and issue keys keep numeric detail navigation", asyn
   page,
 }) => {
   const body = structuredClone(pulseMaps.at(-1));
-  const cluster = body.data.clusters[0];
+  const cluster = body.data.clusters.find((c) =>
+    isNewIssue(c.firstDetectedAt, body.meta.snapshotTs),
+  );
   cluster.label = null;
   cluster.issueKey = null;
   const detail = (await mockClient.getIssue(cluster.id)).data;
@@ -52,7 +59,7 @@ test("nullable graph labels and issue keys keep numeric detail navigation", asyn
     cluster.nodes[0].title,
   );
   const link = page.getByRole("link", {
-    name: "사건 자세히 보기",
+    name: "이슈 리포트 보기",
     exact: true,
   });
   await expect(link).toHaveAttribute("href", `#/issues/${cluster.id}`);
@@ -93,7 +100,12 @@ test("rapid time changes discard a slower response and preserve graph/panel time
   });
   await page.goto("/#/pulse");
   await expect(page.locator(".document-node")).toHaveCount(
-    pulseMaps.at(-1).meta.nodeCount,
+    pulseMaps
+      .at(-1)
+      .data.clusters.filter((c) =>
+        isNewIssue(c.firstDetectedAt, pulseMaps.at(-1).meta.snapshotTs),
+      )
+      .reduce((sum, c) => sum + c.nodes.length, 0),
   );
   await page.locator(".pulse-cluster-list button").first().click();
   await page.getByRole("button", { name: "이전 시점" }).click();
@@ -146,7 +158,12 @@ test("API error retries and mismatched or invalid graph data never masquerade as
   state = "ok";
   await page.getByRole("button", { name: "지도 다시 불러오기" }).click();
   await expect(page.locator(".document-node")).toHaveCount(
-    pulseMaps.at(-1).meta.nodeCount,
+    pulseMaps
+      .at(-1)
+      .data.clusters.filter((c) =>
+        isNewIssue(c.firstDetectedAt, pulseMaps.at(-1).meta.snapshotTs),
+      )
+      .reduce((sum, c) => sum + c.nodes.length, 0),
   );
 });
 test("500 nodes and 1000 edges remain interactive in the browser", async ({

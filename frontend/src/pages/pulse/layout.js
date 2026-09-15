@@ -6,25 +6,19 @@ import {
   forceY,
 } from "d3-force";
 export const nodeRadius = (score) =>
-  score === null ? 6 : 6 + 18 * Math.sqrt(score);
+  score === null ? 12 : 12 + 28 * Math.sqrt(score);
 const hash = (text) =>
   [...text].reduce((value, ch) => (value * 31 + ch.charCodeAt(0)) >>> 0, 7);
-// Cached per page visit; filtering, ordering and scores do not reassign positions.
+// Cache document positions; rank cluster centers again for each snapshot.
 export function createLayoutEngine() {
   const clusters = new Map();
-  let cellSize = 365;
-  let columns = 3;
   return (input) => {
     for (const cluster of [...input].sort((a, b) =>
       a.issueKey.localeCompare(b.issueKey),
     )) {
       let cached = clusters.get(cluster.issueKey);
       if (!cached) {
-        const slot = clusters.size;
         cached = {
-          slot,
-          x: 210 + (slot % 3) * 410,
-          y: 185 + Math.floor(slot / 3) * 365,
           positions: new Map(),
         };
         clusters.set(cluster.issueKey, cached);
@@ -36,7 +30,7 @@ export function createLayoutEngine() {
         const nodes = ordered.map((node, index) => {
           const old = cached.positions.get(node.pageId);
           const angle = hash(node.pageId) * 0.01 + index * 2.39996;
-          const distance = 35 + Math.sqrt(index + 1) * 25;
+          const distance = 50 + Math.sqrt(index + 1) * 40;
           return {
             id: node.pageId,
             ...(old
@@ -57,10 +51,10 @@ export function createLayoutEngine() {
             "link",
             forceLink(links)
               .id((node) => node.id)
-              .distance(85)
+              .distance(125)
               .strength(0.08),
           )
-          .force("collision", forceCollide(31).iterations(3))
+          .force("collision", forceCollide(48).iterations(3))
           .force("x", forceX(0).strength(0.02))
           .force("y", forceY(0).strength(0.02));
         simulation.tick(100);
@@ -77,30 +71,49 @@ export function createLayoutEngine() {
         radius: nodeRadius(node.sizeScore),
       }));
       const radius = Math.max(
-        112,
-        ...nodes.map((v) => Math.hypot(v.x, v.y) + 38),
+        160,
+        ...nodes.map((v) => Math.hypot(v.x, v.y) + 56),
       );
       return {
         ...cluster,
-        slot: cached.slot,
-        x: cached.x,
-        y: cached.y,
         radius,
         nodes,
       };
     });
-    cellSize = Math.max(cellSize, ...scene.map((v) => v.radius * 2 + 100));
-    columns = Math.max(columns, Math.ceil(Math.sqrt(clusters.size)));
+    const ranked = [...scene].sort(
+      (a, b) =>
+        b.pulseScore - a.pulseScore || a.issueKey.localeCompare(b.issueKey),
+    );
+    const placed = [];
+    let distance = 0;
+    for (const [rank, cluster] of ranked.entries()) {
+      const angle = rank * Math.PI * (3 - Math.sqrt(5));
+      if (rank) distance += 40;
+      let x, y;
+      do {
+        x = Math.cos(angle) * distance;
+        y = Math.sin(angle) * distance;
+        if (
+          placed.every(
+            (other) =>
+              Math.hypot(x - other.x, y - other.y) >=
+              cluster.radius + other.radius + 120,
+          )
+        )
+          break;
+        distance += 20;
+      } while (distance > 0);
+      Object.assign(cluster, { x, y, rank });
+      placed.push(cluster);
+    }
+    const extent = Math.max(
+      400,
+      ...placed.map((v) => Math.hypot(v.x, v.y) + v.radius + 100),
+    );
     return {
-      clusters: scene.map((v) => ({
-        ...v,
-        x: ((v.slot % columns) + 0.5) * cellSize,
-        y: (Math.floor(v.slot / columns) + 0.5) * cellSize,
-      })),
-      cellSize,
-      totalSlots: clusters.size,
-      width: cellSize * columns,
-      height: Math.max(2, Math.ceil(clusters.size / columns)) * cellSize,
+      clusters: scene,
+      width: extent * 2,
+      height: extent * 2,
     };
   };
 }
