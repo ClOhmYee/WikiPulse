@@ -1,7 +1,7 @@
 # WikiPulse 프론트엔드 문서
 
-> 상태: **확정**  
-> 기준일: 2026-09-08  
+> 상태: **확정**\
+> 기준일: 2026-09-15\
 > 대상: 독립 React/Vite 프론트엔드의 온보딩·워크스페이스·Mock/API 전환
 
 이 디렉터리는 현재 프론트엔드 구조와 데이터 연결 방법, 온보딩 디자인·인터랙션 결정, 시행착오와 검증 기준을 기록한다. 새 기능을 추가하기 전에 아래 문서와 [`frontend/DESIGN.md`](../../frontend/DESIGN.md)를 함께 확인한다.
@@ -11,8 +11,9 @@
 - [PAGES.md](./PAGES.md): 확정된 11개 페이지·URL, 제거된 화면, API·인증 구현과의 경계
 - [PULSE_MAP.md](./PULSE_MAP.md): 시점 선택·HOT/NEW·문서 그래프, 백엔드 데이터 계약과 후속 작업
 - [MOCK_HISTORY.md](./MOCK_HISTORY.md): 2025-09~2026-09 실제 위키 문서 기반 시연 이력, Nasdaq-100 출처, 합성 범위와 파이프라인 차이
-- [프론트엔드 검증 기록](../../frontend/docs/VALIDATION.md): 2026-09-09 라우팅 검증 결과·재현 명령과 이전 검증 이력
+- [프론트엔드 검증 기록](../../frontend/docs/VALIDATION.md): 현재 DTO 정합·페이지 검증 결과와 이전 실행 이력
 - [ARCHITECTURE.md](./ARCHITECTURE.md): 페이지 중심 구조, 의존성, 상태 소유권과 확장 규칙
+- [API_DECISIONS.md](./API_DECISIONS.md): 실제 코드 기준 백엔드/AI 협의 항목, 현재 화면 처리와 후속 검증
 - [DATA_SOURCE.md](./DATA_SOURCE.md): `.env` 전환, 공통 조회 계약, 백엔드 연결 절차와 검증 결과
 
 - [DECISIONS.md](./DECISIONS.md): 제품 범위, 장면별 내러티브, 비주얼·모션 결정과 폐기한 접근
@@ -45,13 +46,13 @@ npm.cmd --prefix frontend run build
 
 ## 주요 진입점
 
-| 파일 | 책임 |
-| --- | --- |
+| 파일                                                                                                         | 책임                                                     |
+| ------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------- |
 | [`frontend/src/pages/onboarding/OnboardingPage.jsx`](../../frontend/src/pages/onboarding/OnboardingPage.jsx) | 장면 카피, 스크롤·키보드·터치 입력, DOM 전환, WebGL 폴백 |
-| [`frontend/src/pages/onboarding/NodeField.jsx`](../../frontend/src/pages/onboarding/NodeField.jsx) | R3F 캔버스, Three.js 노드·간선·배경별, 셰이더, 장면 보간 |
-| [`frontend/src/pages/onboarding/onboarding.css`](../../frontend/src/pages/onboarding/onboarding.css) | 레이아웃, 타이포그래피, 색상, 반응형, 접근성 스타일 |
-| [`frontend/public/wikipulse-icon.png`](../../frontend/public/wikipulse-icon.png) | 서비스 아이콘 및 파비콘 |
-| [`frontend/index.html`](../../frontend/index.html) | HTML 메타데이터와 앱 진입점 |
+| [`frontend/src/pages/onboarding/NodeField.jsx`](../../frontend/src/pages/onboarding/NodeField.jsx)           | R3F 캔버스, Three.js 노드·간선·배경별, 셰이더, 장면 보간 |
+| [`frontend/src/pages/onboarding/onboarding.css`](../../frontend/src/pages/onboarding/onboarding.css)         | 레이아웃, 타이포그래피, 색상, 반응형, 접근성 스타일      |
+| [`frontend/public/wikipulse-icon.png`](../../frontend/public/wikipulse-icon.png)                             | 서비스 아이콘 및 파비콘                                  |
+| [`frontend/index.html`](../../frontend/index.html)                                                           | HTML 메타데이터와 앱 진입점                              |
 
 ## 완료 기준
 
