@@ -9,6 +9,10 @@
       window_start : 1시간 정각 UTC "YYYY-MM-DDTHH:00:00"
       hour_of_week : 0..167 (월 00시 UTC = 0). baseline 이 이 슬롯으로 평소를 잡는다
       edit_count   : 그 문서·그 시간의 봇 제외 편집 수
+      editor_count : 그 윈도우의 서로 다른 편집자 수. 급증 판정의 편집자 하한
+                     (detector.MIN_DISTINCT_EDITORS, WP-85)이 이 값을 본다.
+                     ⚠️ 스트리밍은 approx_count_distinct(근사), 여기는 정확값이다 —
+                     편집자 1~10명 구간에서 두 값이 일치함을 실측했다(불일치 0건).
       views        : 그 문서·그 시간의 조회수 합(agent 가로질러). 조회 없으면 0
 
 🔴 집계 계약은 스트리밍(streaming/edit_windows.py)과 한 벌이어야 한다 (§AC)
@@ -44,6 +48,7 @@ class WindowRow:
     window_start: str    # "YYYY-MM-DDTHH:00:00" (UTC)
     hour_of_week: int     # 0..167 (월 00시 = 0)
     edit_count: int
+    editor_count: int
     views: int
 
 
@@ -74,18 +79,24 @@ def is_bot_edit(rec: dict) -> bool:
 
 def aggregate_edits(
     edit_events: Iterable[dict], *, keep_bots: bool = False
-) -> dict[tuple[str, str, str], int]:
-    """edit_event 레코드를 (wiki, title, hour) → 편집 수 로 집계한다.
+) -> dict[tuple[str, str, str], tuple[int, int]]:
+    """edit_event 레코드를 (wiki, title, hour) → (편집 수, 편집자 수) 로 집계한다.
 
     봇은 기본 제외(keep_bots=True 면 유지 — 진단용). 시간은 event_ts 를 정각으로 내린다.
+    편집자 수를 함께 세는 이유는 한 사람의 연속 편집을 급증에서 빼기 위해서다
+    (WP-85) — 스트리밍이 이미 같은 값을 집계하므로 배치도 낸다.
     """
     counts: dict[tuple[str, str, str], int] = {}
+    editors: dict[tuple[str, str, str], set[str]] = {}
     for rec in edit_events:
         if not keep_bots and is_bot_edit(rec):
             continue
         key = (rec["wiki"], rec["title"], floor_to_hour(rec["event_ts"]))
         counts[key] = counts.get(key, 0) + 1
-    return counts
+        user = rec.get("user")
+        if user:
+            editors.setdefault(key, set()).add(user)
+    return {k: (n, len(editors.get(k, ()))) for k, n in counts.items()}
 
 
 def sum_views(
@@ -106,7 +117,7 @@ def sum_views(
 
 
 def join_windows(
-    edit_counts: dict[tuple[str, str, str], int],
+    edit_counts: dict[tuple[str, str, str], tuple[int, int]],
     view_totals: dict[tuple[str, str, str], int],
 ) -> Iterator[WindowRow]:
     """편집·조회 집계를 (wiki, title, hour) 기준 full outer join 한다.
@@ -116,12 +127,14 @@ def join_windows(
     """
     for key in edit_counts.keys() | view_totals.keys():
         wiki, title, window_start = key
+        edits, editors = edit_counts.get(key, (0, 0))
         yield WindowRow(
             wiki=wiki,
             title=title,
             window_start=window_start,
             hour_of_week=hour_of_week(window_start),
-            edit_count=edit_counts.get(key, 0),
+            edit_count=edits,
+            editor_count=editors,
             views=view_totals.get(key, 0),
         )
 

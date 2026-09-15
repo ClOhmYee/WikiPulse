@@ -14,6 +14,13 @@
     2. 신규 문서       — baseline 이 없다(문서가 방금 생김). z 계산 불가.
                          절대 편집수·조회수 하한으로 판정한다.
 
+편집자 하한이 필요한 이유 (2026-09-15 실측, WP-85)
+    편집 수만 보면 한 사람이 문서를 몰아서 정리한 것과 여러 사람이 사건을 고치는 것이
+    구분되지 않는다. 실덤프 4개월(2025-05·06, 2024-09·10)로 재생해 보니 상시 편집
+    문서(목록·타임라인·TV 시즌)가 대조군 14개 전부에서 오탐을 냈고 총 395건이었다.
+    `editor_count >= 2` 하나를 걸자 101건으로 줄었고(74% 감소) 대상 재현율은 그대로였다.
+    명세 §3.2 2번의 "1인 반복 편집은 거른다"가 여태 코드에 없던 부분이다.
+
 절대 하한이 반드시 필요한 이유
     평소 편집이 0~1 건인 문서는 표준편차가 작아 2건만 돼도 z 가 폭발한다.
     Strait of Hormuz 6/12 도 2.6배(작은 배수)지만 z 11 인 건 baseline 이
@@ -30,6 +37,10 @@ VIEW_Z_THRESHOLD = 3.0
 MIN_ABSOLUTE_EDITS = 10   # 얇은 baseline 오탐 방지. 신규 문서 판정에도 쓴다.
 MIN_VIEW_RATIO = 2.0      # 조회수 최소 배수. z 만으로는 부족(6/12 가 2.6배)
 MIN_BASELINE_SAMPLE_DAYS = 7  # baseline 이 이보다 얇으면 신규 문서로 취급
+#: 서로 다른 편집자 최소 수. 한 사람의 연속 편집(정리 작업·목록 갱신)을 급증에서 뺀다.
+#: 실측 2026-09-15 (WP-85): 이 게이트 하나로 대조군 오탐 395 -> 101 건 (74% 감소),
+#: 대상 재현율은 그대로였다. 명세 §3.2 2번의 "1인 반복 편집은 거른다"가 코드에 없던 부분이다.
+MIN_DISTINCT_EDITORS = 2
 
 
 @dataclass(frozen=True)
@@ -85,7 +96,9 @@ def detect(window: Window, baseline: Baseline | None) -> SpikeDecision:
 
 def _detect_new_page(window: Window) -> SpikeDecision:
     """baseline 이 없다. 절대 편집수 + (있으면) 조회수 하한으로."""
-    edits_ok = window.edit_count >= MIN_ABSOLUTE_EDITS
+    enough_edits = window.edit_count >= MIN_ABSOLUTE_EDITS
+    enough_editors = window.editor_count >= MIN_DISTINCT_EDITORS
+    edits_ok = enough_edits and enough_editors
     # 신규 문서는 조회수 baseline 도 없어 배수를 못 낸다. 편집으로만 1차 판정.
     score = float(window.edit_count) * max(1, window.editor_count) ** 0.5
     return SpikeDecision(
@@ -95,24 +108,28 @@ def _detect_new_page(window: Window) -> SpikeDecision:
         view_ratio=None,
         spike_score=score if edits_ok else 0.0,
         reason=("신규 문서 절대 편집수 통과" if edits_ok
-                else f"신규 문서지만 편집 {window.edit_count} < {MIN_ABSOLUTE_EDITS}"),
+                else f"신규 문서지만 편집 {window.edit_count} < {MIN_ABSOLUTE_EDITS}"
+                if not enough_edits
+                else f"신규 문서지만 편집자 {window.editor_count} < {MIN_DISTINCT_EDITORS}"),
     )
 
 
 def _detect_existing_page(window: Window, baseline: Baseline) -> SpikeDecision:
     edit_z = _z(window.edit_count, baseline.edit_ewma, baseline.edit_stddev)
 
-    # 편집 1차 관문: z 임계 AND 절대 하한. 둘 다 넘어야 한다.
+    # 편집 1차 관문: z 임계 AND 절대 하한 AND 편집자 하한. 셋 다 넘어야 한다.
     edit_pass = (
         edit_z is not None
         and edit_z >= EDIT_Z_THRESHOLD
         and window.edit_count >= MIN_ABSOLUTE_EDITS
+        and window.editor_count >= MIN_DISTINCT_EDITORS
     )
     if not edit_pass:
         return SpikeDecision(
             is_spike=False, is_new_page=False, edit_z=edit_z, view_ratio=None,
             spike_score=0.0,
-            reason=f"편집 미달 (z={edit_z}, count={window.edit_count})",
+            reason=(f"편집 미달 (z={edit_z}, count={window.edit_count}, "
+                    f"editors={window.editor_count})"),
         )
 
     # 조회수 2차 관문. 아직 조회수가 안 왔으면(None) 보류 — 편집만 통과한 상태.

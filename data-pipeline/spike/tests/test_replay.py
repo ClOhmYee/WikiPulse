@@ -22,7 +22,7 @@ def event(title, ts, user="u1", is_bot=False, wiki="enwiki"):
     return {"wiki": wiki, "title": title, "event_ts": ts, "user": user, "is_bot": is_bot}
 
 
-def obs(title, window_start, edits, editors=1):
+def obs(title, window_start, edits, editors=2):   # 편집자 하한(MIN_DISTINCT_EDITORS)이 2다
     return Observation("enwiki", title, window_start, edits, editors)
 
 
@@ -97,6 +97,20 @@ def test_기준선_없는_문서는_절대_편집수로_잡힌다():
 def test_절대_편집수_미달이면_안_잡힌다():
     results = replay_title([obs("Cat", "2025-06-09T00:00:00", MIN_ABSOLUTE_EDITS - 1)])
     assert results[0].decision.is_spike is False
+
+
+def test_1인_연속편집은_급증이_아니다():
+    """편집 수는 넘어도 편집자가 한 명이면 거른다 (WP-85).
+
+    문서 정리·목록 갱신처럼 한 사람이 몰아서 고치는 경우다. 실덤프에서 이 게이트
+    하나가 대조군 오탐을 395 -> 101 건으로 줄였다(74%), 재현율 손실 없이.
+    """
+    solo = replay_title([obs("Cat", "2025-06-09T00:00:00", 40, editors=1)])
+    assert solo[0].decision.is_spike is False
+    assert "편집자" in solo[0].decision.reason
+
+    team = replay_title([obs("Cat", "2025-06-09T00:00:00", 40, editors=2)])
+    assert team[0].decision.is_spike is True
 
 
 def test_대조군은_평소_편집에서_오탐이_없다():
