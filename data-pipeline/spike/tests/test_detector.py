@@ -12,6 +12,7 @@ import pytest
 from spike.detector import (
     EDIT_Z_THRESHOLD,
     MIN_ABSOLUTE_EDITS,
+    MIN_ABSOLUTE_VIEWS,
     MIN_VIEW_RATIO,
     VIEW_Z_THRESHOLD,
     Baseline,
@@ -219,18 +220,38 @@ def test_얇은_baseline_은_절대하한이_막는다():
     assert not d.is_spike
 
 
-def test_조회수_절대_하한은_아직_없다():
-    """🔴 알려진 공백 — WP-87.
+def test_꼬리_문서의_작은_조회수는_절대_하한이_막는다():
+    """~~알려진 공백~~ → 막았다 (2026-09-15, WP-87).
 
-    평소 10회 보던 문서가 100회가 되면 배수 10·z 45 로 통과한다. 절대량은 100회다.
-    편집 쪽 MIN_ABSOLUTE_EDITS 에 해당하는 게 조회수 쪽엔 없다. OR 전환으로 조회수가
-    단독 트리거가 되면서 이 공백의 영향이 커졌다 — 이 테스트는 **현재 동작을 드러내
-    두는 것**이지 이 동작이 옳다는 뜻이 아니다.
+    평소 1~3회/일이던 `Hurricane_Helene` 이 **8회**로 `z 8.1 · 8.9배` 를 통과했었다.
+    배수도 z 도 상대값이라 평소가 작으면 절대량이 무의미해도 뚫린다. 조회수가 단독
+    트리거가 된 뒤(WP-90) 영향이 커져서 하한을 걸었다.
     """
-    tiny = Baseline(edit_ewma=0.5, edit_stddev=0.5, view_ewma=10, sample_days=28,
-                    view_stddev=2)
-    d = detect(Window(edit_count=1, editor_count=1, views=100), tiny)
-    assert d.is_spike        # 100회짜리 신호가 통과한다 (-87 에서 하한을 논의 중)
+    tail = Baseline(edit_ewma=0.5, edit_stddev=0.5, view_ewma=2, sample_days=28,
+                    view_stddev=0.8)
+    d = detect(Window(edit_count=1, editor_count=1, views=8), tail)
+    assert not d.is_spike
+    assert d.view_ratio >= MIN_VIEW_RATIO       # 배수·z 는 넘었는데도 막힌다
+    assert "8회" in d.reason
+
+
+def test_절대_하한만_넘으면_꼬리_문서도_통과한다():
+    """하한은 **절대량**만 본다 — 인기도에 비례하지 않는다. 편집 쪽 하한 10 과 같은 성격.
+
+    평소 2회짜리 문서라도 진짜로 하한만큼 읽히면 사건이다.
+    """
+    tail = Baseline(edit_ewma=0.5, edit_stddev=0.5, view_ewma=2, sample_days=28,
+                    view_stddev=0.8)
+    d = detect(Window(edit_count=1, editor_count=1, views=MIN_ABSOLUTE_VIEWS), tail)
+    assert d.is_spike and "조회수 통과" in d.reason
+
+
+def test_인기_문서는_절대_하한에_영향_안_받는다():
+    """평소 수만 회짜리 문서는 하한이 있으나 없으나 같다 — 배수·z 가 관문이다."""
+    popular = Baseline(edit_ewma=100, edit_stddev=10, view_ewma=50_000,
+                       sample_days=28, view_stddev=5_000)
+    assert detect(Window(edit_count=1, editor_count=1, views=500_000), popular).is_spike
+    assert not detect(Window(edit_count=1, editor_count=1, views=55_000), popular).is_spike
 
 
 # --- 신규 문서 (Hurricane Milton 같은 사건 당일 생성) ---

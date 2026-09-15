@@ -67,12 +67,19 @@ def test_표준편차가_0이면_z를_못_낸다():
     assert first_view_signal(series(date(2025, 5, 1), [400] * 20 + [20_000])) is None
 
 
-def test_절대_하한_기본값은_없음이다():
-    """🔴 detector 의 현재 조회수 판정에는 절대 하한이 없다. 기본값이 그 규칙을 그대로 따라야
-    측정이 detector 와 같은 답을 낸다. 하한은 실험용 파라미터로만 연다."""
+def test_절대_하한_기본값은_detector_를_따라간다():
+    """🔴 측정 도구가 detector 와 다른 답을 내면 §11 수치가 조용히 어긋난다.
+
+    ~~기본 0 = 하한 없음~~ → detector 에 `MIN_ABSOLUTE_VIEWS` 가 생겨서
+    기본값이 그걸 그대로 따라간다 (2026-09-15, WP-87).
+    """
     tiny = series(date(2025, 5, 1), [1, 2, 1, 3, 1, 2, 1, 1, 2, 1, 8])
-    assert first_view_signal(tiny) is not None                       # 8회로도 통과한다
-    assert first_view_signal(tiny, min_absolute_views=100) is None   # 하한을 걸면 막힌다
+    assert first_view_signal(tiny) is None                       # 8회는 이제 막힌다
+    assert first_view_signal(tiny, min_absolute_views=0) is not None   # sweep 으로만 푼다
+
+    big = series(date(2025, 5, 1), [400] + [400, 412, 389, 405, 396, 418, 402, 391,
+                                            409, 398] + [20_000])
+    assert first_view_signal(big) is not None                    # 큰 값은 그대로 통과
 
 
 def test_not_before_이전_급등은_무시한다():
