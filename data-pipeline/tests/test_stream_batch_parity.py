@@ -47,6 +47,10 @@ def edit(title, ts, user="alice", *, wiki="enwiki", is_bot=False, byte_delta=10)
     두 소스 모두 `event_ts` 를 Z 접미 UTC 로 낸다 (2026-09-15 실측: 덤프
     `2025-06-01T00:00:01.000Z`). 오프셋 표기(`+09:00`)는 이 경로에 안 들어온다 —
     들어오면 배치 `datetime.fromisoformat(...).hour` 가 로컬 시를 내서 갈린다.
+
+    🔴 **title 은 canonical 공백형으로 준다.** 두 소스 다 `canonical_title` 을 거친
+    값을 내기 때문이다(WP-79). 밑줄형을 주면 두 경로가 갈리는데, 그건 버그가
+    아니라 아래 `test_스트리밍은_비정규_제목을_자가_보정하지_않는다` 가 고정하는 계약이다.
     """
     record = {
         "wiki": wiki, "domain": "en.wikipedia.org", "title": title,
@@ -123,10 +127,10 @@ def batch_windows(events):
 
 def test_같은_표본에_같은_편집수가_나온다(spark):
     events = [
-        edit("Hurricane_Milton", "2024-10-06T19:05:00.000Z", "alice"),
-        edit("Hurricane_Milton", "2024-10-06T19:40:00.000Z", "bob"),
-        edit("Hurricane_Milton", "2024-10-06T20:01:00.000Z", "carol"),
-        edit("Strait_of_Hormuz", "2024-10-06T19:30:00.000Z", "dave"),
+        edit("Hurricane Milton", "2024-10-06T19:05:00.000Z", "alice"),
+        edit("Hurricane Milton", "2024-10-06T19:40:00.000Z", "bob"),
+        edit("Hurricane Milton", "2024-10-06T20:01:00.000Z", "carol"),
+        edit("Strait of Hormuz", "2024-10-06T19:30:00.000Z", "dave"),
     ]
     assert stream_windows(spark, events) == batch_windows(events)
 
@@ -154,6 +158,29 @@ def test_is_bot_결측은_양쪽_다_봇이_아니다(spark):
     assert stream == batch
     assert batch[("enwiki", "Cat", "2025-06-01T10:00:00")] == (2, 2)
 
+
+
+def test_스트리밍은_비정규_제목을_자가_보정하지_않는다(spark):
+    """🔴 두 경로의 제목 계약이 비대칭이다. 알고 두는 것과 모르고 당하는 것은 다르다.
+
+    | 경로 | 제목 정규화 |
+    | --- | --- |
+    | 배치 | **읽는 지점에서 한다** (WP-92) — 구세대 -56 샤드가 밑줄형이라 |
+    | 스트리밍 | 안 한다 — `producer/normalize.py` 가 Kafka 에 넣기 전에 이미 맞춘다 |
+
+    스트리밍 쪽에 Spark 표현식으로 같은 규칙을 또 구현하면 파이썬 판과 갈릴 수 있다 —
+    WP-91 이 없앤 "이름 같고 동작 다른 canonical_title" 이 그대로 재현된다.
+    그래서 규칙은 `producer.normalize.canonical_title` 한 곳에만 둔다.
+
+    ⚠️ 이 계약이 깨지는 유일한 경로는 **정규화를 안 거친 이벤트가 토픽에 들어가는 것**이다.
+    그때 배치는 합치고 스트리밍은 쪼갠다 — 이 테스트가 그 차이를 눈에 보이게 박아둔다.
+    """
+    events = [edit("Hurricane_Milton", "2024-10-06T19:10:00.000Z", "alice")]
+    stream, batch = stream_windows(spark, events), batch_windows(events)
+
+    assert list(batch) == [("enwiki", "Hurricane Milton", "2024-10-06T19:00:00")]
+    assert list(stream) == [("enwiki", "Hurricane_Milton", "2024-10-06T19:00:00")]
+    assert stream != batch
 
 # ---------------------------------------------------------------- 경계 조건
 

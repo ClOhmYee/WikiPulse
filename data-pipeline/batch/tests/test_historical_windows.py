@@ -118,6 +118,45 @@ def test_build_windows_정렬_결합():
         edit_count=1, editor_count=1, views=40)]
 
 
+
+def test_샤드_세대가_섞여도_한_문서로_join_된다():
+    """🔴 WP-92 회귀.
+
+    WP-79 부터 normalize_dump·pageview 가 공백형 제목을 낸다. 그 전에 만든
+    -56 편집 샤드는 밑줄형이라 **두 세대가 섞여 돈다.** 읽는 지점에서 canonical 로
+    안 맞추면 join_windows 의 (wiki, title, hour) 가 한 건도 안 맞아서, 같은 문서·
+    같은 시각이 views=0 행과 edit_count=0 행 **둘**로 쪼개진다. view_ewma 가 전부
+    비고 조회수 단독 발동(WP-90)이 통째로 죽는데 **에러는 안 난다.**
+    """
+    rows = build_windows(
+        [edit("enwiki", "Hurricane_Milton", "2024-10-06T19:10:00")],   # 구세대(밑줄)
+        [view("enwiki", "Hurricane Milton", "2024-10-06T19:00:00", "user", 500)],
+    )
+    assert rows == [WindowRow(
+        "enwiki", "Hurricane Milton", "2024-10-06T19:00:00",
+        hour_of_day("2024-10-06T19:00:00"),
+        edit_count=1, editor_count=1, views=500)]
+
+
+def test_canonical_은_멱등이라_신세대_샤드에_무영향():
+    """양쪽 다 공백형이면 값이 하나도 안 바뀐다 — 이 보정이 기존 결과를 흔들지 않는다."""
+    rows = build_windows(
+        [edit("enwiki", "Hurricane Milton", "2024-10-06T19:10:00")],
+        [view("enwiki", "Hurricane Milton", "2024-10-06T19:00:00", "user", 500)],
+    )
+    assert rows[0].title == "Hurricane Milton"
+    assert rows[0].edit_count == 1 and rows[0].views == 500
+
+
+def test_같은_문서의_두_표기가_한_키로_합쳐진다():
+    """세대가 섞인 편집 샤드끼리도 합쳐져야 한다. 안 합치면 편집 수가 쪼개져
+    절대 하한(10)에 못 미치고 미탐이 난다."""
+    counts = aggregate_edits([
+        edit("enwiki", "Hurricane_Milton", "2024-10-06T19:10:00", user="a"),
+        edit("enwiki", "Hurricane Milton", "2024-10-06T19:20:00", user="b"),
+    ])
+    assert counts == {("enwiki", "Hurricane Milton", "2024-10-06T19:00:00"): (2, 2)}
+
 # ---------------------------------------------------------------- CLI 왕복
 
 def test_cli_샤드_읽어_집계(tmp_path):

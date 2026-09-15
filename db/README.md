@@ -32,6 +32,12 @@ CHECK 로 옮기면 규칙이 두 곳에 생긴다). 규칙과 근거는 명세 
 -58 Historical Window 샤드의 `row["title"]` 을 그대로 쓰고, 그 샤드는
 `batch/normalize_dump.py` 가 `canonical_title` 로 맞춘 값이다 — 즉 **DB 경계에
 닿기 전에 이미 canonical 이다.** `baseline_sink` 자체는 정규화하지 않는다.
+
+⚠️ **단, 그건 WP-79 이후에 만든 샤드에만 해당한다** (2026-09-15 정정,
+WP-92). 그 전에 만든 `-56` 편집 샤드는 밑줄형이고 두 세대가 섞여 돈다.
+`batch/historical_windows.py` 가 **읽는 지점에서** `canonical_title` 을 통과시켜
+흡수한다 — 안 그러면 편집·조회수 join 이 한 건도 안 맞아 같은 문서가 두 행으로
+쪼개지고, 밑줄 title 이 그대로 `wiki_page` 에 들어간다. 에러는 안 난다.
 title 로 `wiki_page` 를 조회하는 코드는 **아직 없다**(`cluster/driver.py` 의
 `load_pages_by_title` 은 docstring 속 의사코드이고 실제 함수가 없다).
 
