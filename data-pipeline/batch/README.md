@@ -338,14 +338,46 @@ python -m batch.historical_windows_ingest \
   1시간이 자연스러운 정합값이다.
 - **봇 필터 = `is_bot` 참 편집 제외.** 스트리밍 `~coalesce(is_bot, False)` 와 같은 판정.
 - **`editor_count` 를 함께 센다** (WP-85). 급증 판정의 편집자 하한이 이 값을 본다.
-  ⚠️ 스트리밍은 `approx_count_distinct`(근사), 배치는 정확값이다 — 편집자 1~10명 구간에서
-  두 값이 **불일치 0건**으로 일치함을 실측했다(2026-09-15).
+  🔴 스트리밍은 `approx_count_distinct`(근사), 배치는 정확값이라 **두 값이 갈린다.**
+  ~~편집자 1~10명 구간에서 불일치 0건~~ → 표본을 200,000 events 로 키우니 **21건 불일치**,
+  그중 13건이 `2 → 1` 로 편집자 하한을 뒤집었다 (2026-09-15, WP-83).
+  `rsd=0.01` 이면 0건 — `streaming.EDITOR_COUNT_RSD` 주석 참고.
 - **문서 키 = `(wiki, title)`.** -56·-57 과 같다. dump page_id 는 안 쓴다 — `wiki_page.id`
   해석은 적재(WP-60) 책임.
 - **`hour_of_day` 정의(UTC 시 0~23)는 `spike/baseline.py` 의 Spark 판과 같아야 한다.**
   Python `weekday()` 월=0 == Spark `(dayofweek+5)%7` 월=0. 테스트로 알려진 날짜를 고정했다.
 - 편집·조회는 `(wiki,title,hour)` 기준 **full outer join** — 한쪽만 있는 시간도 0 으로 남긴다
   (baseline 이 `edit_z`·`view_ewma` 를 둘 다 잡는다).
+
+### 대조 실측 (WP-83, 2026-09-15)
+
+선언만으로는 갈린 걸 못 잡는다. 같은 표본을 두 경로에 넣어 확인했다.
+
+```bash
+cd data-pipeline && python -m pytest tests/test_stream_batch_parity.py   # 12개
+```
+
+실덤프 **200,000 events**(enwiki 2025-06 shard 0) 대조 결과:
+
+| 항목 | 결과 |
+| --- | --- |
+| 윈도우 수 | 118,521 — **키 집합 완전 일치** (한쪽에만 있는 키 0) |
+| `edit_count` | **불일치 0건** |
+| `editor_count` | 🔴 **21건 불일치** — 전부 과소 계수 `{2→1: 13, 3→2: 4, 4→3: 1, 5→4: 3}` |
+
+`2 → 1` 13건은 **편집자 하한을 뒤집어 진짜 급증을 떨어뜨린다**(정확 editor≥2 윈도우 5,427의
+0.240%). `rsd=0.01`·`rsd=0.005`·정확 `count_distinct` 는 전부 불일치 0건이었다.
+값은 안 바꿨다 — 팀 결정 대기(명세 §10), `streaming.EDITOR_COUNT_RSD` 로 노출만 했다.
+
+**무엇을 "같다"고 보는가.** 스트리밍은 1시간/5분 **슬라이딩**, 배치는 정각 **tumbling** 이다.
+슬라이드가 창 길이를 나누므로 **정각에서 시작하는 윈도우**가 항상 있고 그게 배치와 같은
+구간이다. 대조는 그 윈도우만 본다 — 나머지 슬라이딩 윈도우는 배치에 대응물이 없다.
+
+⚠️ **`collect()` 는 timestamp 를 드라이버 로컬 시간대(KST)의 naive datetime 으로 준다.**
+`spark.sql.session.timeZone=UTC` 로도 안 막힌다 — 대조 테스트가 처음에 전부 9시간 밀려
+실패했다. 시각 포맷·필터를 **Spark SQL 안에서** 끝내야 한다
+(`date_format`·`F.minute`). 이미 알려진 입력 쪽 함정(naive datetime 을 `createDataFrame`
+에 주면 밀린다)의 **출력판**이고, 역시 에러가 안 난다.
 
 ## ⚠️ API_SPEC §2.4 의 baseline·pulse 와 다른 값이다
 
