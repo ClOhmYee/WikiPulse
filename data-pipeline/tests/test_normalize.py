@@ -7,10 +7,11 @@
 from __future__ import annotations
 
 import copy
+import unicodedata
 
 import pytest
 
-from producer.normalize import SkipEvent, normalize, partition_key
+from producer.normalize import SkipEvent, canonical_title, normalize, partition_key
 
 # 2026-09-08 00:24:20Z 실제 수신 이벤트 (parsedcomment 만 길어서 줄임)
 REAL_EDIT = {
@@ -122,3 +123,64 @@ def test_다른_위키의_같은_제목은_다른_키다():
     a = partition_key(normalize(make(wiki="enwiki")))
     b = partition_key(normalize(make(wiki="kowiki")))
     assert a != b
+
+
+# --- canonical_title (WP-79) ------------------------------------
+#
+# 적용/비적용 규칙의 근거는 canonical_title docstring 에 있다.
+# 여기서는 "적용한다"뿐 아니라 **"적용하지 않는다"도 고정**한다 — 나중에 누가
+# 좋은 뜻으로 대문자화·NFC 를 끼워 넣으면 조용히 키가 갈라지기 때문이다.
+
+
+def test_밑줄을_공백으로_바꾼다():
+    """덤프(Hurricane_Milton)와 LIVE(Hurricane Milton)가 같은 문서다."""
+    assert canonical_title("Hurricane_Milton") == "Hurricane Milton"
+    assert canonical_title("Strait_of_Hormuz") == "Strait of Hormuz"
+
+
+def test_이미_공백형인_제목은_그대로다():
+    """LIVE 경로가 주는 형태. 여기서 값이 바뀌면 안 된다."""
+    assert canonical_title("Hurricane Milton") == "Hurricane Milton"
+    assert canonical_title("Iran") == "Iran"
+
+
+def test_연속_구분자는_공백_하나로_줄인다():
+    """MediaWiki 실측: Hurricane__Milton -> Hurricane Milton (2026-09-13)."""
+    assert canonical_title("Hurricane__Milton") == "Hurricane Milton"
+    assert canonical_title("Hurricane _ Milton") == "Hurricane Milton"
+
+
+def test_앞뒤_구분자를_제거한다():
+    assert canonical_title("_Hurricane Milton_") == "Hurricane Milton"
+    assert canonical_title("  Hurricane Milton  ") == "Hurricane Milton"
+
+
+def test_두_번_적용해도_같다():
+    """적재본을 다시 읽어 또 정규화해도 값이 흔들리면 안 된다."""
+    once = canonical_title("_Hurricane__Milton_")
+    assert canonical_title(once) == once == "Hurricane Milton"
+
+
+def test_첫_글자를_대문자로_바꾸지_않는다():
+    """비적용 규칙 고정. 소스가 주는 건 이미 대문자화된 MediaWiki 저장 제목이라
+    (`eBay` -> 저장 제목 `EBay`) 우리가 또 할 이유가 없다. 위키별 $wgCapitalLinks
+    설정에 달린 규칙이고 enwiki 밖에서는 확인하지 않았다."""
+    assert canonical_title("eBay") == "eBay"
+    assert canonical_title("iPhone") == "iPhone"
+
+
+def test_유니코드_정규화를_하지_않는다():
+    """비적용 규칙 고정. MediaWiki 가 NFC 로 저장·요구하고 LIVE 표본 2,496건이
+    전부 NFC 였다 — 소스가 이미 NFC 라 no-op 이다. 여기서 NFC 를 돌리면 확인하지
+    않은 변환이 파이프라인에 들어온다."""
+    # 결합문자를 소스에 그대로 두면 편집기·도구가 NFC 로 합쳐버릴 수 있다.
+    # 파일 바이트에 기대지 않고 실행 시점에 만든다.
+    nfd = unicodedata.normalize("NFD", "Zürich")
+    assert nfd != "Zürich", "전제: NFD 와 NFC 가 달라야 이 테스트가 의미 있다"
+    assert canonical_title(nfd) == nfd
+
+
+def test_한글_제목도_그대로_통과한다():
+    """kowiki 를 켰을 때 제목이 망가지지 않는지. 구분자만 건드려야 한다."""
+    assert canonical_title("호르무즈_해협") == "호르무즈 해협"
+

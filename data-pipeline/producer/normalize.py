@@ -15,10 +15,13 @@
       categorize는 문서 편집이 아니라 분류 자동 갱신이라 반드시 걸러야 한다.
     - meta.dt 는 ms 정밀도 ISO8601, 최상위 timestamp 는 초 단위. dt 를 쓴다.
     - type=new 는 length.old / revision.old 가 없다.
+    - **title 이 공백형이다.** 75초 표본 2,496건에 밑줄 제목이 0건이었다
+      (2026-09-13 재측정). 덤프는 밑줄형이라 canonical_title 로 맞춘다 — §5.1.
 """
 
 from __future__ import annotations
 
+import re
 from datetime import datetime, timezone
 from typing import Any
 
@@ -28,6 +31,44 @@ EDIT_TYPES = frozenset({"edit", "new"})
 
 # 주 문서 네임스페이스. 0 = (Main/Article)
 ARTICLE_NAMESPACE = 0
+
+#: 제목에서 공백과 같은 뜻으로 쓰이는 문자. MediaWiki 는 밑줄과 공백을 구분하지 않는다.
+_TITLE_SEPARATORS = re.compile(r"[ _]+")
+
+
+def canonical_title(raw: str) -> str:
+    """문서 제목을 파이프라인 내부 canonical 형태(공백형)로 맞춘다. (WP-79)
+
+    같은 문서가 경로마다 다른 키로 들어가면 `(wiki, title)` 자연키가 갈라진다.
+    LIVE 는 `Hurricane Milton`, 덤프는 `Hurricane_Milton` 을 주는데 둘은 같은
+    문서다 — 같은 pageid 로 해석된다(78046814, 2026-09-13 실측).
+
+    공백형을 고른 이유
+        MediaWiki 가 밑줄로 주든 공백으로 주든 **공백형으로 정규화해 돌려준다**.
+        밑줄은 URL 표기이지 제목이 아니다. edit_event 계약(data-pipeline/README.md)
+        과 API 명세도 이미 공백형이라, 밑줄을 내는 곳만 맞추면 된다.
+        명세 §5.1.
+
+    적용하는 규칙 (2026-09-13 MediaWiki API `normalized` 응답으로 실측)
+        밑줄 -> 공백              Hurricane_Milton   -> Hurricane Milton
+        연속 구분자 -> 공백 하나   Hurricane__Milton  -> Hurricane Milton
+        앞뒤 구분자 제거           _Hurricane Milton_ -> Hurricane Milton
+    뒤 둘은 방어용이다. LIVE 표본 2,496건에 연속 공백이 0건이라 실제로는 값이
+    바뀌지 않는 게 정상이다. 적용해도 MediaWiki canonical 에서 멀어질 수 없다.
+
+    ⚠️ 적용하지 않는 규칙 — 추측으로 넣지 않는다
+        **첫 글자 대문자.** 소스가 주는 건 이미 대문자화된 MediaWiki 저장 제목이다
+        (`eBay` 를 조회하면 저장 제목이 `EBay`, pageid 130495). 우리는 사용자가 친
+        제목을 받지 않는다. 게다가 이 규칙은 위키별 `$wgCapitalLinks` 설정에 달렸고
+        enwiki 밖에서는 확인하지 않았다.
+        **Unicode NFC.** MediaWiki 가 NFC 로 저장·요구하고(API 경고 확인), LIVE
+        표본 2,496건 전부 NFC 였다. 소스가 이미 NFC 라 no-op 이다.
+    둘 다 필요해지면 근거 수치를 먼저 만든 뒤 넣는다.
+
+    구분자를 ` ` 와 `_` 로만 한정한 것도 같은 이유다. `str.split()` 은 NBSP 까지
+    공백으로 보는데, MediaWiki 가 NBSP 를 제목에서 어떻게 다루는지는 확인하지 않았다.
+    """
+    return _TITLE_SEPARATORS.sub(" ", raw).strip(" ")
 
 
 class SkipEvent(Exception):
@@ -83,7 +124,8 @@ def normalize(raw: dict[str, Any], *, wikis: frozenset[str] | None = None) -> di
         # 식별
         "wiki": wiki,
         "domain": meta.get("domain"),
-        "title": raw["title"],
+        # canonical 형태로 맞춰 내보낸다 — 덤프 경로와 같은 키가 되게 (WP-79)
+        "title": canonical_title(raw["title"]),
         # 편집 내용
         "event_type": event_type,
         "rev_id": revision.get("new"),
@@ -111,5 +153,8 @@ def partition_key(event: dict[str, Any]) -> bytes:
     Spark 윈도우 집계가 문서 단위라, 한 문서의 이벤트가 여러 파티션에 흩어지면
     순서 보장이 깨진다. page_id 가 스트림에 없어서 (wiki, title) 을 키로 쓴다.
     문서 이동(rename)이 일어나면 키가 바뀌지만 MVP 범위에서는 감수한다.
+
+    title 은 normalize() 가 이미 canonical 로 맞춰 놓은 값이다. 덤프 경로도 같은
+    함수를 쓰므로 같은 문서는 실시간·리플레이가 같은 파티션으로 간다.
     """
     return f"{event['wiki']}:{event['title']}".encode("utf-8")

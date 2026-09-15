@@ -112,6 +112,64 @@
 
 RDB는 PostgreSQL 하나다. MySQL을 따로 두지 않는다 — pgvector 때문에 PG가 필수이고, 나머지를 분리할 이유가 없다.
 
+### 5.1 문서 제목 canonical 규칙 (2026-09-13 확정, WP-79)
+
+`wiki_page`의 자연키가 `(wiki, title)`이라, 같은 문서가 경로마다 다른 제목 표기로 들어오면 한 문서가 두 행으로 갈라진다. **파이프라인 내부 canonical은 공백형이다** — `Hurricane Milton`.
+
+| 경로 | 원래 표기 | 처리 |
+| --- | --- | --- |
+| LIVE EventStreams | 공백형 | 그대로 (계약 고정용으로 함수는 통과시킨다) |
+| `mediawiki_history` 덤프 | 밑줄형 | `canonical_title`로 변환 (`batch/normalize_dump.py:normalize_dump`) |
+| `pageview_complete` 덤프 | 밑줄형 | ~~-57 머지 후 적용~~ → **적용됨** (`batch/pageview.py:parse_row`, 2026-09-15) |
+| Clickstream 덤프 | 밑줄형 | 자체 변환(`raw.replace("_", " ")`). 공통 함수 통합은 후속 — 아래 ⚠️ |
+
+구현은 `data-pipeline/producer/normalize.py`의 `canonical_title()` **한 곳**이다. 경로마다 따로 구현하지 않는다. 위 표의 앞 세 경로가 이 함수를 import해 쓴다.
+
+⚠️ **Clickstream만 아직 자체 구현이고, 결과가 완전히 같지는 않다.** `batch/clickstream.py:canonical_title`은 `replace("_", " ")`뿐이라 **연속 축약·trim이 없다.** `Hurricane__Milton`이 공통 함수로는 `Hurricane Milton`, 여기서는 `Hurricane  Milton`(공백 2개)이 되어 같은 문서가 `(wiki, title)` 두 행으로 갈라진다. Clickstream은 WP-79의 AC가 아니라 손대지 않았다 — 후속으로 통합한다.
+
+**적용 시점 규칙 (⚠️ 조용히 틀리는 지점)**: canonical은 **namespace/유효성 필터 뒤, 집계 키가 되기 전**에 건다.
+
+- 앞으로 당기면 — `pageview.py`의 namespace prefix 목록이 `User_talk`처럼 밑줄형이라 `User talk`와 일치하지 않는다. namespace 문서가 ns0로 새어 들어온다.
+- 뒤로 미루면 — 이미 원래 표기로 그룹이 갈린 뒤라 `Hurricane_Milton`과 `Hurricane__Milton`이 별개 키로 집계된다. 출력 직전 문자열 치환은 이 문제를 못 고친다.
+
+회귀 테스트: `batch/tests/test_pageview.py`의 `test_표기만_다른_같은_문서가_한_키로_합산된다`(집계 전 적용 확인)·`test_canonical_이_namespace_필터보다_뒤에_걸린다`(순서 확인).
+
+**공백형을 고른 이유**
+
+1. MediaWiki가 밑줄로 주든 공백으로 주든 **공백형으로 정규화해 돌려준다**. 밑줄은 URL 표기이지 제목이 아니다.
+2. `edit_event` 계약(`data-pipeline/README.md`)·API 명세(`docs/api-v0.1.md`)·DB 테스트가 **이미 전부 공백형**이다. 밑줄을 고르면 확정된 API 계약을 깨야 한다.
+3. 밑줄을 내는 곳이 `batch/normalize_dump.py` 하나뿐이라 바꿀 곳이 제일 적다.
+4. 공백형이 곧 MediaWiki의 표시 제목이라 **표시용 컬럼을 따로 둘 필요가 없다** (아래).
+
+**적용하는 규칙** (2026-09-13 MediaWiki API `normalized` 응답 실측)
+
+| 규칙 | 예 |
+| --- | --- |
+| 밑줄 → 공백 | `Hurricane_Milton` → `Hurricane Milton` |
+| 연속 구분자 → 공백 하나 | `Hurricane__Milton` → `Hurricane Milton` |
+| 앞뒤 구분자 제거 | `_Hurricane Milton_` → `Hurricane Milton` |
+
+뒤 둘은 방어용이다. LIVE 표본 2,496건에 연속 공백이 0건이라 실제로는 값이 바뀌지 않는 게 정상이다.
+
+🔴 **적용하지 않는 규칙 — 추측으로 넣지 말 것**
+
+- **첫 글자 대문자.** 소스가 주는 건 이미 대문자화된 MediaWiki 저장 제목이다 — `eBay`를 조회하면 저장 제목이 `EBay`(pageid 130495)다. 우리는 사용자가 친 제목을 받지 않는다. 게다가 이 규칙은 위키별 `$wgCapitalLinks` 설정에 달렸고 **enwiki 밖에서는 확인하지 않았다**.
+- **Unicode NFC.** MediaWiki가 NFC로 저장·요구하고(API가 비-NFC 입력에 경고를 낸다), LIVE 표본 2,496건이 전부 NFC였다. 소스가 이미 NFC라 no-op이다.
+
+⚠️ **NFC·연속 밑줄 여부를 덤프 쪽(`mediawiki_history`·`clickstream`·`pageview_complete`)에서는 확인하지 못했다.** 로컬에 덤프가 없고 HDFS 접근이 막힌 상태에서 판단했다. "같은 MediaWiki가 만든 제목"이라는 추론이며 실측이 아니다. 덤프 표본이 생기면 재확인한다.
+
+**표시용 title은 분리하지 않는다.** 공백형이 곧 MediaWiki의 표시 제목이라(`Hurricane Milton`·`EBay`) 내부 식별용과 표시용이 같은 문자열이다. 나누면 두 값이 갈라질 위험만 생긴다. `wiki_page.title` 한 컬럼을 그대로 쓴다.
+
+**기존 HDFS 산출물 재생성 — 필요하지만 이 스토리 범위 밖**
+
+`/wikipulse/raw/mediawiki_history/`(WP-56, enwiki 2025-06·2024-10)에 쌓인 JSONL은 `normalize_dump.py` 출력이라 **밑줄 제목을 담고 있다.** 원본이 아니라 내부 계약(`edit_event`) 산출물이므로 canonical이어야 맞다 → **논리적으로 재생성 대상**이다.
+
+- 다만 **지금 틀린 결과를 내고 있지는 않다.** 소비자인 `cluster/driver.py:load_creation_dates`가 아직 `NotImplementedError`라 이 파일들을 읽는 코드가 없다.
+- 비용: 덤프 재다운로드 1.1 GB + 변환 771s·477s + 재적재.
+- 🔴 **읽을 때 canonical을 적용하는 우회안은 영구 해법으로 쓰지 않는다.** HDFS에 두 가지 제목 표기가 공존하게 되는데, 그게 정확히 이 규칙이 없애려는 실패 모드다.
+- `pageview_complete`(WP-57) 산출물도 같은 문제·같은 결론이다. **두 개를 한 후속 이슈로 묶는다.**
+
+
 ## 6. 이슈-종목 매칭
 
 후보 생성과 검증을 나눈다.
@@ -261,11 +319,13 @@ RAM 16 GB에서 Kafka + Spark + HDFS 데몬을 올리면 Spark executor 몫은 8
 | 편집 재급증 비율, 예비 표본 | 사건기간 편집 수 / 동일 길이 직전 기준기간 편집 수. `Mojtaba_Khamenei`(Iran 재조명 예상) 500+ vs 28 = **17.9배**. `Saffir–Simpson_scale`(Milton과 무관 예상) 49 vs 8 = **6.1배**(태풍 시즌 전체가 겹쳐 편집이 몰린 계절성 오염 — 배제 실패 위험). `Hurricane_Katrina` 23 vs 24 = 1.0배·`Persian_Gulf` 21 vs 30 = 0.7배(둘 다 정상 배제). 표본 4개로는 6.1배와 17.9배 사이 문턱값을 못 정함, Wikipedia API rate limit으로 표본 확대 중단. 후속: WP-77 | 2026-09-09 |
 | mediawiki_history 적재, enwiki 2025-06 | 원본 `2026-08.enwiki.2025-06.tsv.bz2` 515,334,641 B → rows_read 5,501,827 / events_written 3,361,013 / shard **7**(`shard_records` 500,000) / 산출물 전체(shard + `_manifest.json`) **152,362,627 B** / 변환 **771.1s**. HDFS `/wikipulse/raw/mediawiki_history/wiki=enwiki/year=2025/month=06/` — logical 152,362,627 B(로컬 산출물과 바이트 일치) · physical(replication=2) 304,725,254 B · `fsck` HEALTHY · average block replication 2.0 · under-replicated·missing·corrupt 0. 검증 사례 Strait of Hormuz 2025-06 | 2026-09-10 |
 | mediawiki_history 적재, enwiki 2024-10 | 원본 `2026-08.enwiki.2024-10.tsv.bz2` 596,614,108 B → rows_read 6,646,918 / revision 행 5,944,825 / events_written 3,654,769 / shard **8**(`shard_records` 500,000) / 산출물 전체(shard + `_manifest.json`) **164,092,141 B** / 변환 **476.8s** — ⚠️ **직전 다운로드·sha256 검증으로 OS page cache 가 올라간 warm-cache 조건이다. 2025-06 의 771.1s 와 성능을 직접 비교하지 않는다.** HDFS `/wikipulse/raw/mediawiki_history/wiki=enwiki/year=2024/month=10/` — logical 164,092,141 B(로컬 산출물과 바이트 일치) · physical(replication=2) 328,184,282 B · `fsck` HEALTHY · average block replication 2.0 · under-replicated·missing·corrupt 0. 검증 사례 `Hurricane_Milton` ns0 **1,430 events**, event_type **edit 1,430 / new 0**. 관찰: 그중 1,428건이 2024-10-06T18:31:30Z 문서 이동 이후의 본문 문서이고, 나머지 2건은 같은 ns0 제목을 먼저 쓰다 삭제된 별도 단명 문서다 — `(wiki, title)` 계약에서 함께 집계된다 | 2026-09-10 |
+| MediaWiki 제목 정규화 | `action=query` `normalized` 응답 실측. `Hurricane_Milton`·`Hurricane__Milton`·`_ Hurricane Milton _` 전부 → `Hurricane Milton`(pageid 78046814). `hurricane Milton` → `Hurricane Milton`, `eBay` → **저장 제목이 `EBay`**(pageid 130495) · `iPhone` → `IPhone`(8841749) — 첫 글자 대문자는 MediaWiki가 이미 적용해 저장한다. NFD `Zu`+U+0308`rich` → `Zürich`(77257877), 비-NFC 입력에 "NFC로 보내라" 경고. 결론: 밑줄→공백·연속 축약·trim만 적용, 대문자화·NFC는 비적용 (§5.1) | 2026-09-13 |
+| EventStreams 제목 표기, 재측정 | 75초 전 위키·전 네임스페이스 **2,496 이벤트**. title에 `_` 포함 **0건** · NFC 아님 **0건** · 연속 공백 **0건**. enwiki ns0 136건(그중 edit/new 122건) 전부 `_` 0건. ⚠️ 기존 28건 표본의 "공백 27"은 오해를 부른다 — 나머지 1건은 밑줄 제목이 아니라 **단어 하나짜리 제목**이다(ns0 136건 중 12건이 그렇다). 정확한 명제는 "LIVE에 밑줄 제목이 0건"이다 | 2026-09-13 |
 | HDFS 환경 | Hadoop **3.5.0**, NameNode 1 + DataNode **2**, `dfs.replication=2`, block size **128 MiB**, Docker 컨테이너로 운영. `dfsadmin` DFS Remaining 603.91 GB — ⚠️ **두 DataNode 물리 여유의 합이다. replication=2 이므로 사용자 관점 논리 저장 가능량은 대략 그 절반(약 302 GB)이다** | 2026-09-10 |
 
 재현 스크립트는 아직 대부분 저장소 밖에 있다 (WP-53). 이슈 대표 텍스트 비교는 `ai/issue-text-poc/`, 신호 시차 측정은 `ai/signal-order/`(+ `data-pipeline/spike/signal_lag.py`)에 들어와 있다.
 
-⚠️ historical 덤프(`Hurricane_Milton`)와 LIVE EventStreams(`Hurricane Milton`)의 문서 제목 표기가 다르다 — `(wiki, title)` canonical 규칙 통일은 **WP-79** 로 분리했다.
+~~⚠️ historical 덤프와 LIVE EventStreams의 문서 제목 표기가 다르다 — canonical 규칙 통일은 WP-79로 분리했다.~~ → **공백형으로 확정** (2026-09-13, §5.1). `batch/normalize_dump.py`가 `canonical_title`로 맞춘다. ~~남은 적용 대상은 `batch/pageviews.py`(-57 복구 후)와 `batch/clickstream.py`~~ → `batch/pageview.py`도 **적용 완료** (2026-09-15, 파일명은 `pageviews`가 아니라 `pageview`다). 남은 것은 `batch/clickstream.py` 하나 — 공통 함수 통합, 후속.
 
 ## 12. 변경 이력
 

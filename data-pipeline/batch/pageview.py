@@ -20,9 +20,16 @@
     대상 위키(project) 행만, `-` 와 알려진 namespace prefix 를 뺀 ns0 문서만.
     시간별 카운트를 (wiki, title, ts_hour, agent, views) 로 펼쳐 같은 키끼리 합산한다.
 
-제목 정규화 (⚠️ WP-79)
-    Clickstream 과 같은 사안이다. 여기서는 덤프 원형(밑줄)을 그대로 둔다 — 편집 덤프
-    (mediawiki_history)도 밑줄 title 을 쓰고, 두 소스의 canonical 통일이 -79 다.
+제목 정규화 (WP-79)
+    ~~여기서는 덤프 원형(밑줄)을 그대로 둔다~~ → `canonical_title` 로 공백형에 맞춘다.
+    편집 덤프(mediawiki_history)·실시간(EventStreams)과 같은 함수 한 곳을 쓴다 —
+    규칙과 근거는 `producer/normalize.py:canonical_title`, 명세 §5.1.
+
+    ⚠️ **적용 시점이 `is_content_title` 뒤, 합산 앞이다.** 순서가 뒤집히면 조용히 틀린다.
+      - 앞으로 옮기면: namespace prefix 가 `User_talk` 라 밑줄 기준으로 비교하는데
+        `User talk` 가 되어 일치하지 않는다 — namespace 문서가 ns0 로 새어 들어온다.
+      - 뒤로 옮기면: `acc` 가 이미 원형 title 로 그룹을 갈라 놓은 뒤라
+        `Hurricane_Milton` 과 `Hurricane Milton` 이 별개 키로 집계된다.
 """
 
 from __future__ import annotations
@@ -30,6 +37,8 @@ from __future__ import annotations
 import re
 from collections.abc import Iterable, Iterator
 from dataclasses import dataclass
+
+from producer.normalize import canonical_title
 
 #: 공백 구분 컬럼 수. 다르면 덤프 형식이 바뀐 것이다.
 PAGEVIEW_COLUMNS = 6
@@ -70,7 +79,7 @@ ENWIKI_NAMESPACE_PREFIXES = frozenset({
 class PageviewRecord:
     """한 문서·한 시간·한 agent 의 조회수. ingest 가 JSONL.gz 로 쓴다."""
     wiki: str
-    title: str
+    title: str      # canonical 공백형. 덤프 원형(밑줄)이 아니다 — WP-79
     ts_hour: str    # ISO "YYYY-MM-DDTHH:00:00" (UTC)
     agent: str
     views: int
@@ -105,7 +114,11 @@ def decode_hourly(encoded: str) -> dict[int, int]:
 
 
 def is_content_title(title: str, prefixes: frozenset[str] = ENWIKI_NAMESPACE_PREFIXES) -> bool:
-    """ns0 문서면 True. `-`·알려진 namespace prefix 는 False."""
+    """ns0 문서면 True. `-`·알려진 namespace prefix 는 False.
+
+    ⚠️ **덤프 원형(밑줄) title 을 받는다.** prefix 목록이 `User_talk` 처럼 밑줄형이라
+    canonical(공백형)을 넣으면 `User talk` 가 되어 아무것도 안 걸린다 — WP-79.
+    """
     if title == NO_TITLE:
         return False
     head, sep, _ = title.partition(":")
@@ -115,10 +128,13 @@ def is_content_title(title: str, prefixes: frozenset[str] = ENWIKI_NAMESPACE_PRE
 
 
 def parse_row(line: str, project: str) -> tuple[str, dict[int, int]] | None:
-    """공백 6컬럼 한 줄 → (title, {hour: views}). 대상 project·ns0 가 아니면 None.
+    """공백 6컬럼 한 줄 → (canonical title, {hour: views}). 대상 project·ns0 가 아니면 None.
 
     컬럼 수가 6이 아니거나 시간별 합 != daily_total 이면 SchemaMismatch.
     같은 title 이 access_method·page_id 로 여러 행이면 각각 나오고, 합산은 aggregate 가 한다.
+
+    돌려주는 title 은 canonical 공백형이다 (WP-79). ns0 판정은 원형으로 끝낸 뒤
+    변환한다 — 합산 키가 되기 전이라 표기만 다른 같은 문서가 한 그룹으로 모인다.
     """
     fields = line.rstrip("\n").split(" ")
     if len(fields) != PAGEVIEW_COLUMNS:
@@ -134,7 +150,8 @@ def parse_row(line: str, project: str) -> tuple[str, dict[int, int]] | None:
         raise SchemaMismatch(
             f"{title!r} 시간합 {sum(hours.values())} != daily_total {daily_total}"
         )
-    return title, hours
+    # ns0 판정이 끝난 뒤, 합산 키가 되기 전에 canonical 로 맞춘다 (WP-79).
+    return canonical_title(title), hours
 
 
 def aggregate(
@@ -143,6 +160,8 @@ def aggregate(
     """한 agent-일 파일을 (wiki, title, ts_hour, agent, views) 로 펼쳐 합산한다.
 
     access_method·page_id 를 가로질러 (title, hour) 로 합친다. date 는 "YYYY-MM-DD".
+    title 은 parse_row 가 이미 canonical 로 맞춘 값이라, 표기만 다른 같은 문서
+    (`Hurricane_Milton` · `Hurricane Milton`)가 한 키로 합쳐진다 — WP-79.
     한 파일을 dict 로 누적한다 — 전체 enwiki 는 Spark 경로가 맡고, 이 CLI 는 검증
     슬라이스(Hormuz·Milton 등)용이다(§7 메모리 근거).
     """

@@ -154,7 +154,7 @@ shard 개수가 곧 Spark 태스크 수의 상한인데, **실제 Spark 실행 �
 
 ```bash
 cd data-pipeline/batch
-../.venv/Scripts/python.exe -m pytest       # 88개 (mediawiki + clickstream + pageview + historical-window), 네트워크 없이
+../.venv/Scripts/python.exe -m pytest       # 104개 (mediawiki + clickstream + pageview + historical-window), 네트워크 없이
 ```
 
 확인하는 것:
@@ -166,6 +166,8 @@ cd data-pipeline/batch
   skip 되어 계약이 깨져도 아무도 모른다
 - 컬럼이 78개가 아니면 멈추는지 — 위치가 하나만 밀려도 전부 틀린 값이 된다
 - 네임스페이스·제목·봇 판정이 **과거 값**으로 되는지
+- **덤프 밑줄 제목과 실시간 공백 제목이 같은 `(wiki, title)`·같은 파티션 키가
+  되는지** (WP-79). 갈라지면 baseline 조회가 조용히 miss 한다
 - 두 번 돌려도 이벤트가 늘지 않는지, 반쪽 출력이 완료본으로 안 보이는지
 - dry-run 이 파일을 안 만드는지, shard 가 이벤트를 잃지 않는지
 
@@ -232,8 +234,14 @@ python -m batch.clickstream_ingest --wiki enwiki --month 2025-06 --dry-run  # �
   이동이 아니라 이웃 신호가 아니다.
 - **문턱 없음.** 위키미디어가 이미 `n>=10` 만 공개한다. `n` 은 `cluster_member.weight`
   로만 쓰고, 클러스터 포함 여부는 생성일 창이 정한다 (명세 §3.2 4번·§10 폐기 절).
-- **제목 정규화.** Clickstream 밑줄 → `wiki_page` 공백. ⚠️ 두 소스 canonical 통일은
-  `WP-79` — 확정되면 `canonical_title` 을 그 규칙으로 교체한다.
+- **제목 정규화.** Clickstream 밑줄 → `wiki_page` 공백. ~~두 소스 canonical 통일은
+  `WP-79`~~ → **공백형으로 확정** (2026-09-13, 명세 §5.1). ⚠️ **공통 함수
+  (`producer/normalize.py`)로 통합하는 것은 아직 안 했다** — 이 파일만 남았다
+  (`pageview.py` 는 2026-09-15 적용 완료). ~~결과는 같다~~ → **같지 않다**: 이 파일의
+  자체 `canonical_title` 은 `replace("_", " ")` 뿐이라 **연속 축약·trim 이 없다.**
+  `Hurricane__Milton` 이 공통 함수로는 `Hurricane Milton`, 여기서는 `Hurricane  Milton`
+  (공백 2개)이 되어 같은 문서가 두 키로 갈라진다. 덤프에서 연속 밑줄을 본 적은 없어
+  지금 틀린 결과를 내고 있진 않지만, "결과 동일"은 근거 없는 서술이었다.
 
 ## 이웃 조회
 
@@ -287,6 +295,15 @@ python -m batch.pageview_ingest --wiki enwiki --date 2025-06-12 --agents user,au
   가 역매핑하고, 미등록 위키는 `UnsupportedWiki` 로 멈춘다(조용히 틀린 위키 방지).
 - **`:` 단순 필터 금지.** 정상 제목에 콜론이 들어간다. 알려진 namespace prefix 집합만 제외한다.
 - **시간별 합 != daily_total 이면 `SchemaMismatch`.** 형식 손상·인코딩 오류를 조용히 넘기지 않는다.
+- **canonical 적용 시점이 `is_content_title` 뒤·합산 앞이다** (WP-79, 2026-09-15).
+  덤프 밑줄 제목을 공통 `canonical_title` 로 공백형에 맞춘다 — 편집 경로와 같은 함수다.
+  ⚠️ 순서를 옮기면 조용히 틀린다: 앞으로 당기면 prefix 목록이 `User_talk` 라 `User talk` 와
+  일치하지 않아 namespace 문서가 새어 들어오고, 뒤로 미루면 `acc` 가 이미 원래 표기로
+  그룹을 갈라 놓아 `Hurricane_Milton` 과 `Hurricane__Milton` 이 별개 키가 된다.
+  회귀는 `test_canonical_이_namespace_필터보다_뒤에_걸린다`·`test_표기만_다른_같은_문서가_한_키로_합산된다`.
+- **제목에 리터럴 공백은 못 온다.** 6컬럼을 `" "` 로 자르는 형식이라 공백이 든 제목은 7필드가
+  되어 `SchemaMismatch` 다. 그래서 "공백형 제목이 덤프에 섞이는" 경우는 테스트하지 않는다 —
+  덤프 안에서 실제로 흔들릴 수 있는 건 밑줄 표기(연속·앞뒤)뿐이다.
 
 ## 메모리
 
@@ -298,6 +315,10 @@ python -m batch.pageview_ingest --wiki enwiki --date 2025-06-12 --agents user,au
 - **실 덤프 적재·HDFS** — WP-28 완료 후. 하루 user 542 MiB + automated 706 MiB ≈ 1.2 GiB
   (스펙 실측). 실측 크기·소요는 그때 명세 §11 에. 위 오프라인 테스트로 파싱·필터·합산·CLI 배선만 검증했다.
 - **`wiki_page.id` 해석** — 스펙대로 `(wiki, title)` 로만 적재. id 해석은 후속 적재 단계 책임.
+  title 은 이 단계에서 이미 canonical 이라, 해석 단계가 다시 정규화할 필요는 없다 (§5.1).
+- **기존 산출물 재생성** — 여기까지 적재된 JSONL 은 canonical 도입 **전** 산출물이라 밑줄
+  제목을 담고 있다. 논리적으로 재생성 대상이며, 읽을 때 밑줄을 바꾸는 우회는 쓰지 않는다
+  (두 표기가 공존하는 게 이 규칙이 없애려는 실패 모드다). -56 산출물과 묶어 후속 이슈로 — 명세 §5.1.
 
 월 단위는 `--month YYYY-MM` 로 하루씩 순회한다(일별 매니페스트로 이어받기, 결손일 기록, 다 되면
 요약 출력). `SchemaMismatch` 는 전체 실행을 멈춘다(형식 손상은 하루 문제가 아니다).

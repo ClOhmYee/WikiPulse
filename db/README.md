@@ -21,6 +21,28 @@ pgvector 때문에 PG 가 필수다. 그러면 벡터 Top-K 결과에 티커·�
 (2026-09-08 실측). 식별자가 `(wiki, title)` 뿐이라 대리키를 두고 그 쌍에
 UNIQUE 를 걸었다. 문서 이동이 일어나면 새 행이 생긴다 — MVP 범위에서 감수한다.
 
+🔴 **`title` 은 공백형 canonical 만 넣는다** (`Hurricane Milton`). 자연키라서
+표기가 흔들리면 한 문서가 두 행이 된다 — 덤프가 주는 밑줄형(`Hurricane_Milton`)이
+그대로 들어오면 그렇게 된다. 적재 쪽에서 `producer/normalize.py` 의
+`canonical_title()` 로 맞춰 보낸다. DDL 에 제약을 걸지는 않았다(정규화 규칙을
+CHECK 로 옮기면 규칙이 두 곳에 생긴다). 규칙과 근거는 명세 §5.1 (WP-79).
+
+**지금 이 보장이 어디까지인가** (2026-09-15 확인). `wiki_page` 에 쓰는 코드는
+`spike/baseline_sink.py` 의 `RESOLVE_PAGE_SQL` UPSERT **하나뿐**이다. 그 title 은
+-58 Historical Window 샤드의 `row["title"]` 을 그대로 쓰고, 그 샤드는
+`batch/normalize_dump.py` 가 `canonical_title` 로 맞춘 값이다 — 즉 **DB 경계에
+닿기 전에 이미 canonical 이다.** `baseline_sink` 자체는 정규화하지 않는다.
+title 로 `wiki_page` 를 조회하는 코드는 **아직 없다**(`cluster/driver.py` 의
+`load_pages_by_title` 은 docstring 속 의사코드이고 실제 함수가 없다).
+
+🔴 **새 write path 를 추가하는 사람의 책임**: canonical 을 DB 직전에 부르지 말고,
+**소스를 읽어 들이는 지점에서** 이미 canonical 인 샤드를 쓰거나 `canonical_title` 을
+통과시킨다. 집계·그룹핑이 끝난 뒤에 문자열만 바꾸면 키가 이미 갈라진 뒤다 — 명세 §5.1.
+
+**표시용 제목을 따로 두지 않는다.** 공백형이 곧 MediaWiki 의 표시 제목이라
+(`Hurricane Milton`·`EBay`) 내부 식별용과 표시용이 같은 문자열이다. 나누면 두 값이
+갈라질 위험만 생긴다. 백엔드는 `page_id` 로 조인하고 `title` 은 표시용으로만 읽는다.
+
 **클러스터는 시점의 함수다.** 버블맵에 시간 슬라이더가 있어서 같은 사건이라도
 시점마다 구성과 급등도가 다르다. `issue_cluster` 가 `snapshot_ts` 를 갖고,
 LIVE 화면은 가장 최근 값을, 리플레이는 사용자가 고른 시점을 읽는다.
