@@ -1,61 +1,106 @@
 import { DataError } from "./contracts.js";
+import { issueCategories } from "./categories.js";
 
 const unique = (items) => [
   ...new Map(items.map((item) => [item.id ?? item.symbol, item])).values(),
 ];
-export async function readAll(list, params, options) {
-  let offset = 0;
-  const data = [];
-  const included = {};
-  let meta;
-  while (true) {
-    options?.signal?.throwIfAborted();
-    const result = await list({ ...params, offset, limit: 100 }, options);
-    const page = result.meta.pagination;
-    if (
-      !page ||
-      page.offset !== offset ||
-      (page.hasMore && result.data.length === 0)
-    ) {
-      throw new DataError("목록의 페이지 정보를 확인할 수 없습니다.", {
-        code: "INVALID_PAGINATION",
-      });
-    }
-    if (
-      meta &&
-      (meta.asOf !== result.meta.asOf ||
-        meta.dataMode !== result.meta.dataMode ||
-        meta.pagination.total !== page.total)
-    ) {
-      throw new DataError(
-        "목록이 조회 중 변경되었습니다. 다시 시도해 주세요.",
-        { code: "INCONSISTENT_PAGINATION" },
-      );
-    }
-    data.push(...result.data);
-    for (const [key, values] of Object.entries(result.included || {}))
-      included[key] = unique([...(included[key] || []), ...values]);
-    meta = result.meta;
-    offset += result.data.length;
-    if (!page.hasMore) break;
-    if (offset >= page.total)
-      throw new DataError("목록의 페이지 정보가 일치하지 않습니다.", {
-        code: "INVALID_PAGINATION",
-      });
-  }
-  if (
-    data.length !== meta.pagination.total ||
-    unique(data).length !== data.length
-  ) {
-    throw new DataError(
-      "전체 목록을 불러오지 못했습니다. 다시 시도해 주세요.",
-      { code: "INVALID_PAGINATION" },
-    );
-  }
-  const { pagination: _pagination, ...sourceMeta } = meta;
-  return { data, included, meta: sourceMeta };
+const optionalNumber = (value) => (Number.isFinite(value) ? value : null);
+const availableText = (value) =>
+  typeof value === "string" && value.trim() ? value : null;
+export function memberView(member, eventId) {
+  const id = String(member.pageId);
+  return {
+    id,
+    pageId: id,
+    wiki: member.wiki,
+    title: member.title,
+    name: member.title,
+    isSeed: member.isSeed,
+    weight: member.weight,
+    edits: optionalNumber(member.editCount),
+    views: optionalNumber(member.views),
+    pageviews: optionalNumber(member.views),
+    editors: null,
+    pulse: null,
+    baseline: null,
+    description: null,
+    chart: [],
+    changes: [],
+    relatedIds: [],
+    eventIds: [String(eventId)],
+  };
 }
-
+export function issueView(raw, aliases = []) {
+  const members = raw.members || [];
+  return {
+    id: String(raw.id),
+    aliases: [...new Set(aliases.map(String))],
+    title: availableText(raw.label) || members[0]?.title || "제목 미제공",
+    summary: availableText(raw.summary),
+    summaryModel: raw.summaryModel ?? null,
+    pulseScore: raw.pulseScore,
+    status: raw.status,
+    source: raw.source,
+    snapshotTs: raw.snapshotTs,
+    memberCount: raw.memberCount ?? (raw.members ? members.length : null),
+    stockCount: raw.stockCount ?? null,
+    articleIds: members.map((v) => String(v.pageId)),
+    stockSymbols: (raw.relatedStocks || []).map((v) => v.ticker),
+    members: members.map((v) => memberView(v, raw.id)),
+    category: null,
+    date: null,
+    startAt: null,
+    startedAt: null,
+    updatedAt: null,
+    pulse: null,
+    edits: null,
+    editors: null,
+    pageviews: null,
+    baseline: null,
+    chart: [],
+    news: [],
+    timeline: [],
+    insights: [],
+    keywords: [],
+  };
+}
+export function stockView(raw, eventId) {
+  const relation =
+    eventId === undefined
+      ? []
+      : [
+          {
+            eventId: String(eventId),
+            matchPath: raw.matchPath ?? null,
+            tier: raw.tier ?? null,
+            rationale: availableText(raw.rationale),
+            similarity: optionalNumber(raw.similarity),
+            gdeltLift: optionalNumber(raw.gdeltLift),
+          },
+        ];
+  return {
+    symbol: raw.ticker,
+    name: raw.name,
+    exchange: raw.exchange,
+    market: raw.exchange,
+    sector: raw.sector ?? null,
+    description: availableText(raw.businessSummary),
+    cik: raw.cik ?? null,
+    issueCount: raw.issueCount ?? null,
+    price: null,
+    change: null,
+    changePercent: null,
+    currency: null,
+    eventIds: eventId === undefined ? [] : [String(eventId)],
+    relations: relation,
+    chart: [],
+    tier: raw.tier ?? null,
+    matchPath: raw.matchPath ?? null,
+    rationale: availableText(raw.rationale),
+    similarity: optionalNumber(raw.similarity),
+    gdeltLift: optionalNumber(raw.gdeltLift),
+  };
+}
 async function optionalDetail(method, id, options) {
   try {
     return await method(id, options);
@@ -64,96 +109,196 @@ async function optionalDetail(method, id, options) {
     throw error;
   }
 }
+const listQuery = (params, allowed) =>
+  Object.fromEntries(
+    Object.entries(params || {}).filter(
+      ([key, value]) =>
+        allowed.includes(key) &&
+        value !== undefined &&
+        value !== null &&
+        value !== "",
+    ),
+  );
 
-/** Load only the data needed by a route. Views never receive partial loading data. */
-export async function loadPageData(client, resource, params, options) {
+/** Fetch one server page or the route's explicit detail endpoints. */
+export async function loadPageData(client, resource, params = {}, options) {
   const snapshot = {
-    categories: [],
+    categories: issueCategories,
     events: [],
     entities: [],
     stocks: [],
-    meta: null,
+    meta: { dataMode: client.dataSource || "api" },
+    pagination: null,
+    collectionLimit: null,
+    missingSavedEvents: [],
+    missingSavedStocks: [],
   };
-  function merge(result, kind) {
+  function metadata(result) {
     if (!result) return;
-    for (const [key, values] of Object.entries(result.included || {}))
-      snapshot[key] = unique([...(snapshot[key] || []), ...values]);
-    snapshot[kind] = unique([
-      ...snapshot[kind],
-      ...(Array.isArray(result.data) ? result.data : [result.data]),
-    ]);
-    if (kind !== "categories") snapshot.meta = result.meta;
+    Object.assign(snapshot.meta, result.meta || {});
+    snapshot.meta.dataMode = client.dataSource || "api";
+    if (result.meta?.pagination) snapshot.pagination = result.meta.pagination;
   }
-  const categoryTask = client.listCategories(options);
-  const pageTask = (async () => {
-    switch (resource) {
-      case "explore":
-        merge(await readAll(client.listEvents, {}, options), "events");
-        break;
-      case "event":
-        merge(
-          await optionalDetail(client.getEvent, params.id, options),
-          "events",
-        );
-        break;
-      case "entity":
-        merge(
-          await optionalDetail(client.getEntity, params.id, options),
-          "entities",
-        );
-        break;
-      case "stock":
-        merge(
-          await optionalDetail(client.getStock, params.id, options),
-          "stocks",
-        );
-        break;
-      case "stocks":
-        merge(await readAll(client.listStocks, {}, options), "stocks");
-        break;
-      case "eventStocks": {
-        const event = await optionalDetail(client.getEvent, params.id, options);
-        if (event) {
-          merge(event, "events");
-          merge(
-            await readAll(client.listStocks, { eventId: params.id }, options),
-            "stocks",
-          );
-        }
-        break;
-      }
-      case "saved": {
-        const [eventResults, stockResults] = await Promise.all([
-          Promise.all(
-            (params.savedEvents || []).map((id) =>
-              optionalDetail(client.getEvent, id, options),
-            ),
-          ),
-          Promise.all(
-            (params.savedStocks || []).map((id) =>
-              optionalDetail(client.getStock, id, options),
-            ),
-          ),
-        ]);
-        // Only saved records belong in this view; related records are not saved entries.
-        for (const result of eventResults)
-          if (result) {
-            snapshot.events.push(result.data);
-            snapshot.meta = result.meta;
-          }
-        for (const result of stockResults)
-          if (result) {
-            snapshot.stocks.push(result.data);
-            snapshot.meta = result.meta;
-          }
-        break;
-      }
-      default:
-        throw new DataError("알 수 없는 데이터 화면입니다.");
+  async function issueCards(values) {
+    return Promise.all(
+      values.map(async (v) =>
+        issueView(
+          v,
+          client.resolveIssueAlias
+            ? [await client.resolveIssueAlias(v.id)]
+            : [],
+        ),
+      ),
+    );
+  }
+  async function addIssue(result, requestedId, saved = false) {
+    if (!result) return null;
+    const aliases = requestedId == null ? [] : [String(requestedId)];
+    if (client.resolveIssueAlias)
+      aliases.push(await client.resolveIssueAlias(result.data.id));
+    const event = issueView(result.data, aliases);
+    if (saved) event.savedId = String(requestedId);
+    snapshot.events.push(event);
+    if (!saved) {
+      snapshot.entities.push(...event.members);
+      snapshot.stocks.push(
+        ...(result.data.relatedStocks || []).map((v) => stockView(v, event.id)),
+      );
     }
-  })();
-  const [categoryResult] = await Promise.all([categoryTask, pageTask]);
-  merge(categoryResult, "categories");
-  snapshot.meta ||= categoryResult.meta;
+    metadata(result);
+    snapshot.meta.snapshotTs ||= event.snapshotTs;
+    snapshot.meta.source ||= event.source;
+    return event;
+  }
+  switch (resource) {
+    case "explore": {
+      const query = listQuery(params.listParams, [
+        "offset",
+        "limit",
+        "snapshotTs",
+        "status",
+        "source",
+      ]);
+      if (query.source && !query.snapshotTs) {
+        const snapshots = await client.listSnapshots(
+          { source: query.source },
+          options,
+        );
+        const latest = snapshots.data.reduce(
+          (last, item) =>
+            !last || Date.parse(item.snapshotTs) > Date.parse(last.snapshotTs)
+              ? item
+              : last,
+          null,
+        );
+        if (!latest) {
+          snapshot.pagination = {
+            offset: query.offset || 0,
+            limit: query.limit || 20,
+            total: 0,
+            hasMore: false,
+          };
+          snapshot.meta = {
+            ...snapshot.meta,
+            source: query.source,
+            pagination: snapshot.pagination,
+          };
+          break;
+        }
+        query.snapshotTs = latest.snapshotTs;
+      }
+      const result = await client.listIssues(
+        { offset: 0, limit: 20, ...query },
+        options,
+      );
+      snapshot.events = await issueCards(result.data);
+      metadata(result);
+      break;
+    }
+    case "event":
+      await addIssue(
+        await optionalDetail(client.getIssue, params.id, options),
+        params.id,
+      );
+      break;
+    case "eventStocks": {
+      const event = await addIssue(
+        await optionalDetail(client.getIssue, params.id, options),
+        params.id,
+      );
+      if (event) {
+        const result = await client.listIssueStocks(
+          event.id,
+          { limit: 100 },
+          options,
+        );
+        snapshot.stocks = result.data.map((v) => stockView(v, event.id));
+        event.stockSymbols = snapshot.stocks.map((v) => v.symbol);
+        snapshot.collectionLimit = 100;
+        metadata(result);
+      }
+      break;
+    }
+    case "stocks": {
+      const query = listQuery(params.listParams, [
+        "offset",
+        "limit",
+        "q",
+        "sector",
+        "exchange",
+        "hasIssues",
+      ]);
+      const result = await client.listStocks(
+        { offset: 0, limit: 20, ...query },
+        options,
+      );
+      snapshot.stocks = result.data.map((v) => stockView(v));
+      metadata(result);
+      break;
+    }
+    case "stock": {
+      const result = await optionalDetail(client.getStock, params.id, options);
+      if (result) {
+        const related = await client.listStockIssues(params.id, options);
+        snapshot.events = await issueCards(related.data);
+        const value = stockView(result.data);
+        value.eventIds = snapshot.events.map((v) => v.id);
+        snapshot.stocks = [value];
+        snapshot.collectionLimit = 50;
+        metadata(result);
+      }
+      break;
+    }
+    case "saved": {
+      const eventIds = [...new Set(params.savedEvents || [])];
+      const tickers = [...new Set(params.savedStocks || [])];
+      const [eventResults, stockResults] = await Promise.all([
+        Promise.all(
+          eventIds.map((id) => optionalDetail(client.getIssue, id, options)),
+        ),
+        Promise.all(
+          tickers.map((id) => optionalDetail(client.getStock, id, options)),
+        ),
+      ]);
+      for (let i = 0; i < eventResults.length; i++) {
+        if (eventResults[i]) await addIssue(eventResults[i], eventIds[i], true);
+        else snapshot.missingSavedEvents.push(String(eventIds[i]));
+      }
+      for (let i = 0; i < stockResults.length; i++) {
+        if (stockResults[i])
+          snapshot.stocks.push({
+            ...stockView(stockResults[i].data),
+            savedId: tickers[i],
+          });
+        else snapshot.missingSavedStocks.push(tickers[i]);
+      }
+      break;
+    }
+    default:
+      throw new DataError("알 수 없는 데이터 화면입니다.");
+  }
+  snapshot.events = unique(snapshot.events);
+  snapshot.entities = unique(snapshot.entities);
+  snapshot.stocks = unique(snapshot.stocks);
   return snapshot;
 }

@@ -1,33 +1,65 @@
 import { readDataConfig } from "./config.js";
 
-let clientPromise;
-function getClient() {
-  if (!clientPromise) {
-    clientPromise = Promise.resolve().then(async () => {
-      const { source, baseURL } = readDataConfig(import.meta.env);
-      if (source === "mock")
-        return (await import("./mock/client.js")).mockClient;
-      return (await import("./api/client.js")).createApiClient(baseURL);
-    });
-  }
-  return clientPromise;
+// App presentation metadata is never a required server response field.
+export function presentPulseMap(result, dataMode, aliasFor) {
+  return {
+    ...result,
+    meta: { ...result.meta, dataMode },
+    data: {
+      clusters: result.data.clusters.map((cluster) => ({
+        ...cluster,
+        aliases: aliasFor ? [aliasFor(cluster.id)] : [],
+        label:
+          cluster.label?.trim() || cluster.nodes[0]?.title || "제목 미제공",
+        issueKey:
+          cluster.issueKey ||
+          `${result.meta.source}:${result.meta.snapshotTs}:${cluster.id}`,
+      })),
+    },
+  };
 }
-
+export function createDataClient(env = {}) {
+  let clientPromise;
+  function getClient() {
+    if (!clientPromise)
+      clientPromise = Promise.resolve().then(async () => {
+        const config = readDataConfig(env);
+        return config.source === "mock"
+          ? (await import("./mock/client.js")).mockClient
+          : (await import("./api/client.js")).createApiClient(config.baseURL);
+      });
+    return clientPromise;
+  }
+  return {
+    dataSource: env.VITE_DATA_SOURCE ?? "mock",
+    resolveIssueAlias: async (id) =>
+      (await getClient()).resolveIssueAlias?.(id) || String(id),
+    ...Object.fromEntries(
+      [
+        "listIssues",
+        "getIssue",
+        "listIssueStocks",
+        "listStocks",
+        "getStock",
+        "listStockIssues",
+        "listSnapshots",
+        "getPulseMap",
+      ].map((method) => [
+        method,
+        async (...args) => {
+          const client = await getClient();
+          const result = await client[method](...args);
+          return method === "getPulseMap"
+            ? presentPulseMap(
+                result,
+                client.dataSource,
+                client.resolveIssueAlias,
+              )
+            : result;
+        },
+      ]),
+    ),
+  };
+}
 /** @type {import('./contracts.js').DataClient} */
-export const dataClient = Object.fromEntries(
-  [
-    "listSnapshots",
-    "getPulseMap",
-    "listCategories",
-    "listEvents",
-    "getEvent",
-    "listEntities",
-    "getEntity",
-    "listStocks",
-    "getStock",
-    "searchWorkspace",
-  ].map((method) => [
-    method,
-    async (...args) => (await getClient())[method](...args),
-  ]),
-);
+export const dataClient = createDataClient(import.meta.env);

@@ -1,65 +1,45 @@
+import { stocks } from "./fixtures/catalog.js";
 import {
-  categories,
-  entities,
-  events,
-  stocks,
   DEMO_DATE,
-  HISTORY_START,
-} from "./fixtures/catalog.js";
-import { resolveReport, articleAt } from "./fixtures/history.js";
+  resolveReport,
+  snapshotAt,
+  timestamp,
+  dates,
+  episodeById,
+} from "./fixtures/history.js";
 import { DataError } from "../contracts.js";
 import { listSnapshots, getPulseMap } from "./pulse.js";
+import { issueId, legacyIssueId, pageId } from "./identity.js";
 
-const meta = {
-  dataMode: "mock",
-  asOf: DEMO_DATE,
-  timezone: "Asia/Seoul",
-  window: "24h",
-  availableRange: { from: HISTORY_START, to: DEMO_DATE, interval: "day" },
-};
-const omit = (value, keys) =>
-  Object.fromEntries(
-    Object.entries(value).filter(([key]) => !keys.includes(key)),
+const fail = (status, code) => {
+  throw new DataError(
+    status === 404
+      ? "요청한 데이터를 찾을 수 없습니다."
+      : "조회 조건을 확인해 주세요.",
+    { status, code },
   );
-const eventSummary = (value) => omit(value, ["timeline", "news", "insights"]);
-const entitySummary = (value) => omit(value, ["chart", "changes"]);
-const stockSummary = (value) => omit(value, ["chart"]);
-function stockForReport(stock, event) {
-  const baseId = event.id.split("~")[0];
-  return {
-    ...stockSummary(stock),
-    // This projection belongs to the selected report, not today's quote/history.
-    price: event.date === DEMO_DATE ? stock.price : null,
-    change: event.date === DEMO_DATE ? stock.change : null,
-    eventIds: [event.id],
-    relations: stock.relations
-      .filter((r) => r.eventId === baseId)
-      .map((r) => ({ ...r, eventId: event.id })),
-  };
-}
-const match = (text, query = "") =>
-  text.toLowerCase().includes(query.trim().toLowerCase());
-const invalid = () => {
-  throw new DataError("조회 조건을 확인해 주세요.", {
-    status: 400,
-    code: "INVALID_QUERY",
-  });
 };
-function validate(params, allowed, enums = {}) {
+const invalid = () => fail(400, "INVALID_QUERY");
+const envelope = (data, meta) =>
+  structuredClone(meta ? { data, meta } : { data });
+function query(params, allowed) {
   for (const key of Object.keys(params)) if (!allowed.includes(key)) invalid();
   if (
-    params.q !== undefined &&
-    (typeof params.q !== "string" || params.q.length > 200)
+    params.source !== undefined &&
+    !["live", "replay"].includes(params.source)
   )
     invalid();
-  for (const [key, values] of Object.entries(enums))
-    if (params[key] !== undefined && !values.includes(params[key])) invalid();
+  for (const key of ["snapshotTs", "from", "to"])
+    if (
+      params[key] !== undefined &&
+      (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/.test(
+        params[key],
+      ) ||
+        !Number.isFinite(Date.parse(params[key])))
+    )
+      invalid();
 }
-function envelope(data, included = {}, extra = {}) {
-  // Clone to prevent a view accidentally changing future fixture responses.
-  return structuredClone({ data, included, meta: { ...meta, ...extra } });
-}
-function paginate(values, params, includedFor, extra = {}) {
+function bounds(params) {
   const { offset = 0, limit = 50 } = params;
   if (
     !Number.isInteger(offset) ||
@@ -69,8 +49,12 @@ function paginate(values, params, includedFor, extra = {}) {
     limit > 100
   )
     invalid();
+  return { offset, limit };
+}
+function paginate(values, params, extra = {}) {
+  const { offset, limit } = bounds(params);
   const data = values.slice(offset, offset + limit);
-  return envelope(data, includedFor(data), {
+  return envelope(data, {
     ...extra,
     pagination: {
       offset,
@@ -80,228 +64,201 @@ function paginate(values, params, includedFor, extra = {}) {
     },
   });
 }
-function find(values, id, key = "id") {
-  const value = values.find((item) => item[key] === id);
-  if (!value)
-    throw new DataError("요청한 데이터를 찾을 수 없습니다.", {
-      status: 404,
-      code: "NOT_FOUND",
-    });
+function report(id) {
+  const value = resolveReport(legacyIssueId(id));
+  if (!value) fail(404, "NOT_FOUND");
   return value;
 }
-const referenced = (values, ids, project) =>
-  values.filter((item) => ids.includes(item.id ?? item.symbol)).map(project);
-const eventIncluded = (values) => ({
-  entities: [...new Set(values.flatMap((item) => item.articleIds))].map(
-    (id) => {
-      const latest = values
-        .filter((item) => item.articleIds.includes(id))
-        .sort((a, b) => b.date.localeCompare(a.date))[0];
-      return entitySummary(
-        articleAt(
-          id,
-          latest.date,
-          values
-            .filter((item) => item.articleIds.includes(id))
-            .map((item) => item.id),
-        ),
+function stock(ticker) {
+  const value = stocks.find((v) => v.symbol === String(ticker).toUpperCase());
+  if (!value) fail(404, "NOT_FOUND");
+  return value;
+}
+function related(reportValue) {
+  return reportValue.stockSymbols
+    .map((ticker) => {
+      const value = stock(ticker);
+      const relation = value.relations.find(
+        (v) => v.eventId === reportValue.id.split("~")[0],
       );
-    },
-  ),
-});
-const stockIncluded = (values) => ({
-  events: referenced(
-    events,
-    values.flatMap((item) => item.eventIds),
-    eventSummary,
-  ),
-});
-
+      return {
+        ticker,
+        name: value.name,
+        exchange: value.market,
+        sector: value.sector,
+        tier: "EMBEDDING_ONLY",
+        matchPath: "PRODUCT_INDUSTRY",
+        rationale:
+          relation?.explanation ||
+          "시연용 문서·사업 영역 연결 예시입니다. 실제 LLM 검증 결과가 아닙니다.",
+      };
+    })
+    .sort((a, b) => a.ticker.localeCompare(b.ticker));
+}
+function card(cluster, snapshotTs) {
+  return {
+    id: issueId(cluster.id),
+    label: cluster.label,
+    pulseScore: cluster.pulseScore,
+    status: cluster.status,
+    source: "replay",
+    snapshotTs,
+    memberCount: cluster.memberCount,
+    stockCount: episodeById.get(cluster.id.split("~")[0]).topic.symbols.length,
+  };
+}
+let stockIssueIndex;
+function issuesForTicker(ticker) {
+  if (!stockIssueIndex) {
+    stockIssueIndex = new Map(stocks.map((value) => [value.symbol, []]));
+    for (const date of dates) {
+      for (const cluster of snapshotAt(date).data.clusters) {
+        const value = card(cluster, timestamp(date));
+        for (const symbol of episodeById.get(cluster.id.split("~")[0]).topic
+          .symbols)
+          stockIssueIndex.get(symbol).push(value);
+      }
+    }
+    for (const values of stockIssueIndex.values())
+      values.sort(
+        (a, b) =>
+          b.snapshotTs.localeCompare(a.snapshotTs) ||
+          b.pulseScore - a.pulseScore,
+      );
+  }
+  return stockIssueIndex.get(ticker) || [];
+}
+function stockCard(value) {
+  return {
+    ticker: value.symbol,
+    name: value.name,
+    exchange: value.market,
+    sector: value.sector,
+    issueCount: issuesForTicker(value.symbol).length,
+  };
+}
 const handlers = {
-  listSnapshots,
-  getPulseMap,
-  listCategories: () => envelope(categories),
-  listEvents(params = {}) {
-    validate(params, ["q", "category", "window", "sort", "offset", "limit"], {
-      category: ["all", ...categories.map((item) => item.id)],
-      window: ["24h", "3d", "7d"],
-      sort: ["pulse", "recent", "documents"],
-    });
-    const window = params.window || "24h";
-    const values = events
-      .filter(
-        (event) =>
-          match(
-            `${event.title} ${event.summary} ${event.keywords.join(" ")}`,
-            params.q,
-          ) &&
-          (!params.category ||
-            params.category === "all" ||
-            event.category === params.category),
+  listSnapshots(params = {}) {
+    query(params, ["from", "to", "source"]);
+    return listSnapshots(params);
+  },
+  getPulseMap(params = {}) {
+    query(params, ["snapshotTs", "source"]);
+    return getPulseMap(params);
+  },
+  listIssues(params = {}) {
+    query(params, ["snapshotTs", "status", "source", "offset", "limit"]);
+    bounds(params);
+    const statuses = params.status
+      ? params.status.split(",")
+      : ["DETECTED", "VERIFYING", "CONFIRMED"];
+    if (
+      statuses.some(
+        (s) => !["DETECTED", "VERIFYING", "CONFIRMED", "DISCARDED"].includes(s),
       )
-      .map((event) => {
-        const value = eventSummary(event);
-        if (window !== "24h") {
-          const points = event.chart.slice(-(window === "3d" ? 3 : 7));
-          for (const metric of ["edits", "baseline", "pageviews"])
-            value[metric] = points.reduce(
-              (sum, point) => sum + point[metric],
-              0,
-            );
-          value.pulse = Math.round((value.edits / value.baseline) * 10) / 10;
-        }
-        return value;
-      })
-      .sort((a, b) =>
-        params.sort === "recent"
-          ? b.startAt.localeCompare(a.startAt)
-          : params.sort === "documents"
-            ? b.articleIds.length - a.articleIds.length
-            : b.pulse - a.pulse,
-      );
-    return paginate(values, params, eventIncluded, { window });
+    )
+      invalid();
+    const snapshotTs = params.snapshotTs
+      ? new Date(params.snapshotTs).toISOString()
+      : timestamp(DEMO_DATE);
+    const snapshots = listSnapshots().data;
+    const found = snapshots.find(
+      (v) =>
+        v.snapshotTs === snapshotTs &&
+        (!params.source || v.source === params.source),
+    );
+    const values = found
+      ? snapshotAt(snapshotTs.slice(0, 10))
+          .data.clusters.filter((v) => statuses.includes(v.status))
+          .map((v) => card(v, snapshotTs))
+      : [];
+    values.sort((a, b) => b.pulseScore - a.pulseScore || a.id - b.id);
+    return paginate(values, params, { snapshotTs });
   },
-  getEvent(id) {
-    const event = resolveReport(id);
-    if (!event) find([], id);
-    return envelope(
-      event,
-      {
-        entities: event.articleIds.map((pageId) =>
-          entitySummary(articleAt(pageId, event.date, [event.id])),
+  getIssue(id) {
+    const value = report(id);
+    const snapshot = snapshotAt(value.date);
+    const cluster = snapshot.data.clusters.find((v) => v.id === value.id);
+    if (!cluster) fail(404, "NOT_FOUND");
+    return envelope({
+      id: issueId(value.id),
+      label: cluster.label,
+      pulseScore: cluster.pulseScore,
+      status: cluster.status,
+      source: "replay",
+      snapshotTs: snapshot.meta.snapshotTs,
+      summary: value.summary,
+      summaryModel: "mock-authored",
+      members: cluster.nodes
+        .map((node, index) => ({
+          pageId: pageId(node.pageId),
+          wiki: node.wiki,
+          title: node.title,
+          weight: 1 / (index + 1),
+          isSeed: node.isSeed,
+          editCount: node.editCount,
+          views: node.views,
+        }))
+        .sort(
+          (a, b) => Number(b.isSeed) - Number(a.isSeed) || b.weight - a.weight,
         ),
-        stocks: stocks
-          .filter((stock) => event.stockSymbols.includes(stock.symbol))
-          .map((stock) => stockForReport(stock, event)),
-      },
-      { asOf: event.date, snapshotTs: event.updatedAt },
-    );
-  },
-  listEntities(params = {}) {
-    validate(params, ["q", "offset", "limit"]);
-    return paginate(
-      entities
-        .filter((entity) => match(`${entity.name} ${entity.title}`, params.q))
-        .map(entitySummary),
-      params,
-      () => ({}),
-    );
-  },
-  getEntity(id) {
-    const entity = find(entities, id);
-    return envelope(entity, {
-      entities: referenced(entities, entity.relatedIds, entitySummary),
-      events: referenced(events, entity.eventIds, eventSummary),
+      relatedStocks: related(value).slice(0, 5),
     });
+  },
+  listIssueStocks(id, params = {}) {
+    query(params, ["limit"]);
+    const { limit } = bounds(params);
+    return envelope(related(report(id)).slice(0, limit));
   },
   listStocks(params = {}) {
-    validate(
-      params,
-      ["q", "sector", "eventId", "relationType", "sort", "offset", "limit"],
-      {
-        sort: ["events", "name"],
-        relationType: ["all", "direct", "industry", "supply", "region"],
-      },
-    );
-    if (params.sector !== undefined && typeof params.sector !== "string")
+    query(params, ["q", "sector", "exchange", "hasIssues", "offset", "limit"]);
+    if (params.q !== undefined && typeof params.q !== "string") invalid();
+    if (params.hasIssues !== undefined && typeof params.hasIssues !== "boolean")
       invalid();
-    if (params.relationType !== undefined && !params.eventId) invalid();
-    const event = params.eventId ? resolveReport(params.eventId) : null;
-    if (params.eventId && !event) find([], params.eventId);
+    const q = (params.q || "").trim().toLowerCase();
     const values = stocks
       .filter(
-        (stock) =>
-          (!event ||
-            stock.eventIds.includes(event.id) ||
-            event.stockSymbols.includes(stock.symbol)) &&
-          match(
-            `${stock.symbol} ${stock.name} ${stock.sector} ${stock.description}`,
-            params.q,
-          ) &&
-          (!params.sector ||
-            params.sector === "all" ||
-            stock.sector === params.sector) &&
-          (!params.relationType ||
-            params.relationType === "all" ||
-            stockForReport(stock, event).relations.some(
-              (relation) =>
-                relation.eventId === params.eventId &&
-                relation.type === params.relationType,
-            )),
+        (v) =>
+          (!q || `${v.name} ${v.symbol}`.toLowerCase().includes(q)) &&
+          (!params.sector || v.sector === params.sector) &&
+          (!params.exchange || v.market === params.exchange) &&
+          (!params.hasIssues || issuesForTicker(v.symbol).length > 0),
       )
-      .map((stock) =>
-        event ? stockForReport(stock, event) : stockSummary(stock),
-      )
-      .sort(
-        (a, b) =>
-          (params.sort === "name"
-            ? 0
-            : b.eventIds.length - a.eventIds.length) ||
-          a.symbol.localeCompare(b.symbol),
-      );
-    return paginate(
-      values,
-      params,
-      event ? () => ({ events: [eventSummary(event)] }) : stockIncluded,
-      event ? { asOf: event.date } : {},
-    );
+      .map(stockCard)
+      .sort((a, b) => a.ticker.localeCompare(b.ticker));
+    return paginate(values, params);
   },
-  getStock(symbol) {
-    const stock = find(stocks, String(symbol).toUpperCase(), "symbol");
-    const included = stockIncluded([stock]);
-    included.events.sort((a, b) => b.date.localeCompare(a.date));
-    return envelope(stock, included);
+  getStock(ticker) {
+    const value = stock(ticker);
+    return envelope({
+      ticker: value.symbol,
+      name: value.name,
+      exchange: value.market,
+      sector: value.sector,
+      businessSummary: value.description,
+    });
   },
-  searchWorkspace(params = {}) {
-    validate(params, ["q", "limit"]);
-    const { q = "", limit = 7 } = params;
-    if (!Number.isInteger(limit) || limit < 1 || limit > 7) invalid();
-    const values = [
-      ...events.map((item) => ({
-        kind: "event",
-        id: item.id,
-        title: item.title,
-        detail: "사건",
-        words: item.keywords.join(" "),
-      })),
-      ...entities.map((item) => ({
-        kind: "entity",
-        id: item.id,
-        title: item.name,
-        detail: item.title,
-        words: item.title,
-      })),
-      ...stocks.map((item) => ({
-        kind: "stock",
-        id: item.symbol,
-        title: item.name,
-        detail: item.symbol,
-        words: item.symbol,
-      })),
-    ];
-    return envelope(
-      q.trim()
-        ? values
-            .filter((item) =>
-              match(`${item.title} ${item.detail} ${item.words}`, q),
-            )
-            .slice(0, limit)
-            .map((item) => omit(item, ["words"]))
-        : [],
-    );
+  listStockIssues(ticker) {
+    const value = stock(ticker);
+    const values = issuesForTicker(value.symbol).slice(0, 50);
+    return envelope(values);
   },
 };
 
-/** @type {import('../contracts.js').DataClient} */
-export const mockClient = Object.fromEntries(
-  Object.entries(handlers).map(([method, handler]) => [
-    method,
-    async (...args) => {
-      const options = method === "listCategories" ? args[0] : args[1];
-      options?.signal?.throwIfAborted();
-      await Promise.resolve();
-      options?.signal?.throwIfAborted();
-      return handler(...args);
-    },
-  ]),
-);
+/** Mock and API clients expose the same eight raw Spring DTO response shapes. */
+export const mockClient = {
+  dataSource: "mock",
+  resolveIssueAlias: legacyIssueId,
+  ...Object.fromEntries(
+    Object.entries(handlers).map(([method, handler]) => [
+      method,
+      async (...args) => {
+        const options = method === "listIssueStocks" ? args[2] : args[1];
+        options?.signal?.throwIfAborted();
+        await Promise.resolve();
+        options?.signal?.throwIfAborted();
+        return handler(...args);
+      },
+    ]),
+  ),
+};
