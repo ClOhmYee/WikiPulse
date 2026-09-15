@@ -1,6 +1,6 @@
 import { useGlobalSearch } from "./useGlobalSearch";
 import { useEffect, useRef, useState } from "react";
-import { Search, Network, Layers3, X, ArrowDownLeft } from "lucide-react";
+import { Search, Layers3, X, ArrowDownLeft } from "lucide-react";
 export default function GlobalSearch({ searchRef }) {
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
@@ -9,7 +9,6 @@ export default function GlobalSearch({ searchRef }) {
   const search = query.trim().toLowerCase();
   const { data, loading, error, reload } = useGlobalSearch(query);
   const kinds = {
-    event: { path: "issues", icon: Network },
     stock: { path: "stocks", icon: Layers3 },
   };
   const results = (data || [])
@@ -68,7 +67,7 @@ export default function GlobalSearch({ searchRef }) {
             close();
           }
         }}
-        aria-label="전체 검색"
+        aria-label="빠른 종목 검색"
         role="combobox"
         aria-autocomplete="list"
         aria-expanded={open && !!search}
@@ -76,13 +75,13 @@ export default function GlobalSearch({ searchRef }) {
         aria-activedescendant={
           active >= 0 && results[active] ? results[active].id : undefined
         }
-        placeholder="이슈, 종목 검색"
+        placeholder="종목명, 티커 검색"
       />
       <kbd>Ctrl K</kbd>
       {query && (
         <button
           className="wp-icon-button"
-          aria-label="전체 검색 지우기"
+          aria-label="빠른 종목 검색 지우기"
           onClick={close}
         >
           <X size={14} />
@@ -93,7 +92,7 @@ export default function GlobalSearch({ searchRef }) {
           className="global-search__results"
           role="listbox"
           id="global-search-results"
-          aria-label="전체 검색 결과"
+          aria-label="빠른 종목 검색 결과"
         >
           {loading ? (
             <div className="global-search__empty" role="status">
@@ -128,7 +127,7 @@ export default function GlobalSearch({ searchRef }) {
           ) : (
             <div className="global-search__empty">
               “{query}”에 대한 결과가 없습니다.
-              <small>다른 이슈명 또는 티커를 입력해 보세요.</small>
+              <small>다른 종목명 또는 티커를 입력해 보세요.</small>
             </div>
           )}
           <div className="global-search__hint">

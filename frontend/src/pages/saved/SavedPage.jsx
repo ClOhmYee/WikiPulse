@@ -3,6 +3,7 @@ import { ArrowRight, Bookmark, Search } from "lucide-react";
 import { usePageData } from "../../data/hooks/PageData";
 import { EmptyState } from "../../components/ui/EmptyState";
 import { EventRow } from "../../components/event/EventRow";
+import "./saved.css";
 
 export default function SavedPage({
   savedEvents,
@@ -10,14 +11,20 @@ export default function SavedPage({
   onToggleEvent,
   onToggleStock,
 }) {
-  const { events, stocks, getCategory } = usePageData();
+  const {
+    events,
+    stocks,
+    getCategory,
+    missingSavedEvents = [],
+    missingSavedStocks = [],
+  } = usePageData();
   const [tab, setTab] = useState("events");
   const [query, setQuery] = useState("");
   const matches = (value) =>
     value.toLowerCase().includes(query.trim().toLowerCase());
   const selectedEvents = events.filter(
     (event) =>
-      savedEvents.includes(event.id) &&
+      savedEvents.includes(event.savedId || event.id) &&
       matches(`${event.title} ${event.summary}`),
   );
   const selectedStocks = stocks.filter(
@@ -65,6 +72,31 @@ export default function SavedPage({
           onChange={(e) => setQuery(e.target.value)}
         />
       </label>
+      {(tab === "events" ? missingSavedEvents : missingSavedStocks).length >
+        0 && (
+        <section
+          className="saved-unavailable"
+          aria-label="조회할 수 없는 저장 항목"
+        >
+          <p>
+            다음 저장 항목은 현재 조회할 수 없습니다. 보관함에서 직접 해제할 수
+            있어요.
+          </p>
+          {(tab === "events" ? missingSavedEvents : missingSavedStocks).map(
+            (id) => (
+              <button
+                key={id}
+                className="wp-button"
+                onClick={() =>
+                  tab === "events" ? onToggleEvent(id) : onToggleStock(id)
+                }
+              >
+                {id} 저장 해제
+              </button>
+            ),
+          )}
+        </section>
+      )}
       {tab === "events" ? (
         selectedEvents.length ? (
           <div className="event-list">
@@ -74,7 +106,12 @@ export default function SavedPage({
                 key={event.id}
                 event={event}
                 saved
-                onToggle={onToggleEvent}
+                onToggle={() =>
+                  onToggleEvent(event.savedId || event.id, [
+                    event.id,
+                    ...(event.aliases || []),
+                  ])
+                }
               />
             ))}
           </div>
@@ -110,7 +147,9 @@ export default function SavedPage({
                 </span>
               </a>
               <span className="wp-muted">
-                관련 사건 {stock.eventIds.length}개
+                {Number.isInteger(stock.issueCount)
+                  ? `관련 사건 ${stock.issueCount}개`
+                  : "관련 사건 수 미제공"}
               </span>
               <button
                 className="wp-icon-button"
@@ -134,7 +173,10 @@ export default function SavedPage({
           }
         />
       )}
-      <p className="saved-note">보관함은 이 브라우저에 저장됩니다.</p>
+      <p className="saved-note">
+        보관함은 이 브라우저에 저장됩니다. 예시 데이터와 서버 데이터의 보관함은
+        각각 보관합니다.
+      </p>
     </div>
   );
 }

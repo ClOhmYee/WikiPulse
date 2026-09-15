@@ -27,32 +27,58 @@ export function TrendChart({
     right = 10,
     top = 13,
     bottom = 28;
-  const values = data.map((item) => Number(item[valueKey]) || 0);
+  const numeric = (value) =>
+    typeof value === "number" && Number.isFinite(value) ? value : null;
+  const values = data.map((item) => numeric(item[valueKey]));
+  const baselineValues = data.map((item) => numeric(item.baseline));
+  const available = values.filter((value) => value !== null);
+  const times = data.map((item) => Date.parse(item.date));
+  const timeAxis =
+    times.length > 1 && times.every(Number.isFinite) && times.at(-1) > times[0];
   const isPrice = valueKey === "price";
-  const minValue = Math.min(...values);
+  const minValue = available.length ? Math.min(...available) : 0;
   const maxValue = Math.max(
     1,
-    ...values,
-    ...(baseline ? data.map((item) => item.baseline || 0) : []),
+    ...available,
+    ...(baseline ? baselineValues.filter((value) => value !== null) : []),
   );
   const span = Math.max(maxValue - minValue, maxValue * 0.01);
   const min = isPrice ? Math.max(0, minValue - span * 0.2) : 0;
   const max = isPrice ? maxValue + span * 0.2 : maxValue * 1.12;
   const x = (i) =>
-    left + (i / Math.max(1, data.length - 1)) * (width - left - right);
+    left +
+    (timeAxis
+      ? (times[i] - times[0]) / (times.at(-1) - times[0])
+      : i / Math.max(1, data.length - 1)) *
+      (width - left - right);
   const y = (v) =>
     top +
     (1 - (v - min) / Math.max(1, max - min)) * (chartHeight - top - bottom);
-  const points = values.map((v, i) => `${x(i)},${y(v)}`).join(" ");
+  const segments = (series) => {
+    const parts = [];
+    let current = [];
+    series.forEach((value, i) => {
+      if (value === null) {
+        if (current.length) parts.push(current);
+        current = [];
+      } else current.push({ index: i, value });
+    });
+    if (current.length) parts.push(current);
+    return parts;
+  };
+  const valueSegments = segments(values);
+  const referenceSegments = segments(baselineValues);
   const active =
     hover === null ? data.length - 1 : Math.min(hover, data.length - 1);
   const selected = data[active];
   const valueLabel = (value) =>
-    isPrice
-      ? new Intl.NumberFormat("en-US", { maximumFractionDigits: 2 }).format(
-          value,
-        )
-      : formatNumber(value);
+    numeric(value) === null
+      ? "미제공"
+      : isPrice
+        ? new Intl.NumberFormat("en-US", { maximumFractionDigits: 2 }).format(
+            value,
+          )
+        : formatNumber(value);
   return (
     <figure
       ref={figureRef}
@@ -63,7 +89,7 @@ export function TrendChart({
         <span>{label}</span>
         {selected && (
           <span>
-            <strong>{valueLabel(selected[valueKey] || 0)}</strong>
+            <strong>{valueLabel(selected[valueKey])}</strong>
             <small>{selected.date}</small>
           </span>
         )}
@@ -73,7 +99,7 @@ export function TrendChart({
         style={{ height }}
         role="img"
         tabIndex="0"
-        aria-label={`${label}. ${data.length}개 시점. ${selected?.date ?? ""} 값 ${selected?.[valueKey] ?? 0}. 좌우 방향키로 날짜 탐색.`}
+        aria-label={`${label}. ${data.length}개 시점. ${selected?.date ?? ""} 값 ${valueLabel(selected?.[valueKey])}. 좌우 방향키로 날짜 탐색.`}
         onKeyDown={(event) => {
           if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
             event.preventDefault();
@@ -119,28 +145,48 @@ export function TrendChart({
         })}
         {data.length > 0 && (
           <>
-            <polygon
-              points={`${x(0)},${y(min)} ${points} ${x(data.length - 1)},${y(min)}`}
-              fill={`url(#fill-${id})`}
-            />
-            <polyline
-              points={points}
-              fill="none"
-              stroke={color}
-              strokeWidth="2.5"
-              strokeLinejoin="round"
-            />
-            {baseline && (
-              <polyline
-                points={data
-                  .map((v, i) => `${x(i)},${y(v.baseline || 0)}`)
-                  .join(" ")}
-                fill="none"
-                stroke="#dbb057"
-                strokeWidth="1.5"
-                strokeDasharray="5 5"
-              />
-            )}
+            {valueSegments.map((part) => {
+              const points = part
+                .map(({ index, value }) => `${x(index)},${y(value)}`)
+                .join(" ");
+              return (
+                <g key={part[0].index} data-series-segment="value">
+                  <polygon
+                    points={`${x(part[0].index)},${y(min)} ${points} ${x(part.at(-1).index)},${y(min)}`}
+                    fill={`url(#fill-${id})`}
+                  />
+                  <polyline
+                    points={points}
+                    fill="none"
+                    stroke={color}
+                    strokeWidth="2.5"
+                    strokeLinejoin="round"
+                  />
+                  {part.length === 1 && (
+                    <circle
+                      cx={x(part[0].index)}
+                      cy={y(part[0].value)}
+                      r="3"
+                      fill={color}
+                    />
+                  )}
+                </g>
+              );
+            })}
+            {baseline &&
+              referenceSegments.map((part) => (
+                <polyline
+                  key={part[0].index}
+                  data-series-segment="baseline"
+                  points={part
+                    .map(({ index, value }) => `${x(index)},${y(value)}`)
+                    .join(" ")}
+                  fill="none"
+                  stroke="#dbb057"
+                  strokeWidth="1.5"
+                  strokeDasharray="5 5"
+                />
+              ))}
             <line
               x1={x(active)}
               x2={x(active)}
@@ -149,14 +195,16 @@ export function TrendChart({
               stroke={color}
               strokeOpacity=".3"
             />
-            <circle
-              cx={x(active)}
-              cy={y(values[active])}
-              r="4"
-              fill={color}
-              stroke="#0b141b"
-              strokeWidth="2"
-            />
+            {values[active] !== null && (
+              <circle
+                cx={x(active)}
+                cy={y(values[active])}
+                r="4"
+                fill={color}
+                stroke="#0b141b"
+                strokeWidth="2"
+              />
+            )}
           </>
         )}
         {data.map((item, i) => (
@@ -169,7 +217,7 @@ export function TrendChart({
             fill="transparent"
             onMouseEnter={() => setHover(i)}
           >
-            <title>{`${item.date}: ${item[valueKey]}`}</title>
+            <title>{`${item.date}: ${valueLabel(item[valueKey])}`}</title>
           </rect>
         ))}
         {[0, Math.floor((data.length - 1) / 2), data.length - 1]
@@ -187,6 +235,11 @@ export function TrendChart({
             </text>
           ))}
       </svg>
+      {!available.length && (
+        <p className="data-scope" role="status">
+          표시할 관측값이 없습니다.
+        </p>
+      )}
       <figcaption>
         <span>
           <i style={{ background: color }} />

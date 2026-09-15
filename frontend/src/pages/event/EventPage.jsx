@@ -12,10 +12,14 @@ import {
   MessageCircle,
   Newspaper,
   Sparkles,
-  TrendingUp,
 } from "lucide-react";
 import { usePageData } from "../../data/hooks/PageData";
-import { formatNumber } from "../../lib/format";
+import {
+  metricLabel,
+  timestampLabel as formatDate,
+  sourceLabel,
+} from "./presentation.js";
+import { IssueState } from "../../components/event/IssueState";
 import { ArticleNetwork } from "../../components/entity/ArticleNetwork";
 import { CategoryTag } from "../../components/ui/CategoryTag";
 import { EmptyState } from "../../components/ui/EmptyState";
@@ -31,10 +35,6 @@ const tabs = [
   { id: "evidence", label: "근거 문서" },
   { id: "discussion", label: "토론" },
 ];
-const formatDate = (value) =>
-  value
-    ? String(value).replace("T", " ").replace(/Z$/, "").slice(0, 16)
-    : "날짜 미제공";
 
 export default function EventPage({
   eventId,
@@ -77,10 +77,12 @@ export default function EventPage({
     );
   const selected =
     articles.find((article) => article.id === selectedArticle) || articles[0];
-  const isSaved =
+  const savedKey = [event.id, ...(event.aliases || [])].find((id) =>
     typeof savedEvents.has === "function"
-      ? savedEvents.has(event.id)
-      : savedEvents.includes(event.id);
+      ? savedEvents.has(id)
+      : savedEvents.includes(id),
+  );
+  const isSaved = Boolean(savedKey);
   const chartData =
     range === "7" ? (event.chart || []).slice(-7) : event.chart || [];
   const timeline = event.timeline || [];
@@ -114,10 +116,19 @@ export default function EventPage({
       <header className="dt-event-header">
         <div>
           <h1>{event.title}</h1>
-          <p className="dt-lede">{event.summary}</p>
+          <p className="dt-lede">
+            {event.summary ||
+              "이 시점에 제공된 요약이 없습니다. 아래 근거 문서에서 이슈의 구성을 확인하세요."}
+          </p>
           <div className="dt-meta">
-            <CategoryTag category={getCategory(event.category)} />
-            <time>{formatDate(event.date || event.startAt)} 기준</time>
+            {event.category && (
+              <CategoryTag category={getCategory(event.category)} />
+            )}
+            <time dateTime={event.snapshotTs || undefined}>
+              {formatDate(event.snapshotTs)} 기준
+            </time>
+            <IssueState status={event.status} />
+            <span>{sourceLabel(event.source)}</span>
             <span>
               {isExample
                 ? "이벤트 데이터 예시"
@@ -130,7 +141,7 @@ export default function EventPage({
           className="wp-button dt-save-button"
           data-variant={isSaved ? "primary" : "ghost"}
           aria-pressed={isSaved}
-          onClick={() => onToggleEvent?.(event.id)}
+          onClick={() => onToggleEvent?.(savedKey || event.id)}
         >
           {isSaved ? <Check size={17} /> : <Bookmark size={17} />}
           {isSaved ? "저장됨" : "이벤트 저장"}
@@ -144,7 +155,7 @@ export default function EventPage({
       >
         <a className="wp-button" href={`#/issues/${event.id}/stocks`}>
           <Layers3 size={16} />
-          연관 주식 {relatedStocks.length}
+          연관 주식
           <ArrowRight size={14} />
         </a>
         <button
@@ -157,21 +168,17 @@ export default function EventPage({
         </button>
       </div>
 
-      <div className="dt-event-metrics" aria-label="이벤트 신호 예시">
+      <div className="dt-event-metrics" aria-label="이슈 데이터 요약">
         <div>
-          <span>기준일 편집량</span>
+          <span>이슈 편집량</span>
           <strong>
-            {formatNumber(event.edits)}
-            <small>회</small>
+            {metricLabel(event.edits)}
+            {event.edits != null && <small>회</small>}
           </strong>
         </div>
         <div>
-          <span>평소 대비</span>
-          <strong className="dt-teal">
-            {event.pulse}
-            <small>배</small>
-            <TrendingUp size={20} />
-          </strong>
+          <span>급증 점수</span>
+          <strong className="dt-teal">{metricLabel(event.pulseScore)}</strong>
         </div>
         <div>
           <span>함께 움직인 문서</span>
@@ -183,8 +190,8 @@ export default function EventPage({
         <div>
           <span>문서별 편집자 합계</span>
           <strong>
-            {event.editors === null ? "미제공" : formatNumber(event.editors)}
-            {event.editors !== null && <small>명</small>}
+            {metricLabel(event.editors)}
+            {event.editors != null && <small>명</small>}
           </strong>
         </div>
       </div>
@@ -222,7 +229,10 @@ export default function EventPage({
                 <div className="dt-section-heading">
                   <div>
                     <h2>편집 신호의 흐름</h2>
-                    <p>함께 바뀐 문서들의 편집량을 시간순으로 살펴보세요.</p>
+                    <p>
+                      편집·조회수의 관측 자료와 이슈 점수는 서로 다른
+                      정보입니다.
+                    </p>
                   </div>
                   <div
                     className="dt-segment"
@@ -231,6 +241,7 @@ export default function EventPage({
                   >
                     <button
                       type="button"
+                      disabled={!chartData.length}
                       aria-pressed={range === "7"}
                       onClick={() => setRange("7")}
                     >
@@ -238,6 +249,7 @@ export default function EventPage({
                     </button>
                     <button
                       type="button"
+                      disabled={!chartData.length}
                       aria-pressed={range === "all"}
                       onClick={() => setRange("all")}
                     >
@@ -245,37 +257,47 @@ export default function EventPage({
                     </button>
                   </div>
                 </div>
-                <div className="dt-chart-frame">
-                  <div className="dt-chart-legend">
-                    <span>
-                      <i />
-                      편집량
-                    </span>
-                    <label>
-                      <input
-                        type="checkbox"
-                        checked={showBaseline}
-                        onChange={(e) => setShowBaseline(e.target.checked)}
-                      />
-                      <i className="dt-baseline-swatch" />
-                      평소 편집량
-                    </label>
-                    <span className="dt-legend-note">
-                      {isExample ? "단위: 회 · 예시" : "단위: 회"}
-                    </span>
+                {chartData.length ? (
+                  <div className="dt-chart-frame">
+                    <div className="dt-chart-legend">
+                      <span>
+                        <i />
+                        편집량
+                      </span>
+                      <label>
+                        <input
+                          type="checkbox"
+                          checked={showBaseline}
+                          onChange={(e) => setShowBaseline(e.target.checked)}
+                        />
+                        <i className="dt-baseline-swatch" />
+                        평소 편집량
+                      </label>
+                      <span className="dt-legend-note">
+                        {isExample ? "단위: 회 · 예시" : "단위: 회"}
+                      </span>
+                    </div>
+                    <TrendChart
+                      isExample={isExample}
+                      data={chartData}
+                      label={
+                        isExample
+                          ? "이벤트 편집량 추이 예시"
+                          : "이벤트 편집량 추이"
+                      }
+                      baseline={showBaseline}
+                      height={240}
+                    />
                   </div>
-                  <TrendChart
-                    isExample={isExample}
-                    data={chartData}
-                    label={
-                      isExample
-                        ? "이벤트 편집량 추이 예시"
-                        : "이벤트 편집량 추이"
-                    }
-                    baseline={showBaseline}
-                    height={240}
-                  />
-                </div>
+                ) : (
+                  <div className="data-availability">
+                    <strong>시계열 미제공</strong>
+                    <p>
+                      이 시점의 편집·조회수 추이와 기준선 자료가 제공되지
+                      않았습니다.
+                    </p>
+                  </div>
+                )}
               </section>
               <section className="dt-network-section">
                 <div className="dt-section-heading">
@@ -283,7 +305,7 @@ export default function EventPage({
                     <h2>하나의 변화, 연결된 문서</h2>
                     <p>문서를 선택해 이 이벤트와 어떤 관계인지 살펴보세요.</p>
                   </div>
-                  <span className="dt-mini-label">연결 관계 예시</span>
+                  <span className="dt-mini-label">클러스터 구성</span>
                 </div>
                 <div className="dt-network-layout">
                   <ArticleNetwork
@@ -293,14 +315,35 @@ export default function EventPage({
                   />
                   {selected && (
                     <div className="dt-network-detail">
-                      <CategoryTag category={getCategory(selected.category)} />
+                      {selected.category && (
+                        <CategoryTag
+                          category={getCategory(selected.category)}
+                        />
+                      )}
                       <h3>{selected.name}</h3>
-                      <p>{selected.description}</p>
+                      <p>
+                        {selected.isSeed
+                          ? "급증 신호로 포함된 문서"
+                          : "연관 문서"}
+                      </p>
                       <div className="dt-inline-stat">
                         <span>편집량</span>
-                        <strong>{formatNumber(selected.edits)}회</strong>
-                        <span className="dt-teal">{selected.pulse}배</span>
+                        <strong>
+                          {metricLabel(selected.edits)}
+                          {selected.edits != null ? "회" : ""}
+                        </strong>
+                        <span>조회수</span>
+                        <strong>
+                          {metricLabel(selected.views ?? selected.pageviews)}
+                          {(selected.views ?? selected.pageviews) != null
+                            ? "회"
+                            : ""}
+                        </strong>
                       </div>
+                      <p className="wp-small">
+                        집계 구간 미제공 · 선택한 시점의 값인지 확인할 수
+                        없습니다.
+                      </p>
                       <a
                         className="dt-text-link"
                         href={wikipediaUrl(selected)}
@@ -322,12 +365,20 @@ export default function EventPage({
                       ? "AI 해석 예시"
                       : "제공된 해석 · 출처 확인 필요"}
                   </h2>
-                  <span className="dt-mini-label">검증 전 해석</span>
+                  <IssueState status={event.status} />
                 </div>
                 <p className="dt-interpretation-note">
-                  편집 신호를 읽는 하나의 관점입니다. 사실 확인은 근거 문서와
-                  출처에서 이어가세요.
+                  제공된 해석의 근거는 문서와 출처에서 확인하세요. AI 검증
+                  상태는 편집·조회수 신호의 충족 여부와 별개입니다.
                 </p>
+                {!event.insights?.length && (
+                  <p className="data-availability">
+                    구조화된 상세 해석은 제공되지 않았습니다.
+                    {event.summaryModel && (
+                      <span> 요약 모델: {event.summaryModel}</span>
+                    )}
+                  </p>
+                )}
                 <div>
                   {(event.insights || []).map((insight, index) => (
                     <article key={`${insight.title}-${index}`}>
@@ -407,7 +458,11 @@ export default function EventPage({
               <button type="button" onClick={() => selectTab("news")}>
                 <Newspaper size={17} />
                 <span>
-                  <strong>{(event.news || []).length}개의 관련 소식</strong>
+                  <strong>
+                    {event.news?.length
+                      ? `${event.news.length}개의 관련 소식`
+                      : "관련 소식 미제공"}
+                  </strong>
                   <small>문서 밖의 맥락 함께 읽기</small>
                 </span>
                 <ChevronRight size={17} />
@@ -434,7 +489,7 @@ export default function EventPage({
             </p>
             {relatedStocks.length ? (
               <div className="dt-stock-links">
-                {relatedStocks.slice(0, 3).map((stock) => (
+                {relatedStocks.slice(0, 5).map((stock) => (
                   <a key={stock.symbol} href={`#/stocks/${stock.symbol}`}>
                     <span className="dt-stock-symbol">{stock.symbol}</span>
                     <span>
@@ -448,8 +503,8 @@ export default function EventPage({
             ) : (
               <p className="wp-muted">
                 {isExample
-                  ? "연결된 종목 예시가 없습니다."
-                  : "연결된 종목이 없습니다."}
+                  ? "제공된 관련 종목 예시가 없습니다."
+                  : "제공된 관련 종목이 없습니다."}
               </p>
             )}
             <a
@@ -465,9 +520,9 @@ export default function EventPage({
           <section className="dt-context-note">
             <h2>신호를 읽는 방법</h2>
             <p>
-              편집이 늘었다는 것은 사람들이 이 주제를 다시 기록하고 있다는
-              뜻입니다. 그 이유와 의미는 문서의 변화, 출처, 서로 다른 관점을
-              함께 보며 판단하세요.
+              이슈는 편집 또는 조회수의 변화에서 포착됩니다. 급증 점수는 편집
+              배수나 사실의 정확도를 뜻하지 않습니다. 구체적인 탐지 경로가
+              제공되지 않은 경우에는 추정하지 않습니다.
             </p>
             <div className="dt-keywords">
               {(event.keywords || []).map((keyword) => (

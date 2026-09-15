@@ -4,9 +4,11 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useState,
 } from "react";
 import { dataClient } from "../index.js";
 import { loadPageData } from "../resources.js";
+import { nextListParams } from "../pagination.js";
 import { useAsyncResource } from "./useAsyncResource.js";
 import { EmptyState } from "../../components/ui/EmptyState";
 
@@ -25,41 +27,86 @@ export function PageDataBoundary({
   onSource,
   children,
 }) {
+  const routeIdentity = JSON.stringify({ resource, id });
+  const [queryState, setQueryState] = useState({
+    routeIdentity,
+    params: { offset: 0, limit: 20 },
+  });
+  const listParams = useMemo(
+    () =>
+      queryState.routeIdentity === routeIdentity
+        ? queryState.params
+        : { offset: 0, limit: 20 },
+    [queryState, routeIdentity],
+  );
   const key = JSON.stringify({
     resource,
     id,
+    ...(["explore", "stocks"].includes(resource) ? { listParams } : {}),
     ...(resource === "saved" ? { savedEvents, savedStocks } : {}),
   });
   const load = useCallback(
-    (signal) => {
+    async (signal) => {
       const { resource: kind, ...params } = JSON.parse(key);
-      return loadPageData(dataClient, kind, params, { signal });
+      return {
+        ...(await loadPageData(dataClient, kind, params, { signal })),
+        routeIdentity,
+      };
     },
-    [key],
+    [key, routeIdentity],
   );
   const result = useAsyncResource(load, key);
   const { loading, error, reload } = result;
   // Removing a bookmark must not remount the saved page and reset its active tab.
   const data =
     result.data ||
-    (resource === "saved" && loading ? result.previousData : null);
+    (["saved", "explore", "stocks"].includes(resource) &&
+    loading &&
+    result.previousData?.routeIdentity === routeIdentity
+      ? result.previousData
+      : null);
+  const snapshotTs = resource === "explore" ? data?.meta.snapshotTs : undefined;
+  const setListParams = useCallback(
+    (update) => {
+      setQueryState((current) => {
+        const previous =
+          current.routeIdentity === routeIdentity
+            ? current.params
+            : { offset: 0, limit: 20 };
+        const partial =
+          typeof update === "function" ? update(previous) : update;
+        return {
+          routeIdentity,
+          params: nextListParams(previous, partial, snapshotTs),
+        };
+      });
+    },
+    [routeIdentity, snapshotTs],
+  );
   const value = useMemo(
     () =>
       data && {
         ...data,
+        loading,
+        listParams,
+        setListParams,
         isExample: data.meta?.dataMode === "mock",
-        getEvent: (id) => data.events.find((item) => item.id === id),
-        getEntity: (id) => data.entities.find((item) => item.id === id),
+        getEvent: (id) =>
+          data.events.find(
+            (item) =>
+              item.id === String(id) || item.aliases.includes(String(id)),
+          ),
+        getEntity: (id) => data.entities.find((item) => item.id === String(id)),
         getStock: (symbol) =>
           data.stocks.find(
             (item) => item.symbol === String(symbol ?? "").toUpperCase(),
           ),
         getCategory: (id) => data.categories.find((item) => item.id === id),
       },
-    [data],
+    [data, loading, listParams, setListParams],
   );
   useEffect(() => {
-    onSource(data?.meta || null);
+    onSource?.(data?.meta || null);
   }, [data, onSource]);
   if (loading && !data)
     return (

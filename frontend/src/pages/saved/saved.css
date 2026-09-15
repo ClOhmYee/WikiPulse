@@ -1,0 +1,18 @@
+.saved-unavailable {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 24px;
+  padding: 18px;
+  border: 1px solid var(--wp-border);
+  border-radius: 8px;
+}
+.saved-unavailable p {
+  flex-basis: 100%;
+  margin: 0 0 4px;
+  color: var(--muted);
+}
+.saved-unavailable button {
+  overflow-wrap: anywhere;
+  white-space: normal;
+}

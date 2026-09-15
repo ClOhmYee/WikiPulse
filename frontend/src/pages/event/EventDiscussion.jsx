@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { ChevronDown, MessageSquare, Send, ThumbsUp } from "lucide-react";
+import { usePageData } from "../../data/hooks/PageData";
 import "./discussion.css";
 
 const MAX_LENGTH = 1000;
@@ -38,8 +39,13 @@ const examples = {
 };
 
 function seedThreads(event) {
-  const reportTime = Date.parse(event.updatedAt || event.startAt);
-  const startTime = Date.parse(event.startAt);
+  const reportTime = Date.parse(
+    event.snapshotTs || event.updatedAt || event.startAt,
+  );
+  if (!Number.isFinite(reportTime)) return [];
+  const startTime = Number.isFinite(Date.parse(event.startAt))
+    ? Date.parse(event.startAt)
+    : reportTime - 24 * 60 * 60_000;
   const exampleTime = (minutes) =>
     new Date(Math.max(startTime, reportTime - minutes * 60_000)).toISOString();
   const bodies = examples[event.id] || [
@@ -88,11 +94,13 @@ function isMessage(value) {
   );
 }
 
-function readDiscussion(event) {
-  if (sessionDiscussions.has(event.id)) return sessionDiscussions.get(event.id);
+function readDiscussion(event, isExample, storageKey) {
+  const initialThreads = () => (isExample ? seedThreads(event) : []);
+  if (sessionDiscussions.has(storageKey))
+    return sessionDiscussions.get(storageKey);
   try {
-    const raw = window.localStorage.getItem(`wikipulse.discussion.${event.id}`);
-    if (!raw) return { threads: seedThreads(event), notice: "" };
+    const raw = window.localStorage.getItem(storageKey);
+    if (!raw) return { threads: initialThreads(), notice: "" };
     const stored = JSON.parse(raw);
     if (
       stored.version !== 1 ||
@@ -113,9 +121,9 @@ function readDiscussion(event) {
     return { threads: stored.threads, notice: "" };
   } catch {
     return {
-      threads: seedThreads(event),
+      threads: initialThreads(),
       notice:
-        "저장된 토론을 읽을 수 없어 예시 토론으로 시작했어요. 이 화면에서는 계속 작성할 수 있습니다.",
+        "저장된 토론을 읽을 수 없습니다. 이 화면에서는 계속 작성할 수 있습니다.",
     };
   }
 }
@@ -132,8 +140,11 @@ const displayTime = (value) =>
     hour12: false,
   }).format(new Date(value));
 
-function DiscussionBoard({ event }) {
-  const [initial] = useState(() => readDiscussion(event));
+function DiscussionBoard({ event, isExample }) {
+  const storageKey = `wikipulse.${isExample ? "" : "api."}discussion.${event.id}`;
+  const [initial] = useState(() =>
+    readDiscussion(event, isExample, storageKey),
+  );
   const [threads, setThreads] = useState(initial.threads);
   const [notice, setNotice] = useState(initial.notice);
   const [draft, setDraft] = useState("");
@@ -150,14 +161,14 @@ function DiscussionBoard({ event }) {
     setThreads(next);
     try {
       window.localStorage.setItem(
-        `wikipulse.discussion.${event.id}`,
+        storageKey,
         JSON.stringify({ version: 1, threads: next }),
       );
-      sessionDiscussions.set(event.id, { threads: next, notice: "" });
+      sessionDiscussions.set(storageKey, { threads: next, notice: "" });
       setNotice(successMessage);
     } catch {
       const fallbackNotice = `${successMessage} 브라우저 저장 공간을 사용할 수 없어 새로고침하면 사라집니다.`;
-      sessionDiscussions.set(event.id, {
+      sessionDiscussions.set(storageKey, {
         threads: next,
         notice:
           "브라우저 저장 공간을 사용할 수 없어 이 페이지를 새로고침하면 작성 내용이 사라집니다.",
@@ -181,7 +192,7 @@ function DiscussionBoard({ event }) {
     }
     const thread = {
       id: createId(),
-      author: "나 (데모)",
+      author: "나 (이 브라우저)",
       body,
       createdAt: new Date().toISOString(),
       isOwn: true,
@@ -212,7 +223,7 @@ function DiscussionBoard({ event }) {
     }
     const reply = {
       id: createId(),
-      author: "나 (데모)",
+      author: "나 (이 브라우저)",
       body,
       createdAt: new Date().toISOString(),
       isOwn: true,
@@ -311,6 +322,11 @@ function DiscussionBoard({ event }) {
         </label>
       </div>
       <div className="dc-threads">
+        {sorted.length === 0 && (
+          <p className="dc-local-notice">
+            이 브라우저에 작성한 토론이 없습니다.
+          </p>
+        )}
         {sorted.map((thread) => {
           const expanded = openReplies.includes(thread.id);
           const replyDraft = replyDrafts[thread.id] || "";
@@ -431,6 +447,13 @@ function DiscussionBoard({ event }) {
 }
 
 export default function EventDiscussion({ event }) {
+  const { isExample } = usePageData();
   if (!event?.id) return null;
-  return <DiscussionBoard key={event.id} event={event} />;
+  return (
+    <DiscussionBoard
+      key={`${isExample}-${event.id}`}
+      event={event}
+      isExample={isExample}
+    />
+  );
 }

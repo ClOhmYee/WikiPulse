@@ -4,93 +4,99 @@ import {
   ArrowRight,
   Bookmark,
   ChevronRight,
-  GitBranch,
   Search,
-  SlidersHorizontal,
   X,
 } from "lucide-react";
 import { usePageData } from "../../data/hooks/PageData";
 import { EmptyState } from "../../components/ui/EmptyState";
+import { Pagination } from "../../components/event/IssueState";
+import { metricLabel } from "../event/presentation.js";
 import {
   RELATION_LABELS,
   isSaved,
   priceLabel,
   StockMark,
   SaveButton,
-  PriceChange,
+  MatchEvidence,
 } from "./StockElements";
 export default function StockDirectory({
   eventId,
   savedStocks,
   onToggleStock,
 }) {
-  const { stocks, getEvent, isExample } = usePageData();
-  const [query, setQuery] = useState("");
-  const [sector, setSector] = useState("all");
+  const {
+    stocks,
+    getEvent,
+    listParams,
+    setListParams,
+    pagination,
+    collectionLimit,
+    loading,
+  } = usePageData();
+  const [query, setQuery] = useState(listParams.q || "");
+  const [sector, setSector] = useState(listParams.sector || "");
+  const [exchange, setExchange] = useState(listParams.exchange || "");
+  const [hasIssues, setHasIssues] = useState(Boolean(listParams.hasIssues));
   const [relationType, setRelationType] = useState("all");
   const [savedOnly, setSavedOnly] = useState(false);
-  const [sort, setSort] = useState("events");
+  const [applied, setApplied] = useState({ q: "", sector: "" });
   const activeEvent = eventId ? getEvent(eventId) : null;
-  const universe = useMemo(
+  const filteredStocks = useMemo(
     () =>
-      eventId
-        ? stocks.filter(
-            (stock) =>
-              stock.eventIds.includes(eventId) ||
-              activeEvent?.stockSymbols?.includes(stock.symbol),
-          )
-        : stocks,
-    [eventId, activeEvent, stocks],
+      stocks.filter((stock) => {
+        const relation =
+          stock.relations?.find((item) => item.eventId === activeEvent?.id) ||
+          stock;
+        return (
+          (!savedOnly || isSaved(savedStocks, stock.symbol)) &&
+          (!eventId ||
+            ((!applied.q ||
+              `${stock.symbol} ${stock.name}`
+                .toLocaleLowerCase()
+                .includes(applied.q.toLocaleLowerCase())) &&
+              (!applied.sector || stock.sector === applied.sector) &&
+              (relationType === "all" || relation.matchPath === relationType)))
+        );
+      }),
+    [
+      stocks,
+      eventId,
+      activeEvent,
+      applied,
+      relationType,
+      savedOnly,
+      savedStocks,
+    ],
   );
-  const sectors = [...new Set(universe.map((stock) => stock.sector))];
-  const filteredStocks = useMemo(() => {
-    const term = query.trim().toLocaleLowerCase();
-    return universe
-      .filter((stock) => {
-        const matchesQuery =
-          !term ||
-          `${stock.symbol} ${stock.name} ${stock.sector} ${stock.description}`
-            .toLocaleLowerCase()
-            .includes(term);
-        const matchesSector = sector === "all" || stock.sector === sector;
-        const matchesSaved = !savedOnly || isSaved(savedStocks, stock.symbol);
-        const matchesRelation =
-          relationType === "all" ||
-          stock.relations?.some(
-            (relation) =>
-              (!eventId || relation.eventId === eventId) &&
-              relation.type === relationType,
-          );
-        return matchesQuery && matchesSector && matchesSaved && matchesRelation;
-      })
-      .sort((a, b) =>
-        sort === "name"
-          ? a.symbol.localeCompare(b.symbol)
-          : b.eventIds.length - a.eventIds.length ||
-            a.symbol.localeCompare(b.symbol),
-      );
-  }, [
-    universe,
-    query,
-    sector,
-    savedOnly,
-    savedStocks,
-    relationType,
-    eventId,
-    sort,
-  ]);
-  const hasFilters = Boolean(
-    query || sector !== "all" || relationType !== "all" || savedOnly,
-  );
-
+  function submit(event) {
+    event.preventDefault();
+    if (eventId) setApplied({ q: query.trim(), sector: sector.trim() });
+    else
+      setListParams({
+        q: query.trim() || undefined,
+        sector: sector.trim() || undefined,
+        exchange: exchange.trim() || undefined,
+        hasIssues,
+      });
+  }
   function resetFilters() {
     setQuery("");
-    setSector("all");
+    setSector("");
+    setExchange("");
+    setHasIssues(false);
     setRelationType("all");
     setSavedOnly(false);
+    setApplied({ q: "", sector: "" });
+    if (!eventId)
+      setListParams({
+        q: undefined,
+        sector: undefined,
+        exchange: undefined,
+        hasIssues: false,
+        offset: 0,
+      });
   }
-
-  if (eventId && !activeEvent) {
+  if (eventId && !activeEvent)
     return (
       <div className="wp-page">
         <EmptyState
@@ -104,13 +110,15 @@ export default function StockDirectory({
         />
       </div>
     );
-  }
-
   return (
-    <div className="wp-page st-page">
+    <div className="wp-page st-page" aria-busy={loading}>
       {activeEvent && (
-        <a href={`#/issues/${activeEvent.id}`} className="st-back">
-          <ArrowLeft size={16} aria-hidden="true" /> 사건으로 돌아가기
+        <a
+          href={`#/issues/${encodeURIComponent(activeEvent.id)}`}
+          className="st-back"
+        >
+          <ArrowLeft size={16} />
+          사건으로 돌아가기
         </a>
       )}
       <header className="wp-page-header st-directory-header">
@@ -127,68 +135,97 @@ export default function StockDirectory({
           </p>
         </div>
         <span className="st-directory-total">
-          {universe.length}
-          <span>개 종목</span>
+          {eventId ? stocks.length : (pagination?.total ?? stocks.length)}
+          <span>{eventId ? "개 수신" : "개 종목"}</span>
         </span>
       </header>
-
       {activeEvent && (
         <div className="st-event-context">
-          <GitBranch size={18} aria-hidden="true" />
           <p>
-            종목마다 <strong>어떤 경로로 연결되는지</strong>를 확인할 수
-            있습니다.
+            연결 설명과 후보 탐색 경로를 함께 확인하세요. 후보 탐색 경로는
+            신뢰도 등급이 아닙니다.
           </p>
-          <a href={`#/issues/${activeEvent.id}`}>
+          <a href={`#/issues/${encodeURIComponent(activeEvent.id)}`}>
             사건 요약
-            <ArrowRight size={14} aria-hidden="true" />
+            <ArrowRight size={14} />
           </a>
         </div>
       )}
-
       <section className="st-stock-browser" aria-label="종목 탐색">
-        <div className="st-filters">
+        {loading && (
+          <p role="status" className="data-scope">
+            종목 목록을 갱신하는 중입니다.
+          </p>
+        )}
+        <form onSubmit={submit} className="data-filters">
           <label className="wp-search st-search">
-            <Search size={18} aria-hidden="true" />
+            <Search size={18} />
             <input
               aria-label="종목 검색"
               value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder="종목명, 티커, 산업 검색"
+              onChange={(e) => setQuery(e.target.value)}
+              maxLength={200}
+              placeholder="종목명, 티커 검색"
             />
-            {query && (
-              <button
-                type="button"
-                className="st-clear"
-                aria-label="종목 검색어 지우기"
-                onClick={() => setQuery("")}
-              >
-                <X size={16} />
-              </button>
-            )}
           </label>
-          <label className="st-filter-select">
-            <SlidersHorizontal size={16} aria-hidden="true" />
-            <select
+          <label>
+            산업
+            <input
               className="wp-select"
               aria-label="산업 필터"
               value={sector}
-              onChange={(event) => setSector(event.target.value)}
-            >
-              <option value="all">모든 산업</option>
-              {sectors.map((item) => (
-                <option key={item} value={item}>
-                  {item}
-                </option>
-              ))}
-            </select>
+              onChange={(e) => setSector(e.target.value)}
+              maxLength={100}
+              placeholder="예: Technology"
+              list="stock-sectors"
+            />
           </label>
+          <datalist id="stock-sectors">
+            {[
+              ...new Set(stocks.map((stock) => stock.sector).filter(Boolean)),
+            ].map((value) => (
+              <option key={value} value={value} />
+            ))}
+          </datalist>
+          {!eventId && (
+            <>
+              <label>
+                거래소
+                <input
+                  className="wp-select"
+                  aria-label="거래소 필터"
+                  value={exchange}
+                  onChange={(e) => setExchange(e.target.value)}
+                  maxLength={50}
+                  placeholder="예: NASDAQ"
+                />
+              </label>
+              <label className="data-filter-checkbox">
+                <input
+                  type="checkbox"
+                  checked={hasIssues}
+                  onChange={(e) => setHasIssues(e.target.checked)}
+                />
+                관련 이슈가 있는 종목만
+              </label>
+            </>
+          )}
+          <button
+            type="submit"
+            className="wp-button"
+            data-variant="primary"
+            disabled={loading}
+          >
+            검색 적용
+          </button>
+        </form>
+        <div className="st-filters">
           {activeEvent && (
             <select
-              className="wp-select st-relation-select"
+              className="wp-select"
               aria-label="연결 유형 필터"
               value={relationType}
-              onChange={(event) => setRelationType(event.target.value)}
+              onChange={(e) => setRelationType(e.target.value)}
             >
               <option value="all">모든 연결 유형</option>
               {Object.entries(RELATION_LABELS).map(([value, label]) => (
@@ -201,103 +238,85 @@ export default function StockDirectory({
           <button
             type="button"
             className="wp-chip st-saved-filter"
-            data-active={savedOnly}
             aria-pressed={savedOnly}
-            onClick={() => setSavedOnly((value) => !value)}
+            data-active={savedOnly}
+            onClick={() => setSavedOnly(!savedOnly)}
           >
-            <Bookmark
-              size={15}
-              fill={savedOnly ? "currentColor" : "none"}
-              aria-hidden="true"
-            />{" "}
+            <Bookmark size={15} fill={savedOnly ? "currentColor" : "none"} />
             관심 종목
           </button>
-        </div>
-        <div className="st-results-bar">
-          <div>
-            <span aria-live="polite">
-              <strong>{filteredStocks.length}</strong>개 종목
-            </span>
-            {hasFilters && (
-              <button type="button" onClick={resetFilters}>
-                필터 초기화
-                <X size={13} aria-hidden="true" />
-              </button>
-            )}
-          </div>
-          <select
-            className="st-sort"
-            aria-label="종목 정렬"
-            value={sort}
-            onChange={(event) => setSort(event.target.value)}
+          <button
+            type="button"
+            className="wp-text-button"
+            onClick={resetFilters}
           >
-            <option value="events">관련 사건 많은 순</option>
-            <option value="name">티커 이름순</option>
-          </select>
+            필터 초기화
+            <X size={13} />
+          </button>
         </div>
-
+        <p className="data-scope">
+          {eventId
+            ? `검색과 필터는 수신한 관련 종목 최대 ${collectionLimit || 100}개 안에서 적용됩니다. 전체 개수는 제공되지 않았습니다.`
+            : "검색은 전체 종목에 적용됩니다. 관심 종목 필터는 현재 페이지에서 찾습니다."}{" "}
+          <a href="#/saved">보관함 보기</a>
+        </p>
+        <div className="st-results-bar">
+          <span aria-live="polite">
+            <strong>{filteredStocks.length}</strong>개 표시
+          </span>
+        </div>
         {filteredStocks.length ? (
           <div className="st-directory-list">
             <div className="st-list-head" aria-hidden="true">
               <span>종목</span>
-              <span>{activeEvent ? "사건과의 연결" : "주요 연결 맥락"}</span>
+              <span>{activeEvent ? "사건과의 연결" : "산업"}</span>
               <span>관련 사건</span>
-              <span>{isExample ? "예시 가격" : "가격"}</span>
+              <span>가격</span>
               <span>저장</span>
             </div>
             <ul>
               {filteredStocks.map((stock) => {
-                const relation = stock.relations?.find(
-                  (item) => !eventId || item.eventId === eventId,
-                );
-                const leadEvent = relation
-                  ? getEvent(relation.eventId)
-                  : getEvent(stock.eventIds[0]);
+                const relation =
+                  stock.relations?.find(
+                    (item) => item.eventId === activeEvent?.id,
+                  ) || (stock.matchPath || stock.rationale ? stock : null);
                 return (
                   <li className="st-stock-row" key={stock.symbol}>
                     <a
                       className="st-stock-identity"
-                      href={`#/stocks/${stock.symbol}`}
+                      href={`#/stocks/${encodeURIComponent(stock.symbol)}`}
                     >
                       <StockMark stock={stock} />
                       <span>
                         <span className="st-symbol-line">
                           <strong>{stock.symbol}</strong>
-                          <small>{stock.market}</small>
+                          <small>{stock.exchange}</small>
                         </span>
                         <span className="st-company-name">{stock.name}</span>
-                        <span className="st-sector-mobile">{stock.sector}</span>
+                        <span className="st-sector-mobile">
+                          {stock.sector || "산업 미제공"}
+                        </span>
                       </span>
                     </a>
                     <div className="st-row-context">
-                      <div>
-                        <span className="st-sector">{stock.sector}</span>
-                        {relation && (
-                          <span className="st-relation-label">
-                            {RELATION_LABELS[relation.type] || relation.type}
-                          </span>
-                        )}
-                      </div>
-                      <p>
-                        {activeEvent && relation
-                          ? relation.explanation
-                          : leadEvent?.title || stock.description}
-                      </p>
+                      <span className="st-sector">
+                        {stock.sector || "산업 미제공"}
+                      </span>
+                      {activeEvent && <MatchEvidence relation={relation} />}
                     </div>
                     <a
-                      href={`#/stocks/${stock.symbol}`}
+                      href={`#/stocks/${encodeURIComponent(stock.symbol)}`}
                       className="st-event-count"
                     >
-                      <strong>{stock.eventIds.length}</strong>
-                      <span>개 사건</span>
-                      <ChevronRight size={14} aria-hidden="true" />
+                      <strong>{metricLabel(stock.issueCount, 0)}</strong>
+                      <span>
+                        {stock.issueCount != null ? "개 사건" : "사건 수"}
+                      </span>
+                      <ChevronRight size={14} />
                     </a>
                     <div className="st-row-price">
-                      <span className="st-mobile-price-label">
-                        {isExample ? "예시 가격" : "가격"}
-                      </span>
+                      <span className="st-mobile-price-label">가격</span>
                       <strong>{priceLabel(stock)}</strong>
-                      <PriceChange value={stock.change} />
                     </div>
                     <SaveButton
                       stock={stock}
@@ -311,15 +330,11 @@ export default function StockDirectory({
           </div>
         ) : (
           <EmptyState
-            title={
-              savedOnly && !query && sector === "all"
-                ? "아직 관심 종목이 없습니다."
-                : "조건에 맞는 종목이 없습니다."
-            }
+            title="조건에 맞는 종목이 없습니다."
             description={
-              savedOnly && !query && sector === "all"
-                ? "종목 옆의 저장 버튼을 누르면 이곳에서 다시 볼 수 있어요."
-                : "검색어나 산업, 연결 유형을 바꿔 보세요."
+              savedOnly
+                ? "현재 목록에 저장한 종목이 없습니다. 모든 저장 항목은 보관함에서 확인하세요."
+                : "검색어나 산업, 거래소 조건을 바꿔 보세요."
             }
             action={
               <button
@@ -327,16 +342,22 @@ export default function StockDirectory({
                 className="wp-button"
                 onClick={resetFilters}
               >
-                전체 종목 보기
+                필터 초기화
               </button>
             }
           />
         )}
+        {!eventId && (
+          <Pagination
+            pagination={pagination}
+            onChange={setListParams}
+            loading={loading}
+          />
+        )}
       </section>
       <p className="st-data-note">
-        {isExample
-          ? "가격과 사건 연결은 화면 탐색을 위한 예시 데이터입니다."
-          : "가격과 사건 연결의 출처 및 기준 시각을 확인해 주세요."}
+        가격과 등락률은 제공되지 않았습니다. 종목의 연결 설명은 관련 이슈에서
+        확인하세요.
       </p>
     </div>
   );
