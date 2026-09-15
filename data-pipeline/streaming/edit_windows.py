@@ -40,7 +40,8 @@ DEFAULT_SLIDE_SIZE = "5 minutes"
 
 DEFAULT_WATERMARK = "10 minutes"
 
-#: `approx_count_distinct` 의 상대 표준오차. Spark 기본값은 0.05 다.
+#: `approx_count_distinct` 의 상대 표준오차. ~~0.05 (Spark 기본)~~ → **0.01** (2026-09-15,
+#: WP-89). 기본값이 편집자 하한을 뒤집었다 — 아래 실측.
 #:
 #: 🔴 **이 값이 편집자 하한 게이트(detector.MIN_DISTINCT_EDITORS=2)를 뒤집는다.**
 #: 실덤프 200,000 events(enwiki 2025-06, 윈도우 118,521)로 배치 정확값과 대조한 결과
@@ -54,12 +55,16 @@ DEFAULT_WATERMARK = "10 minutes"
 #: 2→1 은 **진짜 급증을 떨어뜨린다**(미탐). 편집자 수는 애초에 한 자릿수라 HLL 의
 #: 이득이 거의 없는 구간이다.
 #:
+#: 정확 `count_distinct` 도 0건이지만 안 골랐다 — 윈도우마다 편집자 집합을 통째로 들고
+#: 있어야 해서 스트리밍 상태가 커지는데, `rsd=0.01` 이 이미 0건이라 그 대가를 치를 이유가
+#: 없다. `rsd=0.005` 는 0.01 과 결과가 같고 메모리만 더 쓴다.
+#: ⚠️ 실규모 상태 크기는 Spark 2노드(WP-27)가 서기 전엔 못 잰다 — 그때 재확인한다.
+#:
 #: ⚠️ ~~"편집자 1~10명 구간에서 두 값이 일치함을 실측했다(불일치 0건)"~~
 #: (`batch/historical_windows.py` · `spike/README.md`, 2026-09-15 -85) → **표본을 키우니
 #: 틀렸다.** 작은 표본에서는 HLL 희소 표현이 정확해 안 드러난다.
 #:
-#: 값은 여기서 안 바꿨다 — WP-83 AC "갈리면 임의로 맞추지 말고 팀에 올린다".
-EDITOR_COUNT_RSD = 0.05
+EDITOR_COUNT_RSD = 0.01
 
 EDIT_EVENT_SCHEMA = StructType(
     [
