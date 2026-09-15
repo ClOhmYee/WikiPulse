@@ -247,7 +247,7 @@ def test_editor_count_정밀도가_의도한_값인지():
 
     실덤프 200,000 events 대조에서 기본 `rsd=0.05` 가 13개 윈도우를 `2 → 1` 로
     과소 계수해 급증을 떨어뜨렸다 (2026-09-15, WP-83). `rsd=0.01` 과
-    정확 `count_distinct` 는 불일치 0건이었다.
+    정확 `count_distinct` 는 불일치 0건이라 **0.01 로 확정했다**(WP-89).
 
     이 테스트는 값을 **고정**하는 게 아니라 **의식적으로 바꾸게** 하는 장치다.
     바꿀 때는 `streaming/edit_windows.py` 의 근거 주석과 명세 §11 을 같이 갱신한다.
@@ -257,7 +257,7 @@ def test_editor_count_정밀도가_의도한_값인지():
     """
     from streaming.edit_windows import EDITOR_COUNT_RSD
 
-    assert EDITOR_COUNT_RSD == 0.05, (
+    assert EDITOR_COUNT_RSD == 0.01, (
         "값을 바꿨다면 실덤프 대조를 다시 돌리고 근거를 §11 에 남길 것"
     )
 

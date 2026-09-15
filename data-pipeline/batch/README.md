@@ -367,7 +367,10 @@ cd data-pipeline && python -m pytest tests/test_stream_batch_parity.py   # 12개
 
 `2 → 1` 13건은 **편집자 하한을 뒤집어 진짜 급증을 떨어뜨린다**(정확 editor≥2 윈도우 5,427의
 0.240%). `rsd=0.01`·`rsd=0.005`·정확 `count_distinct` 는 전부 불일치 0건이었다.
-값은 안 바꿨다 — 팀 결정 대기(명세 §10), `streaming.EDITOR_COUNT_RSD` 로 노출만 했다.
+
+✅ **`EDITOR_COUNT_RSD = 0.01` 로 확정** (2026-09-15, WP-89). 같은 표본을 다시 돌려
+`edit_count`·`editor_count` 둘 다 **불일치 0건**을 확인했다. 정확 `count_distinct` 도 0건이지만
+윈도우마다 편집자 집합을 통째로 들고 있어야 해 안 골랐다.
 
 **무엇을 "같다"고 보는가.** 스트리밍은 1시간/5분 **슬라이딩**, 배치는 정각 **tumbling** 이다.
 슬라이드가 창 길이를 나누므로 **정각에서 시작하는 윈도우**가 항상 있고 그게 배치와 같은
