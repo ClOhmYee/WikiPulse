@@ -6,6 +6,8 @@
 
 from __future__ import annotations
 
+import pytest
+
 from datetime import date
 
 from spike.detector import MIN_ABSOLUTE_EDITS, MIN_BASELINE_SAMPLE_DAYS
@@ -96,12 +98,19 @@ def test_판정_대상은_자기_기준선에_안_들어간다():
 
 
 def test_같은_슬롯만_기준선에_쓴다():
+    """⚠️ 슬롯이 6시간이라 00시와 05시는 **같은 슬롯**이다 (WP-88).
+
+    ~~05시를 "다른 슬롯" 으로 썼다~~ → 이제 둘 다 slot 0 이다. 다른 슬롯을 쓰려면
+    06시 이상으로 가야 한다. 이 테스트가 슬롯 폭 변경을 실제로 잡아냈다.
+    """
     target = obs("Iran", "2025-06-09T00:00:00", 40)          # 월 00시 = slot 0
     history = [target,
                obs("Iran", "2025-06-02T00:00:00", 1),        # slot 0
-               obs("Iran", "2025-06-03T05:00:00", 99)]       # 화 05시 = 다른 슬롯
+               obs("Iran", "2025-06-03T05:00:00", 3),        # 05시 = 여전히 slot 0
+               obs("Iran", "2025-06-04T06:00:00", 99)]       # 06시 = slot 1
     baseline = baseline_at(history, target, halflife_days=1e9)
-    assert baseline.edit_ewma == 1.0                          # 99 는 안 섞였다
+    # 반감기가 사실상 무한이라 거의 균등가중 — 부동소수 오차만큼 approx 로 본다
+    assert baseline.edit_ewma == pytest.approx(2.0)           # (1+3)/2 — 99 는 안 섞였다
 
 
 def test_28일_창_밖은_기준선에_안_들어간다():
@@ -168,7 +177,8 @@ def test_슬롯이_매일_와서_sample_days가_쌓인다():
     """WP-84 로 해소된 구조 문제의 회귀 테스트.
 
     ~~hour_of_week 슬롯은 주 1회라 28일 창 관측이 최대 4개이고 sample_days 가
-    MIN_BASELINE_SAMPLE_DAYS(7) 에 영원히 도달하지 못했다~~ → hour_of_day 로 바꿔
+    MIN_BASELINE_SAMPLE_DAYS(7) 에 영원히 도달하지 못했다~~ → hour_of_day(-84) → 6시간
+    slot_index(-88) 로 넓혀
     같은 슬롯이 **매일** 온다 (2026-09-15). 이제 7일이면 문턱을 넘어 z 경로가 산다.
     """
     days = [f"2025-06-{d:02d}" for d in range(2, 10)]    # 8일 연속, 같은 00시 슬롯

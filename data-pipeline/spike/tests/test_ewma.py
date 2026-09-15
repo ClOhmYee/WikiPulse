@@ -63,12 +63,12 @@ def test_균등가중_모집단_표준편차():
 # ---------------------------------------------------------------- 비교 하네스
 
 def _row(title, hour, day, edits):
-    return {"wiki": "enwiki", "title": title, "hour_of_day": hour,
+    return {"wiki": "enwiki", "title": title, "slot_index": hour // 6,
             "window_start": f"{day}T{hour % 24:02d}:00:00", "edit_count": edits}
 
 
 def test_summarize_후보별_슬롯_집계():
-    # 한 슬롯(hour_of_day=0)에 두 주 관측: 최근(2025-06-09) 10, 옛날(2025-05-26) 0
+    # 한 슬롯(slot_index=0)에 두 주 관측: 최근(2025-06-09) 10, 옛날(2025-05-26) 0
     rows = [_row("Iran", 0, "2025-06-09", 10), _row("Iran", 0, "2025-05-26", 0)]
     out = summarize(rows, candidates=(14.0, 1e9))
     assert out[14.0]["slots"] == 1

@@ -16,10 +16,10 @@ from spike.baseline_sink import (
 from spike.detector import MIN_BASELINE_SAMPLE_DAYS, Baseline, Window, detect
 
 
-def win(day, hour_of_day, edits, views=None, wiki="enwiki", title="Iran"):
-    """-58 산출물 한 행. window_start 의 시각을 hour_of_day 와 맞춰 둔다."""
-    return {"wiki": wiki, "title": title, "hour_of_day": hour_of_day,
-            "window_start": f"{day}T{hour_of_day % 24:02d}:00:00",
+def win(day, slot_hour, edits, views=None, wiki="enwiki", title="Iran"):
+    """-58 산출물 한 행. 시각을 주면 slot_index(= 시각 // 6)를 맞춰 둔다."""
+    return {"wiki": wiki, "title": title, "slot_index": slot_hour // 6,
+            "window_start": f"{day}T{slot_hour % 24:02d}:00:00",
             "edit_count": edits, "views": views}
 
 
@@ -157,7 +157,7 @@ def test_page_id_해석은_고유키당_한_번():
 
 
 def test_upsert는_PK충돌시_갱신():
-    assert "ON CONFLICT (page_id, hour_of_day) DO UPDATE" in UPSERT_BASELINE_SQL
+    assert "ON CONFLICT (page_id, slot_index) DO UPDATE" in UPSERT_BASELINE_SQL
     assert "updated_at  = now()" in UPSERT_BASELINE_SQL
 
     rows = build_rows([win("2025-06-09", 0, 4, views=10)], as_of=date(2025, 6, 9))

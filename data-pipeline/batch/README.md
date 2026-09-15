@@ -333,7 +333,7 @@ python -m batch.pageview_ingest --wiki enwiki --date 2025-06-12 --agents user,au
 
 ```
 edit_event JSONL.gz (-56) ┐
-                          ├─▶ (wiki, title, window_start, hour_of_day, edit_count, editor_count, views) JSONL.gz
+                          ├─▶ (wiki, title, window_start, slot_index, edit_count, editor_count, views) JSONL.gz
 pageview JSONL.gz  (-57) ┘        1시간 윈도우 · 봇 제외 편집 · agent 가로질러 조회 합산
 ```
 
@@ -355,7 +355,7 @@ python -m batch.historical_windows_ingest \
 
 `streaming/edit_windows.py`(실시간)와 정의가 갈리면 `edit_z` 가 에러 없이 조용히 틀린다.
 
-- **윈도우 = 1시간.** 스트리밍 `WINDOW_SIZE` 와 맞춘다. baseline 은 24 슬롯(`hour_of_day`)이라
+- **윈도우 = 1시간.** 스트리밍 `WINDOW_SIZE` 와 맞춘다. ⚠️ 슬롯 폭(`SLOT_HOURS`=6)과 다른 값이다 — 윈도우는 집계 주기, 슬롯은 기준선 묶음 단위다. baseline 은 4 슬롯(`hour_of_day`)이라
   1시간이 자연스러운 정합값이다.
 - **봇 필터 = `is_bot` 참 편집 제외.** 스트리밍 `~coalesce(is_bot, False)` 와 같은 판정.
 - **`editor_count` 를 함께 센다** (WP-85). 급증 판정의 편집자 하한이 이 값을 본다.
@@ -372,7 +372,7 @@ python -m batch.historical_windows_ingest \
   ⚠️ **스트리밍은 이 보정을 안 한다** — `producer/normalize.py` 가 Kafka 에 넣기 전에 이미
   맞춘다. 규칙을 Spark 표현식으로 또 구현하면 파이썬 판과 갈릴 수 있어서 한 곳에만 둔다.
   이 비대칭은 `tests/test_stream_batch_parity.py` 가 명시적으로 고정한다.
-- **`hour_of_day` 정의(UTC 시 0~23)는 `spike/baseline.py` 의 Spark 판과 같아야 한다.**
+- **`slot_index` 정의(UTC 시 // `SLOT_HOURS`, 0~3)는 `spike/baseline.py` 의 Spark 판과 같아야 한다.**
   Python `weekday()` 월=0 == Spark `(dayofweek+5)%7` 월=0. 테스트로 알려진 날짜를 고정했다.
 - 편집·조회는 `(wiki,title,hour)` 기준 **full outer join** — 한쪽만 있는 시간도 0 으로 남긴다
   (baseline 이 `edit_z`·`view_ewma` 를 둘 다 잡는다).

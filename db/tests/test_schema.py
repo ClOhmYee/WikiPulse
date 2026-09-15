@@ -112,14 +112,14 @@ def test_근거_경로도_정해진_값만_받는다(conn):
     assert q(conn, "SELECT match_path FROM cluster_stock WHERE ticker = 'TS2'") == [(None,)]
 
 
-def test_기준선_시간대는_0에서_167이다(conn):
+def test_기준선_슬롯은_0에서_3이다(conn):
     x(conn, "INSERT INTO wiki_page (wiki, title) VALUES ('enwiki', 'Baseline Test')")
     page_id = q(conn, "SELECT id FROM wiki_page WHERE title = 'Baseline Test'")[0][0]
     with pytest.raises(psycopg.errors.CheckViolation):
         x(
             conn,
-            "INSERT INTO page_baseline (page_id, hour_of_day, edit_ewma, sample_days) "
-            "VALUES (%s, 168, 1.0, 28)",
+            "INSERT INTO page_baseline (page_id, slot_index, edit_ewma, sample_days) "
+            "VALUES (%s, 4, 1.0, 28)",
             page_id,
         )
 

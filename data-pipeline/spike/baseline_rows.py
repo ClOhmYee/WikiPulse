@@ -5,7 +5,7 @@ Historical Window 산출물(WP-58)을 읽어 `page_baseline` 한 행에 해당�
 🔴 여기서 가중치를 새로 정하지 않는다.
 
 산출 형태 (page_baseline 컬럼과 1:1)
-    (wiki, title, hour_of_day, edit_ewma, edit_stddev, view_ewma, view_stddev, sample_days)
+    (wiki, title, slot_index, edit_ewma, edit_stddev, view_ewma, view_stddev, sample_days)
     page_id 는 여기 없다 — (wiki, title) → wiki_page.id 해석은 적재 시점
     (baseline_sink.py) 책임이다. 덤프 page_id 를 쓰지 않는 -56·-57·-58 과 같은 키다.
 
@@ -15,7 +15,7 @@ Historical Window 산출물(WP-58)을 읽어 `page_baseline` 한 행에 해당�
     번져 "평소"가 아니게 된다.
 
 sample_days
-    그 슬롯에 실제로 관측이 있었던 **고유 날짜 수**. detector 의 is_thin(<7)이
+    그 슬롯에 실제로 관측이 있었던 **고유 날짜 수** (슬롯이 6시간이라 하루에 여러 윈도우가 같은 슬롯에 들어간다 — 그래도 하루로 센다). detector 의 is_thin(<7)이
     이 값으로 얇은 baseline 을 신규 문서 경로로 보낸다. 관측 자체가 없는 날은 세지
     않는다 — 0 편집을 채워 넣으면 표본이 두꺼워 보여 오탐이 난다.
 
@@ -43,7 +43,8 @@ class BaselineRow:
     """page_baseline 한 행. page_id 는 적재 시점에 붙는다."""
     wiki: str
     title: str
-    hour_of_day: int
+    #: 0..3 (UTC 시 // batch.historical_windows.SLOT_HOURS). 🔴 폭은 거기서만 온다.
+    slot_index: int
     edit_ewma: float
     edit_stddev: float | None
     view_ewma: float | None
@@ -74,7 +75,7 @@ def build_rows(
 ) -> list[BaselineRow]:
     """Historical Window 행들에서 기준선 행을 만든다.
 
-    windows: -58 산출물 레코드 (wiki, title, window_start, hour_of_day, edit_count, views)
+    windows: -58 산출물 레코드 (wiki, title, window_start, slot_index, edit_count, views)
     as_of  : 창의 끝(포함). None 이면 관측 중 가장 최근 날짜.
 
     [as_of-window_days, as_of] 밖의 관측은 버린다. 창 안에 관측이 하나도 없는
@@ -89,19 +90,19 @@ def build_rows(
 
     oldest = as_of.toordinal() - window_days
 
-    # (wiki, title, hour_of_day) -> [(관측일, 편집수, 조회수)]
+    # (wiki, title, slot_index) -> [(관측일, 편집수, 조회수)]
     slots: dict[tuple[str, str, int], list[tuple[date, float, float | None]]] = defaultdict(list)
     for row in rows:
         day = _day(row["window_start"])
         if not (oldest < day.toordinal() <= as_of.toordinal()):
             continue          # 28일 창 밖
         views = row.get("views")
-        slots[(row["wiki"], row["title"], int(row["hour_of_day"]))].append(
+        slots[(row["wiki"], row["title"], int(row["slot_index"]))].append(
             (day, float(row["edit_count"]), None if views is None else float(views))
         )
 
     out: list[BaselineRow] = []
-    for (wiki, title, hour), observed in sorted(slots.items()):
+    for (wiki, title, slot), observed in sorted(slots.items()):
         edits = [Observation((as_of - day).days, count) for day, count, _ in observed]
         edit_ewma, edit_stddev = ewma_mean_std(edits, halflife_days)
 
@@ -116,7 +117,7 @@ def build_rows(
         out.append(BaselineRow(
             wiki=wiki,
             title=title,
-            hour_of_day=hour,
+            slot_index=slot,
             edit_ewma=edit_ewma,
             edit_stddev=edit_stddev,
             view_ewma=view_ewma,

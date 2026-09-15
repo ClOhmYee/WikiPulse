@@ -52,9 +52,10 @@ def title(conn):
     conn.commit()
 
 
-def windows(title, edits, views=None, day="2025-06-09", hour_of_day=0):
-    return [{"wiki": "enwiki", "title": title, "hour_of_day": hour_of_day,
-             "window_start": f"{day}T00:00:00", "edit_count": edits, "views": views}]
+def windows(title, edits, views=None, day="2025-06-09", hour=0):
+    return [{"wiki": "enwiki", "title": title, "slot_index": hour // 6,
+             "window_start": f"{day}T{hour:02d}:00:00",
+             "edit_count": edits, "views": views}]
 
 
 def count_rows(conn, title) -> int:
@@ -89,7 +90,7 @@ def test_재적재가_값을_갱신하고_updated_at을_올린다(conn, title):
     before = read_row(conn, title)
     assert before[0] == pytest.approx(4.0) and before[2] == pytest.approx(10.0)
 
-    # 같은 (page_id, hour_of_day) 에 다른 값
+    # 같은 (page_id, slot_index) 에 다른 값
     load(conn, build_rows(windows(title, 9, views=99), as_of=date(2025, 6, 9)))
     after = read_row(conn, title)
     assert count_rows(conn, title) == 1
@@ -109,7 +110,8 @@ def test_wiki_page도_중복되지_않는다(conn, title):
 
 
 def test_여러_슬롯이_각각_한_행(conn, title):
-    src = windows(title, 3, hour_of_day=0) + windows(title, 5, hour_of_day=5)
+    # 0시와 6시는 6시간 슬롯에서 서로 다른 슬롯이다 (0 / 1)
+    src = windows(title, 3, hour=0) + windows(title, 5, hour=6)
     rows = build_rows(src, as_of=date(2025, 6, 9))
     assert len(rows) == 2
     load(conn, rows)

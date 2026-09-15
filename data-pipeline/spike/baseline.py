@@ -13,20 +13,20 @@
 
 입력·키 (WP-60)
     입력은 Historical Window 산출물(WP-58): (wiki, title, window_start,
-    hour_of_day, edit_count, views). 문서 키는 **(wiki, title)** 이다 — 파이프라인
+    slot_index, edit_count, views). 문서 키는 **(wiki, title)** 이다 — 파이프라인
     전체가 그렇고, wiki_page.id 해석은 적재 시점(baseline_sink.py)에 한다.
 
 두 판이 같은 값을 낸다 (2026-09-14 실측)
     같은 계산이 순수 파이썬(baseline_rows.build_rows)에도 있다. 적재 경로는 순수 판이
     쓰고, 대량 처리는 이 Spark 판이 쓴다. 🔴 둘이 갈리면 기준선이 에러 없이 달라지고
     edit_z 가 통째로 틀린다 — tests/test_baseline_spark.py 가 edit_ewma·edit_stddev·
-    view_ewma·view_stddev·sample_days·28일 경계까지 같은지 고정한다(로컬 Spark 로 실제 통과).
+    view_ewma·view_stddev·sample_days·슬롯 정의·28일 경계까지 같은지 고정한다(로컬 Spark 로 실제 통과).
     가중 정의는 ewma.py 한 곳에서만 온다.
 
 ⚠️ 입력 window_start 는 UTC 다
     세션 timeZone 을 UTC 로 두는 것만으로는 부족하다. 파이썬에서 **naive** datetime 을
     createDataFrame 에 주면 Spark 가 드라이버의 로컬 시간대로 해석해 UTC 로 옮긴다 —
-    KST 에서는 9시간 밀려 hour_of_day 가 통째로 어긋나는데 에러가 안 난다
+    KST 에서는 9시간 밀려 slot_index 가 통째로 어긋나는데 에러가 안 난다
     (2026-09-14 실제로 겪음). 타임스탬프는 tz-aware 로 넘긴다.
 """
 
@@ -40,6 +40,7 @@ from pyspark.sql import functions as F
 # ⚠️ 절대 임포트다. spark-submit 은 이 파일을 **스크립트로** 실행해서 패키지 상대
 # 임포트(`from .ewma import ...`)가 깨진다. 저장소 루트를 PYTHONPATH 에 두고 돌린다
 # (아래 실행 예). 형제 모듈(baseline_rows·baseline_sink)은 `python -m` 으로 도니 상대 임포트다.
+from batch.historical_windows import SLOT_HOURS
 from spike.baseline_rows import BASELINE_WINDOW_DAYS
 from spike.ewma import DEFAULT_HALFLIFE_DAYS
 
@@ -48,21 +49,24 @@ def env(name: str, default: str) -> str:
     return os.environ.get(name, default)
 
 
-def hour_of_day(ts_col):
-    """타임스탬프 -> 0..23 (UTC 시). batch/historical_windows.py 순수 판과 같은 정의.
+def slot_index(ts_col):
+    """타임스탬프 -> 0..3 (UTC 시 // SLOT_HOURS). 순수 판과 **같은 정의여야 한다.**
 
-    ~~요일×시간(0..167)~~ -> 시간(0..23) (2026-09-15, WP-84). 주 1회 슬롯은
-    28일 창 관측이 최대 4개라 sample_days 가 7 에 도달하지 못해 z 경로가 죽어 있었다.
+    🔴 SLOT_HOURS 는 batch/historical_windows.py 한 곳에서만 온다 — 여기 숫자를 따로
+    쓰면 두 판이 조용히 갈린다(tests/test_baseline_spark.py 가 값 일치를 고정한다).
+
+    ~~요일×시간(0..167)~~ -> 시간(0..23) (WP-84) -> **6시간 4슬롯**
+    (2026-09-15, WP-88). 근거·비용은 SLOT_HOURS 주석.
     """
-    return F.hour(ts_col)
+    return (F.hour(ts_col) / F.lit(SLOT_HOURS)).cast("int")
 
 
-GROUP_KEYS = ["wiki", "title", "hour_of_day"]
+GROUP_KEYS = ["wiki", "title", "slot_index"]
 
 
 def build_baseline(edit_windows, as_of, halflife_days=DEFAULT_HALFLIFE_DAYS,
                    window_days=BASELINE_WINDOW_DAYS):
-    """문서 × 시간대(0~23) 편집 EWMA·표준편차. baseline_rows.build_rows 의 Spark 판.
+    """문서 × 슬롯(0~3, 6시간) 편집 EWMA·표준편차. baseline_rows.build_rows 의 Spark 판.
 
     입력: (wiki, title, window_start, edit_count, views) — WP-58 산출물.
     as_of: 기준선 창의 끝(날짜 문자열 "YYYY-MM-DD"). 창은 (as_of-28일, as_of].
@@ -77,7 +81,7 @@ def build_baseline(edit_windows, as_of, halflife_days=DEFAULT_HALFLIFE_DAYS,
 
     scoped = (
         edit_windows
-        .withColumn("hour_of_day", hour_of_day(F.col("window_start")))
+        .withColumn("slot_index", slot_index(F.col("window_start")))
         .withColumn("_day", day)
         .withColumn("_age", age_days)
         # 28일 경계. 안 걸면 기준선이 소스 전체로 번져 "평소"가 아니게 된다.

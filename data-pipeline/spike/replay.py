@@ -41,7 +41,7 @@ from dataclasses import dataclass
 from datetime import date, timedelta
 from pathlib import Path
 
-from batch.historical_windows import floor_to_hour, hour_of_day, is_bot_edit
+from batch.historical_windows import floor_to_hour, is_bot_edit, slot_index
 from producer.normalize import canonical_title
 from .baseline_rows import BASELINE_WINDOW_DAYS, build_rows
 from .detector import Baseline, SpikeDecision, Window, detect
@@ -62,8 +62,8 @@ class Observation:
         return date.fromisoformat(self.window_start[:10])
 
     @property
-    def hour_of_day(self) -> int:
-        return hour_of_day(self.window_start)
+    def slot_index(self) -> int:
+        return slot_index(self.window_start)
 
 
 @dataclass(frozen=True)
@@ -125,7 +125,7 @@ def aggregate(events: Iterable[dict], titles: set[str]) -> dict[str, list[Observ
 def _as_windows(observations: Iterable[Observation]) -> list[dict]:
     """build_rows 가 먹는 형태로. 조회수는 이 경로에 없다(편집 덤프만)."""
     return [{"wiki": o.wiki, "title": o.title, "window_start": o.window_start,
-             "hour_of_day": o.hour_of_day, "edit_count": o.edit_count, "views": None}
+             "slot_index": o.slot_index, "edit_count": o.edit_count, "views": None}
             for o in observations]
 
 
@@ -140,7 +140,7 @@ def baseline_at(
     as_of = target.day - timedelta(days=1)
     oldest = as_of - timedelta(days=BASELINE_WINDOW_DAYS)
     prior = [o for o in observations
-             if o.hour_of_day == target.hour_of_day and oldest < o.day <= as_of]
+             if o.slot_index == target.slot_index and oldest < o.day <= as_of]
     if not prior:
         return None          # 그 슬롯에 과거 관측이 없다 -> 신규 문서 경로
 

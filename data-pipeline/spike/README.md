@@ -6,7 +6,7 @@
 
 ```
 28일 기준선 (baseline.py, Spark 배치)
-   문서 × 시간대(0..23, UTC) EWMA
+   문서 × 6시간 슬롯(0..3, UTC) EWMA
         │
         ▼
 급증 판정 (detector.py, 순수 함수)
@@ -58,6 +58,44 @@ baseline이 없다 — z를 못 낸다. 신규 문서는 절대 편집수로만 
 ⚠️ 남은 후속: **6시간 창**
 (재현율 92%·오탐 40건). 창 길이는 스트리밍 `WINDOW_SIZE` 와 함께 움직여야 해서
 **WP-83 이 선행**이다 — 배치만 바꾸면 `edit_z` 가 에러 없이 어긋난다.
+
+
+## 슬롯 폭 — 6시간 4슬롯 (WP-88, 2026-09-15 실측)
+
+`SLOT_HOURS = 6` (`batch/historical_windows.py` 한 곳에서만 온다). ~~168 → 24~~ → **4**.
+
+**왜 또 넓혔나.** 24슬롯도 얇았다. 실덤프 2025-06·2024-10 (두 달 1pp 이내 일치):
+
+| 슬롯 | 슬롯당 `sample_days>=7` | 문서 중 1개라도 |
+| --- | --- | --- |
+| 1h (24) | 1.5% | 4.8% |
+| 3h (8) | 5.4% | 13.7% |
+| **6h (4)** | **13.0%** | **25.2%** |
+| 일 (1) | 58.1% | 58.1% |
+
+월 편집 수 구간별(1h): 20~49편집 **0.8%** · 100~299편집 39.9% · 300~999편집 83.3%.
+즉 **24슬롯 z 경로는 월 300편집 이상 문서 전용**이었다.
+
+**일 단위까지 안 간 이유**: 하루를 통으로 묶으면 시간대 패턴을 전부 버린다. 6시간이면
+새벽·오전·오후·저녁 네 구간이 남는다. 도달률 58% 대 25% 를 그 대가로 포기했다.
+
+**무엇을 잃나** (같은 관측에 1h·6h 기준선을 각각 물림, 965문서 2,134윈도우):
+
+- z 경로 가능 482(23%) → **1,726(81%)**
+- 둘 다 가능한 479 윈도우에서 임계 판정 **일치 469 (97.9%)** — 불일치 10건(1h만 7·6h만 3)
+- z 차이(6h−1h) 중앙값 +0.07 · 범위 −11.53 ~ +1.69
+
+### 🔴 기대했던 오탐 감소는 없었다
+
+-85 재현율 10/12 그대로, 대조군 오탐 **49건 그대로**. 폭 2·3·4·6·12h 를 쓸어봐도 42~51
+범위의 잡음이다.
+
+원인을 확인했다 — `Deaths_in_2024` 오탐 23건 중 **21건이 z 경로를 통과한다.** 상시 편집
+목록 문서는 자기 기준선 대비로도 진짜로 튄다. **z 를 살려도 안 걸린다.**
+
+즉 이 변경의 성과는 **구조 교정**(죽어 있던 `EDIT_Z_THRESHOLD` 가 실제로 돈다)이지
+오탐 개선이 아니다. 오탐의 남은 지렛대는 -88 선택지 4번 — 신규 문서 경로를
+"진짜 신규" 와 "관측이 드문 기존 문서" 로 쪼개는 것이다.
 
 ## 조회수 **데이터**는 늦게 온다 (신호가 늦다는 뜻이 아니다)
 
@@ -125,7 +163,7 @@ z 를 못 내면 "평소의 2배"만으로 발동해서다 — 여태 `VIEW_Z_TH
 
 ```bash
 cd data-pipeline/spike
-python -m pytest        # 73개. 47개는 Spark·DB 없이, 5개는 실 PostgreSQL, 5개는 Spark 대조
+python -m pytest        # 80개. 47개는 Spark·DB 없이, 5개는 실 PostgreSQL, 5개는 Spark 대조
                         # (PG·Spark 가 없으면 그 10개는 skip 된다)
 ```
 
@@ -163,13 +201,13 @@ python -m spike.ewma_compare --input ./data/baseline-input/enwiki/2025-06   # �
 Historical Window 산출물(WP-58)에서 `page_baseline` 행을 만들어 적재한다.
 
 ```
-(wiki,title,window_start,hour_of_day,edit_count,editor_count,views)   ← -58 산출물
+(wiki,title,window_start,slot_index,edit_count,editor_count,views)   ← -58 산출물
         │  baseline_rows.py  — 28일 창 · ewma.py 가중 · sample_days
         ▼
-(wiki,title,hour_of_day, edit_ewma, edit_stddev, view_ewma, sample_days)
+(wiki,title,slot_index, edit_ewma, edit_stddev, view_ewma, view_stddev, sample_days)
         │  baseline_sink.py  — (wiki,title) → wiki_page.id · upsert
         ▼
-page_baseline  PK (page_id, hour_of_day)
+page_baseline  PK (page_id, slot_index)
 ```
 
 ```bash
@@ -215,7 +253,7 @@ upsert 가 필요해 `baseline_sink.py` 가 맡는다. 거기 `SINK` 는 진단 
 
 **naive datetime 을 `createDataFrame` 에 주면 9시간 밀린다.** 세션
 `timeZone=UTC` 는 이걸 막아주지 않는다 — 드라이버의 로컬 시간대(KST)로 해석해 UTC 로
-옮긴다. `hour_of_day` 가 0 대신 15 가 되는데 **에러가 안 난다.** 타임스탬프는
+옮긴다. `slot_index` 가 0 대신 2 가 되는데 **에러가 안 난다.** 타임스탬프는
 tz-aware 로 넘긴다.
 
 ## 리플레이 회귀 검증 (WP-61)
@@ -257,6 +295,9 @@ WP-38 의 임계는 **조회수**로 정한 것이고 편집 분포로는 검증
   MIN_BASELINE_SAMPLE_DAYS=7` → 기존 문서도 항상 `is_thin` → **z 경로가 한 번도 실행되지 않는다**
   → ✅ **해소됨** (2026-09-15, WP-84). 슬롯을 `hour_of_day`(0~23)로 바꿔 같은 슬롯이
   매일 오므로 28일 창에서 최대 28관측이 된다. `V3__baseline_hour_of_day.sql`
+  → ⚠️ **그래도 얇았다** (2026-09-15, WP-88). 24슬롯 도달률이 슬롯당 1.5% 뿐이라
+  z 경로가 사실상 월 300편집 이상 문서 전용이었다. **6시간 4슬롯**(`slot_index`)으로 다시
+  넓혔다 — `V5__baseline_slot_index.sql`. 아래 "슬롯 폭" 절.
 
 → **WP-84**(sample_days 구조적 미달)·**WP-85**(임계 재검토). 근거는 명세 §11.
 

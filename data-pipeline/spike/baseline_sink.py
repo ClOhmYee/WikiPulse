@@ -13,7 +13,7 @@
     wiki_page 에 안 들어온 문서에서 기준선만 통째로 버려지지 않게.
 
 멱등성
-    page_baseline PK 는 (page_id, hour_of_day) 다. 같은 키가 오면 값을 갱신하고
+    page_baseline PK 는 (page_id, slot_index) 다. 같은 키가 오면 값을 갱신하고
     updated_at 을 새로 찍는다. 같은 입력을 두 번 돌려도 행이 늘지 않는다.
     ⚠️ 실 PostgreSQL 로 멱등성을 확인한 기록은 아직 없다 — README 참고.
 """
@@ -43,10 +43,10 @@ RETURNING id
 
 UPSERT_BASELINE_SQL = """
 INSERT INTO page_baseline
-    (page_id, hour_of_day, edit_ewma, edit_stddev, view_ewma, view_stddev,
+    (page_id, slot_index, edit_ewma, edit_stddev, view_ewma, view_stddev,
      sample_days, updated_at)
 VALUES (%s, %s, %s, %s, %s, %s, %s, now())
-ON CONFLICT (page_id, hour_of_day) DO UPDATE SET
+ON CONFLICT (page_id, slot_index) DO UPDATE SET
     edit_ewma   = EXCLUDED.edit_ewma,
     edit_stddev = EXCLUDED.edit_stddev,
     view_ewma   = EXCLUDED.view_ewma,
@@ -80,7 +80,7 @@ def resolve_page_ids(cur, keys: Iterable[tuple[str, str]]) -> dict[tuple[str, st
 def upsert_rows(cur, rows: Iterable[BaselineRow], page_ids: dict[tuple[str, str], int]) -> int:
     """기준선 행들을 page_baseline 에 upsert 한다. 반환: 쓴 행 수."""
     params = [
-        (page_ids[(row.wiki, row.title)], row.hour_of_day,
+        (page_ids[(row.wiki, row.title)], row.slot_index,
          row.edit_ewma, row.edit_stddev, row.view_ewma, row.view_stddev,
          row.sample_days)
         for row in rows

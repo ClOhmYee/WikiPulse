@@ -5,9 +5,9 @@
 지금 이 형태를 만드는 코드가 없어 baseline 배치가 통째로 no-op 이다.
 
 산출 형태 (한 행)
-    (wiki, title, window_start, hour_of_day, edit_count, editor_count, views)
+    (wiki, title, window_start, slot_index, edit_count, editor_count, views)
       window_start : 1시간 정각 UTC "YYYY-MM-DDTHH:00:00"
-      hour_of_day  : 0..23 (UTC 시). baseline 이 이 슬롯으로 평소를 잡는다
+      slot_index   : 0..3 (UTC 시 // 6). baseline 이 이 슬롯으로 평소를 잡는다
       edit_count   : 그 문서·그 시간의 봇 제외 편집 수
       editor_count : 그 윈도우의 서로 다른 편집자 수. 급증 판정의 편집자 하한
                      (detector.MIN_DISTINCT_EDITORS, WP-85)이 이 값을 본다.
@@ -22,8 +22,8 @@
 
 🔴 집계 계약은 스트리밍(streaming/edit_windows.py)과 한 벌이어야 한다 (§AC)
     - **윈도우 길이 = 1시간.** 스트리밍 WINDOW_SIZE 와 일치시킨다. 다르면 edit_z 가
-      통째로 어긋나는데 에러 없이 숫자만 틀린다. baseline 은 24 슬롯(hour_of_day)이라
-      1시간이 자연스러운 정합값이다.
+      통째로 어긋나는데 에러 없이 숫자만 틀린다. baseline 은 4 슬롯(slot_index)이라
+      1시간이 자연스러운 정합값이다(슬롯 폭 6시간과 별개다).
     - **봇 필터 = is_bot 참인 편집 제외.** 스트리밍의 `~coalesce(is_bot, False)` 와 같다.
     - **문서 키 = (wiki, title), title 은 canonical 공백형.** -56·-57 과 같다.
       dump page_id 는 쓰지 않는다 — wiki_page.id 해석은 적재(WP-60) 책임.
@@ -42,7 +42,7 @@
     HDFS 2노드(WP-28)·Spark 2노드(WP-27)가 아직 없다. 형제 적재
     (-56·-57)와 같이 순수 파이썬으로 두어 인프라 없이 파싱·집계·테스트가 돌게 한다.
     parquet 출력과 "배치==스트리밍" 대조는 인프라가 서면 잇는다(아래 CLI·README).
-    hour_of_day 정의는 spike/baseline.py 의 Spark 판과 반드시 같아야 한다(UTC 시).
+    slot_index 정의는 spike/baseline.py 의 Spark 판과 반드시 같아야 한다(UTC 시 // SLOT_HOURS).
 """
 
 from __future__ import annotations
@@ -53,8 +53,30 @@ from datetime import datetime
 
 from producer.normalize import canonical_title
 
-#: 집계 윈도우(시간). 스트리밍 WINDOW_SIZE 와 맞춘다. baseline 24 슬롯의 입도.
+#: 집계 윈도우(시간). 스트리밍 WINDOW_SIZE 와 맞춘다.
+#: ⚠️ 슬롯 폭(SLOT_HOURS)과 다른 값이다 — 윈도우는 "얼마나 자주 집계하나", 슬롯은
+#: "기준선을 어떤 단위로 묶나". -84 도 윈도우는 1시간 그대로 두고 슬롯만 바꿨다.
 WINDOW_HOURS = 1
+
+#: 기준선 슬롯 폭(시간). 하루가 24/SLOT_HOURS 개 슬롯으로 나뉜다.
+#: ~~요일×시간 168~~ → 시간 24 (WP-84) → **6시간 4슬롯** (2026-09-15, WP-88).
+#:
+#: 왜 또 넓혔나 — 24 슬롯도 여전히 얇았다. 실덤프 전수 측정(2025-06·2024-10):
+#:     슬롯당 sample_days>=7 도달률   1h 1.5% / 3h 5.4% / 6h 13.0% / 일 58.1%
+#:     문서 중 1개라도 통과           1h 4.8% / 3h 13.7% / 6h 25.2% / 일 58.1%
+#: 월 편집 수 구간별로는 20~49편집 0.8% · 100~299편집 39.9% · 300~999편집 83.3% —
+#: 즉 24 슬롯의 z 경로는 **월 300편집 이상 문서 전용**이었다. 두 달 값이 1pp 이내로 일치.
+#:
+#: 왜 일 단위(1슬롯)까지 안 갔나 — 하루를 통으로 묶으면 시간대 패턴을 전부 버린다.
+#: 6시간이면 새벽·오전·오후·저녁 네 구간이 남아 일주기 모양을 유지한다.
+#:
+#: 무엇을 잃나 (같은 관측에 1h·6h 기준선을 각각 물려 실측, 2025-06 월 100편집 이상 965문서)
+#:     판정 대상 2,134 윈도우 중 z 경로 가능: 1h 482 (23%) -> 6h 1,726 (81%)
+#:     둘 다 z 가능한 479 윈도우에서 임계 판정 **일치 469 (97.9%)**
+#:     불일치 10건 — 1h만 급증 7 · 6h만 급증 3
+#:     z 차이(6h-1h) 중앙값 +0.07 · 평균 -0.10 · 범위 -11.53 ~ +1.69
+#: 얻는 쪽(1,244 윈도우가 z 경로로 진입)이 잃는 쪽(겹치는 구간에서 2.1% 불일치)보다 크다.
+SLOT_HOURS = 6
 
 
 @dataclass(frozen=True)
@@ -63,7 +85,7 @@ class WindowRow:
     wiki: str
     title: str
     window_start: str    # "YYYY-MM-DDTHH:00:00" (UTC)
-    hour_of_day: int      # 0..23 (UTC 시)
+    slot_index: int       # 0..3 (UTC 시 // SLOT_HOURS)
     edit_count: int
     editor_count: int
     views: int
@@ -80,17 +102,15 @@ def floor_to_hour(ts: str) -> str:
     return f"{dt.year:04d}-{dt.month:02d}-{dt.day:02d}T{dt.hour:02d}:00:00"
 
 
-def hour_of_day(hour_ts: str) -> int:
-    """정각 타임스탬프 → 0..23 (UTC 시).
+def slot_index(hour_ts: str) -> int:
+    """정각 타임스탬프 → 0..3 (UTC 시 // SLOT_HOURS).
 
     🔴 spike/baseline.py 의 Spark 판과 같은 정의여야 한다.
 
-    ~~요일×시간(0..167)~~ → 시간(0..23) (2026-09-15, WP-84). 주 1회 오는 슬롯은
-    28일 창에서 관측이 최대 4개뿐이라 sample_days 가 MIN_BASELINE_SAMPLE_DAYS(7) 에
-    구조적으로 도달하지 못했다 — 기존 문서도 항상 is_thin 이라 z 경로가 죽어 있었다.
-    대신 "요일을 크게 탄다"는 168 슬롯의 근거는 포기한다(명세 §11 실측에서 이득이 더 컸다).
+    ~~요일×시간(0..167)~~ → 시간(0..23) (WP-84) → **6시간 4슬롯**
+    (2026-09-15, WP-88). 넓힌 근거·비용은 SLOT_HOURS 주석에 있다.
     """
-    return _parse_iso(hour_ts).hour
+    return _parse_iso(hour_ts).hour // SLOT_HOURS
 
 
 def is_bot_edit(rec: dict) -> bool:
@@ -154,7 +174,7 @@ def join_windows(
             wiki=wiki,
             title=title,
             window_start=window_start,
-            hour_of_day=hour_of_day(window_start),
+            slot_index=slot_index(window_start),
             edit_count=edits,
             editor_count=editors,
             views=view_totals.get(key, 0),
