@@ -1,22 +1,46 @@
-import { test, expect } from '@playwright/test';
-import { events } from '../src/data/mock/fixtures/catalog.js';
+import { test, expect } from "@playwright/test";
 
-test('issue presentation preserves query, sorting and saved state', async ({ page }) => {
-  await page.goto('/#/issues');
-  await page.getByRole('textbox', { name: '사건 검색', exact: true }).fill('호르무즈');
-  await page.getByRole('combobox', { name: '사건 정렬' }).selectOption('recent');
-  await expect(page.locator('.event-row')).toHaveCount(events.filter(e => e.title.includes('호르무즈')).length);
-  const row = page.locator('.event-row').first();
-  await row.getByRole('button', { name: /저장/ }).click();
-  await page.getByRole('button', { name: '카드', exact: true }).click();
-  await expect(page.locator('.event-list')).toHaveAttribute('data-view', 'card');
-  await expect(row.getByRole('button', { name: /저장 해제/ })).toHaveAttribute('aria-pressed', 'true');
-  await page.getByRole('button', { name: '리스트', exact: true }).click();
-  await expect(page.locator('.event-list')).toHaveAttribute('data-view', 'list');
-  await expect(page.getByRole('textbox', { name: '사건 검색', exact: true })).toHaveValue('호르무즈');
-  await expect(page.getByRole('combobox', { name: '사건 정렬' })).toHaveValue('recent');
-  await page.goto('/#/pulse');
-  await expect(page.getByRole('heading', { name: '세상의 변화가 모이는 곳' })).toBeVisible();
-  await expect(page.locator('[aria-label="탐색 보기"]')).toHaveCount(0);
-  await expect(page.getByRole('button', { name: '카드', exact: true })).toHaveCount(0);
+test("issue pagination, view mode, local title search and server filters state their scope", async ({
+  page,
+}) => {
+  await page.goto("/#/issues");
+  await expect(page.locator(".event-row")).toHaveCount(20);
+  await expect(
+    page.getByRole("navigation", { name: "목록 페이지" }),
+  ).toContainText("전체 36개");
+  await page.getByRole("button", { name: "카드", exact: true }).click();
+  await expect(page.locator(".event-list")).toHaveAttribute(
+    "data-view",
+    "card",
+  );
+  await page.getByRole("button", { name: "다음 페이지", exact: true }).click();
+  await expect(page.locator(".event-row")).toHaveCount(16);
+  await expect(page.locator(".event-list")).toHaveAttribute(
+    "data-view",
+    "card",
+  );
+  await page
+    .getByRole("textbox", { name: "사건 검색", exact: true })
+    .fill("no-such-title");
+  await expect(
+    page.getByRole("heading", {
+      name: "현재 페이지에서 일치하는 사건이 없습니다",
+    }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "필터 초기화", exact: true }).click();
+  await expect(page.locator(".event-row")).toHaveCount(20);
+  await page
+    .getByRole("combobox", { name: "데이터 출처", exact: true })
+    .selectOption("live");
+  await expect(
+    page.getByRole("heading", { name: "이 조건에 해당하는 사건이 없습니다" }),
+  ).toBeVisible();
+  await page
+    .getByRole("combobox", { name: "데이터 출처", exact: true })
+    .selectOption("replay");
+  await expect(page.locator(".event-row")).toHaveCount(20);
+  await page.getByRole("button", { name: "급증 점수란?", exact: true }).click();
+  await expect(page.locator(".wp-explainer")).toContainText(
+    "AI 검증의 확률이 아닙니다",
+  );
 });
