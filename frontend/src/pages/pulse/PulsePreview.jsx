@@ -1,4 +1,4 @@
-import { ArrowRight, Bookmark, ExternalLink } from "lucide-react";
+import { ArrowRight, Bookmark, ExternalLink, X } from "lucide-react";
 import { CategoryTag } from "../../components/ui/CategoryTag";
 import { getIssueCategory } from "../../data/categories.js";
 import { isNewIssue, kstTimestamp } from "../../data/pulse/time.js";
@@ -6,14 +6,6 @@ import { IssueState } from "../../components/event/IssueState";
 export function SignalBadges({ cluster, meta }) {
   return (
     <span className="pulse-badges">
-      {cluster.hot && (
-        <span
-          className="pulse-badge pulse-badge--hot"
-          title="이 시점에 급증 판정을 통과했습니다"
-        >
-          HOT
-        </span>
-      )}
       {isNewIssue(
         cluster.firstDetectedAt,
         meta.snapshotTs,
@@ -42,6 +34,7 @@ export default function PulsePreview({
   onNodeSelect,
   savedEvents,
   onToggleEvent,
+  onClose,
 }) {
   const node = cluster?.nodes.find((v) => v.pageId === nodeId);
   const savedKey =
@@ -71,6 +64,15 @@ export default function PulsePreview({
         <>
           <div className="signal-preview__top">
             <CategoryTag category={getIssueCategory(cluster.category)} />
+            {onClose && (
+              <button
+                className="wp-icon-button"
+                onClick={onClose}
+                aria-label="클러스터 정보 닫기"
+              >
+                <X size={18} />
+              </button>
+            )}
             <button
               className="wp-icon-button"
               onClick={() => onToggleEvent(savedKey || cluster.id)}
@@ -102,6 +104,14 @@ export default function PulsePreview({
               ? kstTimestamp(cluster.firstDetectedAt)
               : "미제공"}
           </p>
+          <a
+            className="wp-button"
+            data-variant="primary"
+            href={`#/issues/${encodeURIComponent(cluster.id)}`}
+          >
+            이슈 리포트 보기
+            <ArrowRight size={16} />
+          </a>
           <h3>구성 문서</h3>
           <div className="pulse-document-list" aria-label="구성 문서 선택">
             {cluster.nodes.map((v) => (
@@ -191,14 +201,6 @@ export default function PulsePreview({
               )}
             </section>
           )}
-          <a
-            className="wp-button"
-            data-variant="primary"
-            href={`#/issues/${encodeURIComponent(cluster.id)}`}
-          >
-            사건 자세히 보기
-            <ArrowRight size={16} />
-          </a>
         </>
       )}
       <p className="pulse-preview__timestamp">

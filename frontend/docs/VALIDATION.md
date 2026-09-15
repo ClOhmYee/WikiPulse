@@ -1,5 +1,17 @@
 # 프론트엔드 검증 기록
 
+## 2026-09-15 — NEW 중심 펄스맵과 전체화면 탐색
+
+대상: WP-101. 프론트엔드 표시·배치·탐색 변경이며 서버의 HOT/NEW 데이터 계약은 유지한다.
+
+- lint, build, 변경 파일 Prettier, `git diff --check` 통과. 기존 Onboarding 906.71 kB 청크 경고 유지.
+- `test:data` 27개 통과: 500노드 배치, 점수에 따른 반지름, 중요도와 중심 거리, 클러스터 충돌 방지, 과거 탐색 순서와 무관한 순위 검증.
+- `test:contract` 통과: 8개 GET·24개 스키마·290개 응답, 375개 스냅샷 및 부하 그래프.
+- `playwright test e2e/pulse.spec.js` 3개 통과: NEW만 표시, NEW가 없는 시점, 날짜 탐색, 일반·전체화면 패널의 리포트 이동, 오른쪽 패널, Esc/닫기/포커스 복귀, 모바일 표시.
+- `playwright test --config playwright.api.config.js pulse.spec.js` 5개 통과: **HTTP 가로채기**로 숫자 ID 이동·nullable 필드·응답 경합·오류 복구·500노드/1,000간선 선택 검증. 실제 Spring/DB를 호출하지 않았다.
+- 1440px 데스크톱 및 390px 모바일의 일반/전체화면 캡처 확인. Impeccable 스캔은 기존 지도 색상과 전체화면 배경 dim 처리의 DESIGN.md 팔레트 advisory를 보고했다. 기존 화면 색상 유지와 배경 구분을 위한 의도된 선택이다.
+- Playwright의 테스트 본문 완료 후 Windows 샌드박스에서 Vite 종료가 대기하여, 이번 검증에서 생성한 서버만 별도로 종료했다.
+
 ## 2026-09-15 — 실제 8개 GET DTO와 mock/API 화면 정합
 
 대상: WP-95/-96/-97/-98. Spring 코드 기준 `f3c0160`, Windows · Node.js 24.18.0 · Playwright Chromium. 현재 연결 계약은 [API_SPEC.md](API_SPEC.md), 남은 서버/AI 협의는 [API_DECISIONS.md](../../docs/frontend/API_DECISIONS.md)를 따른다. 아래 과거 날짜의 기록은 당시 실행 결과이며 현재 API·화면 범위가 아니다.
