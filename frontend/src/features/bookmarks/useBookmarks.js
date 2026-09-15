@@ -1,4 +1,7 @@
 import { useRef, useState } from "react";
+// Local examples and backend IDs belong to different datasets.
+const storagePrefix =
+  import.meta.env.VITE_DATA_SOURCE === "api" ? "wikipulse.api" : "wikipulse";
 function readSaved(key) {
   try {
     const data = JSON.parse(localStorage.getItem(key) || "[]");
@@ -11,24 +14,25 @@ function readSaved(key) {
 }
 export function useBookmarks() {
   const [savedEvents, setSavedEvents] = useState(() =>
-    readSaved("wikipulse.savedEvents"),
+    readSaved(`${storagePrefix}.savedEvents`),
   );
   const [savedStocks, setSavedStocks] = useState(() =>
-    readSaved("wikipulse.savedStocks"),
+    readSaved(`${storagePrefix}.savedStocks`),
   );
   const current = useRef({ events: savedEvents, stocks: savedStocks });
   const [notice, setNotice] = useState("");
-  function toggleSaved(id, type) {
+  function toggleSaved(id, type, aliases = []) {
     const previous = current.current[type];
-    const existed = previous.includes(id);
+    const matchingIds = new Set([id, ...aliases]);
+    const existed = previous.some((value) => matchingIds.has(value));
     const next = existed
-      ? previous.filter((value) => value !== id)
+      ? previous.filter((value) => !matchingIds.has(value))
       : [...previous, id];
     current.current[type] = next;
     (type === "events" ? setSavedEvents : setSavedStocks)(next);
     try {
       localStorage.setItem(
-        type === "events" ? "wikipulse.savedEvents" : "wikipulse.savedStocks",
+        `${storagePrefix}.${type === "events" ? "savedEvents" : "savedStocks"}`,
         JSON.stringify(next),
       );
       setNotice(
@@ -45,7 +49,7 @@ export function useBookmarks() {
     savedStocks,
     notice,
     setNotice,
-    onToggleEvent: (id) => toggleSaved(id, "events"),
+    onToggleEvent: (id, aliases) => toggleSaved(id, "events", aliases),
     onToggleStock: (id) => toggleSaved(id, "stocks"),
   };
 }

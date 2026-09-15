@@ -1,10 +1,47 @@
 import { ArrowDown, ArrowRight, ArrowUp, Bookmark } from "lucide-react";
+import { metricLabel } from "../event/presentation.js";
 export const RELATION_LABELS = {
-  direct: "직접 언급",
-  industry: "산업·기술",
-  supply: "공급망",
-  region: "지역 노출",
+  DIRECT_MENTION: "직접 언급",
+  PRODUCT_INDUSTRY: "제품·산업",
+  SUPPLY_CHAIN: "공급망",
+  REGION: "지역 노출",
 };
+
+const TIER_LABELS = {
+  BOTH: "임베딩 · GDELT",
+  GDELT_ONLY: "GDELT",
+  EMBEDDING_ONLY: "임베딩",
+};
+
+export function MatchEvidence({ relation }) {
+  if (!relation)
+    return (
+      <p className="wp-muted">이 연결의 상세 근거는 제공되지 않았습니다.</p>
+    );
+  return (
+    <div className="st-relationship">
+      <div className="st-relationship-heading">
+        <span>{RELATION_LABELS[relation.matchPath] || "연결 유형 미제공"}</span>
+      </div>
+      <p>{relation.rationale || "연결 설명 미제공"}</p>
+      {relation.tier && (
+        <p className="wp-small">
+          후보 탐색 경로: {TIER_LABELS[relation.tier] || relation.tier}
+        </p>
+      )}
+      {(relation.similarity != null || relation.gdeltLift != null) && (
+        <p className="wp-small">
+          {relation.similarity != null && (
+            <span>임베딩 유사도 {metricLabel(relation.similarity, 3)} </span>
+          )}
+          {relation.gdeltLift != null && (
+            <span>GDELT 동시출현 {metricLabel(relation.gdeltLift)}배</span>
+          )}
+        </p>
+      )}
+    </div>
+  );
+}
 
 export function isSaved(savedStocks, symbol) {
   return savedStocks instanceof Set
@@ -13,7 +50,8 @@ export function isSaved(savedStocks, symbol) {
 }
 
 export function priceLabel(stock) {
-  if (typeof stock.price !== "number") return "—";
+  if (typeof stock.price !== "number" || !Number.isFinite(stock.price))
+    return "미제공";
   const isKorean =
     stock.currency === "KRW" ||
     /KRX|KOSPI|KOSDAQ/.test(stock.market) ||
@@ -70,7 +108,7 @@ export function SaveButton({
 }
 
 export function PriceChange({ value }) {
-  if (typeof value !== "number") return <span className="wp-muted">—</span>;
+  if (typeof value !== "number" || !Number.isFinite(value)) return null;
   const Direction = value < 0 ? ArrowDown : ArrowUp;
   return (
     <span

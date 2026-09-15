@@ -21,8 +21,16 @@ export function useGlobalSearch(query) {
       });
       signal.throwIfAborted();
       return (
-        await dataClient.searchWorkspace({ q: term, limit: 7 }, { signal })
-      ).data;
+        await dataClient.listStocks(
+          { q: term, offset: 0, limit: 7 },
+          { signal },
+        )
+      ).data.map((stock) => ({
+        kind: "stock",
+        id: stock.ticker,
+        title: `${stock.ticker} · ${stock.name}`,
+        detail: [stock.exchange, stock.sector].filter(Boolean).join(" · "),
+      }));
     },
     [term],
   );

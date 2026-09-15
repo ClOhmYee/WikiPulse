@@ -2,6 +2,7 @@ import { ArrowRight, Bookmark, ExternalLink } from "lucide-react";
 import { CategoryTag } from "../../components/ui/CategoryTag";
 import { getIssueCategory } from "../../data/categories.js";
 import { isNewIssue, kstTimestamp } from "../../data/pulse/time.js";
+import { IssueState } from "../../components/event/IssueState";
 export function SignalBadges({ cluster, meta }) {
   return (
     <span className="pulse-badges">
@@ -43,6 +44,11 @@ export default function PulsePreview({
   onToggleEvent,
 }) {
   const node = cluster?.nodes.find((v) => v.pageId === nodeId);
+  const savedKey =
+    cluster &&
+    [cluster.id, ...(cluster.aliases || [])].find((id) =>
+      savedEvents.includes(id),
+    );
   const links =
     cluster?.edges.filter(
       (v) => v.sourcePageId === nodeId || v.targetPageId === nodeId,
@@ -67,25 +73,19 @@ export default function PulsePreview({
             <CategoryTag category={getIssueCategory(cluster.category)} />
             <button
               className="wp-icon-button"
-              onClick={() => onToggleEvent(cluster.id)}
-              aria-pressed={savedEvents.includes(cluster.id)}
+              onClick={() => onToggleEvent(savedKey || cluster.id)}
+              aria-pressed={Boolean(savedKey)}
               aria-label={
-                savedEvents.includes(cluster.id)
-                  ? "선택한 사건 저장 해제"
-                  : "선택한 사건 저장"
+                savedKey ? "선택한 사건 저장 해제" : "선택한 사건 저장"
               }
             >
-              <Bookmark
-                size={18}
-                fill={
-                  savedEvents.includes(cluster.id) ? "currentColor" : "none"
-                }
-              />
+              <Bookmark size={18} fill={savedKey ? "currentColor" : "none"} />
             </button>
           </div>
           <SignalBadges cluster={cluster} meta={meta} />
+          <IssueState status={cluster.status} />
           <h2>{cluster.label}</h2>
-          <p>{cluster.summary || "이 시점의 요약이 아직 없습니다."}</p>
+          <p>{cluster.summary || "이 시점의 요약이 제공되지 않았습니다."}</p>
           <dl className="pulse-metrics">
             <div>
               <dt>이슈 급증 점수</dt>
