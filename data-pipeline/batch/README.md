@@ -154,7 +154,7 @@ shard 개수가 곧 Spark 태스크 수의 상한인데, **실제 Spark 실행 �
 
 ```bash
 cd data-pipeline/batch
-../.venv/Scripts/python.exe -m pytest       # 87개 (mediawiki + clickstream + pageview + historical-window), 네트워크 없이
+../.venv/Scripts/python.exe -m pytest       # 88개 (mediawiki + clickstream + pageview + historical-window), 네트워크 없이
 ```
 
 확인하는 것:
@@ -312,7 +312,7 @@ python -m batch.pageview_ingest --wiki enwiki --date 2025-06-12 --agents user,au
 
 ```
 edit_event JSONL.gz (-56) ┐
-                          ├─▶ (wiki, title, window_start, hour_of_week, edit_count, views) JSONL.gz
+                          ├─▶ (wiki, title, window_start, hour_of_week, edit_count, editor_count, views) JSONL.gz
 pageview JSONL.gz  (-57) ┘        1시간 윈도우 · 봇 제외 편집 · agent 가로질러 조회 합산
 ```
 
@@ -337,6 +337,9 @@ python -m batch.historical_windows_ingest \
 - **윈도우 = 1시간.** 스트리밍 `WINDOW_SIZE` 와 맞춘다. baseline 은 168 슬롯(`hour_of_week`)이라
   1시간이 자연스러운 정합값이다.
 - **봇 필터 = `is_bot` 참 편집 제외.** 스트리밍 `~coalesce(is_bot, False)` 와 같은 판정.
+- **`editor_count` 를 함께 센다** (WP-85). 급증 판정의 편집자 하한이 이 값을 본다.
+  ⚠️ 스트리밍은 `approx_count_distinct`(근사), 배치는 정확값이다 — 편집자 1~10명 구간에서
+  두 값이 **불일치 0건**으로 일치함을 실측했다(2026-09-15).
 - **문서 키 = `(wiki, title)`.** -56·-57 과 같다. dump page_id 는 안 쓴다 — `wiki_page.id`
   해석은 적재(WP-60) 책임.
 - **`hour_of_week` 정의(월 00시 UTC = 0)는 `spike/baseline.py` 의 Spark 판과 같아야 한다.**
