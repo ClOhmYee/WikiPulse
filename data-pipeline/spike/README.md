@@ -10,7 +10,7 @@
         │
         ▼
 급증 판정 (detector.py, 순수 함수)
-   기존 문서: 편집 z≥3 AND ≥10건 AND 편집자≥2  →  조회수 z≥3 AND ≥2배
+   기존 문서: (편집 z≥3 AND ≥10건 AND 편집자≥2)  OR  (조회수 z≥3 AND ≥2배)
    신규 문서: 절대 편집수 ≥10 AND 편집자≥2 (baseline 없음)
 ```
 
@@ -99,7 +99,16 @@ python -m spike.signal_lag --edits ./out/enwiki/2025-05 --edits ./out/enwiki/202
   아예 없다 — `Hurricane_Milton`·`Air_India_Flight_171` 의 조회수 미탐은 임계 문제가 아니다.
 
 그래서 **조회수를 전면 1차로 뒤집는 안은 채택 불가**다(신규 문서를 통째로 놓친다).
-권고는 기존 문서 경로만 AND → OR. 결정은 팀 대기 — 명세 §10.
+✅ **기존 문서 경로만 AND → OR 로 확정** (2026-09-15, WP-90).
+
+전환하며 `page_baseline.view_stddev` 를 새로 만들었다(`V4`). 조회수가 단독 트리거가 되는데
+z 를 못 내면 "평소의 2배"만으로 발동해서다 — 여태 `VIEW_Z_THRESHOLD` 는 선언만 되고
+쓰이지 않았다. `view_stddev` 가 NULL 인 행(마이그레이션 직후)은 조회수 단독 발동을 안 한다.
+
+⚠️ **잃은 것**: "편집만 튀고 조회수가 안 따라오면 버린다"는 컷. 그 일은 편집자 하한이
+맡는다(위 절) — 다만 그 대체는 **리플레이로 확인이 안 된다**(편집 덤프에 조회수가 없다).
+실덤프 4개월 재생 결과는 전환 전후 **완전 동일**했고(재현율 10/12), 그건 `views=None` 이라
+편집 쪽이 안 변하는 게 맞기 때문이다. 조회수가 붙은 실환경에서 재확인이 필요하다.
 
 ⚠️ **덤프 한 달만 주면 기존 문서도 `is_thin` 이 된다.** 월초 사건은 28일 창을 못 채워
 신규 문서 경로로 빠진다. `--edits` 를 두 번 줘서 전월을 같이 읽힌다.
@@ -112,7 +121,7 @@ python -m spike.signal_lag --edits ./out/enwiki/2025-05 --edits ./out/enwiki/202
 
 ```bash
 cd data-pipeline/spike
-python -m pytest        # 67개. 47개는 Spark·DB 없이, 5개는 실 PostgreSQL, 5개는 Spark 대조
+python -m pytest        # 73개. 47개는 Spark·DB 없이, 5개는 실 PostgreSQL, 5개는 Spark 대조
                         # (PG·Spark 가 없으면 그 10개는 skip 된다)
 ```
 

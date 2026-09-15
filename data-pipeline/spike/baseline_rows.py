@@ -5,7 +5,7 @@ Historical Window 산출물(WP-58)을 읽어 `page_baseline` 한 행에 해당�
 🔴 여기서 가중치를 새로 정하지 않는다.
 
 산출 형태 (page_baseline 컬럼과 1:1)
-    (wiki, title, hour_of_day, edit_ewma, edit_stddev, view_ewma, sample_days)
+    (wiki, title, hour_of_day, edit_ewma, edit_stddev, view_ewma, view_stddev, sample_days)
     page_id 는 여기 없다 — (wiki, title) → wiki_page.id 해석은 적재 시점
     (baseline_sink.py) 책임이다. 덤프 page_id 를 쓰지 않는 -56·-57·-58 과 같은 키다.
 
@@ -47,6 +47,10 @@ class BaselineRow:
     edit_ewma: float
     edit_stddev: float | None
     view_ewma: float | None
+    #: 조회수 가중 표준편차. 관측이 하나뿐이면 0, 조회수가 아예 없으면 None.
+    #: 🔴 조회수 z 를 내는 유일한 입력이다 — 없으면 detector 가 조회수 단독 발동을 못 한다
+    #: (WP-90). 여태 view_ewma 만 내서 VIEW_Z_THRESHOLD 가 죽어 있었다.
+    view_stddev: float | None
     sample_days: int
 
 
@@ -106,7 +110,8 @@ def build_rows(
             Observation((as_of - day).days, views)
             for day, _, views in observed if views is not None
         ]
-        view_ewma = ewma_mean_std(seen_views, halflife_days)[0] if seen_views else None
+        view_ewma, view_stddev = (
+            ewma_mean_std(seen_views, halflife_days) if seen_views else (None, None))
 
         out.append(BaselineRow(
             wiki=wiki,
@@ -115,6 +120,7 @@ def build_rows(
             edit_ewma=edit_ewma,
             edit_stddev=edit_stddev,
             view_ewma=view_ewma,
+            view_stddev=view_stddev,
             # 관측이 있었던 고유 날짜 수. 같은 날 여러 행이면 하루로 센다.
             sample_days=len({day for day, _, _ in observed}),
         ))

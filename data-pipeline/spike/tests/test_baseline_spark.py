@@ -122,6 +122,20 @@ def test_두_판의_view_ewma와_sample_days가_같다(spark):
         assert sp[hour]["sample_days"] == row.sample_days, hour
 
 
+def test_두_판의_view_stddev가_같다(spark):
+    """WP-90 에서 추가된 컬럼. 조회수 z 의 유일한 입력이라 두 판이 갈리면
+    배치로 만든 기준선과 Spark 로 만든 기준선이 **다른 급증 판정**을 낸다.
+
+    조회수 결측은 분자·분모 양쪽에서 빠져야 한다 — 평균과 같은 표본을 써야 값이 맞는다.
+    """
+    pure, sp = pure_rows(), spark_rows(spark)
+    for hour, row in pure.items():
+        if row.view_stddev is None:
+            assert sp[hour]["view_stddev"] is None, hour
+        else:
+            assert sp[hour]["view_stddev"] == pytest.approx(row.view_stddev, rel=1e-9), hour
+
+
 def test_28일_경계가_양쪽_모두_적용된다(spark):
     """창 밖(29일 전) 관측은 두 판 모두 버려야 한다."""
     rows = sample() + [("enwiki", "Iran", utc(2025, 5, 1, 0, 0), 9999, 9999.0)]

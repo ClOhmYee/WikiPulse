@@ -165,7 +165,9 @@ def test_upsert는_PK충돌시_갱신():
     written = upsert_rows(cur, rows, {("enwiki", "Iran"): 7})
     assert written == 1
     sql, params = cur.many[0]
-    assert params == [(7, 0, 4.0, 0.0, 10.0, 1)]    # page_id 가 앞에 붙는다
+    # page_id 가 앞에 붙고, view_stddev 가 view_ewma 뒤에 온다 (WP-90).
+    # 관측이 하나뿐이라 두 표준편차가 다 0.0 이다 — None(표본 없음)과 다른 뜻이다.
+    assert params == [(7, 0, 4.0, 0.0, 10.0, 0.0, 1)]
 
 
 def test_같은_입력을_두_번_돌려도_같은_파라미터():

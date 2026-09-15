@@ -20,7 +20,7 @@
     같은 계산이 순수 파이썬(baseline_rows.build_rows)에도 있다. 적재 경로는 순수 판이
     쓰고, 대량 처리는 이 Spark 판이 쓴다. 🔴 둘이 갈리면 기준선이 에러 없이 달라지고
     edit_z 가 통째로 틀린다 — tests/test_baseline_spark.py 가 edit_ewma·edit_stddev·
-    view_ewma·sample_days·28일 경계까지 같은지 고정한다(로컬 Spark 로 실제 통과).
+    view_ewma·view_stddev·sample_days·28일 경계까지 같은지 고정한다(로컬 Spark 로 실제 통과).
     가중 정의는 ewma.py 한 곳에서만 온다.
 
 ⚠️ 입력 window_start 는 UTC 다
@@ -94,17 +94,26 @@ def build_baseline(edit_windows, as_of, halflife_days=DEFAULT_HALFLIFE_DAYS,
     )
 
     # 2-pass: 위 평균을 되돌려 가중 모집단 분산 -> 표준편차.
+    # 조회수 분산도 같은 2-pass 로. 결측(views IS NULL)은 분자·분모 양쪽에서 뺀다 —
+    # 평균과 같은 표본을 써야 값이 맞는다.
+    view_weight = F.when(F.col("views").isNotNull(), F.col("_w"))
     variance = (
-        scoped.join(means.select(*GROUP_KEYS, "edit_ewma"), GROUP_KEYS)
+        scoped.join(means.select(*GROUP_KEYS, "edit_ewma", "view_ewma"), GROUP_KEYS)
         .groupBy(*GROUP_KEYS)
-        .agg((F.sum(F.col("_w") * F.pow(F.col("edit_count") - F.col("edit_ewma"), 2))
-              / F.sum("_w")).alias("_var"))
+        .agg(
+            (F.sum(F.col("_w") * F.pow(F.col("edit_count") - F.col("edit_ewma"), 2))
+             / F.sum("_w")).alias("_var"),
+            (F.sum(view_weight * F.pow(F.col("views") - F.col("view_ewma"), 2))
+             / F.sum(view_weight)).alias("_view_var"),
+        )
     )
 
     return (
         means.join(variance, GROUP_KEYS)
         .withColumn("edit_stddev", F.sqrt("_var"))
-        .select(*GROUP_KEYS, "edit_ewma", "edit_stddev", "view_ewma", "sample_days")
+        .withColumn("view_stddev", F.sqrt("_view_var"))
+        .select(*GROUP_KEYS, "edit_ewma", "edit_stddev", "view_ewma", "view_stddev",
+                "sample_days")
     )
 
 
