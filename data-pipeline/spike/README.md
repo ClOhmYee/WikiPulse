@@ -125,9 +125,12 @@ z 를 못 내면 "평소의 2배"만으로 발동해서다 — 여태 `VIEW_Z_TH
 
 ```bash
 cd data-pipeline/spike
-python -m pytest        # 73개. 47개는 Spark·DB 없이, 5개는 실 PostgreSQL, 5개는 Spark 대조
-                        # (PG·Spark 가 없으면 그 10개는 skip 된다)
+python -m pytest        # 95개는 Spark·DB 없이, 15개는 실 PostgreSQL
+                        # (test_baseline_spark.py 는 pyspark 가 있어야 돈다 — 없으면 skip)
 ```
+
+측정 2026-09-15 (WP-94): psycopg 있는 venv 에서 `110 passed, 1 skipped`
+(skip 은 pyspark 없는 `test_baseline_spark.py`), psycopg 없는 venv 에서 `95 passed, 3 skipped`.
 
 - 평상시 조회수가 z 임계 아래인지 (오탐)
 - 사건 첫날부터 임계를 넘는지 (미탐)
@@ -205,6 +208,117 @@ python -m spike.baseline_sink --input ... --as-of 2025-06-30 --dsn "$DATABASE_UR
 ⚠️ **`baseline.py` 의 `SINK` 로는 `page_baseline` 을 채우지 않는다.** `wiki_page.id` 해석과
 upsert 가 필요해 `baseline_sink.py` 가 맡는다. 거기 `SINK` 는 진단 출력이다.
 
+## 판정 런타임 — `page_baseline` 조회 → `detect()` → `spike` (WP-94)
+
+여태 `page_baseline` 을 **쓰는** 코드만 있고 **읽는** 코드가 없었고, `detect()` 결과는
+`replay.py` 의 stdout 으로 끝났다. 그래서 `Historical Window → 기준선 → 판정 → 저장` 이
+한 번도 이어지지 않았고 `cluster/driver.py` 의 씨드 조회는 입력 자체가 없었다.
+
+```
+page_baseline ──BaselineRepository──▶ detector.Baseline
+                                            │
+PageWindow (wiki,title,window_start,edit_count,editor_count,views)
+                                            │
+                                     detect()  ← detector.py 그대로
+                                            │  급증만
+                                       SpikeSink
+                                            ▼
+                                spike  PK id · UNIQUE (page_id, window_start)
+```
+
+| 파일 | 역할 |
+| --- | --- |
+| `baseline_repository.py` | `(wiki, title, hour_of_day)` → `Baseline`. 문서당 24슬롯 한 번에 읽어 캐시 |
+| `spike_sink.py` | `SpikeDecision` → `spike` 행. `(page_id, window_start)` 멱등 upsert |
+| `runtime.py` | `PageWindow` 한 건을 판정하고 급증이면 저장. **LIVE·리플레이 공용** |
+
+- 🔴 **리플레이 전용이 아니다.** 입력이 `PageWindow` 한 건이라 `streaming/edit_windows.py`
+  의 윈도우 집계가 같은 `SpikeRuntime` 을 부를 수 있다. 붙일 때 고치는 건 여기가 아니라
+  `PageWindow` 를 만드는 쪽이다 — 집계 계약이 이미 같다(`batch/historical_windows.py` §AC).
+- **조회는 문서를 만들지 않는다.** `baseline_sink.resolve_page_ids` 는 없는 문서를
+  만들어 주는데(적재 경로에는 맞다), 조회가 그걸 쓰면 판정만 해도 `wiki_page` 가 분다.
+  `baseline_repository` 는 순수 `SELECT`, `spike_sink` 는 그 resolve 를 **import 해서** 쓴다
+  (규칙을 두 벌 만들면 한쪽만 고쳐졌을 때 같은 문서가 두 행으로 갈린다).
+- **`detected_at` 은 윈도우 끝이다. `now()` 가 아니다.** 리플레이가 `now()` 를 찍으면
+  2024년 급증이 전부 2026년에 감지된 것으로 남아, 뒤에 붙을 클러스터 스냅샷의 시간축이
+  조용히 무너진다. 결정적이라 재실행해도 값이 안 흔들린다.
+  윈도우 끝은 **소스가 주면 그 값을 쓴다** — `streaming/edit_windows.py` 는
+  `F.col("window.end")` 를 이미 내보내고 그 길이는 `WINDOW_SIZE` 환경변수다. -58 행에는
+  없으므로(정각 tumbling) 그때만 `WINDOW_HOURS` 로 채운다. 상수로만 계산하면
+  `WINDOW_SIZE` 를 바꿨을 때 `detected_at` 이 에러 없이 어긋난다.
+- 🔴 **기준선 캐시는 배치 하나만큼 산다.** `BaselineRepository` 는 문서당 24슬롯을 한 번에
+  읽어 캐시하고(리플레이 왕복 272 → 문서당 1), `SpikeRuntime.iter_process`/`process_all` 이
+  **배치 시작마다 비운다.** 안 비우면 장수명 LIVE 프로세스(`foreachBatch` 가 같은 런타임을
+  계속 부르는 구조)가 `page_baseline` 재적재를 영원히 못 읽는데 **에러 없이 z 만 틀린다.**
+  윈도우를 `process()` 로 하나씩 넣으면 캐시는 유지된다 — 호출자가 명시적으로 고른 경로다.
+- **미탐은 저장하지 않는다.** `spike` 는 "판정을 통과한 문서" 다(V1 테이블 주석).
+- **없음 / 얇음 / db** 를 `DetectionOutcome.baseline_source` 로 가른다. `detect()` 는 앞의
+  둘을 똑같이 신규 문서 경로로 보내지만 원인이 다르다 — **없음은 적재가 안 된 것**,
+  **얇음은 표본이 모자란 것**이다. 안 가르면 기준선을 안 넣고 돌린 실행을 표본 부족으로 오진한다.
+
+### 리플레이 DB 모드
+
+```bash
+# 기존(메모리 기준선) — 동작 그대로
+python -m spike.replay --edits ./out/enwiki/2024-10 --title Hurricane_Milton --control Milton_Park
+
+# DB 모드 — page_baseline 을 읽어 판정하고 spike 에 적재
+python -m spike.baseline_sink --input ./data/baseline-input/enwiki/2024-10 --dsn "$DATABASE_URL"
+python -m spike.replay --edits ./out/enwiki/2024-10 --title Hurricane_Milton --dsn "$DATABASE_URL"
+```
+
+⚠️ `--dsn` 은 **명시 opt-in** 이다. `baseline_sink` 와 달리 `$DATABASE_URL` 로 기본값을
+채우지 않는다 — 여기서는 DSN 유무가 **동작을 바꾸므로**, 환경변수만으로 회귀 검증이
+DB 모드로 넘어가면 그게 조용히 틀리는 경로다.
+
+### 🔴 두 모드는 같은 숫자를 내지 않는다 — 버그가 아니라 정의 차이다
+
+| | 메모리 모드 (`--dsn` 없음) | DB 모드 (`--dsn`) |
+| --- | --- | --- |
+| 기준선 창 | 판정 대상 시점 **직전까지** (매 윈도우 재계산) | `baseline_sink --as-of` 로 **고정** |
+| 사건 구간 포함 | 안 됨 (자기 급증이 평소로 희석되지 않게) | 적재 창에 들어 있으면 포함됨 |
+| 쓰임 | 임계·수식 **회귀 검증** | 런타임 경로 검증 |
+
+Milton 2024-10 한 달, 같은 편집 적재본·같은 명령 (2026-09-15 실측):
+
+| 모드 | 적재 `--as-of` | 윈도우 | 급증 | spike 적재 | 기준선 출처 |
+| --- | --- | --- | --- | --- | --- |
+| 메모리 | — | 272 | **48** | — | 매 시점 직전 28일 재계산 |
+| DB | 미지정 → `2024-10-31` | 272 | **6** | 6 | db 252 · 얇음 20 · 없음 0 |
+| DB | `2024-10-05` (사건 전날) | 272 | **48** | 48 | db 0 · 얇음 0 · **없음 272** |
+| 대조군 `Milton Park` | 둘 다 | 7 | **0** | 0 | 얇음 7 |
+
+**`--as-of` 를 사건 전날로 주면 메모리 모드와 숫자가 정확히 같아진다**(272 / 48, 최초
+`2024-10-06T19:00Z`, 대조군 0). 문서가 `2024-10-06` 에 처음 편집돼 그 창에 관측이 없고,
+메모리 모드의 초기 구간과 똑같이 신규 문서 경로로 가기 때문이다 — 48행 전부 `edit_z IS NULL`.
+
+`--as-of` 를 안 주면 창의 끝이 관측 중 최신일(2024-10-31)이 되어 **사건이 기준선 안에
+들어간다.** `Hurricane Milton` 시간 슬롯의 `edit_ewma` 가 3~6 으로 올라가 z 가 깎이고
+급증이 6건으로 준다. 임계 문제가 아니라 창 문제다.
+
+🔴 **`--as-of` 를 바꿔 재적재해도 옛 슬롯은 안 지워진다.** `baseline_sink` 는 upsert 만
+한다 — 넓은 창으로 한 번 적재한 뒤 좁은 창으로 다시 적재하면 새 창에 없는 슬롯은 **옛 값이
+그대로 남아** 두 창이 섞인다. 실제로 위 3행째를 처음 시도했을 때 `page_baseline` 을 안 비워
+급증이 6건 그대로였다(2026-09-15). 창을 바꿔 재현할 때는 그 문서의 `page_baseline` 을 먼저
+비운다. (이건 WP-60 의 성질이고 이 스토리에서 바꾸지 않았다.)
+
+⚠️ **신규 문서 경로와 기존 문서 경로의 `spike_score` 는 아직 같은 척도가 아니다.**
+위 실측에서 z 경로 건은 1.46~1.67, 신규 문서 경로 건은 42.33 이 나왔다
+(`edit_count × √editor_count` vs `log1p(z)` 압축). WP-93 은 기존 문서 경로
+**안에서** 편집·조회수 단위를 맞춘 것이고 두 경로 사이는 범위 밖이었다. 정렬에 둘을
+섞기 전에 별도로 다뤄야 한다 — 이 스토리에서는 건드리지 않았다.
+
+### 검증
+
+```bash
+docker compose up -d postgres      # 저장소 루트
+cd data-pipeline/spike && python -m pytest tests/test_spike_runtime_pg.py
+```
+
+DB 없이 도는 계약 검사는 `tests/test_runtime.py`·`tests/test_baseline_repository.py` 다
+(대역 사용). 실 DB 왕복만 `_pg.py` 로 뺐다 — 한 파일에 두면 DB 없는 환경에서 계약 검사까지
+함께 skip 되어 깨져도 아무도 모른다(`test_baseline_sink_pg.py` 와 같은 이유).
+
 ### ⚠️ 조용히 틀리는 함정 둘 (2026-09-14 실제로 겪음)
 
 **PySpark 워커가 안 뜨는 건 파이썬 버전 문제가 아닐 수 있다.** `CreateProcess error=2`
@@ -281,8 +395,9 @@ cd data-pipeline && .venv/Scripts/python.exe -m pytest spike/tests/test_baseline
 - **실규모 Spark 실행** — 위 대조는 로컬 `local[1]` 소표본이다. Spark 2노드
   (`WP-27`)·HDFS(`-28`)에서의 태스크 수·소요 시간은 그때 잰다.
 
-- **Streaming 연결.** `streaming/edit_windows.py` 가 윈도우 집계까지 하고,
-  거기에 `detect()` 를 붙여 spike 테이블에 쓰는 건 데이터 모델(-35)·기준선
-  적재가 develop 에 들어간 뒤다.
+- **Streaming 연결.** ~~`detect()` 를 붙여 spike 테이블에 쓰는 건 데이터 모델(-35)·기준선
+  적재가 develop 에 들어간 뒤다~~ → 판정·적재 경로는 `runtime.py` 로 섰다(WP-94).
+  남은 건 `streaming/edit_windows.py` 의 집계 출력을 `PageWindow` 로 바꿔 `SpikeRuntime`
+  에 넘기는 것뿐이다(`foreachBatch`). 이 스토리 범위 밖.
 - **윈도우 길이·봇 필터 강도** 는 실데이터로 튜닝. 지금 임계는 Strait of Hormuz 한
   사건 기준이라 여러 사건으로 넓혀야 한다. (EWMA 반감기는 위 -59 참조.)
