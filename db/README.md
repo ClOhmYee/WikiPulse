@@ -48,7 +48,7 @@ LIVE 화면은 가장 최근 값을, 리플레이는 사용자가 고른 시점�
 | `wiki_page` | 문서. `(wiki, title)` 이 자연키 |
 | `page_edit_window` | Spark 윈도우 집계 출력. **단기 보존** — 슬라이딩이라 편집 1건이 12행에 걸친다 |
 | `page_view_hourly` | Pageviews 조회수. 급증 2차 판정용 |
-| `page_baseline` | 문서 × 요일·시간대(0~167) 기준선. 28일 EWMA |
+| `page_baseline` | 문서 × 시간대(0~23, UTC) 기준선. 28일 EWMA |
 | `spike` | 급증 판정 통과분. 편집 급증 **AND** 조회수 급등 |
 
 ### 이슈

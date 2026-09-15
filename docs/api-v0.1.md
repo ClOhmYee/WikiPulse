@@ -207,13 +207,13 @@ DB `CHECK` 제약과 **같은 값을 그대로** 쓴다. 번역하지 않는다.
   "data": {
     "edits": [ { "windowStart": "2026-09-08T03:00:00Z", "editCount": 87, "editorCount": 12 } ],
     "views": [ { "tsHour": "2026-09-08T03:00:00Z", "views": 12043 } ],
-    "baseline": [ { "hourOfWeek": 51, "editEwma": 2.1, "editStddev": 1.4, "viewEwma": 380.0 } ],
+    "baseline": [ { "hourOfDay": 3, "editEwma": 2.1, "editStddev": 1.4, "viewEwma": 380.0 } ],
     "spikes": [ { "detectedAt": "…", "windowStart": "…", "editZ": 11.2, "viewRatio": 2.6, "spikeScore": 8.4 } ]
   }
 }
 ```
 
-- `baseline`은 요일·시간대(0~167) 기준이라 시계열과 축이 다르다. 차트에 겹칠 때 FE가 시각→`hourOfWeek`로 접어서 매핑한다.
+- `baseline`은 시간대(0~23, UTC) 기준이라 시계열과 축이 다르다. 차트에 겹칠 때 FE가 시각→`hourOfDay`로 접어서 매핑한다. ~~요일·시간대(0~167)·`hourOfWeek`~~ → 2026-09-15 변경 (WP-84).
 - `viewRatio`가 `null`이면 **아직 2차 판정 전**이지 판정 실패가 아니다 (Pageviews 최대 1시간 지연).
 
 ~~Wiki Intelligence 화면의 MVP 포함 여부 확인 필요~~ → 단일 위키 문서 상세는 페이지 구성에서 제외했다(2026-09-09, [페이지 구성 정본](frontend/PAGES.md)). 위 문서 데이터 API 제안은 이번 페이지 정리에서 변경하지 않는다. 화면 제거를 데이터 모델이나 endpoint 삭제로 해석하지 않는다.

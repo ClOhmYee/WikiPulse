@@ -154,7 +154,7 @@ shard 개수가 곧 Spark 태스크 수의 상한인데, **실제 Spark 실행 �
 
 ```bash
 cd data-pipeline/batch
-../.venv/Scripts/python.exe -m pytest       # 49개, 네트워크 없이
+../.venv/Scripts/python.exe -m pytest       # 88개 (mediawiki + clickstream + pageview + historical-window), 네트워크 없이
 ```
 
 확인하는 것:
@@ -253,3 +253,130 @@ python -m batch.clickstream_ingest --wiki enwiki --month 2025-06 --dry-run  # �
   건수는 그때 명세 §11 에 적는다. 위 오프라인 스모크(가짜 덤프)로 CLI 흐름만 검증했다.
 - **page_id·생성일 조인** — `driver.build_neighbor_inputs` 가 자리는 잡았고, `wiki_page`
   조회와 `mediawiki_history`(`WP-56`) 생성일 어댑터가 붙으면 실데이터로 흐른다.
+
+---
+
+# 조회수 적재 (WP-57)
+
+`pageview.py` + `pageview_ingest.py`. Wikipedia `pageview_complete` 일별 덤프를 받아
+시간별 조회수를 `(wiki, title, ts_hour, agent, views)` 로 적재한다. baseline `view_ewma`
+(WP-58/-60)와 급증 2차 판정(조회수) 입력이다.
+
+```
+pageviews-{YYYYMMDD}-{agent}.bz2  ──▶  (wiki, title, ts_hour, agent, views) JSONL.gz (shard)
+  project title page_id access daily hourly     대상 project·ns0 만 · access·page_id 가로질러 합산
+  희소 시간 인코딩 A=0시…X=23시                   pageview_ingest.py
+```
+
+## 실행
+
+```bash
+export CONTACT_EMAIL=you@example.com      # 새로 받을 때만 필요
+
+python -m batch.pageview_ingest --wiki enwiki --date 2025-06-12            # 적재
+python -m batch.pageview_ingest --wiki enwiki --date 2025-06-12 --dry-run  # 건수만
+python -m batch.pageview_ingest --wiki enwiki --date 2025-06-12 --agents user,automated
+```
+
+출력: `data/pageview/{wiki}/{date}/part-*.jsonl.gz` + `_manifest.json`(존재·결손 agent 기록).
+
+## 함정 (2026-09-09 실측, 스펙 기준)
+
+- **agent 는 파일명에** 있고 시기마다 구성이 다르다 — 2019 user·spider / 2020 +automated /
+  2025 user·automated(spider 404). 🔴 하드코딩하지 않고 후보를 순회해 **있는 것만** 적재,
+  404 는 결손으로 매니페스트에 남긴다. agent 끼리 합치거나 없는 agent 를 0 으로 채우지 않는다.
+- **dump page_id 를 키로 쓰지 않는다.** `-` title 337,394행이 제각각 page_id 로 뭉쳐 있고,
+  정상 ns0 문서도 page_id 가 수십 개로 갈린다(null 10.56%). `(wiki, title, ts_hour, agent)`
+  로만 합산한다.
+- **위키 코드가 다르다** — 덤프는 `en.wikipedia`, mediawiki_history 는 `enwiki`. `project_for`
+  가 역매핑하고, 미등록 위키는 `UnsupportedWiki` 로 멈춘다(조용히 틀린 위키 방지).
+- **`:` 단순 필터 금지.** 정상 제목에 콜론이 들어간다. 알려진 namespace prefix 집합만 제외한다.
+- **시간별 합 != daily_total 이면 `SchemaMismatch`.** 형식 손상·인코딩 오류를 조용히 넘기지 않는다.
+
+## 메모리
+
+`aggregate()` 는 한 agent-일 파일을 dict 로 누적한다. 전체 enwiki 는 Spark 경로(WP-58)가
+맡고, 이 CLI 는 **검증 슬라이스**(Hormuz 2025-06·Milton 2024-10 등)용이다.
+
+## 아직 안 한 것
+
+- **실 덤프 적재·HDFS** — WP-28 완료 후. 하루 user 542 MiB + automated 706 MiB ≈ 1.2 GiB
+  (스펙 실측). 실측 크기·소요는 그때 명세 §11 에. 위 오프라인 테스트로 파싱·필터·합산·CLI 배선만 검증했다.
+- **`wiki_page.id` 해석** — 스펙대로 `(wiki, title)` 로만 적재. id 해석은 후속 적재 단계 책임.
+
+월 단위는 `--month YYYY-MM` 로 하루씩 순회한다(일별 매니페스트로 이어받기, 결손일 기록, 다 되면
+요약 출력). `SchemaMismatch` 는 전체 실행을 멈춘다(형식 손상은 하루 문제가 아니다).
+
+---
+
+# Historical Window 집계 (WP-58)
+
+`historical_windows.py` + `historical_windows_ingest.py`. 편집 적재본(WP-56)과
+조회수 적재본(WP-57)을 읽어 baseline(`spike/baseline.py`)이 읽을 **문서 × 시간
+윈도우** 데이터셋을 만든다. 이 형태가 없어 baseline 배치가 통째로 no-op 이던 걸 채운다.
+
+```
+edit_event JSONL.gz (-56) ┐
+                          ├─▶ (wiki, title, window_start, hour_of_day, edit_count, editor_count, views) JSONL.gz
+pageview JSONL.gz  (-57) ┘        1시간 윈도우 · 봇 제외 편집 · agent 가로질러 조회 합산
+```
+
+## 실행
+
+```bash
+python -m batch.historical_windows_ingest \
+    --edits ./out/enwiki/2025-06 \
+    --views ./data/pageview/enwiki \
+    --out ./data/baseline-input/enwiki/2025-06
+
+... --agents user,automated    # baseline 에 쓸 agent 만 합산 (기본: 전부)
+... --dry-run                   # 행 수만
+```
+
+출력: `{out}/part-*.jsonl.gz` + `_manifest.json`.
+
+## 🔴 집계 계약은 스트리밍과 한 벌이어야 한다
+
+`streaming/edit_windows.py`(실시간)와 정의가 갈리면 `edit_z` 가 에러 없이 조용히 틀린다.
+
+- **윈도우 = 1시간.** 스트리밍 `WINDOW_SIZE` 와 맞춘다. baseline 은 24 슬롯(`hour_of_day`)이라
+  1시간이 자연스러운 정합값이다.
+- **봇 필터 = `is_bot` 참 편집 제외.** 스트리밍 `~coalesce(is_bot, False)` 와 같은 판정.
+- **`editor_count` 를 함께 센다** (WP-85). 급증 판정의 편집자 하한이 이 값을 본다.
+  ⚠️ 스트리밍은 `approx_count_distinct`(근사), 배치는 정확값이다 — 편집자 1~10명 구간에서
+  두 값이 **불일치 0건**으로 일치함을 실측했다(2026-09-15).
+- **문서 키 = `(wiki, title)`.** -56·-57 과 같다. dump page_id 는 안 쓴다 — `wiki_page.id`
+  해석은 적재(WP-60) 책임.
+- **`hour_of_day` 정의(UTC 시 0~23)는 `spike/baseline.py` 의 Spark 판과 같아야 한다.**
+  Python `weekday()` 월=0 == Spark `(dayofweek+5)%7` 월=0. 테스트로 알려진 날짜를 고정했다.
+- 편집·조회는 `(wiki,title,hour)` 기준 **full outer join** — 한쪽만 있는 시간도 0 으로 남긴다
+  (baseline 이 `edit_z`·`view_ewma` 를 둘 다 잡는다).
+
+## ⚠️ API_SPEC §2.4 의 baseline·pulse 와 다른 값이다
+
+여기 산출물은 시간대별 편집·조회 원자료다. `frontend/docs/API_SPEC.md` §2.4 의 `baseline`
+(일 단위 편집 횟수)·`pulse`(배수)와 **이름만 같고 정의가 다르다.** 화면용 일 단위 baseline
+유도는 별건(백엔드·프론트 합의).
+
+## 아직 안 한 것
+
+- **Spark parquet 출력·"배치 == 스트리밍" 표본 대조** — 지금은 형제 적재(-56·-57)와 같은
+  순수 파이썬·JSONL.gz 경로다. 집계 semantics 는 순수 함수로 한 벌 고정해 두었으니 Spark
+  판이 같은 계약을 부르게 한다. 실규모 실행은 Spark 2노드(WP-27)·HDFS
+  (WP-28)가 서면 잇는다.
+  - ~~venv 3.14 에서 PySpark 워커가 죽어 로컬 실행 불가~~ → **로컬에서 돈다** (2026-09-14
+    정정, WP-82). venv 는 **3.11.15** 로 PySpark 3.5 지원 범위(3.8~3.11) 안이다 —
+    시스템 파이썬(3.14)을 보고 venv 도 그럴 것이라 단정한 서술이었다. 워커가 죽은 실제
+    원인은 버전이 아니라 `PYSPARK_PYTHON` 미설정이고, 증상은 `CreateProcess error=2`
+    (워커로 띄울 파이썬 **경로**를 못 찾음)다. `conftest.py` 가 그걸 고정하면 실제로 돈다 —
+    WP-60 이 로컬 Spark 로 `build_baseline` 을 돌려 순수 판과 값 일치를 확인했다
+    (`spike/tests/test_baseline_spark.py`).
+  - ⚠️ **자체 `pytest.ini` 를 쓰는 패키지는 바깥 `conftest.py` 가 로드되지 않는다.** rootdir 이
+    그 패키지로 잡혀서다. `spike/` 가 그래서 `spike/tests/conftest.py` 를 따로 둔다. 여기
+    `batch/` 도 자체 `pytest.ini` 가 있으니 Spark 를 쓰는 테스트를 추가하면 같은 게 필요하다.
+  - ⚠️ **naive `datetime` 을 `createDataFrame` 에 주면 드라이버 로컬 시간대(KST)로 해석돼
+    9시간 밀린다.** 세션 `timeZone=UTC` 로도 안 막힌다. `hour_of_day` 가 통째로 어긋나는데
+    **에러가 안 난다** — 타임스탬프는 tz-aware 로 넘긴다 (2026-09-14 실제로 겪음).
+  - 🔴 "배치 == 스트리밍" 대조 자체는 이 README 정정 범위 밖이다 — 별건 이슈다.
+- **실데이터 규모 집계** — Hormuz 2025-06·Milton 2024-10 실적재는 -56·-57 실덤프 뒤. `aggregate_*`
+  가 dict 누적이라 검증 슬라이스용이다(전체 enwiki 는 Spark).

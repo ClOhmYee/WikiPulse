@@ -118,7 +118,7 @@ def test_기준선_시간대는_0에서_167이다(conn):
     with pytest.raises(psycopg.errors.CheckViolation):
         x(
             conn,
-            "INSERT INTO page_baseline (page_id, hour_of_week, edit_ewma, sample_days) "
+            "INSERT INTO page_baseline (page_id, hour_of_day, edit_ewma, sample_days) "
             "VALUES (%s, 168, 1.0, 28)",
             page_id,
         )
