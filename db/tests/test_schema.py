@@ -168,9 +168,12 @@ def test_파이프라인_한_바퀴가_스키마에_담긴다(conn):
     )
     x(
         conn,
+        # source 는 V5 에서 NOT NULL 이 됐고 기본값을 일부러 안 남겼다 —
+        # 모든 writer 가 출처를 명시하게 하려는 것이라 여기서도 적는다.
         "INSERT INTO spike "
-        "(page_id, detected_at, window_start, edit_count, edit_z, view_ratio, spike_score) "
-        "VALUES (%s, now(), '2024-10-10T12:00Z', 47, 8.4, 12.1, 9.7)",
+        "(source, page_id, detected_at, window_start, edit_count, edit_z, view_ratio, "
+        "spike_score) "
+        "VALUES ('replay', %s, now(), '2024-10-10T12:00Z', 47, 8.4, 12.1, 9.7)",
         page_id,
     )
 

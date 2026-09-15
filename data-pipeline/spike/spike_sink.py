@@ -1,6 +1,6 @@
 """급증 판정을 `spike` 테이블에 적재한다 (WP-94).
 
-    sink = SpikeSink(conn)
+    sink = SpikeSink(conn, source="replay")
     sink.save(wiki="enwiki", title="Hurricane Milton",
               window_start=ws, detected_at=we, edit_count=10, decision=decision)
     conn.commit()
@@ -10,9 +10,23 @@
 파이프라인 밖으로 나가지 못했고, 그래서 `cluster/driver.py` 의 씨드 조회는 입력이
 아예 없었다. 이 모듈이 그 출구다.
 
+출처(provenance)를 생성 시점에 못박는다
+    `SpikeSink(conn, source="live")` — `source` 는 키워드 필수다. 한 인스턴스는 한 출처만
+    쓴다. `save()` 인자로 두지 않은 이유는, 그러면 호출 한 번의 실수로 LIVE 윈도우가
+    `replay` 로(또는 그 반대로) 들어갈 수 있어서다. 인스턴스에 묶어 두면 그 실수의
+    단위가 "한 행" 이 아니라 "한 실행" 이 되어 눈에 띈다.
+    값은 `SPIKE_SOURCES` 두 개뿐이고, 생성 시점에 검사한다 — 첫 행을 쓰다가 아니라
+    첫 행을 쓰기 전에 막는다.
+
 멱등성
-    `spike` 에는 `UNIQUE (page_id, window_start)` 가 이미 있다(V1). 같은 윈도우를 다시
-    판정하면 값만 갱신하고 행은 안 는다 — 리플레이를 두 번 돌려도 결과가 같다.
+    `spike` 에는 `UNIQUE (source, page_id, window_start)` 가 있다(V5. ~~V1 의
+    `(page_id, window_start)`~~ → 출처를 키에 넣었다). 같은 출처가 같은 윈도우를 다시
+    판정하면 값만 갱신하고 행은 안 는다 — 리플레이를 두 번 돌려도, 같은 마이크로배치가
+    재처리돼도 결과가 같다.
+
+    🔴 **다른 출처는 서로 덮어쓰지 않는다.** 키에 `source` 가 있으니 LIVE 판정이
+    리플레이 행에 `ON CONFLICT` 로 닿지 못한다 — DB 가 막는 것이지 여기서 조심하는 게
+    아니다. 근거는 `db/migrations/V5__spike_source.sql` 의 🔴 절.
 
 문서 해석은 `baseline_sink` 것을 그대로 쓴다
     `(wiki, title) → wiki_page.id` 규칙을 두 벌 만들면 한쪽만 고쳐졌을 때 같은 문서가
@@ -42,18 +56,40 @@ from datetime import datetime, timezone
 from .baseline_sink import resolve_page_ids
 from .detector import SpikeDecision
 
-#: 재판정은 값만 갱신한다. 충돌 키는 V1 의 spike_unique_window (page_id, window_start).
+#: `spike.source` 가 가질 수 있는 값. V5 의 CHECK 제약과 한 벌이다 —
+#: 한쪽만 늘리면 DB 가 거부하거나(추가 시) 여기가 통과시킨다(삭제 시).
+#: `issue_cluster.source` 와 같은 어휘를 쓴다(V1).
+SPIKE_SOURCES = ("live", "replay")
+
+#: 재판정은 값만 갱신한다. 충돌 키는 V5 의 spike_unique_window (source, page_id, window_start).
+#: 🔴 `source` 는 UPDATE 목록에 없다 — 충돌 키의 일부라 어차피 같은 값이고,
+#: 적어 두면 "출처가 갱신될 수 있다" 로 읽힌다.
 UPSERT_SPIKE_SQL = """
 INSERT INTO spike
-    (page_id, detected_at, window_start, edit_count, edit_z, view_ratio, spike_score)
-VALUES (%s, %s, %s, %s, %s, %s, %s)
-ON CONFLICT (page_id, window_start) DO UPDATE SET
+    (source, page_id, detected_at, window_start, edit_count, edit_z, view_ratio, spike_score)
+VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+ON CONFLICT (source, page_id, window_start) DO UPDATE SET
     detected_at = EXCLUDED.detected_at,
     edit_count  = EXCLUDED.edit_count,
     edit_z      = EXCLUDED.edit_z,
     view_ratio  = EXCLUDED.view_ratio,
     spike_score = EXCLUDED.spike_score
 """
+
+
+def require_source(value: str) -> str:
+    """`spike.source` 로 쓸 수 있는 값인지 확인하고 그대로 돌려준다.
+
+    🔴 **추론하지 않는다.** 호출자가 무엇을 돌리는지(리플레이인지 LIVE 인지)는
+    호출자만 안다. 여기서 "DSN 이 있으면 live" 같은 규칙을 만들면 두 경로가 어휘를
+    공유하는 순간 조용히 어긋난다.
+    """
+    if value not in SPIKE_SOURCES:
+        raise ValueError(
+            f"spike.source 는 {SPIKE_SOURCES} 중 하나다 (받은 값: {value!r}). "
+            "V5 의 CHECK 제약과 같은 목록이다."
+        )
+    return value
 
 
 def require_utc(ts: datetime, field: str) -> datetime:
@@ -72,12 +108,23 @@ def require_utc(ts: datetime, field: str) -> datetime:
 
 
 class SpikeSink:
-    """`SpikeDecision` 을 `spike` 행으로. 호출자가 `conn.commit()` 을 책임진다."""
+    """`SpikeDecision` 을 `spike` 행으로. 호출자가 `conn.commit()` 을 책임진다.
 
-    def __init__(self, conn) -> None:
+    `source` 는 키워드 필수다 — 기본값을 주지 않는다. 기본값이 있으면 새 writer 가
+    그냥 안 적고 지나가는데, 그게 곧 잘못된 라벨이다(모듈 독스트링).
+    """
+
+    def __init__(self, conn, *, source: str) -> None:
         self._conn = conn
+        #: 이 인스턴스가 쓰는 출처. 생성 시점에 검사해 첫 행 전에 막는다.
+        self._source = require_source(source)
         #: (wiki, title) -> wiki_page.id. 같은 문서를 매 윈도우마다 다시 해석하지 않게.
         self._page_ids: dict[tuple[str, str], int] = {}
+
+    @property
+    def source(self) -> str:
+        """이 싱크가 쓰는 `spike.source`. 로그·테스트에서 실제 라벨을 확인할 때."""
+        return self._source
 
     def page_id(self, wiki: str, title: str) -> int:
         """`(wiki, title)` → `wiki_page.id`. 없으면 만든다(baseline_sink 와 같은 규칙)."""
@@ -108,6 +155,7 @@ class SpikeSink:
         page_id = self.page_id(wiki, title)
         with self._conn.cursor() as cur:
             cur.execute(UPSERT_SPIKE_SQL, (
+                self._source,
                 page_id,
                 require_utc(detected_at, "detected_at"),
                 require_utc(window_start, "window_start"),

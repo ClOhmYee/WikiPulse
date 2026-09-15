@@ -30,16 +30,22 @@ def _page(conn, title: str, wiki: str = "enwiki") -> int:
 
 
 def _spike(conn, page_id: int, window_start: datetime, *, edit_count=10,
-           edit_z=None, view_ratio=None, spike_score=26.4575) -> None:
-    """WP-94 런타임이 쓰는 형태 그대로. detected_at = 윈도우 끝."""
+           edit_z=None, view_ratio=None, spike_score=26.4575,
+           source="replay") -> None:
+    """WP-94 런타임이 쓰는 형태 그대로. detected_at = 윈도우 끝.
+
+    `source` 는 V5 에서 NOT NULL 이 됐고 기본값을 일부러 안 남겼다(모든 writer 가
+    출처를 명시하게 하려는 것). 이 어댑터가 읽는 건 리플레이 산출물이라 기본값이
+    "replay" 다 — `cluster/driver.py` 의 `SPIKE_SOURCE` 와 같은 값이다.
+    """
     with conn.cursor() as cur:
         cur.execute(
             """
-            INSERT INTO spike (page_id, detected_at, window_start, edit_count,
+            INSERT INTO spike (source, page_id, detected_at, window_start, edit_count,
                                edit_z, view_ratio, spike_score)
-            VALUES (%s, %s, %s, %s, %s, %s, %s)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
             """,
-            (page_id, window_start + timedelta(hours=1), window_start,
+            (source, page_id, window_start + timedelta(hours=1), window_start,
              edit_count, edit_z, view_ratio, spike_score),
         )
 

@@ -1,6 +1,6 @@
 """윈도우 한 건을 판정해 `spike` 까지 보내는 런타임 경로 (WP-94).
 
-    runtime = SpikeRuntime(BaselineRepository(conn), SpikeSink(conn))
+    runtime = SpikeRuntime(BaselineRepository(conn), SpikeSink(conn, source="replay"))
     outcome = runtime.process(window)      # 급증이면 저장, 아니면 안 저장
     conn.commit()
 

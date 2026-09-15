@@ -3,9 +3,16 @@
     spark-submit --packages org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.3 \
                  streaming/edit_windows.py
 
-이 잡이 하는 것은 집계까지다. 급증 판정과 클러스터링은 다음 스토리다.
-    - 급증 판정 수식(z-score 임계·조회수 2차 판정)  -> WP-38
-    - 클러스터링(Clickstream + Wikidata)            -> 미등록
+싱크는 두 가지다 (`SINK` 환경변수, 기본 `console`).
+    SINK=console  집계 결과를 찍기만 한다. 여태 동작 그대로다.
+    SINK=spike    판정까지 간다 — `page_baseline` 조회 -> `detect()` ->
+                  `spike(source='live')` 적재. `DATABASE_URL` 이 필요하다.
+                  연결은 `streaming/live_spike.py` (WP-100).
+
+~~"이 잡이 하는 것은 집계까지다. 급증 판정과 클러스터링은 다음 스토리다"~~
+    -> 급증 판정은 붙었다 (2026-09-15, WP-100). 클러스터링은 아직이다 —
+    `cluster/driver.py` 에 `source='replay'` 전용 가드가 걸려 있고, 그걸 걷는 전제인
+    `spike.source` 가 이제야 생겼다(다음 스토리).
     근거: docs/requirements-v0.1.md §3.2 2~4번
 
 윈도우 길이는 아직 확정 전이라 환경 변수로 뺐다. 명세 §10 Open Issue —
@@ -15,6 +22,7 @@
 from __future__ import annotations
 
 import os
+import sys
 
 from pyspark.sql import DataFrame, SparkSession
 from pyspark.sql import functions as F
@@ -66,6 +74,13 @@ DEFAULT_WATERMARK = "10 minutes"
 #:
 EDITOR_COUNT_RSD = 0.01
 
+#: 싱크 선택. 기본은 여태와 같은 콘솔이다 — 기존 실행 방식을 바꾸지 않는다.
+#: `SINK=spike` 면 판정까지 가서 `spike(source='live')` 에 적재한다
+#: (`streaming/live_spike.py`). 그 경로는 `DATABASE_URL` 이 필요하다.
+#: 그 외 값은 여태처럼 Spark 내장 포맷 이름으로 그대로 넘긴다(console·memory 등).
+SINK_CONSOLE = "console"
+SINK_SPIKE = "spike"
+
 EDIT_EVENT_SCHEMA = StructType(
     [
         StructField("wiki", StringType()),
@@ -89,6 +104,23 @@ EDIT_EVENT_SCHEMA = StructType(
 
 def env(name: str, default: str) -> str:
     return os.environ.get(name, default)
+
+
+def ensure_project_root_on_path() -> None:
+    """`data-pipeline/` 를 `sys.path` 에 올린다. spark-submit 으로 돌 때 필요하다.
+
+    🔴 **spark-submit 은 스크립트가 있는 디렉터리를 sys.path 에 넣는다** — 작업
+    디렉터리가 아니다. 그래서 `spark-submit streaming/edit_windows.py` 로 돌리면
+    `/opt/app/streaming` 만 올라가고 `streaming.live_spike`·`spike.runtime` 이
+    `ModuleNotFoundError` 로 죽는다 (2026-09-15 컨테이너에서 실측).
+
+    콘솔 싱크는 이 파일 밖을 안 import 해서 여태 안 드러났다. LIVE 싱크를 붙이면서
+    드러난 것이라 여기서 흡수한다 — 호출자가 PYTHONPATH 를 기억해야 하는 구조로
+    두지 않는다. 이미 올라가 있으면 아무것도 하지 않는다(pytest·모듈 실행 경로).
+    """
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    if root not in sys.path:
+        sys.path.insert(0, root)
 
 
 def aggregate_edit_windows(
@@ -186,17 +218,33 @@ def main() -> None:
 
     aggregated = build_stream(spark)
 
-    # 싱크는 지금 콘솔이다. PostgreSQL 적재는 데이터 모델(WP-35)이
-    # 확정된 뒤에 붙인다. 지금 스키마를 넣으면 두 번 고치게 된다.
-    query = (
+    writer = (
         aggregated.writeStream.outputMode("update")
-        .format(env("SINK", "console"))
-        .option("truncate", "false")
-        .option("numRows", env("CONSOLE_ROWS", "20"))
         .option("checkpointLocation", env("CHECKPOINT_DIR", "/tmp/wikipulse-checkpoint"))
         .trigger(processingTime=env("TRIGGER_INTERVAL", "30 seconds"))
-        .start()
     )
+
+    sink = env("SINK", SINK_CONSOLE)
+    if sink == SINK_SPIKE:
+        # ~~"PostgreSQL 적재는 데이터 모델(WP-35)이 확정된 뒤에"~~
+        # -> V1 스키마와 SpikeRuntime(-94)이 서고 나서 연결했다 (2026-09-15, -100).
+        dsn = env("DATABASE_URL", "")
+        if not dsn:
+            # 조용히 콘솔로 떨어지지 않는다 — 적재한 줄 알고 빈 테이블을 보게 된다.
+            raise SystemExit(
+                f"SINK={SINK_SPIKE} 에는 DATABASE_URL 이 필요하다. "
+                "예: postgresql://wikipulse:wikipulse@postgres:5432/wikipulse"
+            )
+        ensure_project_root_on_path()
+        from streaming.live_spike import make_spike_batch_writer
+        query = writer.foreachBatch(make_spike_batch_writer(dsn)).start()
+    else:
+        query = (
+            writer.format(sink)
+            .option("truncate", "false")
+            .option("numRows", env("CONSOLE_ROWS", "20"))
+            .start()
+        )
     query.awaitTermination()
 
 

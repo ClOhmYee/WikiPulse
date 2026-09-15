@@ -262,13 +262,13 @@ PageWindow (wiki,title,window_start,edit_count,editor_count,views)
                                             │  급증만
                                        SpikeSink
                                             ▼
-                                spike  PK id · UNIQUE (page_id, window_start)
+                                spike  PK id · UNIQUE (source, page_id, window_start)
 ```
 
 | 파일 | 역할 |
 | --- | --- |
 | `baseline_repository.py` | `(wiki, title, hour_of_day)` → `Baseline`. 문서당 24슬롯 한 번에 읽어 캐시 |
-| `spike_sink.py` | `SpikeDecision` → `spike` 행. `(page_id, window_start)` 멱등 upsert |
+| `spike_sink.py` | `SpikeDecision` → `spike` 행. `(source, page_id, window_start)` 멱등 upsert. `source` 는 생성 시 키워드 필수 |
 | `runtime.py` | `PageWindow` 한 건을 판정하고 급증이면 저장. **LIVE·리플레이 공용** |
 
 - 🔴 **리플레이 전용이 아니다.** 입력이 `PageWindow` 한 건이라 `streaming/edit_windows.py`
@@ -291,6 +291,11 @@ PageWindow (wiki,title,window_start,edit_count,editor_count,views)
   계속 부르는 구조)가 `page_baseline` 재적재를 영원히 못 읽는데 **에러 없이 z 만 틀린다.**
   윈도우를 `process()` 로 하나씩 넣으면 캐시는 유지된다 — 호출자가 명시적으로 고른 경로다.
 - **미탐은 저장하지 않는다.** `spike` 는 "판정을 통과한 문서" 다(V1 테이블 주석).
+- 🔴 **출처(`spike.source`)를 명시한다** (WP-100, `V5__spike_source.sql`).
+  `SpikeSink(conn, source="live"|"replay")` — 키워드 필수이고 기본값이 없다. 추론하지
+  않는 이유는, "DSN 이 있으면 live" 같은 규칙을 만드는 순간 두 경로가 어휘를 공유하며
+  조용히 어긋나서다. **UNIQUE 키에 `source` 가 들어가 두 출처가 서로 못 덮는다** —
+  안 넣으면 LIVE 판정이 리플레이 행을 `ON CONFLICT` 로 갱신하며 출처까지 바꾼다.
 - **없음 / 얇음 / db** 를 `DetectionOutcome.baseline_source` 로 가른다. `detect()` 는 앞의
   둘을 똑같이 신규 문서 경로로 보내지만 원인이 다르다 — **없음은 적재가 안 된 것**,
   **얇음은 표본이 모자란 것**이다. 안 가르면 기준선을 안 넣고 돌린 실행을 표본 부족으로 오진한다.
@@ -326,6 +331,20 @@ Milton 2024-10 한 달, 같은 편집 적재본·같은 명령 (2026-09-15 실�
 | DB | 미지정 → `2024-10-31` | 272 | **6** | 6 | db 252 · 얇음 20 · 없음 0 |
 | DB | `2024-10-05` (사건 전날) | 272 | **48** | 48 | db 0 · 얇음 0 · **없음 272** |
 | 대조군 `Milton Park` | 둘 다 | 7 | **0** | 0 | 얇음 7 |
+
+✅ **WP-100(spike.source 추가) 후 재확인** — 위 표의 1·3·4행을 실데이터로 다시
+냈고 값이 그대로다 (2026-09-15). HDFS `/wikipulse/raw/mediawiki_history/wiki=enwiki/year=2024/month=10/`
+에서 Milton 두 문서만 **서버에서 걸러** 받았다(1,442 events · 49,910 B — 164 MB 전량을 받지 않는다):
+
+| 모드 | 윈도우 | 급증 | spike 적재 | 기준선 |
+| --- | --- | --- | --- | --- |
+| 메모리 `Hurricane_Milton` | 272 | **48** | — | 최초 탐지 `2024-10-06T19:00:00` |
+| DB `--as-of 2024-10-05` | 272 | **48** | 48 | db 0 · 얇음 0 · 없음 272 |
+| 대조군 `Milton_Park` | 7 | **0** | 0 | — |
+
+적재 48행은 전부 `source='replay'` 이고, **같은 명령을 두 번 돌려도 48행·id 1~48 그대로다**
+— UNIQUE 키에 `source` 가 들어가도 리플레이 멱등성이 안 깨진다는 실데이터 확인이다.
+⚠️ 공용 dev DB 를 건드리지 않으려고 일회용 DB(`milton_regress`)에 V1~V5 를 올려 돌리고 지웠다.
 
 **`--as-of` 를 사건 전날로 주면 메모리 모드와 숫자가 정확히 같아진다**(272 / 48, 최초
 `2024-10-06T19:00Z`, 대조군 0). 문서가 `2024-10-06` 에 처음 편집돼 그 창에 관측이 없고,
@@ -438,9 +457,17 @@ cd data-pipeline && .venv/Scripts/python.exe -m pytest spike/tests/test_baseline
 - **실규모 Spark 실행** — 위 대조는 로컬 `local[1]` 소표본이다. Spark 2노드
   (`WP-27`)·HDFS(`-28`)에서의 태스크 수·소요 시간은 그때 잰다.
 
-- **Streaming 연결.** ~~`detect()` 를 붙여 spike 테이블에 쓰는 건 데이터 모델(-35)·기준선
-  적재가 develop 에 들어간 뒤다~~ → 판정·적재 경로는 `runtime.py` 로 섰다(WP-94).
-  남은 건 `streaming/edit_windows.py` 의 집계 출력을 `PageWindow` 로 바꿔 `SpikeRuntime`
-  에 넘기는 것뿐이다(`foreachBatch`). 이 스토리 범위 밖.
+- **Streaming 연결** — ~~`detect()` 를 붙여 spike 테이블에 쓰는 건 데이터 모델(-35)·기준선
+  적재가 develop 에 들어간 뒤다~~ → 판정·적재 경로는 `runtime.py` 로 섰고(WP-94),
+  ~~남은 건 집계 출력을 `PageWindow` 로 바꿔 넘기는 것뿐~~ → **붙었다**
+  (WP-100, `streaming/live_spike.py`). `SINK=spike` 로 돌리면
+  Kafka → Spark 윈도우 → `SpikeRuntime` → `spike(source='live')` 까지 간다.
+  실 Kafka·실 Spark·실 PostgreSQL 관통 확인됨 (2026-09-15).
+  🔴 **남은 것은 LIVE 클러스터다.** `cluster/driver.py` 는 아직 `source='replay'` 전용
+  가드가 걸려 있고, 씨드 조회(`SELECT_SEEDS_SQL`)에 `source` 조건이 **없다** — LIVE 행이
+  쌓이면 리플레이 스냅샷에 섞인다. 그 필터와 가드 해제가 다음 스토리다.
+  ⚠️ **compose 의 `spark` 서비스로는 아직 `SINK=spike` 를 못 돌린다** —
+  `apache/spark:3.5.3-python3` 의 파이썬이 3.8.10 이라 못박은 psycopg 3.3.5 가 안 깔린다
+  (2026-09-15 실측). 파이썬 3.11 기반 이미지는 배포 토폴로지 문제라 WP-27 쪽이다.
 - **윈도우 길이·봇 필터 강도** 는 실데이터로 튜닝. 지금 임계는 Strait of Hormuz 한
   사건 기준이라 여러 사건으로 넓혀야 한다. (EWMA 반감기는 위 -59 참조.)

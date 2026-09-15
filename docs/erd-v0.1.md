@@ -58,7 +58,7 @@ spike → issue_cluster ─┬─ cluster_member   (어떤 문서가 묶였나)
 | `page_edit_window` | `(page_id, window_start)` | `page_id` | 슬라이딩이라 편집 1건이 여러 행에 걸린다 |
 | `page_view_hourly` | `(page_id, ts_hour)` | `page_id` | |
 | `page_baseline` | `(page_id, hour_of_day)` | `page_id` | `hour_of_day` 0~23 (UTC 시). ~~`hour_of_week` 0~167~~ → 2026-09-15 (WP-84, `V3__baseline_hour_of_day.sql`). `view_stddev` 추가 — 2026-09-15 (WP-90, `V4__baseline_view_stddev.sql`). 조회수 z 의 유일한 입력이고, NULL 이면 조회수 단독 발동을 안 한다 |
-| `spike` | `id` | `page_id` | `UNIQUE (page_id, window_start)` — 같은 창을 두 번 못 넣는다 |
+| `spike` | `id` | `page_id` | `UNIQUE (source, page_id, window_start)` — 같은 출처가 같은 창을 두 번 못 넣는다. ~~`UNIQUE (page_id, window_start)`~~ → 2026-09-15 (WP-100, `V5__spike_source.sql`). `source` ∈ {`live`, `replay`} 가 키에 들어간 이유는, 안 들어가면 LIVE 판정이 리플레이 행을 `ON CONFLICT` 로 덮어쓰며 출처까지 바꾸기 때문이다. 두 출처가 같은 문서·창을 **다른 행으로** 갖는다 |
 | `issue_cluster` | `id` | — | `snapshot_ts` 가 시점을 가른다 |
 | `cluster_member` | `(cluster_id, page_id)` | `cluster_id`, `page_id` | 한 문서가 여러 클러스터에 들어갈 수 있다 |
 | `issue_report` | `cluster_id` | `cluster_id` | PK가 곧 FK = **1:1** |

@@ -228,7 +228,11 @@ def run_db_mode(by_title: dict[str, list[Observation]], targets: list[str],
 
     exit_code = 0
     with psycopg.connect(args.dsn) as conn:
-        runtime = SpikeRuntime(BaselineRepository(conn), SpikeSink(conn))
+        # 🔴 출처를 명시한다. 이 CLI 는 정의상 과거 덤프 재생이다 — LIVE 경로
+        # (streaming/live_spike.py)가 같은 테이블에 source='live' 로 쓴다.
+        # 키에 source 가 들어가므로(V5) 두 출처가 서로 덮어쓰지 않는다.
+        runtime = SpikeRuntime(BaselineRepository(conn),
+                               SpikeSink(conn, source="replay"))
 
         for title in targets:
             kind = "대조군" if title in args.control else "검증"
