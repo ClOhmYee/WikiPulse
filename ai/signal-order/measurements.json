@@ -1,0 +1,476 @@
+{
+  "events": [
+    {
+      "title": "Hassan_Nasrallah",
+      "kind": "기존",
+      "note": "이스라엘 공습 사망 (9/27)",
+      "anchor": "2024-09-26",
+      "edit_day": "2024-09-28",
+      "edit_count": 10,
+      "edit_editors": 3,
+      "edit_is_new_page": true,
+      "views": {
+        "0": {
+          "day": "2024-09-19",
+          "views": 22790,
+          "baseline": 2117.4,
+          "ratio": 10.8,
+          "z": 5.6,
+          "lag_days": 9
+        },
+        "100": {
+          "day": "2024-09-19",
+          "views": 22790,
+          "baseline": 2117.4,
+          "ratio": 10.8,
+          "z": 5.6,
+          "lag_days": 9
+        },
+        "500": {
+          "day": "2024-09-19",
+          "views": 22790,
+          "baseline": 2117.4,
+          "ratio": 10.8,
+          "z": 5.6,
+          "lag_days": 9
+        },
+        "1000": {
+          "day": "2024-09-19",
+          "views": 22790,
+          "baseline": 2117.4,
+          "ratio": 10.8,
+          "z": 5.6,
+          "lag_days": 9
+        }
+      }
+    },
+    {
+      "title": "Hurricane_Helene",
+      "kind": "신규",
+      "note": "허리케인 상륙 (9/26)",
+      "anchor": "2024-09-26",
+      "edit_day": "2024-09-27",
+      "edit_count": 16,
+      "edit_editors": 13,
+      "edit_is_new_page": true,
+      "views": {
+        "0": {
+          "day": "2024-09-22",
+          "views": 8,
+          "baseline": 0.9,
+          "ratio": 8.9,
+          "z": 8.1,
+          "lag_days": 5
+        },
+        "100": {
+          "day": "2024-09-25",
+          "views": 719,
+          "baseline": 12.8,
+          "ratio": 56.1,
+          "z": 25.0,
+          "lag_days": 2
+        },
+        "500": {
+          "day": "2024-09-25",
+          "views": 719,
+          "baseline": 12.8,
+          "ratio": 56.1,
+          "z": 25.0,
+          "lag_days": 2
+        },
+        "1000": {
+          "day": "2024-09-26",
+          "views": 1503,
+          "baseline": 72.7,
+          "ratio": 20.7,
+          "z": 7.2,
+          "lag_days": 1
+        }
+      }
+    },
+    {
+      "title": "Hurricane_Milton",
+      "kind": "신규",
+      "note": "허리케인 발생 (10/5)",
+      "anchor": "2024-10-05",
+      "edit_day": "2024-10-06",
+      "edit_count": 10,
+      "edit_editors": 7,
+      "edit_is_new_page": true,
+      "views": {
+        "0": null,
+        "100": null,
+        "500": null,
+        "1000": null
+      }
+    },
+    {
+      "title": "Liam_Payne",
+      "kind": "기존",
+      "note": "사망 (10/16)",
+      "anchor": "2024-10-16",
+      "edit_day": "2024-10-16",
+      "edit_count": 43,
+      "edit_editors": 21,
+      "edit_is_new_page": true,
+      "views": {
+        "0": {
+          "day": "2024-10-16",
+          "views": 2439137,
+          "baseline": 4712.3,
+          "ratio": 517.6,
+          "z": 930.4,
+          "lag_days": 0
+        },
+        "100": {
+          "day": "2024-10-16",
+          "views": 2439137,
+          "baseline": 4712.3,
+          "ratio": 517.6,
+          "z": 930.4,
+          "lag_days": 0
+        },
+        "500": {
+          "day": "2024-10-16",
+          "views": 2439137,
+          "baseline": 4712.3,
+          "ratio": 517.6,
+          "z": 930.4,
+          "lag_days": 0
+        },
+        "1000": {
+          "day": "2024-10-16",
+          "views": 2439137,
+          "baseline": 4712.3,
+          "ratio": 517.6,
+          "z": 930.4,
+          "lag_days": 0
+        }
+      }
+    },
+    {
+      "title": "Yahya_Sinwar",
+      "kind": "기존",
+      "note": "사망 (10/16, 확인 10/17)",
+      "anchor": "2024-10-16",
+      "edit_day": "2024-10-17",
+      "edit_count": 18,
+      "edit_editors": 8,
+      "edit_is_new_page": true,
+      "views": {
+        "0": {
+          "day": "2024-10-17",
+          "views": 543810,
+          "baseline": 8429.1,
+          "ratio": 64.5,
+          "z": 127.7,
+          "lag_days": 0
+        },
+        "100": {
+          "day": "2024-10-17",
+          "views": 543810,
+          "baseline": 8429.1,
+          "ratio": 64.5,
+          "z": 127.7,
+          "lag_days": 0
+        },
+        "500": {
+          "day": "2024-10-17",
+          "views": 543810,
+          "baseline": 8429.1,
+          "ratio": 64.5,
+          "z": 127.7,
+          "lag_days": 0
+        },
+        "1000": {
+          "day": "2024-10-17",
+          "views": 543810,
+          "baseline": 8429.1,
+          "ratio": 64.5,
+          "z": 127.7,
+          "lag_days": 0
+        }
+      }
+    },
+    {
+      "title": "2025_India–Pakistan_conflict",
+      "kind": "신규",
+      "note": "교전 시작 (5/7)",
+      "anchor": "2025-05-07",
+      "edit_day": "2025-05-10",
+      "edit_count": 27,
+      "edit_editors": 13,
+      "edit_is_new_page": true,
+      "views": {
+        "0": {
+          "day": "2025-05-10",
+          "views": 66034,
+          "baseline": 4034.2,
+          "ratio": 16.4,
+          "z": 20.9,
+          "lag_days": 0
+        },
+        "100": {
+          "day": "2025-05-10",
+          "views": 66034,
+          "baseline": 4034.2,
+          "ratio": 16.4,
+          "z": 20.9,
+          "lag_days": 0
+        },
+        "500": {
+          "day": "2025-05-10",
+          "views": 66034,
+          "baseline": 4034.2,
+          "ratio": 16.4,
+          "z": 20.9,
+          "lag_days": 0
+        },
+        "1000": {
+          "day": "2025-05-10",
+          "views": 66034,
+          "baseline": 4034.2,
+          "ratio": 16.4,
+          "z": 20.9,
+          "lag_days": 0
+        }
+      }
+    },
+    {
+      "title": "Papal_conclave",
+      "kind": "기존",
+      "note": "콘클라베 개시 (5/7)",
+      "anchor": "2025-05-07",
+      "edit_day": null,
+      "edit_count": null,
+      "edit_editors": null,
+      "edit_is_new_page": null,
+      "views": {
+        "0": {
+          "day": "2025-05-07",
+          "views": 145248,
+          "baseline": 31774.1,
+          "ratio": 4.6,
+          "z": 3.5,
+          "lag_days": null
+        },
+        "100": {
+          "day": "2025-05-07",
+          "views": 145248,
+          "baseline": 31774.1,
+          "ratio": 4.6,
+          "z": 3.5,
+          "lag_days": null
+        },
+        "500": {
+          "day": "2025-05-07",
+          "views": 145248,
+          "baseline": 31774.1,
+          "ratio": 4.6,
+          "z": 3.5,
+          "lag_days": null
+        },
+        "1000": {
+          "day": "2025-05-07",
+          "views": 145248,
+          "baseline": 31774.1,
+          "ratio": 4.6,
+          "z": 3.5,
+          "lag_days": null
+        }
+      }
+    },
+    {
+      "title": "Strait_of_Hormuz",
+      "kind": "기존",
+      "note": "이란 봉쇄 위협 (6/13~)",
+      "anchor": "2025-06-12",
+      "edit_day": null,
+      "edit_count": null,
+      "edit_editors": null,
+      "edit_is_new_page": null,
+      "views": {
+        "0": {
+          "day": "2025-06-12",
+          "views": 873,
+          "baseline": 309.5,
+          "ratio": 2.8,
+          "z": 8.9,
+          "lag_days": null
+        },
+        "100": {
+          "day": "2025-06-12",
+          "views": 873,
+          "baseline": 309.5,
+          "ratio": 2.8,
+          "z": 8.9,
+          "lag_days": null
+        },
+        "500": {
+          "day": "2025-06-12",
+          "views": 873,
+          "baseline": 309.5,
+          "ratio": 2.8,
+          "z": 8.9,
+          "lag_days": null
+        },
+        "1000": {
+          "day": "2025-06-13",
+          "views": 9129,
+          "baseline": 343.7,
+          "ratio": 26.6,
+          "z": 58.2,
+          "lag_days": null
+        }
+      }
+    },
+    {
+      "title": "Air_India_Flight_171",
+      "kind": "신규",
+      "note": "추락 (6/12)",
+      "anchor": "2025-06-12",
+      "edit_day": "2025-06-12",
+      "edit_count": 126,
+      "edit_editors": 43,
+      "edit_is_new_page": true,
+      "views": {
+        "0": null,
+        "100": null,
+        "500": null,
+        "1000": null
+      }
+    },
+    {
+      "title": "Boeing_787_Dreamliner",
+      "kind": "기존",
+      "note": "추락 기종 (6/12)",
+      "anchor": "2025-06-12",
+      "edit_day": "2025-06-12",
+      "edit_count": 19,
+      "edit_editors": 16,
+      "edit_is_new_page": true,
+      "views": {
+        "0": {
+          "day": "2025-06-12",
+          "views": 411317,
+          "baseline": 3647.7,
+          "ratio": 112.8,
+          "z": 856.0,
+          "lag_days": 0
+        },
+        "100": {
+          "day": "2025-06-12",
+          "views": 411317,
+          "baseline": 3647.7,
+          "ratio": 112.8,
+          "z": 856.0,
+          "lag_days": 0
+        },
+        "500": {
+          "day": "2025-06-12",
+          "views": 411317,
+          "baseline": 3647.7,
+          "ratio": 112.8,
+          "z": 856.0,
+          "lag_days": 0
+        },
+        "1000": {
+          "day": "2025-06-12",
+          "views": 411317,
+          "baseline": 3647.7,
+          "ratio": 112.8,
+          "z": 856.0,
+          "lag_days": 0
+        }
+      }
+    }
+  ],
+  "controls": {
+    "0": {
+      "Cat": [],
+      "Association_football": [],
+      "Deaths_in_2025": [],
+      "List_of_people_named_Peter": [],
+      "Timeline_of_science_fiction": [
+        "2025-05-28"
+      ],
+      "YouTube": [],
+      "India": [
+        "2025-05-07"
+      ],
+      "Python_(programming_language)": [],
+      "World_War_II": [],
+      "Elizabeth_II": [],
+      "Solar_System": [],
+      "Chess": [],
+      "Taylor_Swift": [
+        "2025-05-20",
+        "2025-05-30"
+      ],
+      "The_Beatles": []
+    },
+    "100": {
+      "Cat": [],
+      "Association_football": [],
+      "Deaths_in_2025": [],
+      "List_of_people_named_Peter": [],
+      "Timeline_of_science_fiction": [],
+      "YouTube": [],
+      "India": [
+        "2025-05-07"
+      ],
+      "Python_(programming_language)": [],
+      "World_War_II": [],
+      "Elizabeth_II": [],
+      "Solar_System": [],
+      "Chess": [],
+      "Taylor_Swift": [
+        "2025-05-20",
+        "2025-05-30"
+      ],
+      "The_Beatles": []
+    },
+    "500": {
+      "Cat": [],
+      "Association_football": [],
+      "Deaths_in_2025": [],
+      "List_of_people_named_Peter": [],
+      "Timeline_of_science_fiction": [],
+      "YouTube": [],
+      "India": [
+        "2025-05-07"
+      ],
+      "Python_(programming_language)": [],
+      "World_War_II": [],
+      "Elizabeth_II": [],
+      "Solar_System": [],
+      "Chess": [],
+      "Taylor_Swift": [
+        "2025-05-20",
+        "2025-05-30"
+      ],
+      "The_Beatles": []
+    },
+    "1000": {
+      "Cat": [],
+      "Association_football": [],
+      "Deaths_in_2025": [],
+      "List_of_people_named_Peter": [],
+      "Timeline_of_science_fiction": [],
+      "YouTube": [],
+      "India": [
+        "2025-05-07"
+      ],
+      "Python_(programming_language)": [],
+      "World_War_II": [],
+      "Elizabeth_II": [],
+      "Solar_System": [],
+      "Chess": [],
+      "Taylor_Swift": [
+        "2025-05-20",
+        "2025-05-30"
+      ],
+      "The_Beatles": []
+    }
+  }
+}
