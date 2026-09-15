@@ -119,11 +119,20 @@ RDB는 PostgreSQL 하나다. MySQL을 따로 두지 않는다 — pgvector 때�
 | 경로 | 원래 표기 | 처리 |
 | --- | --- | --- |
 | LIVE EventStreams | 공백형 | 그대로 (계약 고정용으로 함수는 통과시킨다) |
-| `mediawiki_history` 덤프 | 밑줄형 | `canonical_title`로 변환 |
-| `pageview_complete` 덤프 | 밑줄형 | `canonical_title`로 변환 — **WP-57 복구 후 적용** |
-| Clickstream 덤프 | 밑줄형 | 지금은 자체 변환(밑줄→공백, 결과 동일). 공통 함수로 통합은 후속 |
+| `mediawiki_history` 덤프 | 밑줄형 | `canonical_title`로 변환 (`batch/normalize_dump.py:normalize_dump`) |
+| `pageview_complete` 덤프 | 밑줄형 | ~~-57 머지 후 적용~~ → **적용됨** (`batch/pageview.py:parse_row`, 2026-09-15) |
+| Clickstream 덤프 | 밑줄형 | 자체 변환(`raw.replace("_", " ")`). 공통 함수 통합은 후속 — 아래 ⚠️ |
 
-구현은 `data-pipeline/producer/normalize.py`의 `canonical_title()` **한 곳**이다. 경로마다 따로 구현하지 않는다.
+구현은 `data-pipeline/producer/normalize.py`의 `canonical_title()` **한 곳**이다. 경로마다 따로 구현하지 않는다. 위 표의 앞 세 경로가 이 함수를 import해 쓴다.
+
+⚠️ **Clickstream만 아직 자체 구현이고, 결과가 완전히 같지는 않다.** `batch/clickstream.py:canonical_title`은 `replace("_", " ")`뿐이라 **연속 축약·trim이 없다.** `Hurricane__Milton`이 공통 함수로는 `Hurricane Milton`, 여기서는 `Hurricane  Milton`(공백 2개)이 되어 같은 문서가 `(wiki, title)` 두 행으로 갈라진다. Clickstream은 WP-79의 AC가 아니라 손대지 않았다 — 후속으로 통합한다.
+
+**적용 시점 규칙 (⚠️ 조용히 틀리는 지점)**: canonical은 **namespace/유효성 필터 뒤, 집계 키가 되기 전**에 건다.
+
+- 앞으로 당기면 — `pageview.py`의 namespace prefix 목록이 `User_talk`처럼 밑줄형이라 `User talk`와 일치하지 않는다. namespace 문서가 ns0로 새어 들어온다.
+- 뒤로 미루면 — 이미 원래 표기로 그룹이 갈린 뒤라 `Hurricane_Milton`과 `Hurricane__Milton`이 별개 키로 집계된다. 출력 직전 문자열 치환은 이 문제를 못 고친다.
+
+회귀 테스트: `batch/tests/test_pageview.py`의 `test_표기만_다른_같은_문서가_한_키로_합산된다`(집계 전 적용 확인)·`test_canonical_이_namespace_필터보다_뒤에_걸린다`(순서 확인).
 
 **공백형을 고른 이유**
 
@@ -308,7 +317,7 @@ RAM 16 GB에서 Kafka + Spark + HDFS 데몬을 올리면 Spark executor 몫은 8
 
 재현 스크립트는 아직 대부분 저장소 밖에 있다 (WP-53). 이슈 대표 텍스트 비교만 `ai/issue-text-poc/`에 들어와 있다.
 
-~~⚠️ historical 덤프와 LIVE EventStreams의 문서 제목 표기가 다르다 — canonical 규칙 통일은 WP-79로 분리했다.~~ → **공백형으로 확정** (2026-09-13, §5.1). `batch/normalize_dump.py`가 `canonical_title`로 맞춘다. 남은 적용 대상은 `batch/pageviews.py`(-57 복구 후)와 `batch/clickstream.py`(공통 함수로 통합, 후속).
+~~⚠️ historical 덤프와 LIVE EventStreams의 문서 제목 표기가 다르다 — canonical 규칙 통일은 WP-79로 분리했다.~~ → **공백형으로 확정** (2026-09-13, §5.1). `batch/normalize_dump.py`가 `canonical_title`로 맞춘다. ~~남은 적용 대상은 `batch/pageviews.py`(-57 복구 후)와 `batch/clickstream.py`~~ → `batch/pageview.py`도 **적용 완료** (2026-09-15, 파일명은 `pageviews`가 아니라 `pageview`다). 남은 것은 `batch/clickstream.py` 하나 — 공통 함수 통합, 후속.
 
 ## 12. 변경 이력
 

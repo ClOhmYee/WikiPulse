@@ -178,3 +178,92 @@ def test_main_전부결손이면_3(monkeypatch):
     from batch import pageview_ingest
     monkeypatch.setattr(pageview_ingest, "ingest_date", lambda *a, **k: "missing")
     assert pageview_ingest.main(["--date", "2025-06-12"]) == 3
+
+
+# ------------------------------------------- canonical title (WP-79)
+#
+# 왜 여기서 보나 — pageview 는 baseline `view_ewma` 입력이고, 편집 경로와
+# `(wiki, title)` 로 조인된다. 키가 갈라지면 예외 없이 "조회수가 없는 문서"가 되어
+# 급증 2차 판정이 조용히 틀린다. 근거: 명세 §3.2 3번·§5.1.
+#
+# ⚠️ 덤프 계약상 **제목에 리터럴 공백은 올 수 없다.** 6컬럼을 `" "` 로 자르는 형식이라
+#   공백이 든 제목은 7필드가 되어 SchemaMismatch 로 떨어진다. 그래서 "공백형 제목이
+#   덤프에 섞여 들어오는" 시나리오는 인위적이라 만들지 않는다. 덤프 안에서 실제로
+#   흔들릴 수 있는 건 밑줄 표기(연속·앞뒤)뿐이고, 공백형과의 대조는 아래
+#   `test_pageview_와_편집경로가_같은_키를_낸다` 가 소스 간 조인으로 확인한다.
+
+from producer.normalize import canonical_title, normalize  # noqa: E402
+
+
+def test_밑줄_제목이_canonical_공백형으로_나온다():
+    """핵심 회귀. 덤프는 `Hurricane_Milton`, 내부 canonical 은 `Hurricane Milton`."""
+    title, hours = parse_row(
+        row("en.wikipedia", "Hurricane_Milton", "780", "desktop", "5", "A5"),
+        "en.wikipedia",
+    )
+    assert title == "Hurricane Milton"
+    assert hours == {0: 5}
+
+
+@pytest.mark.parametrize(
+    "dump_title",
+    ["Hurricane_Milton", "Hurricane__Milton", "_Hurricane_Milton_", "Hurricane___Milton"],
+)
+def test_밑줄_표기가_흔들려도_같은_canonical(dump_title):
+    """연속·앞뒤 밑줄은 덤프 표본에서 본 적 없다. 봐도 키가 안 갈라지게 방어한다."""
+    title, _ = parse_row(
+        row("en.wikipedia", dump_title, "780", "desktop", "5", "A5"), "en.wikipedia"
+    )
+    assert title == "Hurricane Milton"
+
+
+def test_canonical_은_멱등이다():
+    once = canonical_title("_Hurricane__Milton_")
+    assert canonical_title(once) == once == "Hurricane Milton"
+
+
+def test_표기만_다른_같은_문서가_한_키로_합산된다():
+    """합산 **전에** canonical 이 걸리는지 보는 테스트.
+
+    출력 직전에만 문자열을 바꾸면 `acc` 가 이미 원형으로 그룹을 갈라 놓은 뒤라
+    같은 0시가 레코드 두 개로 나온다. 여기서 views 8 이 나와야 시점이 맞는 것이다.
+    """
+    lines = [
+        row("en.wikipedia", "Hurricane_Milton", "780", "desktop", "5", "A5"),
+        row("en.wikipedia", "Hurricane__Milton", "781", "mobile-web", "3", "A3"),
+    ]
+    recs = list(aggregate(lines, "en.wikipedia", "enwiki", "user", "2024-10-09"))
+    assert len(recs) == 1, f"키가 갈라졌다: {[r.title for r in recs]}"
+    assert recs[0] == PageviewRecord(
+        "enwiki", "Hurricane Milton", "2024-10-09T00:00:00", "user", 8)
+
+
+def test_pageview_와_편집경로가_같은_키를_낸다():
+    """소스 간 조인 키 확인. 이게 깨지면 조회수와 편집량이 서로 다른 행이 된다."""
+    title, _ = parse_row(
+        row("en.wikipedia", "Strait_of_Hormuz", "1", "desktop", "5", "A5"), "en.wikipedia"
+    )
+    live = normalize({
+        "meta": {"domain": "en.wikipedia.org", "id": "x", "dt": "2026-09-08T00:24:20.990Z"},
+        "type": "edit", "namespace": 0, "title": "Strait of Hormuz",
+        "user": "Alice", "bot": False, "minor": False,
+        "length": {"old": 1000, "new": 1100}, "revision": {"old": 10, "new": 11},
+        "wiki": "enwiki",
+    })
+    assert title == live["title"] == "Strait of Hormuz"
+
+
+def test_canonical_이_namespace_필터보다_뒤에_걸린다():
+    """순서 회귀. canonical 을 앞으로 옮기면 `User_talk` 가 `User talk` 가 되어
+    prefix 목록과 일치하지 않고, namespace 문서가 ns0 로 새어 들어온다."""
+    for ns_title in ["User_talk:Alice", "Template_talk:Infobox", "Image_talk:X.png"]:
+        assert parse_row(
+            row("en.wikipedia", ns_title, "1", "desktop", "5", "A5"), "en.wikipedia"
+        ) is None, f"{ns_title} 가 통과했다 — canonical 적용 시점이 앞으로 밀렸다"
+
+
+def test_다른_문서는_여전히_다른_키다():
+    """정규화가 서로 다른 문서를 뭉쳐버리지 않는지. 반대 방향 확인."""
+    a, _ = parse_row(row("en.wikipedia", "Hurricane_Milton", "1", "d", "5", "A5"), "en.wikipedia")
+    b, _ = parse_row(row("en.wikipedia", "Hurricane_Helene", "2", "d", "5", "A5"), "en.wikipedia")
+    assert a != b

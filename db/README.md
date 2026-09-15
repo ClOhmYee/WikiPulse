@@ -27,6 +27,18 @@ UNIQUE 를 걸었다. 문서 이동이 일어나면 새 행이 생긴다 — MVP
 `canonical_title()` 로 맞춰 보낸다. DDL 에 제약을 걸지는 않았다(정규화 규칙을
 CHECK 로 옮기면 규칙이 두 곳에 생긴다). 규칙과 근거는 명세 §5.1 (WP-79).
 
+**지금 이 보장이 어디까지인가** (2026-09-15 확인). `wiki_page` 에 쓰는 코드는
+`spike/baseline_sink.py` 의 `RESOLVE_PAGE_SQL` UPSERT **하나뿐**이다. 그 title 은
+-58 Historical Window 샤드의 `row["title"]` 을 그대로 쓰고, 그 샤드는
+`batch/normalize_dump.py` 가 `canonical_title` 로 맞춘 값이다 — 즉 **DB 경계에
+닿기 전에 이미 canonical 이다.** `baseline_sink` 자체는 정규화하지 않는다.
+title 로 `wiki_page` 를 조회하는 코드는 **아직 없다**(`cluster/driver.py` 의
+`load_pages_by_title` 은 docstring 속 의사코드이고 실제 함수가 없다).
+
+🔴 **새 write path 를 추가하는 사람의 책임**: canonical 을 DB 직전에 부르지 말고,
+**소스를 읽어 들이는 지점에서** 이미 canonical 인 샤드를 쓰거나 `canonical_title` 을
+통과시킨다. 집계·그룹핑이 끝난 뒤에 문자열만 바꾸면 키가 이미 갈라진 뒤다 — 명세 §5.1.
+
 **표시용 제목을 따로 두지 않는다.** 공백형이 곧 MediaWiki 의 표시 제목이라
 (`Hurricane Milton`·`EBay`) 내부 식별용과 표시용이 같은 문자열이다. 나누면 두 값이
 갈라질 위험만 생긴다. 백엔드는 `page_id` 로 조인하고 `title` 은 표시용으로만 읽는다.

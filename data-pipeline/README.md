@@ -126,6 +126,11 @@ docker compose run --rm spark
 `canonical_title()` **한 곳**이다 — 경로마다 따로 구현하지 않는다.
 규칙·근거·비적용 항목은 그 함수 docstring 과 명세 §5.1 (WP-79).
 
+이 함수를 쓰는 경로 (2026-09-15): `producer/normalize.py`(LIVE) ·
+`batch/normalize_dump.py`(mediawiki_history) · `batch/pageview.py`(pageview_complete).
+⚠️ `batch/clickstream.py` 만 아직 자체 구현(`replace("_", " ")`)이라 연속 축약·trim 이
+없다 — 후속 통합 대상. 적용 시점은 **필터 뒤·집계 키 앞**이다(§5.1).
+
 ## 원본 스키마에서 알게 된 것 (2026-09-08 실측)
 
 recentchange 이벤트를 실제로 받아 확인한 것들이다.
