@@ -21,7 +21,7 @@
     `editor_count >= 2` 하나를 걸자 101건으로 줄었고(74% 감소) 대상 재현율은 그대로였다.
     명세 §3.2 2번의 "1인 반복 편집은 거른다"가 여태 코드에 없던 부분이다.
 
-절대 하한이 반드시 필요한 이유
+절대 하한이 반드시 필요한 이유 (편집·조회수 양쪽)
     평소 편집이 0~1 건인 문서는 표준편차가 작아 2건만 돼도 z 가 폭발한다.
     Strait of Hormuz 6/12 도 2.6배(작은 배수)지만 z 11 인 건 baseline 이
     안정적이라 그렇다. 얇은 baseline 은 절대 하한이 막는다.
@@ -36,6 +36,27 @@ EDIT_Z_THRESHOLD = 3.0
 VIEW_Z_THRESHOLD = 3.0
 MIN_ABSOLUTE_EDITS = 10   # 얇은 baseline 오탐 방지. 신규 문서 판정에도 쓴다.
 MIN_VIEW_RATIO = 2.0      # 조회수 최소 배수. z 만으로는 부족(6/12 가 2.6배)
+
+#: 조회수 절대 하한 (WP-87, 2026-09-15 실측). 편집 쪽 MIN_ABSOLUTE_EDITS 의 대응물.
+#:
+#: 배수도 z 도 **상대값**이라, 평소 값이 아주 작으면 절대량이 무의미해도 통과한다.
+#: `Hurricane_Helene` 2024-09 이 평소 1~3회/일이었는데 9/22 에 **8회**가 되자
+#: `z 8.1 · 8.9배` 로 규칙을 통과했다 — 진짜 폭증은 9/25(719회)부터다.
+#:
+#: 사건 10건 전수 sweep (ai/signal-order/measure.py):
+#:     하한 없음  Helene 9/22 오탐. 대조군 434 문서·일에서 4건 발동
+#:     100        Helene 9/25 로 교정. 나머지 9건 값 불변. 대조군 3건
+#:     500        100 과 완전히 동일
+#:     1000       Helene 9/26, Strait_of_Hormuz 6/12 -> 6/13 (진짜 신호가 하루 늦는다)
+#:
+#: 100~500 구간이 평평해서 **아래쪽 끝**을 골랐다 — 재현율 여유를 남기는 쪽이다.
+#: 500 도 현재 근거로는 똑같이 지지된다. 꼬리 문서 노이즈가 실제로 드러나면
+#: 대조군을 키워 다시 재고 올린다.
+#:
+#: ⚠️ 문서 인기도에 비례하지 않는 **고정값**이다. 평소 100만 조회인 문서엔 영향이 없고
+#: 꼬리 문서만 막는다 — 편집 쪽 하한 10 과 같은 성격이다.
+#: 🔴 기존 문서 경로에만 걸린다. 신규 문서 경로는 조회수를 아예 안 본다(baseline 부재).
+MIN_ABSOLUTE_VIEWS = 100
 MIN_BASELINE_SAMPLE_DAYS = 7  # baseline 이 이보다 얇으면 신규 문서로 취급
 #: 서로 다른 편집자 최소 수. 한 사람의 연속 편집(정리 작업·목록 갱신)을 급증에서 뺀다.
 #: 실측 2026-09-15 (WP-85): 이 게이트 하나로 대조군 오탐 395 -> 101 건 (74% 감소),
@@ -150,6 +171,10 @@ def _detect_existing_page(window: Window, baseline: Baseline) -> SpikeDecision:
         and view_ratio >= MIN_VIEW_RATIO
         and view_z is not None
         and view_z >= VIEW_Z_THRESHOLD
+        # 절대 하한. 배수·z 는 둘 다 상대값이라 평소가 1~3회인 문서는 8회로도 통과한다
+        # (WP-87). 조회수가 단독 트리거가 된 뒤로 이 공백의 영향이 커졌다.
+        and window.views is not None
+        and window.views >= MIN_ABSOLUTE_VIEWS
     )
 
     if not (edit_pass or view_pass):
@@ -157,7 +182,8 @@ def _detect_existing_page(window: Window, baseline: Baseline) -> SpikeDecision:
             is_spike=False, is_new_page=False, edit_z=edit_z, view_ratio=view_ratio,
             spike_score=0.0,
             reason=(f"편집·조회수 둘 다 미달 (편집 z={edit_z}, count={window.edit_count}, "
-                    f"editors={window.editor_count} / 조회수 배수={view_ratio}, z={view_z})"),
+                    f"editors={window.editor_count} / 조회수 {window.views}회, "
+                    f"배수={view_ratio}, z={view_z})"),
         )
 
     if edit_pass and view_pass:

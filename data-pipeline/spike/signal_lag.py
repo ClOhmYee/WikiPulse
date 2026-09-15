@@ -55,7 +55,7 @@ from datetime import date, timedelta
 from pathlib import Path
 
 from .baseline_rows import BASELINE_WINDOW_DAYS
-from .detector import MIN_VIEW_RATIO, VIEW_Z_THRESHOLD
+from .detector import MIN_ABSOLUTE_VIEWS, MIN_VIEW_RATIO, VIEW_Z_THRESHOLD
 from .ewma import DEFAULT_HALFLIFE_DAYS, Observation, ewma_mean_std
 from .replay import aggregate, first_detection, read_edit_events, replay_title
 
@@ -166,7 +166,7 @@ def first_view_signal(
     halflife_days: float = DEFAULT_HALFLIFE_DAYS,
     window_days: int = BASELINE_WINDOW_DAYS,
     not_before: date | None = None,
-    min_absolute_views: int = 0,
+    min_absolute_views: int = MIN_ABSOLUTE_VIEWS,
 ) -> ViewSignal | None:
     """조회수가 처음 `z>=3 AND 배수>=2` 를 넘은 날.
 
@@ -177,11 +177,11 @@ def first_view_signal(
     not_before 를 주면 그날 이후만 본다. 관측 구간 앞부분의 무관한 급등을
     사건 신호로 오인하지 않기 위해서다(호출자가 사건 전 며칠까지 허용할지 정한다).
 
-    min_absolute_views 는 **측정용 실험 손잡이**다. 기본 0 = 하한 없음 —
-    `detector.py` 의 현재 조회수 판정에는 절대 하한이 없고, 이 함수는 그 규칙을
-    그대로 재현해야 한다. 🔴 여기에 기본값을 넣어 detector 와 다른 판정을 만들지 않는다.
-    하한을 넣었을 때 무엇이 달라지는지 재려고 파라미터로만 연다
-    (평소 1회/일 문서가 8회로 z 8 을 내는 경우 — Hurricane_Helene 2024-09-22).
+    min_absolute_views 기본값은 **detector 의 MIN_ABSOLUTE_VIEWS 를 그대로 따라간다**
+    (~~0 = 하한 없음~~ → WP-87 에서 detector 에 하한이 생겼다). 🔴 이 함수는
+    detector 와 같은 답을 내야 하므로 기본값을 따로 고정하지 않는다 — 임계가 바뀌면
+    측정도 같이 움직여야 한다. 다른 값을 넣어 보는 건 sweep 용으로만 쓴다
+    (`ai/signal-order/measure.py` 의 VIEW_FLOORS).
     """
     for day in sorted(series):
         if not_before is not None and day < not_before:
@@ -245,7 +245,7 @@ def measure(
     view_lookback_days: int = BASELINE_WINDOW_DAYS + 7,
     view_lookahead_days: int = 21,
     halflife_days: float = DEFAULT_HALFLIFE_DAYS,
-    min_absolute_views: int = 0,
+    min_absolute_views: int = MIN_ABSOLUTE_VIEWS,
 ) -> list[LagResult]:
     """문서별로 두 신호의 최초 시점과 시차를 낸다.
 
@@ -334,8 +334,9 @@ def build_arg_parser() -> argparse.ArgumentParser:
                    help="측정할 문서. 밑줄·공백 아무 형태로나 준다. 여러 번 줄 수 있다")
     p.add_argument("--event-date", help="사건 기준일 YYYY-MM-DD. 없으면 덤프 첫 편집일")
     p.add_argument("--halflife-days", type=float, default=DEFAULT_HALFLIFE_DAYS)
-    p.add_argument("--min-views", type=int, default=0,
-                   help="조회수 절대 하한(실험용). 기본 0 = detector 현재 규칙 그대로")
+    p.add_argument("--min-views", type=int, default=MIN_ABSOLUTE_VIEWS,
+                   help=f"조회수 절대 하한. 기본 {MIN_ABSOLUTE_VIEWS} "
+                        "= detector.MIN_ABSOLUTE_VIEWS 그대로. sweep 할 때만 바꾼다")
     p.add_argument("--json", action="store_true", help="결과를 JSON 으로")
     return p
 
