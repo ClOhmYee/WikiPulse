@@ -11,8 +11,12 @@
       edit_count   : 그 문서·그 시간의 봇 제외 편집 수
       editor_count : 그 윈도우의 서로 다른 편집자 수. 급증 판정의 편집자 하한
                      (detector.MIN_DISTINCT_EDITORS, WP-85)이 이 값을 본다.
-                     ⚠️ 스트리밍은 approx_count_distinct(근사), 여기는 정확값이다 —
-                     편집자 1~10명 구간에서 두 값이 일치함을 실측했다(불일치 0건).
+                     🔴 스트리밍은 approx_count_distinct(근사), 여기는 정확값이라
+                     **두 값이 갈린다.** ~~편집자 1~10명 구간에서 일치함을 실측(불일치 0건)~~
+                     → 표본을 200,000 events 로 키우니 **21건 불일치**(전부 과소 계수,
+                     2→1 이 13건)였고 그 13건이 편집자 하한을 뒤집었다
+                     (2026-09-15, WP-83). 작은 표본에서는 HLL 희소 표현이
+                     정확해 안 드러난다. streaming.EDITOR_COUNT_RSD 주석 참고.
       views        : 그 문서·그 시간의 조회수 합(agent 가로질러). 조회 없으면 0
 
 🔴 집계 계약은 스트리밍(streaming/edit_windows.py)과 한 벌이어야 한다 (§AC)
