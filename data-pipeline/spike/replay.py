@@ -19,11 +19,11 @@
     미사용이 이미 알려진 예다).
 
 editor_count 는 여기서 직접 센다
-    Historical Window 산출물(WP-58)은 edit_count 만 집계한다. detect() 의
-    판정에는 editor_count 가 쓰이지 않지만 신규 문서 spike_score 에는 쓰이므로
-    (`edit_count × max(1, editor_count)**0.5`), 점수를 제대로 내려고 edit_event 를
-    직접 읽어 편집자 수를 함께 센다. ⚠️ 스트리밍은 approx_count_distinct 라 근사값이고
-    여기는 정확값이다 — 점수 비교 시 이 차이를 감안한다.
+    edit_event 를 직접 읽어 서로 다른 편집자 수를 함께 센다. **detect() 의 편집 관문이
+    이 값을 본다** (MIN_DISTINCT_EDITORS, WP-85) — 1인 연속 편집을 급증에서
+    빼기 위해서다. 신규 문서 spike_score 에도 쓰인다.
+    ⚠️ 스트리밍은 approx_count_distinct 라 근사값이고 여기는 정확값이다. 편집자 1~10명
+    구간에서 두 값이 일치함을 실측했다(불일치 0건, 2026-09-15).
 """
 
 from __future__ import annotations
@@ -38,7 +38,7 @@ from dataclasses import dataclass
 from datetime import date, timedelta
 from pathlib import Path
 
-from batch.historical_windows import floor_to_hour, hour_of_week, is_bot_edit
+from batch.historical_windows import floor_to_hour, hour_of_day, is_bot_edit
 from .baseline_rows import BASELINE_WINDOW_DAYS, build_rows
 from .detector import Baseline, SpikeDecision, Window, detect
 from .ewma import DEFAULT_HALFLIFE_DAYS
@@ -58,8 +58,8 @@ class Observation:
         return date.fromisoformat(self.window_start[:10])
 
     @property
-    def hour_of_week(self) -> int:
-        return hour_of_week(self.window_start)
+    def hour_of_day(self) -> int:
+        return hour_of_day(self.window_start)
 
 
 @dataclass(frozen=True)
@@ -111,7 +111,7 @@ def aggregate(events: Iterable[dict], titles: set[str]) -> dict[str, list[Observ
 def _as_windows(observations: Iterable[Observation]) -> list[dict]:
     """build_rows 가 먹는 형태로. 조회수는 이 경로에 없다(편집 덤프만)."""
     return [{"wiki": o.wiki, "title": o.title, "window_start": o.window_start,
-             "hour_of_week": o.hour_of_week, "edit_count": o.edit_count, "views": None}
+             "hour_of_day": o.hour_of_day, "edit_count": o.edit_count, "views": None}
             for o in observations]
 
 
@@ -126,7 +126,7 @@ def baseline_at(
     as_of = target.day - timedelta(days=1)
     oldest = as_of - timedelta(days=BASELINE_WINDOW_DAYS)
     prior = [o for o in observations
-             if o.hour_of_week == target.hour_of_week and oldest < o.day <= as_of]
+             if o.hour_of_day == target.hour_of_day and oldest < o.day <= as_of]
     if not prior:
         return None          # 그 슬롯에 과거 관측이 없다 -> 신규 문서 경로
 

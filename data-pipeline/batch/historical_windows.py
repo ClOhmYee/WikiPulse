@@ -5,9 +5,9 @@
 지금 이 형태를 만드는 코드가 없어 baseline 배치가 통째로 no-op 이다.
 
 산출 형태 (한 행)
-    (wiki, title, window_start, hour_of_week, edit_count, views)
+    (wiki, title, window_start, hour_of_day, edit_count, editor_count, views)
       window_start : 1시간 정각 UTC "YYYY-MM-DDTHH:00:00"
-      hour_of_week : 0..167 (월 00시 UTC = 0). baseline 이 이 슬롯으로 평소를 잡는다
+      hour_of_day  : 0..23 (UTC 시). baseline 이 이 슬롯으로 평소를 잡는다
       edit_count   : 그 문서·그 시간의 봇 제외 편집 수
       editor_count : 그 윈도우의 서로 다른 편집자 수. 급증 판정의 편집자 하한
                      (detector.MIN_DISTINCT_EDITORS, WP-85)이 이 값을 본다.
@@ -17,7 +17,7 @@
 
 🔴 집계 계약은 스트리밍(streaming/edit_windows.py)과 한 벌이어야 한다 (§AC)
     - **윈도우 길이 = 1시간.** 스트리밍 WINDOW_SIZE 와 일치시킨다. 다르면 edit_z 가
-      통째로 어긋나는데 에러 없이 숫자만 틀린다. baseline 은 168 슬롯(hour_of_week)이라
+      통째로 어긋나는데 에러 없이 숫자만 틀린다. baseline 은 24 슬롯(hour_of_day)이라
       1시간이 자연스러운 정합값이다.
     - **봇 필터 = is_bot 참인 편집 제외.** 스트리밍의 `~coalesce(is_bot, False)` 와 같다.
     - **문서 키 = (wiki, title).** -56·-57 과 같다. dump page_id 는 쓰지 않는다 —
@@ -27,7 +27,7 @@
     HDFS 2노드(WP-28)·Spark 2노드(WP-27)가 아직 없다. 형제 적재
     (-56·-57)와 같이 순수 파이썬으로 두어 인프라 없이 파싱·집계·테스트가 돌게 한다.
     parquet 출력과 "배치==스트리밍" 대조는 인프라가 서면 잇는다(아래 CLI·README).
-    hour_of_week 정의는 spike/baseline.py 의 Spark 판과 반드시 같아야 한다(월=0, UTC).
+    hour_of_day 정의는 spike/baseline.py 의 Spark 판과 반드시 같아야 한다(UTC 시).
 """
 
 from __future__ import annotations
@@ -36,7 +36,7 @@ from collections.abc import Iterable, Iterator
 from dataclasses import dataclass
 from datetime import datetime
 
-#: 집계 윈도우(시간). 스트리밍 WINDOW_SIZE 와 맞춘다. baseline 168 슬롯의 입도.
+#: 집계 윈도우(시간). 스트리밍 WINDOW_SIZE 와 맞춘다. baseline 24 슬롯의 입도.
 WINDOW_HOURS = 1
 
 
@@ -46,7 +46,7 @@ class WindowRow:
     wiki: str
     title: str
     window_start: str    # "YYYY-MM-DDTHH:00:00" (UTC)
-    hour_of_week: int     # 0..167 (월 00시 = 0)
+    hour_of_day: int      # 0..23 (UTC 시)
     edit_count: int
     editor_count: int
     views: int
@@ -63,13 +63,17 @@ def floor_to_hour(ts: str) -> str:
     return f"{dt.year:04d}-{dt.month:02d}-{dt.day:02d}T{dt.hour:02d}:00:00"
 
 
-def hour_of_week(hour_ts: str) -> int:
-    """정각 타임스탬프 → 0..167 (월요일 00시 UTC = 0).
+def hour_of_day(hour_ts: str) -> int:
+    """정각 타임스탬프 → 0..23 (UTC 시).
 
-    🔴 spike/baseline.py 의 Spark 판과 같은 정의여야 한다. Python weekday(): 월=0..일=6.
+    🔴 spike/baseline.py 의 Spark 판과 같은 정의여야 한다.
+
+    ~~요일×시간(0..167)~~ → 시간(0..23) (2026-09-15, WP-84). 주 1회 오는 슬롯은
+    28일 창에서 관측이 최대 4개뿐이라 sample_days 가 MIN_BASELINE_SAMPLE_DAYS(7) 에
+    구조적으로 도달하지 못했다 — 기존 문서도 항상 is_thin 이라 z 경로가 죽어 있었다.
+    대신 "요일을 크게 탄다"는 168 슬롯의 근거는 포기한다(명세 §11 실측에서 이득이 더 컸다).
     """
-    dt = _parse_iso(hour_ts)
-    return dt.weekday() * 24 + dt.hour
+    return _parse_iso(hour_ts).hour
 
 
 def is_bot_edit(rec: dict) -> bool:
@@ -132,7 +136,7 @@ def join_windows(
             wiki=wiki,
             title=title,
             window_start=window_start,
-            hour_of_week=hour_of_week(window_start),
+            hour_of_day=hour_of_day(window_start),
             edit_count=edits,
             editor_count=editors,
             views=view_totals.get(key, 0),

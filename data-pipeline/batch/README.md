@@ -312,7 +312,7 @@ python -m batch.pageview_ingest --wiki enwiki --date 2025-06-12 --agents user,au
 
 ```
 edit_event JSONL.gz (-56) ┐
-                          ├─▶ (wiki, title, window_start, hour_of_week, edit_count, editor_count, views) JSONL.gz
+                          ├─▶ (wiki, title, window_start, hour_of_day, edit_count, editor_count, views) JSONL.gz
 pageview JSONL.gz  (-57) ┘        1시간 윈도우 · 봇 제외 편집 · agent 가로질러 조회 합산
 ```
 
@@ -334,7 +334,7 @@ python -m batch.historical_windows_ingest \
 
 `streaming/edit_windows.py`(실시간)와 정의가 갈리면 `edit_z` 가 에러 없이 조용히 틀린다.
 
-- **윈도우 = 1시간.** 스트리밍 `WINDOW_SIZE` 와 맞춘다. baseline 은 168 슬롯(`hour_of_week`)이라
+- **윈도우 = 1시간.** 스트리밍 `WINDOW_SIZE` 와 맞춘다. baseline 은 24 슬롯(`hour_of_day`)이라
   1시간이 자연스러운 정합값이다.
 - **봇 필터 = `is_bot` 참 편집 제외.** 스트리밍 `~coalesce(is_bot, False)` 와 같은 판정.
 - **`editor_count` 를 함께 센다** (WP-85). 급증 판정의 편집자 하한이 이 값을 본다.
@@ -342,7 +342,7 @@ python -m batch.historical_windows_ingest \
   두 값이 **불일치 0건**으로 일치함을 실측했다(2026-09-15).
 - **문서 키 = `(wiki, title)`.** -56·-57 과 같다. dump page_id 는 안 쓴다 — `wiki_page.id`
   해석은 적재(WP-60) 책임.
-- **`hour_of_week` 정의(월 00시 UTC = 0)는 `spike/baseline.py` 의 Spark 판과 같아야 한다.**
+- **`hour_of_day` 정의(UTC 시 0~23)는 `spike/baseline.py` 의 Spark 판과 같아야 한다.**
   Python `weekday()` 월=0 == Spark `(dayofweek+5)%7` 월=0. 테스트로 알려진 날짜를 고정했다.
 - 편집·조회는 `(wiki,title,hour)` 기준 **full outer join** — 한쪽만 있는 시간도 0 으로 남긴다
   (baseline 이 `edit_z`·`view_ewma` 를 둘 다 잡는다).
@@ -370,7 +370,7 @@ python -m batch.historical_windows_ingest \
     그 패키지로 잡혀서다. `spike/` 가 그래서 `spike/tests/conftest.py` 를 따로 둔다. 여기
     `batch/` 도 자체 `pytest.ini` 가 있으니 Spark 를 쓰는 테스트를 추가하면 같은 게 필요하다.
   - ⚠️ **naive `datetime` 을 `createDataFrame` 에 주면 드라이버 로컬 시간대(KST)로 해석돼
-    9시간 밀린다.** 세션 `timeZone=UTC` 로도 안 막힌다. `hour_of_week` 가 통째로 어긋나는데
+    9시간 밀린다.** 세션 `timeZone=UTC` 로도 안 막힌다. `hour_of_day` 가 통째로 어긋나는데
     **에러가 안 난다** — 타임스탬프는 tz-aware 로 넘긴다 (2026-09-14 실제로 겪음).
   - 🔴 "배치 == 스트리밍" 대조 자체는 이 README 정정 범위 밖이다 — 별건 이슈다.
 - **실데이터 규모 집계** — Hormuz 2025-06·Milton 2024-10 실적재는 -56·-57 실덤프 뒤. `aggregate_*`

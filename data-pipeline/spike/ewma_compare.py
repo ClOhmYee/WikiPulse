@@ -33,14 +33,14 @@ def _day(window_start: str) -> date:
 def summarize(
     rows: Iterable[dict], candidates: tuple[float, ...] = CANDIDATE_HALFLIFE_DAYS
 ) -> dict[float, dict[str, float]]:
-    """(wiki,title,hour_of_week) 슬롯별 관측치를 모아 후보 반감기마다 요약한다.
+    """(wiki,title,hour_of_day) 슬롯별 관측치를 모아 후보 반감기마다 요약한다.
 
     각 후보에 대해: 슬롯 수, 평균 edit_ewma, 그리고 단순평균 대비 평균 절대차
     (|가중평균 − 단순평균|). 절대차가 클수록 최근 가중이 단순평균과 다른 답을 준다.
     """
     slots: dict[tuple, list[tuple[date, float]]] = defaultdict(list)
     for row in rows:
-        key = (row["wiki"], row["title"], row["hour_of_week"])
+        key = (row["wiki"], row["title"], row["hour_of_day"])
         slots[key].append((_day(row["window_start"]), float(row["edit_count"])))
     if not slots:
         return {h: {"slots": 0, "mean_ewma": 0.0, "mean_abs_diff_vs_simple": 0.0}

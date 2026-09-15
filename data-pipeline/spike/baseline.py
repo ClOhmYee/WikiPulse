@@ -2,16 +2,18 @@
 
     cd data-pipeline && PYTHONPATH=. spark-submit spike/baseline.py
 
-명세 §3.2 4번. 문서 × 요일·시간대(0~167) 로 나눠 EWMA 를 굴린다.
+명세 §3.2 4번. 문서 × 시간대(0~23, UTC) 로 나눠 EWMA 를 굴린다.
 
 왜 동시간대로 나누나
-    위키 편집·조회는 요일·시간대를 크게 탄다. 하나의 평균으로 뭉치면 평일
-    낮의 정상 트래픽이 주말 새벽 기준으로는 급증처럼 보인다. 168개 슬롯으로
-    나눠 "같은 시간대의 평소" 와 비교한다.
+    위키 편집·조회는 시간대를 크게 탄다. 하나의 평균으로 뭉치면 낮의 정상
+    트래픽이 새벽 기준으로는 급증처럼 보인다. 24개 슬롯으로 나눠 "같은 시간대의
+    평소" 와 비교한다.
+    ⚠️ 요일 축은 2026-09-15 에 뺐다(WP-84) — 주 1회 슬롯은 28일 창에서
+    관측이 4개뿐이라 기준선이 서지 않았다. 평일/주말 차이는 이제 흡수되지 않는다.
 
 입력·키 (WP-60)
     입력은 Historical Window 산출물(WP-58): (wiki, title, window_start,
-    hour_of_week, edit_count, views). 문서 키는 **(wiki, title)** 이다 — 파이프라인
+    hour_of_day, edit_count, views). 문서 키는 **(wiki, title)** 이다 — 파이프라인
     전체가 그렇고, wiki_page.id 해석은 적재 시점(baseline_sink.py)에 한다.
 
 두 판이 같은 값을 낸다 (2026-09-14 실측)
@@ -24,7 +26,7 @@
 ⚠️ 입력 window_start 는 UTC 다
     세션 timeZone 을 UTC 로 두는 것만으로는 부족하다. 파이썬에서 **naive** datetime 을
     createDataFrame 에 주면 Spark 가 드라이버의 로컬 시간대로 해석해 UTC 로 옮긴다 —
-    KST 에서는 9시간 밀려 hour_of_week 가 통째로 어긋나는데 에러가 안 난다
+    KST 에서는 9시간 밀려 hour_of_day 가 통째로 어긋나는데 에러가 안 난다
     (2026-09-14 실제로 겪음). 타임스탬프는 tz-aware 로 넘긴다.
 """
 
@@ -46,19 +48,21 @@ def env(name: str, default: str) -> str:
     return os.environ.get(name, default)
 
 
-def hour_of_week(ts_col):
-    """타임스탬프 -> 0..167 (월요일 00시 UTC = 0)."""
-    # Spark dayofweek: 1=일요일 .. 7=토요일. 월=0 으로 맞춘다.
-    dow = (F.dayofweek(ts_col) + 5) % 7  # 월=0 .. 일=6
-    return dow * 24 + F.hour(ts_col)
+def hour_of_day(ts_col):
+    """타임스탬프 -> 0..23 (UTC 시). batch/historical_windows.py 순수 판과 같은 정의.
+
+    ~~요일×시간(0..167)~~ -> 시간(0..23) (2026-09-15, WP-84). 주 1회 슬롯은
+    28일 창 관측이 최대 4개라 sample_days 가 7 에 도달하지 못해 z 경로가 죽어 있었다.
+    """
+    return F.hour(ts_col)
 
 
-GROUP_KEYS = ["wiki", "title", "hour_of_week"]
+GROUP_KEYS = ["wiki", "title", "hour_of_day"]
 
 
 def build_baseline(edit_windows, as_of, halflife_days=DEFAULT_HALFLIFE_DAYS,
                    window_days=BASELINE_WINDOW_DAYS):
-    """문서 × 요일·시간대 편집 EWMA·표준편차. baseline_rows.build_rows 의 Spark 판.
+    """문서 × 시간대(0~23) 편집 EWMA·표준편차. baseline_rows.build_rows 의 Spark 판.
 
     입력: (wiki, title, window_start, edit_count, views) — WP-58 산출물.
     as_of: 기준선 창의 끝(날짜 문자열 "YYYY-MM-DD"). 창은 (as_of-28일, as_of].
@@ -73,7 +77,7 @@ def build_baseline(edit_windows, as_of, halflife_days=DEFAULT_HALFLIFE_DAYS,
 
     scoped = (
         edit_windows
-        .withColumn("hour_of_week", hour_of_week(F.col("window_start")))
+        .withColumn("hour_of_day", hour_of_day(F.col("window_start")))
         .withColumn("_day", day)
         .withColumn("_age", age_days)
         # 28일 경계. 안 걸면 기준선이 소스 전체로 번져 "평소"가 아니게 된다.
