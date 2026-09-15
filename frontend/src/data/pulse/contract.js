@@ -55,7 +55,8 @@ export function validateMap(body, requested = {}) {
     "meta",
   );
   requireContract(
-    !requested.snapshotTs || meta.snapshotTs === requested.snapshotTs,
+    !requested.snapshotTs ||
+      Date.parse(meta.snapshotTs) === Date.parse(requested.snapshotTs),
     "snapshotTs mismatch",
   );
   requireContract(
@@ -67,7 +68,7 @@ export function validateMap(body, requested = {}) {
     "cluster id",
   );
   unique(
-    clusters.map((v) => v.issueKey),
+    clusters.map((v) => v.issueKey).filter((v) => v != null),
     "issueKey",
   );
   let nodes = 0,
@@ -75,8 +76,8 @@ export function validateMap(body, requested = {}) {
   for (const cluster of clusters) {
     requireContract(
       id(cluster.id) &&
-        id(cluster.issueKey) &&
-        id(cluster.label) &&
+        nullable(id, cluster.issueKey) &&
+        nullable(id, cluster.label) &&
         nullable(id, cluster.summary) &&
         typeof cluster.hot === "boolean" &&
         number(cluster.pulseScore) &&

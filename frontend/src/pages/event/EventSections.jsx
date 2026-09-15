@@ -7,7 +7,7 @@ import {
   Info,
   Search,
 } from "lucide-react";
-import { formatNumber } from "../../lib/format";
+import { metricLabel } from "./presentation.js";
 import { EmptyState } from "../../components/ui/EmptyState";
 import { wikipediaUrl } from "../../lib/wiki";
 const newsTypes = [
@@ -31,8 +31,8 @@ export function Timeline({ entries, articles = [], compact = false }) {
   if (!entries.length)
     return (
       <EmptyState
-        title="아직 등록된 흐름이 없어요"
-        description="이 이벤트의 타임라인 예시가 준비되면 이곳에서 확인할 수 있어요."
+        title="타임라인 미제공"
+        description="이 시점의 사건별 기록이 제공되지 않았습니다. 근거 문서와 요약에서 현재 확인할 수 있는 내용을 살펴보세요."
       />
     );
   return (
@@ -83,6 +83,13 @@ export function EventNews({ items, isExample }) {
         .toLocaleLowerCase()
         .includes(query.trim().toLocaleLowerCase()),
   );
+  if (!items.length)
+    return (
+      <EmptyState
+        title="관련 소식 미제공"
+        description="이 리포트에 기사와 출처 자료가 제공되지 않았습니다. 관련 뉴스가 없다는 뜻은 아닙니다."
+      />
+    );
   return (
     <section aria-label="관련 소식 목록">
       <div className="dt-section-intro">
@@ -194,6 +201,10 @@ export function Evidence({ articles, isExample }) {
           어떤 문서가 함께 바뀌었는지 확인하고, 위키백과 원문을 새 탭에서
           읽어보세요.
         </p>
+        <p>
+          편집 수와 조회수의 집계 구간이 제공되지 않아 선택한 시점의 값인지
+          확인할 수 없습니다.
+        </p>
       </div>
       {articles.length ? (
         <div className="dt-evidence-list">
@@ -215,10 +226,12 @@ export function Evidence({ articles, isExample }) {
               </div>
               <div className="dt-evidence-numbers">
                 <strong>
-                  {formatNumber(article.edits)}
-                  <small>회 편집</small>
+                  {metricLabel(article.edits)}
+                  <small>{article.edits != null ? "회 편집" : "편집 수"}</small>
                 </strong>
-                <span>평소 대비 {article.pulse}배</span>
+                <span>
+                  조회수 {metricLabel(article.views ?? article.pageviews)}
+                </span>
               </div>
               <ChevronRight size={19} />
               <span className="dt-sr-only">위키백과 원문 (새 탭)</span>
@@ -236,9 +249,9 @@ export function Evidence({ articles, isExample }) {
           <Info size={18} />이 수치는 어떻게 읽나요?
         </h3>
         <p>
-          편집량은 기준일에 문서가 수정된 횟수이고, 평소 대비 수치는 기준일
-          편집량을 {isExample ? "예시 기준 편집량" : "기준 편집량"}과 비교한
-          값입니다. 차트 기간을 바꾸어도 이 기준은 유지됩니다.
+          편집 수와 조회수의 집계 구간이 제공되지 않아 선택한 시점의 값인지
+          확인할 수 없습니다. 미제공은 0과 다르며, 관측값만으로 구체적인 탐지
+          경로나 AI 검증 결과를 추정하지 않습니다.
         </p>
         <p>
           {isExample

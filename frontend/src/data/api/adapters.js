@@ -1,39 +1,112 @@
 import { DataError } from "../contracts.js";
 
-// The server contract is a proposal. Keep wire-format changes in this adapter.
-export function adaptResponse(body, { list = false, paginated = false } = {}) {
+const object = (v) => v !== null && typeof v === "object" && !Array.isArray(v);
+const id = (v) =>
+  (typeof v === "string" && v.length > 0) || (Number.isSafeInteger(v) && v > 0);
+const text = (v) => typeof v === "string" && v.length > 0;
+const optionalText = (v) => v == null || typeof v === "string";
+const number = (v) => typeof v === "number" && Number.isFinite(v) && v >= 0;
+const optionalNumber = (v) => v == null || number(v);
+const count = (v) => Number.isSafeInteger(v) && v >= 0;
+const timestamp = (v) =>
+  text(v) && /Z$/.test(v) && Number.isFinite(Date.parse(v));
+const status = (v) => ["DETECTED", "VERIFYING", "CONFIRMED"].includes(v);
+const source = (v) => ["live", "replay"].includes(v);
+
+export const issueCard = (v) =>
+  object(v) &&
+  id(v.id) &&
+  optionalText(v.label) &&
+  number(v.pulseScore) &&
+  status(v.status) &&
+  source(v.source) &&
+  timestamp(v.snapshotTs) &&
+  count(v.memberCount) &&
+  count(v.stockCount);
+export const stockCard = (v) =>
+  object(v) &&
+  text(v.ticker) &&
+  text(v.name) &&
+  text(v.exchange) &&
+  optionalText(v.sector) &&
+  count(v.issueCount);
+export const stockDetail = (v) =>
+  object(v) &&
+  text(v.ticker) &&
+  text(v.name) &&
+  text(v.exchange) &&
+  optionalText(v.sector) &&
+  optionalText(v.cik) &&
+  optionalText(v.businessSummary);
+export const relatedStock = (v) =>
+  object(v) &&
+  text(v.ticker) &&
+  text(v.name) &&
+  text(v.exchange) &&
+  optionalText(v.sector) &&
+  ["BOTH", "GDELT_ONLY", "EMBEDDING_ONLY"].includes(v.tier) &&
+  (v.matchPath == null ||
+    ["DIRECT_MENTION", "PRODUCT_INDUSTRY", "SUPPLY_CHAIN", "REGION"].includes(
+      v.matchPath,
+    )) &&
+  optionalNumber(v.similarity) &&
+  (v.similarity == null || v.similarity <= 1) &&
+  optionalNumber(v.gdeltLift) &&
+  optionalText(v.rationale);
+const member = (v) =>
+  object(v) &&
+  id(v.pageId) &&
+  text(v.wiki) &&
+  text(v.title) &&
+  number(v.weight) &&
+  typeof v.isSeed === "boolean" &&
+  optionalNumber(v.editCount) &&
+  optionalNumber(v.views);
+export const issueDetail = (v) =>
+  object(v) &&
+  id(v.id) &&
+  optionalText(v.label) &&
+  number(v.pulseScore) &&
+  status(v.status) &&
+  source(v.source) &&
+  timestamp(v.snapshotTs) &&
+  optionalText(v.summary) &&
+  optionalText(v.summaryModel) &&
+  Array.isArray(v.members) &&
+  v.members.every(member) &&
+  Array.isArray(v.relatedStocks) &&
+  v.relatedStocks.every(relatedStock);
+
+/** Validate Spring DTOs without inventing included records or source metadata. */
+export function adaptResponse(
+  body,
+  { list = false, paginated = false, validate } = {},
+) {
   const invalid = () => {
     throw new DataError("응답 데이터 형식이 계약과 다릅니다.", {
       code: "INVALID_RESPONSE",
     });
   };
-  if (!body || !body.meta || typeof body.meta.dataMode !== "string") invalid();
-  if (
-    list
-      ? !Array.isArray(body.data)
-      : !body.data || typeof body.data !== "object" || Array.isArray(body.data)
-  )
+  if (!object(body) || (body.meta !== undefined && !object(body.meta)))
     invalid();
-  if (
-    body.included &&
-    (typeof body.included !== "object" || Array.isArray(body.included))
-  )
+  if (list ? !Array.isArray(body.data) : !object(body.data)) invalid();
+  if (validate && !(list ? body.data.every(validate) : validate(body.data)))
     invalid();
-  for (const values of Object.values(body.included || {}))
-    if (!Array.isArray(values)) invalid();
   if (paginated) {
-    const page = body.meta.pagination;
+    const p = body.meta?.pagination;
     if (
-      !page ||
-      !Number.isInteger(page.offset) ||
-      page.offset < 0 ||
-      !Number.isInteger(page.limit) ||
-      page.limit < 1 ||
-      !Number.isInteger(page.total) ||
-      page.total < 0 ||
-      typeof page.hasMore !== "boolean"
+      !object(p) ||
+      !count(p.offset) ||
+      !Number.isInteger(p.limit) ||
+      p.limit < 1 ||
+      p.limit > 100 ||
+      !count(p.total) ||
+      typeof p.hasMore !== "boolean" ||
+      body.data.length > p.limit ||
+      p.hasMore !== p.offset + body.data.length < p.total ||
+      (p.hasMore && body.data.length === 0)
     )
       invalid();
   }
-  return { data: body.data, included: body.included || {}, meta: body.meta };
+  return body;
 }

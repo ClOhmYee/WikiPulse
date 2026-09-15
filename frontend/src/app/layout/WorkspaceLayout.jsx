@@ -76,7 +76,7 @@ export default function WorkspaceLayout({
           </a>
           <div className="sidebar-snapshot">
             <span />
-            데모 워크스페이스
+            {source.label}
           </div>
         </div>
       </aside>
@@ -110,7 +110,7 @@ export default function WorkspaceLayout({
         {help && (
           <div className="workspace-help">
             <div>
-              <strong>자유롭게 탐색할 수 있는 데모입니다.</strong>
+              <strong>데이터 및 브라우저 저장 안내</strong>
               <p>
                 {source.description}
                 저장한 항목은 이 브라우저에서 다시 볼 수 있습니다.
@@ -118,7 +118,7 @@ export default function WorkspaceLayout({
             </div>
             <button
               className="wp-icon-button"
-              aria-label="데모 안내 닫기"
+              aria-label="데이터 안내 닫기"
               onClick={() => setHelp(false)}
             >
               <X size={17} />

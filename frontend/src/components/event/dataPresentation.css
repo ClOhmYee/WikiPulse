@@ -1,0 +1,78 @@
+.issue-state {
+  color: var(--teal, #86c9c4);
+  font-size: 12px;
+}
+.data-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-top: 24px;
+  padding-top: 18px;
+  border-top: 1px solid var(--wp-border, #24313a);
+}
+.data-pagination p {
+  color: var(--muted, #9cafb6);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+.data-pagination > div {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.data-filters {
+  display: flex;
+  align-items: end;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-block: 18px;
+}
+.data-filters label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  color: var(--muted, #9cafb6);
+  font-size: 13px;
+  min-width: 0;
+}
+.data-filters input,
+.data-filters select {
+  min-height: 40px;
+  max-width: 100%;
+}
+.data-filters .data-filter-checkbox {
+  flex-direction: row;
+  align-items: center;
+  min-height: 40px;
+}
+.data-filters .wp-search {
+  flex-direction: row;
+  align-items: center;
+}
+.data-availability {
+  padding: 22px 0;
+  color: var(--muted, #9cafb6);
+  line-height: 1.8;
+}
+.data-availability > strong {
+  display: block;
+  margin-bottom: 6px;
+  color: var(--paper, #f3f7f7);
+}
+.data-scope {
+  color: var(--muted, #9cafb6);
+  font-size: 13px;
+  line-height: 1.8;
+  margin-block: 12px;
+}
+@media (max-width: 600px) {
+  .data-filters input,
+  .data-filters select {
+    font-size: 16px;
+  }
+  .data-pagination {
+    align-items: flex-start;
+  }
+}

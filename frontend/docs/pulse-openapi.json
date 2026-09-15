@@ -2,8 +2,8 @@
   "openapi": "3.0.3",
   "info": {
     "title": "WikiPulse Pulse Map contract",
-    "version": "1.0.0-proposal",
-    "description": "Frontend mock/API contract. Server implementation tracked in WP-74; production/storage in WP-75. IDs are opaque strings on the wire; numeric database IDs must be serialized without precision loss."
+    "version": "1.1.0-backend",
+    "description": "Spring PulseMap DTO contract as of 2026-09-15 (WP-74, -95, -97). Runtime pipeline deployment is separate. IDs are strings; missing node metrics remain null."
   },
   "servers": [
     {
@@ -41,10 +41,7 @@
             "required": false,
             "schema": {
               "type": "string",
-              "enum": [
-                "live",
-                "replay"
-              ]
+              "enum": ["live", "replay"]
             }
           }
         ],
@@ -82,10 +79,7 @@
             "required": false,
             "schema": {
               "type": "string",
-              "enum": [
-                "live",
-                "replay"
-              ]
+              "enum": ["live", "replay"]
             }
           }
         ],
@@ -118,11 +112,7 @@
     "schemas": {
       "Snapshot": {
         "type": "object",
-        "required": [
-          "snapshotTs",
-          "source",
-          "clusterCount"
-        ],
+        "required": ["snapshotTs", "source", "clusterCount"],
         "properties": {
           "snapshotTs": {
             "type": "string",
@@ -131,10 +121,7 @@
           },
           "source": {
             "type": "string",
-            "enum": [
-              "live",
-              "replay"
-            ]
+            "enum": ["live", "replay"]
           },
           "clusterCount": {
             "type": "integer",
@@ -145,9 +132,7 @@
       },
       "SnapshotResponse": {
         "type": "object",
-        "required": [
-          "data"
-        ],
+        "required": ["data"],
         "properties": {
           "data": {
             "type": "array",
@@ -224,11 +209,7 @@
           },
           "completeness": {
             "type": "string",
-            "enum": [
-              "complete",
-              "pending",
-              "unavailable"
-            ]
+            "enum": ["complete", "pending", "unavailable"]
           },
           "windowStart": {
             "type": "string",
@@ -245,9 +226,7 @@
       },
       "Evidence": {
         "type": "object",
-        "required": [
-          "label"
-        ],
+        "required": ["label"],
         "properties": {
           "label": {
             "type": "string",
@@ -291,10 +270,7 @@
           },
           "kind": {
             "type": "string",
-            "enum": [
-              "clickstream",
-              "wikidata"
-            ]
+            "enum": ["clickstream", "wikidata"]
           },
           "directed": {
             "type": "boolean"
@@ -332,11 +308,12 @@
           },
           "issueKey": {
             "type": "string",
-            "minLength": 1
+            "nullable": true,
+            "description": "Legacy rows can omit the stable cross-snapshot identity. Do not infer continuity from a snapshot-local id."
           },
           "label": {
             "type": "string",
-            "minLength": 1
+            "nullable": true
           },
           "summary": {
             "type": "string",
@@ -373,11 +350,7 @@
           },
           "status": {
             "type": "string",
-            "enum": [
-              "DETECTED",
-              "VERIFYING",
-              "CONFIRMED"
-            ]
+            "enum": ["DETECTED", "VERIFYING", "CONFIRMED"]
           },
           "memberCount": {
             "type": "integer",
@@ -418,10 +391,7 @@
           },
           "source": {
             "type": "string",
-            "enum": [
-              "live",
-              "replay"
-            ]
+            "enum": ["live", "replay"]
           },
           "dataMode": {
             "type": "string",
@@ -456,16 +426,11 @@
       },
       "MapResponse": {
         "type": "object",
-        "required": [
-          "data",
-          "meta"
-        ],
+        "required": ["data", "meta"],
         "properties": {
           "data": {
             "type": "object",
-            "required": [
-              "clusters"
-            ],
+            "required": ["clusters"],
             "properties": {
               "clusters": {
                 "type": "array",
@@ -484,15 +449,11 @@
       },
       "Error": {
         "type": "object",
-        "required": [
-          "error"
-        ],
+        "required": ["error"],
         "properties": {
           "error": {
             "type": "object",
-            "required": [
-              "code"
-            ],
+            "required": ["code"],
             "properties": {
               "code": {
                 "type": "string",

@@ -1,48 +1,38 @@
 import { useMemo, useState } from "react";
-import {
-  ArrowDownUp,
-  CircleHelp,
-  LayoutGrid,
-  List,
-  Search,
-  X,
-} from "lucide-react";
+import { CircleHelp, LayoutGrid, List, Search, X } from "lucide-react";
 import { usePageData } from "../../data/hooks/PageData";
 import { EventRow } from "../../components/event/EventRow";
+import { Pagination } from "../../components/event/IssueState";
 import { EmptyState } from "../../components/ui/EmptyState";
-
+import { ISSUE_STATUS_LABELS, timestampLabel } from "../event/presentation.js";
 export default function ExplorePage({
   initialQuery = "",
   savedEvents,
   onToggleEvent,
 }) {
-  const { categories, events, getCategory, meta, isExample } = usePageData();
+  const {
+    events,
+    getCategory,
+    meta,
+    listParams,
+    setListParams,
+    pagination,
+    loading,
+  } = usePageData();
   const [query, setQuery] = useState(initialQuery);
-  const [category, setCategory] = useState("all");
-  const [sort, setSort] = useState("pulse");
   const [view, setView] = useState("list");
   const [showHelp, setShowHelp] = useState(false);
   const filtered = useMemo(
     () =>
-      events
-        .filter(
-          (event) =>
-            (category === "all" || event.category === category) &&
-            `${event.title} ${event.summary} ${event.keywords.join(" ")}`
-              .toLowerCase()
-              .includes(query.trim().toLowerCase()),
-        )
-        .sort((a, b) =>
-          sort === "recent"
-            ? b.startAt.localeCompare(a.startAt)
-            : sort === "documents"
-              ? b.articleIds.length - a.articleIds.length
-              : b.pulse - a.pulse,
-        ),
-    [events, category, query, sort],
+      events.filter((event) =>
+        event.title
+          .toLocaleLowerCase()
+          .includes(query.trim().toLocaleLowerCase()),
+      ),
+    [events, query],
   );
   return (
-    <div className="wp-page explore-page">
+    <div className="wp-page explore-page" aria-busy={loading}>
       <div className="wp-page-header">
         <div>
           <h1>사건을 탐색하세요</h1>
@@ -51,8 +41,8 @@ export default function ExplorePage({
           </p>
         </div>
         <div className="explore-date">
-          <span>{isExample ? "데모 기준일" : "데이터 기준일"}</span>
-          <strong>{meta.asOf?.replaceAll("-", ". ") || "기준일 미제공"}</strong>
+          <span>데이터 기준 시각</span>
+          <strong>{timestampLabel(meta.snapshotTs)}</strong>
         </div>
       </div>
       <div className="explore-toolbar">
@@ -61,8 +51,10 @@ export default function ExplorePage({
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="사건, 주제, 키워드 검색"
+            maxLength={200}
+            placeholder="현재 페이지의 이슈 제목 검색"
             aria-label="사건 검색"
+            aria-describedby="issue-search-scope"
           />
           {query && (
             <button
@@ -91,59 +83,90 @@ export default function ExplorePage({
           </button>
         </div>
       </div>
-      <div className="explore-filter-row">
-        <div className="wp-filter-chips" aria-label="사건 주제">
-          <button
-            className="wp-chip"
-            data-active={category === "all"}
-            aria-pressed={category === "all"}
-            onClick={() => setCategory("all")}
+      <p className="data-scope" id="issue-search-scope">
+        제목 검색은 현재 페이지에 표시된 이슈에서 찾습니다. 이슈는 급증 점수가
+        높은 순서로 표시됩니다.
+      </p>
+      {loading && (
+        <p role="status" className="data-scope">
+          이슈 목록을 갱신하는 중입니다.
+        </p>
+      )}
+      <div className="data-filters">
+        <label>
+          AI 검증 상태
+          <select
+            className="wp-select"
+            aria-label="AI 검증 상태"
+            value={listParams.status || ""}
+            onChange={(e) =>
+              setListParams({ status: e.target.value || undefined })
+            }
           >
-            전체 <span>{events.length}</span>
-          </button>
-          {categories
-            .filter((v) => events.some((event) => event.category === v.id))
-            .map((v) => (
-              <button
-                key={v.id}
-                className="wp-chip"
-                data-active={category === v.id}
-                aria-pressed={category === v.id}
-                onClick={() => setCategory(v.id)}
-              >
-                {v.label}
-              </button>
+            <option value="">모든 상태</option>
+            {Object.entries(ISSUE_STATUS_LABELS).map(([value, label]) => (
+              <option key={value} value={value}>
+                {label}
+              </option>
             ))}
-        </div>
+          </select>
+        </label>
+        <label>
+          데이터 출처
+          <select
+            className="wp-select"
+            aria-label="데이터 출처"
+            value={listParams.source || ""}
+            onChange={(e) =>
+              setListParams({ source: e.target.value || undefined })
+            }
+          >
+            <option value="">모든 출처</option>
+            <option value="live">실시간 수집</option>
+            <option value="replay">과거 재구성</option>
+          </select>
+        </label>
         <button
           className="wp-text-button"
           aria-expanded={showHelp}
           onClick={() => setShowHelp(!showHelp)}
         >
           <CircleHelp size={15} />
-          Pulse란?
+          급증 점수란?
         </button>
       </div>
       {showHelp && (
         <div className="wp-explainer">
-          <strong>평소보다 얼마나 많은 편집이 일어났을까요?</strong>
+          <strong>문서에서 포착한 변화의 크기를 나타냅니다.</strong>
           <p>
-            이슈 탐색의 Pulse는 평소 대비 편집량의 배수입니다. 사건의 중요도나
-            주가 방향을 의미하지 않습니다. 펄스맵의 복합 급증 점수와는 다른
-            지표입니다. {isExample && "이 화면의 값과 관계는 모두 예시입니다."}
+            급증 점수는 편집량의 배수나 AI 검증의 확률이 아닙니다. 편집과
+            조회수의 신호를 반영하며, 신규 문서와 기존 문서는 계산 방식이
+            다릅니다. AI 검증 상태는 별도로 확인하세요.
           </p>
         </div>
       )}
       {!filtered.length ? (
         <EmptyState
-          title="일치하는 사건이 없습니다"
-          description="검색어를 짧게 입력하거나 다른 주제를 선택해 보세요."
+          title={
+            query
+              ? "현재 페이지에서 일치하는 사건이 없습니다"
+              : "이 조건에 해당하는 사건이 없습니다"
+          }
+          description={
+            query
+              ? "검색어를 바꾸거나 다른 페이지에서 찾아보세요."
+              : "AI 검증 상태나 데이터 출처를 바꿔 보세요."
+          }
           action={
             <button
               className="wp-button"
               onClick={() => {
-                setCategory("all");
                 setQuery("");
+                setListParams({
+                  status: undefined,
+                  source: undefined,
+                  offset: 0,
+                });
               }}
             >
               필터 초기화
@@ -154,20 +177,8 @@ export default function ExplorePage({
         <section className="event-list-section">
           <div className="wp-section-heading">
             <h2>
-              모든 사건<span className="wp-count">{filtered.length}</span>
+              이슈<span className="wp-count">{filtered.length}</span>
             </h2>
-            <label className="sort-control">
-              <ArrowDownUp size={14} />
-              <select
-                value={sort}
-                onChange={(e) => setSort(e.target.value)}
-                aria-label="사건 정렬"
-              >
-                <option value="pulse">Pulse 높은 순</option>
-                <option value="recent">최근 시작 순</option>
-                <option value="documents">문서 많은 순</option>
-              </select>
-            </label>
           </div>
           <div className="event-list" data-view={view}>
             {filtered.map((event) => (
@@ -175,18 +186,26 @@ export default function ExplorePage({
                 key={event.id}
                 category={getCategory(event.category)}
                 event={event}
-                saved={savedEvents.includes(event.id)}
-                onToggle={onToggleEvent}
+                saved={[event.id, ...(event.aliases || [])].some((id) =>
+                  savedEvents.includes(id),
+                )}
+                onToggle={() =>
+                  onToggleEvent(
+                    [event.id, ...(event.aliases || [])].find((id) =>
+                      savedEvents.includes(id),
+                    ) || event.id,
+                  )
+                }
               />
             ))}
           </div>
         </section>
       )}
-      <p className="explore-footnote">
-        {isExample
-          ? "화면의 모든 수치는 데모 데이터입니다."
-          : "데이터의 출처와 기준 시각을 확인해 주세요."}
-      </p>
+      <Pagination
+        pagination={pagination}
+        onChange={setListParams}
+        loading={loading}
+      />
     </div>
   );
 }

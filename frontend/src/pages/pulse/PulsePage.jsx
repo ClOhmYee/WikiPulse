@@ -210,6 +210,12 @@ export default function PulsePage({ savedEvents, onToggleEvent, onSource }) {
             </span>
             <span>노드 크기 = 공통 척도의 급증도</span>
           </div>
+          <p className="data-scope">
+            급증 점수와 HOT은 제공된 판정을 표시합니다. AI 검증 상태와 탐지
+            신호의 충족 여부는 별개입니다. 점수는 편집 배수나 확률이 아닙니다.
+            {map.data?.meta.scoreVersion &&
+              ` 점수 척도 ${map.data.meta.scoreVersion}`}
+          </p>
           <PulseTimeline
             snapshots={sourceItems}
             selected={target}

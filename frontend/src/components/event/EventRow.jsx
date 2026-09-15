@@ -1,38 +1,40 @@
 import { ArrowRight, Bookmark } from "lucide-react";
 import { CategoryTag } from "../ui/CategoryTag";
-import { formatNumber } from "../../lib/format";
-export const statusLabels = {
-  rising: "상승 중",
-  sustained: "관심 지속",
-  cooling: "안정화",
-};
-
+import { IssueState } from "./IssueState";
+import {
+  metricLabel,
+  sourceLabel,
+  timestampLabel,
+} from "../../pages/event/presentation.js";
 export function EventRow({ event, saved, onToggle, category }) {
   return (
     <article className="event-row">
       <div className="event-row__main">
-        <CategoryTag category={category} />
-        <a href={`#/issues/${event.id}`} className="event-row__title">
+        {category && <CategoryTag category={category} />}
+        <a
+          href={`#/issues/${encodeURIComponent(event.id)}`}
+          className="event-row__title"
+        >
           {event.title}
           <ArrowRight size={17} />
         </a>
-        <p>{event.summary}</p>
+        {event.summary && <p>{event.summary}</p>}
         <div className="event-row__meta">
-          <span>{event.articleIds.length}개 문서</span>
-          <span>{event.date.replaceAll("-", ".")}</span>
-          <span>{statusLabels[event.status]}</span>
+          <span>{metricLabel(event.memberCount, 0)}개 문서</span>
+          <time dateTime={event.snapshotTs || undefined}>
+            {timestampLabel(event.snapshotTs)}
+          </time>
+          <span>{sourceLabel(event.source)}</span>
+          <IssueState status={event.status} />
         </div>
       </div>
       <div className="event-row__signal">
-        <strong>
-          {event.pulse.toFixed(1)}
-          <small>×</small>
-        </strong>
-        <span>평소 대비 편집</span>
+        <strong>{metricLabel(event.pulseScore)}</strong>
+        <span>급증 점수</span>
       </div>
       <div className="event-row__edits">
-        <strong>{formatNumber(event.edits)}</strong>
-        <span>편집</span>
+        <strong>{metricLabel(event.stockCount, 0)}</strong>
+        <span>관련 종목</span>
       </div>
       <button
         className="wp-icon-button"
