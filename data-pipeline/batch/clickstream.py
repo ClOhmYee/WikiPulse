@@ -29,6 +29,13 @@ from collections.abc import Iterable, Iterator
 from pathlib import Path
 from dataclasses import dataclass
 
+# 🔴 제목 정규화는 한 곳에서만 온다 (WP-91).
+# ~~여기 같은 이름의 함수를 따로 뒀다(`raw.replace("_", " ")`)~~ → 지웠다. 이름이 같은데
+# 연속 구분자·앞뒤 구분자 처리가 달라 `Hurricane__Milton` 이 한쪽은 `Hurricane Milton`,
+# 다른 쪽은 공백 두 개짜리가 됐다. 그러면 (wiki, title) 자연키가 갈라지는데 **에러가 안 나고**
+# 조회 결과만 0행이 된다 — -79 가 막으려던 문제 그 자체다.
+from producer.normalize import canonical_title
+
 #: 덤프 TSV 의 컬럼 수. 다르면 스냅샷 형식이 바뀐 것이다.
 CLICKSTREAM_COLUMNS = 4
 
@@ -54,11 +61,6 @@ class NeighborRef:
     title: str      # 이웃 문서 제목 (공백 정규화됨)
     n: int          # 이동량 합. cluster_member.weight 로 쓴다
     directed: bool  # 씨드 -> 이웃 방향이면 True(나가는 클릭), 들어오는 클릭이면 False
-
-
-def canonical_title(raw: str) -> str:
-    """Clickstream 밑줄 제목을 wiki_page 공백 제목으로. (WP-79 잠정)"""
-    return raw.replace("_", " ")
 
 
 def parse_row(line: str) -> ClickstreamRow | None:

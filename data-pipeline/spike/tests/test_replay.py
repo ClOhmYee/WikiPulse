@@ -50,6 +50,39 @@ def test_같은_편집자_반복은_편집자_1명():
     assert first.edit_count == 3 and first.editor_count == 1
 
 
+
+def test_밑줄_덤프와_공백_덤프가_같은_답을_낸다():
+    """덤프 세대가 둘이다 (WP-91).
+
+    `normalize_dump` 가 WP-79 부터 공백형 제목을 낸다. 재생성 전 적재본은
+    밑줄형이라 두 세대가 섞여 돈다. 형식이 어긋나면 "관측 없음" 으로 끝나는데 그게
+    "급증이 없었다" 로 읽히기 쉬워 — 조용히 틀리는 쪽이라 aggregate 가 흡수한다.
+    """
+    underscore = [event("Strait_of_Hormuz", "2025-06-23T14:10:00", "a"),
+                  event("Strait_of_Hormuz", "2025-06-23T14:40:00", "b")]
+    spaced = [event("Strait of Hormuz", "2025-06-23T14:10:00", "a"),
+              event("Strait of Hormuz", "2025-06-23T14:40:00", "b")]
+
+    # 요청 제목도 어느 형식으로 주든 같아야 한다 — 2 × 2 조합 전부.
+    results = [aggregate(evts, {req})
+               for evts in (underscore, spaced)
+               for req in ("Strait_of_Hormuz", "Strait of Hormuz")]
+    for by_title in results:
+        assert list(by_title) == ["Strait of Hormuz"]      # 결과 키는 canonical
+        assert by_title["Strait of Hormuz"][0].edit_count == 2
+
+
+def test_연속_구분자_제목도_한_문서로_모인다():
+    """같은 문서가 표기만 다르게 들어오면 한 키로 합쳐야 한다. 안 합치면 편집 수가
+    쪼개져 절대 하한(10)에 못 미치고 미탐이 난다."""
+    events = [event("Hurricane__Milton", "2024-10-06T19:10:00", "a"),
+              event("Hurricane Milton", "2024-10-06T19:20:00", "b"),
+              event("_Hurricane_Milton_", "2024-10-06T19:30:00", "c")]
+    by_title = aggregate(events, {"Hurricane Milton"})
+    assert list(by_title) == ["Hurricane Milton"]
+    obs = by_title["Hurricane Milton"][0]
+    assert obs.edit_count == 3 and obs.editor_count == 3
+
 # ---------------------------------------------------------------- 기준선 시점
 
 def test_판정_대상은_자기_기준선에_안_들어간다():

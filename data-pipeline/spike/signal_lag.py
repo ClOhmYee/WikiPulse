@@ -34,6 +34,10 @@
 
     조회수는 wikimedia.org AQS 를 부른다. 응답은 data/cache/pageviews 에 캐시해
     같은 문서를 다시 부르지 않는다(rate limit 대비 — WP-77 에서 실제로 걸렸다).
+
+제목 형식
+    밑줄·공백 아무 형태로나 준다 (WP-91). 편집 덤프 쪽은 `replay.aggregate` 가
+    canonical 로 맞춰 비교하고, AQS 는 **두 형식 다 200 을 준다**(2026-09-15 실측).
 """
 
 from __future__ import annotations
@@ -54,6 +58,8 @@ from .baseline_rows import BASELINE_WINDOW_DAYS
 from .detector import MIN_VIEW_RATIO, VIEW_Z_THRESHOLD
 from .ewma import DEFAULT_HALFLIFE_DAYS, Observation, ewma_mean_std
 from .replay import aggregate, first_detection, read_edit_events, replay_title
+
+from producer.normalize import canonical_title  # noqa: E402  (spike -> producer 는 기존 경로)
 
 #: AQS per-article 일별 조회수. agent=user 로 봇·크롤러를 뺀다(편집 쪽 봇 제외와 짝).
 AQS_URL = (
@@ -214,7 +220,9 @@ def first_edit_signal(
     """
     out: dict[str, EditSignal | None] = {}
     for title in titles:
-        observations = by_title.get(title, [])
+        # by_title 키는 canonical(공백형)이다. 반환 dict 는 **호출자가 준 제목 그대로**
+        # 키를 둔다 — 호출자가 자기 목록으로 다시 찾을 수 있어야 한다 (WP-91).
+        observations = by_title.get(canonical_title(title), [])
         if not observations:
             out[title] = None
             continue
@@ -246,12 +254,12 @@ def measure(
     """
     by_title = aggregate(_read_all(edits_dirs), set(titles))
     edit_signals = first_edit_signal(by_title, titles, halflife_days=halflife_days)
-    # event_date 를 안 줬을 때의 기준점 = 덤프 내 첫 편집일.
+    # event_date 를 안 줬을 때의 기준점 = 덤프 내 첫 편집일. 키는 canonical 이다.
     observed_days = {t: min(o.day for o in obs) for t, obs in by_title.items() if obs}
 
     results = []
     for title in titles:
-        anchor = event_date or observed_days.get(title)
+        anchor = event_date or observed_days.get(canonical_title(title))
         if anchor is None:
             results.append(LagResult(title, event_date, None, edit_signals[title]))
             continue
@@ -323,7 +331,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
                    help="편집 적재본 디렉터리 (-56). 여러 번 주면 이어 읽는다 — "
                         "월초 사건은 전월을 같이 줘야 28일 기준선이 찬다")
     p.add_argument("--title", action="append", default=[], required=True,
-                   help="측정할 문서(덤프 원형, 밑줄). 여러 번 줄 수 있다")
+                   help="측정할 문서. 밑줄·공백 아무 형태로나 준다. 여러 번 줄 수 있다")
     p.add_argument("--event-date", help="사건 기준일 YYYY-MM-DD. 없으면 덤프 첫 편집일")
     p.add_argument("--halflife-days", type=float, default=DEFAULT_HALFLIFE_DAYS)
     p.add_argument("--min-views", type=int, default=0,
