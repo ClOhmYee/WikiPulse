@@ -200,7 +200,71 @@ def build_arg_parser() -> argparse.ArgumentParser:
     p.add_argument("--halflife-days", type=float, default=DEFAULT_HALFLIFE_DAYS)
     p.add_argument("--max-rows", type=int, default=10,
                    help="문서당 출력할 급증 판정 건수")
+    # ⚠️ $DATABASE_URL 로 기본값을 채우지 않는다. baseline_sink 는 어차피 DSN 이
+    # 필수라 그래도 되지만, 여기서는 DSN 유무가 **동작을 바꾼다** — 환경변수만으로
+    # 회귀 검증이 DB 모드로 넘어가면 그게 바로 조용히 틀리는 경로다. 명시 opt-in 만.
+    p.add_argument("--dsn", default="",
+                   help="PostgreSQL DSN. 주면 DB 모드(WP-94) — page_baseline 을 "
+                        "읽어 판정하고 spike 에 적재한다. 없으면 기존 메모리 재생 그대로")
     return p
+
+
+def run_db_mode(by_title: dict[str, list[Observation]], targets: list[str],
+                args: argparse.Namespace) -> int:
+    """DB 모드 — `page_baseline` 을 읽어 판정하고 `spike` 에 적재한다 (WP-94).
+
+    🔴 `baseline_at()` 을 **부르지 않는다.** 메모리에서 기준선을 다시 만들어 놓고 결과만
+    저장하면 "`page_baseline` 을 읽는다" 는 이 스토리의 목적이 통째로 빠진다. 기준선은
+    `BaselineRepository` 에서만 온다.
+
+    ⚠️ 그래서 판정이 메모리 모드와 다를 수 있다 — 두 기준선의 창이 다르다(`runtime.py`
+    상단). 메모리 모드는 임계·수식 회귀 검증, DB 모드는 런타임 경로 검증이다.
+    """
+    import psycopg     # DB 모드에서만 필요 — 기존 경로는 드라이버 없이도 돈다
+
+    from .baseline_repository import BaselineRepository
+    from .runtime import PageWindow, RuntimeSummary, SpikeRuntime, parse_window_start
+    from .spike_sink import SpikeSink
+
+    exit_code = 0
+    with psycopg.connect(args.dsn) as conn:
+        runtime = SpikeRuntime(BaselineRepository(conn), SpikeSink(conn))
+
+        for title in targets:
+            kind = "대조군" if title in args.control else "검증"
+            observations = by_title.get(canonical_title(title), [])
+            if not observations:
+                print(f"\n[{kind}] {title} - 관측 없음 (제목/구간 확인)")
+                exit_code = 1
+                continue
+
+            windows = [
+                PageWindow(
+                    wiki=o.wiki, title=o.title,
+                    window_start=parse_window_start(o.window_start),
+                    edit_count=o.edit_count, editor_count=o.editor_count,
+                    # 편집 덤프에는 조회수가 없다 — 메모리 모드와 같은 조건이다.
+                    views=None,
+                )
+                for o in observations
+            ]
+            outcomes = list(runtime.iter_process(windows))
+
+            print(f"\n[{kind}] {title}  (DB 모드)")
+            print(f"  {RuntimeSummary.of(outcomes).format()}")
+            for outcome in [o for o in outcomes if o.decision.is_spike][:args.max_rows]:
+                d, w, b = outcome.decision, outcome.window, outcome.baseline
+                # 🔴 기준선 출처와 그 값을 그대로 찍는다 — 판정이 page_baseline 을 탔다는 증거.
+                evidence = ("기준선 없음(absent)" if b is None else
+                            f"기준선 {outcome.baseline_source} ewma {b.edit_ewma:.2f} "
+                            f"sd {'-' if b.edit_stddev is None else format(b.edit_stddev, '.2f')} "
+                            f"일수 {b.sample_days}")
+                print(f"    {w.window_start.isoformat()}  편집 {w.edit_count:>4} "
+                      f"편집자 {w.editor_count:>3}  "
+                      f"z {'-' if d.edit_z is None else format(d.edit_z, '.2f'):>7}  "
+                      f"score {d.spike_score:>7.2f}  {evidence}")
+        conn.commit()
+    return exit_code
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -216,6 +280,9 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
     by_title = aggregate(read_edit_events(edits_dir), set(targets))
+
+    if args.dsn:
+        return run_db_mode(by_title, targets, args)
 
     exit_code = 0
     for title in targets:

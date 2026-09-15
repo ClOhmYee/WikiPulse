@@ -2,5 +2,12 @@
 confluent-kafka==2.6.1
 requests==2.32.3
 
+# PostgreSQL 적재·조회. spike/baseline_sink.py · spike/spike_sink.py ·
+# spike/baseline_repository.py · cluster/writer.py 가 임포트한다.
+# ⚠️ 여태 선언이 빠져 있어서 새 venv 에서 `python -m spike.baseline_sink --dsn ...` 가
+# ModuleNotFoundError 로 죽었다(2026-09-15 실측). 코드가 이미 쓰던 의존성을 적는 것이라
+# 동작은 안 바뀐다 — DB 없는 경로(dry-run·테스트)는 여전히 psycopg 없이도 돈다.
+psycopg[binary]==3.3.5
+
 # 개발용
 pytest==8.3.4
