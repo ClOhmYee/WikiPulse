@@ -286,6 +286,7 @@ RAM 16 GB에서 Kafka + Spark + HDFS 데몬을 올리면 Spark executor 몫은 8
 - [ ] 2노드 RAM 배분 — 서비스 박스에 DataNode·Worker를 얹을 때 Spring·PG와 나누는 기준
 - [x] ~~매칭 정확도 정답셋~~ — **확정 (2026-09-10, WP-39).** 사건형 3(Milton·CrowdStrike·2023 은행위기) + 기업형 2(IBM 실적 경고·PayPal 인수 무산) = 5건, 정답 20종목에 근거 기사를 달았다. 등급(§6.3) 채점 결과 CrowdStrike·IBM은 정답이 등급1(교집합)에서 다 잡히고 등급3(임베딩 단독)엔 정답이 0개 — §6.3 우선순위가 실측으로 확인됐다. 자세한 결과·GDELT 방식의 한계는 `ai/matching-goldset/RESULT.md`
 - [ ] 면책 문구 법적 검토
+- [x] ~~LLM 판정 재사용 키·재검증 시점(WP-49), 검증 실패 시 상태 처리(WP-50)~~ — **확정 (2026-09-16).** 재사용 키는 `(issue_key, ticker, prompt_version)` — `cluster_id`는 스냅샷마다 새로 생겨 캐시 키로 못 쓴다(`data-pipeline/cluster/snapshot.py` 확인). 재검증은 `prompt_version`을 올릴 때만 — 클러스터 멤버 변화·이슈 텍스트 미세 변화로는 재검증 안 함(MVP 범위, 크레딧 절약). 실패 처리는 `cluster_stock.check_state`(PENDING/DONE/FAILED)로 `verified`와 분리 — "아직 검증 안 됨"과 "GATEWAY 장애로 검증 실패"를 구분한다. 재시도 3회 후 FAILED로 파킹, 무한 재시도 안 함(장애 복구 직후 크레딧 스파이크 방지). 스키마: `db/migrations/V5__cluster_stock_reuse.sql`
 
 ## 11. 근거 수치 (실측)
 
