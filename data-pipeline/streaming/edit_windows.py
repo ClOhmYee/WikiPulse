@@ -10,9 +10,11 @@
                   연결은 `streaming/live_spike.py` (WP-100).
 
 ~~"이 잡이 하는 것은 집계까지다. 급증 판정과 클러스터링은 다음 스토리다"~~
-    -> 급증 판정은 붙었다 (2026-09-15, WP-100). 클러스터링은 아직이다 —
-    `cluster/driver.py` 에 `source='replay'` 전용 가드가 걸려 있고, 그걸 걷는 전제인
-    `spike.source` 가 이제야 생겼다(다음 스토리).
+    -> 급증 판정은 붙었다 (2026-09-15, WP-100). ~~클러스터링은 아직이다~~
+    -> 클러스터링도 붙었다 (2026-09-16, WP-102): `cluster/driver.py --source live`
+    가 `spike.source='live'` 만 읽어 `issue_cluster(source='live')` 를 만든다.
+    ⚠️ 클러스터 생산은 이 스트리밍 잡 안에서 돌지 않는다 — `spike` 를 사이에 둔
+    **별도 실행**이다. 이 잡은 여전히 `spike` 까지만 쓴다.
     근거: docs/requirements-v0.1.md §3.2 2~4번
 
 윈도우 길이는 아직 확정 전이라 환경 변수로 뺐다. 명세 §10 Open Issue —

@@ -1,8 +1,9 @@
-"""스냅샷 생산 드라이버 — 실 데이터 소스 배선 (WP-75 · -99).
+"""스냅샷 생산 드라이버 — 실 데이터 소스 배선 (WP-75 · -99 · -102).
 
     python -m cluster.driver --dsn "$DATABASE_URL" --source replay
+    python -m cluster.driver --dsn "$DATABASE_URL" --source live
     python -m cluster.driver --dsn ... --source replay --snapshot-ts 2024-10-07T14:00:00Z
-    python -m cluster.driver --dsn ... --source replay --dry-run
+    python -m cluster.driver --dsn ... --source live --dry-run
 
 `spike` 테이블(WP-94 런타임 출력)을 읽어 씨드를 만들고, 순수 로직
 (`snapshot.build_snapshot`)으로 스냅샷을 생산해 `writer.persist_snapshot` 으로 저장한다.
@@ -35,17 +36,33 @@
     (`spike/runtime.py`). 그 규칙이 바뀌면 여기가 조용히 어긋나므로 `window_start` 보다
     뒤인지 확인하고, 아니면 막는다.
 
-🔴 **이 DB 입력 경로는 `replay` 전용이다 (WP-99).**
-    `spike` 에는 출처(live/replay) 컬럼이 **없다.** 그래서 이 어댑터는 어떤 행이 리플레이
-    산출물이고 어떤 행이 LIVE 산출물인지 가릴 수 없다. `source` 를 자유롭게 받으면
-    **리플레이 spike 를 읽어 `issue_cluster.source='live'` 로 저장하는 거짓 라벨링**이
-    가능해진다 — 화면·API 가 그걸 실시간 이슈로 그리는데 에러는 안 난다.
-    그래서 `SPIKE_SOURCE`(=`replay`) 하나만 허용하고 나머지는 거부한다.
-    LIVE 연결은 `spike` 에 provenance 컬럼을 두는 계약과 함께 **별도 스토리**에서 한다
-    (스키마 변경이라 이 스토리 범위 밖).
+🔴 **`source` 는 산출물 라벨이 아니라 입력 필터다 (WP-102).**
+    ~~`SPIKE_SOURCE`(=replay) 하나만 허용~~ → `live`·`replay` 둘 다 (2026-09-16).
 
-    `load_seeds_from_spike` 는 아예 `source` 를 받지 않는다 — 받으면 조회 필터로
-    오해된다. 라벨은 상위 런타임(`build_snapshot_at`)이 붙이고 거기서 검사한다.
+    -99 가 replay 하나로 묶어 둔 이유는 `spike` 에 출처 컬럼이 **없었기** 때문이다.
+    어떤 행이 리플레이 산출물이고 어떤 행이 LIVE 산출물인지 가릴 수 없으니, `source`
+    를 자유롭게 받으면 리플레이 spike 를 읽어 `issue_cluster.source='live'` 로 저장하는
+    **거짓 라벨링**이 성립했다. V5(`db/migrations/V5__spike_source.sql`)가 `spike.source`
+    를 만들면서 그 전제가 사라졌고, 여기가 그 가드를 걷는 자리다.
+
+    🔴 **가드를 걷는 조건은 "조회에 source 를 건다" 이지 "라벨을 자유롭게 받는다" 가
+    아니다.** `source` 를 출력 라벨로만 쓰고 입력 질의에 안 걸면 -99 가 막던 거짓
+    라벨링이 **그대로 돌아온다** — LIVE 스냅샷에 2024년 리플레이 씨드가 섞여 들어가고
+    에러는 안 난다. 그래서 `SELECT_SEEDS_SQL`·`SELECT_SNAPSHOT_TIMES_SQL` 둘 다
+    `s.source = %s` 를 갖고, 조회 함수가 `source` 를 **필수 인자**로 받는다
+    (~~`load_seeds_from_spike` 는 source 를 아예 받지 않는다~~ → 받는다, -102).
+
+    ⚠️ 두 출처는 같은 `(page_id, window_start)` 를 각각 가질 수 있다(V5 가 UNIQUE 키에
+    source 를 넣었다). 즉 **같은 `detected_at` 에 replay 행과 live 행이 공존한다** —
+    `detected_at` 만으로 시점을 고르면 두 출처가 한 스냅샷에 섞인다. 시점 목록부터
+    출처별로 뽑는 이유다.
+
+    산출물 쪽 격리는 이미 서 있다: `issue_key_of` 가 `{source}:{wiki}:{title}` 라
+    두 출처의 키가 겹치지 않고, `writer.persist_snapshot` 의 삭제·재적재 단위가
+    `(source, snapshot_ts)` 라 한쪽을 다시 돌려도 다른 쪽이 안 지워진다.
+
+    어휘는 `spike.spike_sink.SPIKE_SOURCES` 하나를 쓴다 — V5 의 CHECK 제약·
+    `issue_cluster.source`(V1)와 같은 목록이다. 여기서 따로 정의하면 세 벌이 된다.
 """
 
 from __future__ import annotations
@@ -58,30 +75,35 @@ from datetime import date, datetime, timezone
 from pathlib import Path
 
 from batch.clickstream import NeighborRef, neighbors_for, read_shards
+from spike.spike_sink import SPIKE_SOURCES
 
 from .snapshot import Neighbor, Seed, Snapshot, build_snapshot
 from .writer import persist_snapshot
 
-#: 이 DB 입력 경로가 낼 수 있는 유일한 산출물 라벨 (모듈 독스트링 🔴).
-#: `spike` 에 provenance 컬럼이 생기기 전까지 LIVE 는 여기서 만들 수 없다.
-SPIKE_SOURCE = "replay"
-
-#: 한 시점의 씨드. `detected_at` 이 그 시점이다.
+#: 한 시점·한 출처의 씨드. `detected_at` 이 그 시점이다.
+#: 🔴 `s.source = %s` 가 이 스토리(-102)의 핵심이다. 빼면 LIVE 스냅샷에 리플레이 씨드가
+#: 섞이는데 에러가 안 난다 — V5 가 UNIQUE 키에 source 를 넣어 두 출처가 같은
+#: `(page_id, window_start)` 를, 따라서 같은 `detected_at` 을 각각 갖기 때문이다.
 #: 정렬은 저장 순서일 뿐 — 노출 순위는 백엔드가 pulse_score 로 다시 매긴다.
 SELECT_SEEDS_SQL = """
 SELECT s.id, s.page_id, p.wiki, p.title, s.window_start, s.detected_at,
        s.edit_count, s.view_ratio, s.spike_score
   FROM spike s
   JOIN wiki_page p ON p.id = s.page_id
- WHERE s.detected_at = %s
+ WHERE s.source = %s
+   AND s.detected_at = %s
  ORDER BY s.spike_score DESC, s.page_id
 """
 
 #: 저장할 스냅샷 시점들. 오름차순 — first_detected_at 멱등성이 여기 달렸다(위 🔴).
+#: 🔴 시점 목록도 출처별이다. 합쳐서 뽑으면 live 실행이 리플레이에만 있는 시점까지
+#: 돌아 `cluster_count=0` 인 LIVE 스냅샷을 무더기로 만든다 — "완료된 빈 스냅샷" 과
+#: 구분되지 않아 `/issues/snapshots` 에 유령 시점이 뜬다.
 SELECT_SNAPSHOT_TIMES_SQL = """
 SELECT DISTINCT s.detected_at
   FROM spike s
- WHERE (%s::timestamptz IS NULL OR s.detected_at >= %s::timestamptz)
+ WHERE s.source = %s
+   AND (%s::timestamptz IS NULL OR s.detected_at >= %s::timestamptz)
    AND (%s::timestamptz IS NULL OR s.detected_at <= %s::timestamptz)
  ORDER BY s.detected_at
 """
@@ -109,35 +131,44 @@ def _completeness(view_ratio: float | None) -> str:
 
 
 def require_spike_source(source: str) -> str:
-    """이 DB 입력 경로가 낼 수 있는 라벨인지 검사한다. 아니면 거부.
+    """`spike.source` 로 조회할 수 있는 값인지 검사하고 그대로 돌려준다.
 
-    ~~`source` 를 자유롭게 받았다~~ → `replay` 만 (WP-99). `spike` 에 출처
-    컬럼이 없어 리플레이 행과 LIVE 행을 못 가르기 때문이다 — 그대로 두면 리플레이
-    산출물이 `source='live'` 로 저장되고, API·화면이 그걸 실시간 이슈로 그린다.
-    조용히 틀리는 쪽이라 경계에서 막는다.
+    ~~`replay` 만 (WP-99)~~ → `SPIKE_SOURCES` 둘 다 (WP-102).
+    -99 의 제한은 `spike` 에 출처 컬럼이 없어서였고, V5 가 그걸 만들었다.
+
+    🔴 **없는 값을 관용하지 않는다.** `'LIVE'`·`'Replay'` 같은 대소문자 어긋남을
+    통과시키면 `s.source = 'LIVE'` 가 **0행**을 돌려준다 — 씨드가 비어 클러스터 0개
+    스냅샷이 저장되고, 그건 writer 계약상 "완료된 빈 스냅샷" 이라 에러가 안 난다.
+    화면에는 "이 시점엔 이슈가 없다" 로 보인다. 경계에서 막는 이유다.
+
+    `spike_sink.require_source` 와 같은 검사를 같은 목록으로 한다. 쓰기(-100)와
+    읽기(-102)가 같은 어휘를 봐야 한쪽만 늘었을 때 조용히 어긋나지 않는다.
     """
-    if source != SPIKE_SOURCE:
+    if source not in SPIKE_SOURCES:
         raise ValueError(
-            f"이 경로는 source={SPIKE_SOURCE!r} 만 만든다 (받은 값: {source!r}). "
-            "spike 테이블에 provenance 컬럼이 없어 LIVE 행과 리플레이 행을 가릴 수 없다 "
-            "— LIVE 연결은 그 계약과 함께 별도 스토리에서 한다."
+            f"cluster 입력 source 는 {SPIKE_SOURCES} 중 하나다 (받은 값: {source!r}). "
+            "V5 의 spike.source CHECK 제약·issue_cluster.source 와 같은 목록이다 — "
+            "없는 값은 조회가 0행이 되어 빈 스냅샷으로 조용히 저장된다."
         )
     return source
 
 
-def load_seeds_from_spike(conn, snapshot_ts: datetime) -> list[Seed]:
-    """`spike` + `wiki_page` 를 조인해 이 시점의 씨드를 만든다.
+def load_seeds_from_spike(conn, snapshot_ts: datetime, source: str) -> list[Seed]:
+    """`spike` + `wiki_page` 를 조인해 **이 출처·이 시점**의 씨드를 만든다.
 
-    🔴 **`source` 를 받지 않는다.** `spike` 에 출처 컬럼이 없어 걸 수 있는 조건이 아니고,
-    파라미터로 두면 "이 source 로 거른다"로 오해된다(~~-75 골격 시그니처~~ →
-    2026-09-15, WP-99). 산출물 라벨은 `build_snapshot_at` 이 붙이고 거기서
-    `require_spike_source` 로 검사한다.
+    🔴 **`source` 는 필수다** (~~아예 받지 않는다, -99~~ → -102). 같은 `detected_at` 에
+    replay 행과 live 행이 공존할 수 있어(V5 UNIQUE 키에 source) 시각만으로는 두 출처를
+    못 가른다. 안 걸면 LIVE 스냅샷에 리플레이 씨드가 섞이는데 에러가 안 난다.
+
+    ⚠️ 기본값을 주지 않는다. 기본값이 있으면 새 호출자가 빠뜨려도 통과하고, 그 순간
+    라벨과 입력이 갈린다 — `SpikeSink(conn, source=...)` 가 키워드 필수인 것과 같은 이유.
 
     `event_date` = `window_start` 의 날짜(UTC). 생성일 창의 중심이며, 씨드 단독
     스냅샷에서는 쓰이지 않지만(이웃이 없다) 계약대로 채운다.
     """
+    require_spike_source(source)
     with conn.cursor() as cur:
-        cur.execute(SELECT_SEEDS_SQL, (snapshot_ts,))
+        cur.execute(SELECT_SEEDS_SQL, (source, snapshot_ts))
         rows = cur.fetchall()
 
     seeds: list[Seed] = []
@@ -172,11 +203,16 @@ def load_seeds_from_spike(conn, snapshot_ts: datetime) -> list[Seed]:
 
 
 def load_snapshot_times(
-    conn, since: datetime | None = None, until: datetime | None = None
+    conn, source: str, since: datetime | None = None, until: datetime | None = None
 ) -> list[datetime]:
-    """저장할 스냅샷 시점들을 **오름차순**으로. `spike.detected_at` 의 고유값이다."""
+    """**이 출처**의 스냅샷 시점들을 **오름차순**으로. `spike.detected_at` 의 고유값이다.
+
+    🔴 `source` 는 필수다. 두 출처를 합쳐 뽑으면 한쪽에만 있는 시점까지 돌아
+    빈 스냅샷이 남는다(SELECT_SNAPSHOT_TIMES_SQL 🔴).
+    """
+    require_spike_source(source)
     with conn.cursor() as cur:
-        cur.execute(SELECT_SNAPSHOT_TIMES_SQL, (since, since, until, until))
+        cur.execute(SELECT_SNAPSHOT_TIMES_SQL, (source, since, since, until, until))
         return [row[0] for row in cur.fetchall()]
 
 
@@ -258,15 +294,16 @@ def build_snapshot_at(
 ) -> Snapshot:
     """한 시점의 스냅샷을 생산한다(저장 안 함). 로직은 전부 -75 자산이다.
 
-    🔴 `source` 는 `SPIKE_SOURCE`(=replay) 만 받는다 — 여기가 "spike 를 읽어 라벨을
-    붙이는" 유일한 지점이라 거짓 라벨링을 여기서 막는다(모듈 독스트링).
+    🔴 **`source` 하나가 입력 필터이자 산출물 라벨이다.** 읽는 씨드(`spike.source`),
+    이전 감지 이력(`issue_cluster.source`), 붙는 라벨(`Snapshot.source`) 이 같은 값에서
+    나온다 — 따로 받으면 그 둘이 갈릴 수 있고, 갈린 결과가 -99 가 막던 거짓 라벨링이다.
 
     `neighbors` 를 안 주면 씨드 단독이다. Clickstream 적재본이 생기면 호출자가
     `load_clickstream_neighbors` → `build_neighbor_inputs` 결과를 넘기면 된다 —
     `build_snapshot` 계약이 이미 그 형태다.
     """
     require_spike_source(source)
-    seeds = load_seeds_from_spike(conn, snapshot_ts)
+    seeds = load_seeds_from_spike(conn, snapshot_ts, source)
     return build_snapshot(
         snapshot_ts, source, seeds, neighbors or {},
         prior_first_detected=load_prior_first_detected(conn, source),
@@ -285,8 +322,12 @@ def run(
     🔴 `snapshot_times` 는 **오름차순**이어야 한다(모듈 독스트링). `load_snapshot_times`
     가 그렇게 돌려준다.
 
-    `source` 는 `SPIKE_SOURCE` 만 — 시점이 0개여도 먼저 막는다. 늦게 막으면 빈 목록일 때만
-    통과해 버려서, 나중에 데이터가 생겼을 때 갑자기 실패한다.
+    `source` 는 `SPIKE_SOURCES` 안의 값이어야 한다 — 시점이 0개여도 먼저 막는다.
+    늦게 막으면 빈 목록일 때만 통과해 버려서, 나중에 데이터가 생겼을 때 갑자기 실패한다.
+
+    ⚠️ `snapshot_times` 는 **같은 `source` 로 뽑은 것**이어야 한다. 다른 출처의 시점을
+    넘기면 그 시점엔 이 출처의 씨드가 없어 `cluster_count=0` 스냅샷이 저장된다 —
+    유효한 산출물이라 에러가 안 난다. `load_snapshot_times(conn, source)` 를 쓴다.
     """
     require_spike_source(source)
     produced: list[Snapshot] = []
@@ -312,14 +353,16 @@ def _parse_ts(value: str) -> datetime:
 
 def build_arg_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
-        description="spike → 클러스터 스냅샷 생산·적재 (WP-99)")
+        description="spike → 클러스터 스냅샷 생산·적재 (WP-102)")
     p.add_argument("--dsn", default=os.environ.get("DATABASE_URL", ""),
                    help="PostgreSQL DSN (기본: $DATABASE_URL)")
-    # 🔴 replay 만. spike 에 provenance 컬럼이 없어 LIVE 를 여기서 만들 수 없다
-    # (모듈 독스트링). choices 를 좁혀 argparse 가 먼저 거절하게 둔다.
-    p.add_argument("--source", default=SPIKE_SOURCE, choices=(SPIKE_SOURCE,),
-                   help=f"산출물 라벨(issue_cluster.source). 현재 {SPIKE_SOURCE} 전용 — "
-                        "spike 에 출처 컬럼이 없어 LIVE 는 별도 스토리에서 잇는다")
+    # 🔴 **기본값을 주지 않는다** (~~default=replay, -99~~ → required, -102).
+    #    기본값이 있으면 `--source` 를 빠뜨린 LIVE 운영이 **에러 없이 리플레이 스냅샷을
+    #    다시 만든다**. V5 가 `spike.source` 에서 DEFAULT 를 뗀 것과 같은 이유다.
+    #    choices 로 argparse 가 먼저 거절하게 둔다 — 오타는 0행 조회로 조용히 끝난다.
+    p.add_argument("--source", required=True, choices=SPIKE_SOURCES,
+                   help="읽을 spike.source 이자 붙일 issue_cluster.source 라벨. "
+                        "입력 필터와 출력 라벨이 같은 값이다")
     p.add_argument("--snapshot-ts", type=_parse_ts,
                    help="이 시점 하나만 생산한다. 없으면 spike.detected_at 고유값 전부")
     p.add_argument("--since", type=_parse_ts, help="시점 범위 시작(포함)")
@@ -341,9 +384,10 @@ def main(argv: list[str] | None = None) -> int:
 
     with psycopg.connect(args.dsn) as conn:
         times = ([args.snapshot_ts] if args.snapshot_ts
-                 else load_snapshot_times(conn, args.since, args.until))
+                 else load_snapshot_times(conn, args.source, args.since, args.until))
         if not times:
-            print("생산할 시점이 없다 — spike 테이블이 비었거나 범위 밖이다.")
+            print(f"생산할 시점이 없다 — source={args.source} 인 spike 행이 "
+                  "없거나 범위 밖이다.")
             return 1
 
         print(f"시점 {len(times)}개 ({times[0].isoformat()} ~ {times[-1].isoformat()}) "

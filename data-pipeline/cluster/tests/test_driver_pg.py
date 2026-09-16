@@ -73,7 +73,7 @@ def milton(conn):
 # ---------------------------------------------------------------- 관통
 
 def test_spike가_issue_cluster까지_관통한다(conn, milton):
-    times = load_snapshot_times(conn)
+    times = load_snapshot_times(conn, "replay")
     assert times == [W1 + timedelta(hours=1), W2 + timedelta(hours=1)]   # 오름차순
 
     run(conn, "replay", snapshot_times=times)
@@ -91,7 +91,7 @@ def test_spike가_issue_cluster까지_관통한다(conn, milton):
 
 
 def test_멤버는_씨드_한_건이고_간선은_없다(conn, milton):
-    run(conn, "replay", snapshot_times=load_snapshot_times(conn))
+    run(conn, "replay", snapshot_times=load_snapshot_times(conn, "replay"))
 
     members = _all(conn,
                    "SELECT cm.page_id, cm.is_seed, cm.weight, cm.completeness, "
@@ -108,7 +108,7 @@ def test_멤버는_씨드_한_건이고_간선은_없다(conn, milton):
 
 
 def test_cluster_snapshot이_시점마다_등록된다(conn, milton):
-    run(conn, "replay", snapshot_times=load_snapshot_times(conn))
+    run(conn, "replay", snapshot_times=load_snapshot_times(conn, "replay"))
     rows = _all(conn, "SELECT snapshot_ts, source, cluster_count, score_version, "
                       "new_window_hours FROM cluster_snapshot ORDER BY snapshot_ts")
     assert len(rows) == 2
@@ -120,7 +120,7 @@ def test_cluster_snapshot이_시점마다_등록된다(conn, milton):
 # ---------------------------------------------------------------- 멱등
 
 def test_두_번_돌려도_안_늘어난다(conn, milton):
-    times = load_snapshot_times(conn)
+    times = load_snapshot_times(conn, "replay")
     run(conn, "replay", snapshot_times=times)
     before = (_one(conn, "SELECT count(*) FROM issue_cluster")[0],
               _one(conn, "SELECT count(*) FROM cluster_member")[0],
@@ -135,7 +135,7 @@ def test_두_번_돌려도_안_늘어난다(conn, milton):
 
 
 def test_재실행해도_issue_key와_최초감지가_안_변한다(conn, milton):
-    times = load_snapshot_times(conn)
+    times = load_snapshot_times(conn, "replay")
     run(conn, "replay", snapshot_times=times)
     first = _all(conn, "SELECT issue_key, first_detected_at FROM issue_cluster "
                        "ORDER BY snapshot_ts")
@@ -145,7 +145,7 @@ def test_재실행해도_issue_key와_최초감지가_안_변한다(conn, milton
 
 
 def test_dry_run은_아무것도_안_쓴다(conn, milton):
-    run(conn, "replay", snapshot_times=load_snapshot_times(conn), dry_run=True)
+    run(conn, "replay", snapshot_times=load_snapshot_times(conn, "replay"), dry_run=True)
     assert _one(conn, "SELECT count(*) FROM issue_cluster")[0] == 0
     assert _one(conn, "SELECT count(*) FROM cluster_snapshot")[0] == 0
 
@@ -154,7 +154,7 @@ def test_dry_run은_아무것도_안_쓴다(conn, milton):
 
 def test_백엔드_카드_질의가_이_행을_읽는다(conn, milton):
     """IssueClusterRepository.findCards 와 같은 조건으로 뽑아본다(백엔드 무수정 확인)."""
-    times = load_snapshot_times(conn)
+    times = load_snapshot_times(conn, "replay")
     run(conn, "replay", snapshot_times=times)
 
     row = _one(conn, """
@@ -173,18 +173,42 @@ def test_백엔드_카드_질의가_이_행을_읽는다(conn, milton):
     assert row[7] == 0        # stockCount — LLM 검증(WP-68) 전이라 0이 정상
 
 
-def test_replay_spike가_live로_저장되지_않는다(conn, milton):
-    """🔴 spike 에 provenance 컬럼이 없다 — 거짓 라벨링을 실 DB 에서도 막는다."""
-    times = load_snapshot_times(conn)
-    with pytest.raises(ValueError, match="provenance|replay"):
-        run(conn, "live", snapshot_times=times)
+def test_replay_spike는_live_클러스터의_씨드가_되지_않는다(conn, milton):
+    """🔴 -99 는 라벨을 replay 로 묶어 막았다. -102 는 **조회에 source 를 걸어** 막는다.
+
+    ~~`run(conn, "live", ...)` 가 ValueError~~ → 이제 통과하지만 **씨드가 없다**
+    (2026-09-16, WP-102). 리플레이 행은 `s.source='live'` 조건에 안 걸린다.
+
+    ⚠️ 리플레이 시점을 일부러 넘긴 경우다 — LIVE 는 그 시점에 아무 spike 도 없으므로
+    `cluster_count=0` 인 "완료된 빈 스냅샷" 이 남는다(writer 계약). 이슈 클러스터는
+    한 건도 안 생긴다. 운영 경로는 `load_snapshot_times(conn, "live")` 를 쓰므로
+    이 시점을 애초에 돌지 않는다 — 다음 테스트가 그걸 본다.
+    """
+    times = load_snapshot_times(conn, "replay")
+    run(conn, "live", snapshot_times=times)
 
     assert _one(conn, "SELECT count(*) FROM issue_cluster WHERE source = 'live'")[0] == 0
-    assert _one(conn, "SELECT count(*) FROM cluster_snapshot WHERE source = 'live'")[0] == 0
+    assert _one(conn, "SELECT count(*) FROM cluster_member")[0] == 0
 
     run(conn, "replay", snapshot_times=times)
     assert _one(conn, "SELECT count(*) FROM issue_cluster WHERE source = 'live'")[0] == 0
     assert _one(conn, "SELECT count(*) FROM issue_cluster WHERE source = 'replay'")[0] == 2
+
+
+def test_live_시점_목록은_리플레이_시점을_안_준다(conn, milton):
+    """운영 경로. 리플레이 행만 있는 DB 에서 live 시점 조회는 빈 목록이다."""
+    assert load_snapshot_times(conn, "live") == []
+    assert len(load_snapshot_times(conn, "replay")) == 2
+
+
+def test_없는_source는_실_DB에서도_거부된다(conn, milton):
+    """대소문자 어긋남은 0행 조회 → 빈 스냅샷으로 조용히 저장될 자리다."""
+    with pytest.raises(ValueError, match="source"):
+        load_snapshot_times(conn, "LIVE")
+    with pytest.raises(ValueError, match="source"):
+        run(conn, "Replay", snapshot_times=[W1 + timedelta(hours=1)])
+
+    assert _one(conn, "SELECT count(*) FROM cluster_snapshot")[0] == 0
 
 
 def test_빈_시점도_완료로_등록된다(conn):

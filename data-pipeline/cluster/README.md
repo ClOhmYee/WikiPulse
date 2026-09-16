@@ -48,12 +48,13 @@ pytest cluster/tests        # 42개. Docker 불필요(pgserver 번들 PostgreSQL
 `(source, snapshot_ts)` 단위로 멱등이라 재계산이 중복을 쌓지 않는다. 클러스터 0개
 스냅샷도 `cluster_snapshot` 에 등록해 "완료된 빈 스냅샷"을 미저장 시점과 구분한다.
 
-## 실행 — spike → issue_cluster (WP-99)
+## 실행 — spike → issue_cluster (WP-99 · -102)
 
 ```bash
 python -m cluster.driver --dsn "$DATABASE_URL" --source replay
+python -m cluster.driver --dsn "$DATABASE_URL" --source live
 python -m cluster.driver --dsn ... --source replay --snapshot-ts 2024-10-07T14:00:00Z
-python -m cluster.driver --dsn ... --source replay --dry-run
+python -m cluster.driver --dsn ... --source live --dry-run
 ```
 
 `spike`(WP-94 런타임 출력) → 씨드 → `build_snapshot` → `persist_snapshot`.
@@ -62,15 +63,40 @@ python -m cluster.driver --dsn ... --source replay --dry-run
 **스냅샷 시점은 `spike.detected_at` 의 고유값 하나당 하나다.** 새 문턱이나 lookback 창을
 만들지 않으려고 이렇게 했다 — 기존 행을 다시 묶기만 한다.
 
-🔴 **이 DB 입력 경로는 `--source replay` 전용이다.** `spike` 테이블에 provenance(출처)
-컬럼이 없어 어떤 행이 리플레이 산출물이고 어떤 행이 LIVE 산출물인지 **가릴 수 없다.**
-그대로 두면 리플레이 spike 를 읽어 `issue_cluster.source='live'` 로 저장하는 거짓 라벨링이
-가능한데, API·화면은 그걸 실시간 이슈로 그리고 **에러는 안 난다.** 그래서
-`require_spike_source` 가 `replay` 외를 거부하고 CLI `--source` 도 `replay` 만 받는다.
-같은 이유로 조회 함수 `load_seeds_from_spike` 는 `source` 를 **아예 받지 않는다** —
-인자로 있으면 "이 source 로 거른다"로 오해된다. 라벨은 `build_snapshot_at` 이 붙인다.
-**LIVE 연결은 `spike` 에 provenance 컬럼을 두는 계약과 함께 별도 스토리에서 한다**
-(스키마 변경이라 WP-99 범위 밖).
+🔴 **`--source` 는 산출물 라벨이 아니라 입력 필터다** (~~`replay` 전용, -99~~ →
+`live`·`replay` 둘 다, WP-102 · 2026-09-16).
+
+-99 가 `replay` 하나로 묶어 둔 이유는 `spike` 에 출처 컬럼이 **없었기** 때문이다 —
+리플레이 행을 읽어 `issue_cluster.source='live'` 로 저장하는 거짓 라벨링이 가능했고,
+API·화면은 그걸 실시간 이슈로 그리는데 **에러는 안 났다.** V5(`db/migrations/V5__spike_source.sql`)가
+`spike.source` 를 만들면서 전제가 사라졌고, -102 가 그 가드를 걷었다.
+
+**가드를 걷는 조건은 "조회에 source 를 건다" 이지 "라벨을 자유롭게 받는다" 가 아니다.**
+`source` 를 출력 라벨로만 쓰고 입력 질의에 안 걸면 -99 가 막던 거짓 라벨링이 그대로
+돌아온다. 그래서:
+
+| 자리 | -102 계약 |
+| --- | --- |
+| `SELECT_SEEDS_SQL` | `WHERE s.source = %s AND s.detected_at = %s` |
+| `SELECT_SNAPSHOT_TIMES_SQL` | `WHERE s.source = %s AND …` |
+| `load_seeds_from_spike(conn, ts, source)` | `source` **필수**, 기본값 없음 |
+| `load_snapshot_times(conn, source, …)` | `source` **필수** |
+| `require_spike_source` | `spike_sink.SPIKE_SOURCES` 두 개만. 그 외 `ValueError` |
+| CLI `--source` | **required**. 기본값 없음, `choices` 로 오타 거절 |
+
+⚠️ **같은 `detected_at` 에 replay 행과 live 행이 공존한다.** V5 가 UNIQUE 키에
+`source` 를 넣어 두 출처가 같은 `(page_id, window_start)` 를 각각 갖기 때문이다 —
+시각만으로 시점을 고르면 두 출처가 한 스냅샷에 섞인다. 시점 목록부터 출처별로 뽑는다.
+
+🔴 **없는 `source` 를 관용하지 않는 이유.** `'LIVE'` 같은 대소문자 어긋남을 통과시키면
+조회가 **0행**이 되고, 씨드가 비어 클러스터 0개 스냅샷이 저장된다. 그건 writer 계약상
+"완료된 빈 스냅샷" 이라 에러가 안 나고, 화면에는 "이 시점엔 이슈가 없다" 로 보인다.
+CLI 기본값을 없앤 것도 같은 이유다 — `--source` 를 빠뜨린 LIVE 운영이 조용히
+리플레이 스냅샷을 다시 만든다.
+
+산출물 쪽 격리는 이미 서 있었다: `issue_key_of` 가 `{source}:{wiki}:{title}` 라 두
+출처의 키가 겹치지 않고, `persist_snapshot` 의 삭제·재적재 단위가 `(source, snapshot_ts)`
+라 한쪽을 다시 돌려도 다른 쪽이 안 지워진다.
 
 🔴 **오름차순 처리라야 `first_detected_at` 이 멱등이다.** 앞 시점이 먼저 저장돼 있어야
 `load_prior_first_detected` 가 맞는 최초 시각을 준다. 내림차순으로 돌리면 뒤 시점이
@@ -90,6 +116,59 @@ python -m cluster.driver --dsn ... --source replay --dry-run
 근처에도 못 간다. 임계가 틀린 게 아니라 **두 경로의 `spike_score` 척도가 다르다** —
 `detector._detect_new_page` 는 `edit_count × √editor_count`, 기존 문서 경로는 `log1p(z)`
 압축이다. 여기서 임계를 만지면 안 되고(WP-38 자산) 점수 쪽에서 풀어야 한다.
+
+### LIVE / replay 공존 실측 (2026-09-16, WP-102)
+
+한 DB 에 두 출처를 같이 넣고 `--source` 별로 돌렸다. 입력은 둘 다 **공식 적재 경로**다 —
+replay 는 실 Milton 덤프(`spike.replay --edits …/out/enwiki/2024-10 --dsn`), live 는 실
+Spark 윈도우(`streaming.live_spike.process_batch`). spike 를 손으로 INSERT 하지 않았다.
+
+| | replay | live |
+| --- | --- | --- |
+| `spike` | 48행, 2024-10-06T20Z ~ 10-12T23Z | 2행, 2026-09-16T05Z |
+| `load_snapshot_times` | 48시점 | 1시점 (2024년이 안 섞인다) |
+| `issue_cluster` | 48 (`replay:enwiki:Hurricane Milton`) | 2 (`live:enwiki:Live Issue Alpha`·`Bravo`) |
+| `cluster_member` | 48, 전부 `is_seed=true` | 2, 전부 `is_seed=true` |
+| `cluster_snapshot` | 48 | 1 (`cluster_count=2`) |
+| `cluster_edge` | 0 | 0 (씨드 단독 계약) |
+
+혼입 검사 — 각 클러스터 멤버를 `spike(source=클러스터 출처, detected_at=snapshot_ts)` 와
+조인했더니 replay 48/48 · live 2/2 가 **같은 출처에서** 매칭됐다. 교차 0건.
+두 `--source` 를 각각 2회씩 돌린 뒤 `(cluster, member, snapshot)` = `(50, 50, 49)` 불변,
+`issue_key`·`first_detected_at` 전부 동일.
+
+⚠️ **이 실측의 replay 숫자를 위 "Milton 실측(2026-09-15)" 6행과 비교하지 말 것.**
+여기서는 `page_baseline` 을 적재하지 않아 272 윈도우가 전부 "기준선 없음(absent)"
+경로로 갔다 — 그래서 48건이 잡히고 `hot` 이 전부 켜졌다. -99 의 6행은 기준선이 있는
+z 경로다. 판정이 달라진 게 아니라 **입력 조건이 다르다**(`spike/runtime.py` 상단 ⚠️).
+
+### 백엔드 무수정 확인 (2026-09-16, 실 HTTP)
+
+위 DB 를 그대로 물린 `bootRun` 에 붙었다. 백엔드 코드는 **한 줄도 안 고쳤다.**
+
+| 요청 | 결과 |
+| --- | --- |
+| `GET /api/v1/issues` (무인자) | 200 · LIVE 2건 (`id` 149·150, `source":"live"`, `memberCount":1`, `meta.snapshotTs":"2026-09-16T05:00:00Z"`) |
+| `GET /api/v1/issues?source=live` | 200 · 같은 2건 |
+| `GET /api/v1/issues?snapshotTs=2024-10-07T22:00:00Z&source=replay` | 200 · Milton 1건 (pulse 176.0) |
+| `GET /api/v1/issues/map` | 200 · `issueKey` `live:enwiki:Live Issue Alpha`·`Bravo`, `edgeCount":0` |
+| `GET /api/v1/issues/snapshots?source=live` | 200 · 1건 (`clusterCount":2`) |
+| `GET /api/v1/issues/149` | 200 · `members` 1건(`isSeed":true`), `relatedStocks":[]` |
+
+무인자 피드가 LIVE 를 잡는 경로는 `IssueClusterRepository.findLatestLiveSnapshot`
+(`SELECT max(snapshot_ts) … WHERE source='live'`)이다.
+
+⚠️ **`?source=replay` 를 시각 없이 주면 빈 목록이 온다** (`total:0`,
+`meta.snapshotTs` 는 LIVE 시각). `IssueService.feed` 가 시각 미지정 시 **최신 LIVE
+스냅샷**을 먼저 고르고 그 시각에 `source=replay` 를 거는 구조라서다. 버그로 보고
+고치기 전에 의도를 확인할 것 — 리플레이는 사용자가 시점을 고르는 화면이라는 전제면
+맞는 동작이다. -102 가 만든 게 아니라 기존 계약이고, 이 스토리는 백엔드를 안 건드렸다.
+
+⚠️ **pgserver 로는 백엔드를 못 띄운다.** 번들 postgres 에 timezone DB
+(`share/postgresql/timezone`)가 없어 JDBC 가 보내는 `TimeZone` 파라미터를 전부 거절한다
+(`Asia/Seoul`·`UTC` 둘 다 `FATAL: invalid value`). `GMT` 만 통과한다 —
+위 확인은 `-Duser.timezone=GMT` 로 돌린 것이다. 실 PostgreSQL(docker compose)에는
+없는 문제다(CLAUDE.md). 팀 기본 경로는 `docker compose up -d postgres` 다.
 
 ## 아직 안 한 것
 
