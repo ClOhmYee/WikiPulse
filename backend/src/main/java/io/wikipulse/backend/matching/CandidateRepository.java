@@ -101,14 +101,34 @@ public class CandidateRepository {
     }
 
     /**
+     * 이 클러스터의 issue_key. 재사용 조회(WP-49)의 키다. 없으면(V1 이전 데이터) null —
+     * 그 클러스터는 재사용 대상에서 자연히 빠진다(과거 판정을 찾을 수 없으므로 새로 검증).
+     */
+    private String issueKeyOf(long clusterId) {
+        List<String> rows = jdbc.queryForList(
+                "SELECT issue_key FROM issue_cluster WHERE id = :cid",
+                new MapSqlParameterSource("cid", clusterId), String.class);
+        return rows.isEmpty() ? null : rows.get(0);
+    }
+
+    /**
      * 후보를 cluster_stock 에 멱등 적재한다 (인수조건 4: verified=false, 재실행 갱신).
      *
      * <p>한 트랜잭션에서:
      * <ol>
-     *   <li>이번 합집합에 없는 <b>미검증</b> 후보를 지운다 — 후보군이 좁아지면 낡은 행이 남지 않게.
-     *       검증된 행(verified=true)은 건드리지 않는다 — LLM 검증 결과를 후보 재생성이 지우면 안 된다.
-     *   <li>각 후보를 upsert 한다. 충돌 시 tier·similarity·gdelt_lift 만 갱신하고
-     *       match_path·rationale·verified·verified_at 은 그대로 둔다(LLM 검증 단계 소유).
+     *   <li>이번 합집합에 없고 <b>아직 판정이 끝나지 않은(check_state &lt;&gt; DONE)</b> 후보를
+     *       지운다 — 후보군이 좁아지면 낡은 행이 남지 않게. DONE 행(통과·탈락 둘 다)은 건드리지
+     *       않는다 — LLM 검증 결과를 후보 재생성이 지우면 안 되고, 재사용 조회(-49)의 이력이기도
+     *       하다.
+     *   <li>각 후보를 upsert 한다. 충돌 시(같은 cluster_id 재실행) tier·similarity·gdelt_lift 만
+     *       갱신하고 match_path·rationale·verified·verified_at·check_state 는 그대로 둔다
+     *       (LLM 검증 단계 소유).
+     *   <li>신규 행(이 cluster_id 에서 처음 보는 ticker)은 같은 issue_key 의 과거 스냅샷에
+     *       DONE 판정이 있으면 그대로 들고 온다(WP-49) — {@code cluster_id} 는 스냅샷마다
+     *       새로 생겨서(cluster/snapshot.py) 이 복사가 없으면 진행 중인 이슈가 재감지될 때마다
+     *       LLM 을 다시 부른다. prompt_version 일치 여부는 검증 단계(WP-68)가 판단한다 —
+     *       여기서는 "가장 최근 DONE" 을 무조건 들고 오고, 프롬프트가 올라 재검증이 필요하면
+     *       검증 단계가 check_state 를 다시 PENDING 으로 돌린다.
      * </ol>
      *
      * @return 적재(삽입·갱신)한 후보 수
@@ -118,7 +138,7 @@ public class CandidateRepository {
         if (candidates.isEmpty()) {
             jdbc.update("""
                     DELETE FROM cluster_stock
-                     WHERE cluster_id = :cid AND verified = false
+                     WHERE cluster_id = :cid AND check_state <> 'DONE'
                     """, new MapSqlParameterSource("cid", clusterId));
             return 0;
         }
@@ -126,21 +146,45 @@ public class CandidateRepository {
         List<String> keep = candidates.stream().map(StockCandidate::ticker).toList();
         jdbc.update("""
                 DELETE FROM cluster_stock
-                 WHERE cluster_id = :cid AND verified = false AND ticker NOT IN (:keep)
+                 WHERE cluster_id = :cid AND check_state <> 'DONE' AND ticker NOT IN (:keep)
                 """, new MapSqlParameterSource().addValue("cid", clusterId).addValue("keep", keep));
 
+        String issueKey = issueKeyOf(clusterId);
         SqlParameterSource[] batch = candidates.stream()
                 .map(c -> new MapSqlParameterSource()
                         .addValue("cid", clusterId)
                         .addValue("ticker", c.ticker())
                         .addValue("tier", c.tier().name())
                         .addValue("similarity", c.similarity())
-                        .addValue("gdelt_lift", c.gdeltLift()))
+                        .addValue("gdelt_lift", c.gdeltLift())
+                        .addValue("issueKey", issueKey))
                 .toArray(SqlParameterSource[]::new);
 
+        // 신규 행만 prior(같은 issue_key·ticker 의 가장 최근 DONE 행)를 들고 온다. 이미 있는
+        // 행(ON CONFLICT)은 재실행이라 prior 조회 결과를 무시하고 기존 검증 상태를 지킨다.
         jdbc.batchUpdate("""
-                INSERT INTO cluster_stock (cluster_id, ticker, tier, similarity, gdelt_lift, verified)
-                VALUES (:cid, :ticker, :tier, :similarity, :gdelt_lift, false)
+                INSERT INTO cluster_stock
+                    (cluster_id, ticker, tier, similarity, gdelt_lift, verified,
+                     issue_key, prompt_version, check_state, attempt_count,
+                     match_path, confidence, rationale, verified_at)
+                SELECT :cid, :ticker, :tier, :similarity, :gdelt_lift,
+                       COALESCE(prior.verified, false),
+                       :issueKey,
+                       prior.prompt_version,
+                       COALESCE(prior.check_state, 'PENDING'),
+                       COALESCE(prior.attempt_count, 0),
+                       prior.match_path, prior.confidence, prior.rationale, prior.verified_at
+                  FROM (SELECT 1) AS dual
+                  LEFT JOIN (
+                      SELECT verified, prompt_version, check_state, attempt_count,
+                             match_path, confidence, rationale, verified_at
+                        FROM cluster_stock
+                       WHERE issue_key = CAST(:issueKey AS text)
+                         AND ticker = :ticker
+                         AND check_state = 'DONE'
+                       ORDER BY verified_at DESC NULLS LAST
+                       LIMIT 1
+                  ) AS prior ON true
                 ON CONFLICT (cluster_id, ticker) DO UPDATE
                    SET tier = EXCLUDED.tier,
                        similarity = EXCLUDED.similarity,
