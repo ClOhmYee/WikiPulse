@@ -1,0 +1,25 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "WikiPulse LLM 검증 응답 v1",
+  "description": "WP-45. cluster_stock 갱신 입력: verified/match_path/rationale는 컬럼명과 그대로 대응. confidence는 DB에 저장 컬럼이 없다 — 필요해지면 -44 재검토.",
+  "type": "object",
+  "required": ["issue_class", "verified", "match_path", "confidence", "rationale_en", "rationale_ko"],
+  "additionalProperties": false,
+  "properties": {
+    "issue_class": {
+      "type": "string",
+      "enum": ["SINGLE_COMPANY_EVENT", "SECTOR_OR_REGION_EVENT"]
+    },
+    "verified": { "type": "boolean" },
+    "match_path": {
+      "type": ["string", "null"],
+      "enum": ["DIRECT_MENTION", "PRODUCT_INDUSTRY", "SUPPLY_CHAIN", "REGION", null]
+    },
+    "confidence": {
+      "type": ["string", "null"],
+      "enum": ["strong", "weak", null]
+    },
+    "rationale_en": { "type": ["string", "null"] },
+    "rationale_ko": { "type": ["string", "null"] }
+  }
+}
