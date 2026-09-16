@@ -64,8 +64,12 @@ def title(conn):
     conn.commit()
 
 
-def runtime(conn) -> SpikeRuntime:
-    return SpikeRuntime(BaselineRepository(conn), SpikeSink(conn))
+def runtime(conn, source: str = "replay") -> SpikeRuntime:
+    """기존 검증은 리플레이 출처 그대로 둔다 — -94 회귀가 이 경로다.
+
+    출처별 동작(공존·격리)은 `test_live_spike_pg.py` 가 따로 본다.
+    """
+    return SpikeRuntime(BaselineRepository(conn), SpikeSink(conn, source=source))
 
 
 def window(title, edits=MIN_ABSOLUTE_EDITS, editors=2, start=WINDOW_START):

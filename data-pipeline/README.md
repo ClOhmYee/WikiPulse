@@ -87,6 +87,39 @@ docker compose run --rm spark
 | `KAFKA_TOPIC` | `wiki.edits` | |
 | `WINDOW_SIZE` / `SLIDE_SIZE` | `1 hour` / `5 minutes` | 급증 판정 수식 확정 전 임시값 (`WP-38`) |
 | `STARTING_OFFSETS` | `latest` | 처음부터 읽으려면 `earliest` |
+| `SINK` | `console` | `spike` 면 판정까지 가서 `spike(source='live')` 에 적재 (WP-100) |
+| `DATABASE_URL` | (없음) | `SINK=spike` 에 필수. 없으면 기동 때 멈춘다 — 조용히 콘솔로 안 떨어진다 |
+
+### LIVE 적재 경로 (`SINK=spike`, WP-100)
+
+```
+EventStreams ──producer/wiki_edits.py──▶ Kafka wiki.edits
+                                             │
+                        streaming/edit_windows.py  (윈도우 집계)
+                                             │ foreachBatch
+                          streaming/live_spike.py  (epoch → PageWindow)
+                                             │
+                                   spike/runtime.py  SpikeRuntime
+                                             │ page_baseline 조회 → detect()
+                                             ▼
+                                spike (source='live')
+```
+
+- 🔴 **타임스탬프는 epoch 초로 건넌다.** PySpark 의 `TimestampType` → 파이썬 변환은
+  **드라이버 로컬 시간대의 naive datetime** 을 낸다. KST 장비 실측(2026-09-15):
+  UTC `2024-10-06T19:00:00` → `datetime(2024, 10, 7, 4, 0)`, `tzinfo=None`.
+  9시간 밀린 값이라 `require_utc` 가 막지만, 거기에 tzinfo 만 붙여 "고치면" 그때부터
+  조용히 틀린다. `F.unix_timestamp` 는 세션 시간대 설정에도 안 걸린다.
+- **조회수는 `None`(미수집)이다.** `wiki.edits` 에 조회수 필드가 없다 — 0 으로 꾸미면
+  "진짜 0회" 와 구분이 안 된다. `detect()` 는 `None` 이면 편집만으로 1차 판정한다.
+- **멱등하다.** `UNIQUE (source, page_id, window_start)`(V5) 라 같은 마이크로배치를
+  재처리해도 행이 안 는다. 실 Kafka 재처리로 확인함 (2026-09-15).
+- ⚠️ **슬라이딩 윈도우라 한 문서가 한 시간에 여러 행을 낸다.** `SLIDE_SIZE` 가 5분이면
+  겹치는 윈도우가 최대 12개고, `window_start` 가 달라 전부 별개 행이다. 정각 tumbling
+  만 원하면 `SLIDE_SIZE` 를 `WINDOW_SIZE` 와 같게 준다.
+- ⚠️ **compose 의 `spark` 서비스로는 아직 못 돌린다** — 이미지 파이썬이 3.8.10 이라
+  못박은 psycopg 3.3.5 가 안 깔린다(2026-09-15 실측). 근거와 대안은 `docker-compose.yml`
+  의 spark 서비스 주석.
 
 ## edit_event 스키마
 
