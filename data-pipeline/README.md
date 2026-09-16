@@ -103,6 +103,10 @@ EventStreams ──producer/wiki_edits.py──▶ Kafka wiki.edits
                                              │ page_baseline 조회 → detect()
                                              ▼
                                 spike (source='live')
+                                             │
+                  cluster/driver.py --source live   (WP-102, 별도 실행)
+                                             ▼
+                     issue_cluster(source='live') + cluster_member/cluster_snapshot
 ```
 
 - 🔴 **타임스탬프는 epoch 초로 건넌다.** PySpark 의 `TimestampType` → 파이썬 변환은
@@ -120,6 +124,9 @@ EventStreams ──producer/wiki_edits.py──▶ Kafka wiki.edits
 - ⚠️ **compose 의 `spark` 서비스로는 아직 못 돌린다** — 이미지 파이썬이 3.8.10 이라
   못박은 psycopg 3.3.5 가 안 깔린다(2026-09-15 실측). 근거와 대안은 `docker-compose.yml`
   의 spark 서비스 주석.
+- ⚠️ **클러스터 생산은 이 스트리밍 잡 안에서 돌지 않는다** (WP-102). `spike` 를
+  사이에 둔 별도 실행(`python -m cluster.driver --dsn … --source live`)이다. 아직
+  스케줄러가 없어 사람이 돌린다 — 상시 LIVE 운영은 후속 과제.
 
 ## edit_event 스키마
 

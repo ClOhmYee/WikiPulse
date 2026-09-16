@@ -463,9 +463,11 @@ cd data-pipeline && .venv/Scripts/python.exe -m pytest spike/tests/test_baseline
   (WP-100, `streaming/live_spike.py`). `SINK=spike` 로 돌리면
   Kafka → Spark 윈도우 → `SpikeRuntime` → `spike(source='live')` 까지 간다.
   실 Kafka·실 Spark·실 PostgreSQL 관통 확인됨 (2026-09-15).
-  🔴 **남은 것은 LIVE 클러스터다.** `cluster/driver.py` 는 아직 `source='replay'` 전용
-  가드가 걸려 있고, 씨드 조회(`SELECT_SEEDS_SQL`)에 `source` 조건이 **없다** — LIVE 행이
-  쌓이면 리플레이 스냅샷에 섞인다. 그 필터와 가드 해제가 다음 스토리다.
+  ~~🔴 남은 것은 LIVE 클러스터다 — `cluster/driver.py` 에 `source='replay'` 전용 가드가
+  걸려 있고 씨드 조회에 `source` 조건이 없다~~ → **붙었다** (2026-09-16,
+  WP-102). 씨드·시점 조회 둘 다 `s.source = %s` 를 걸고 CLI 가
+  `--source live` 를 받는다. LIVE spike → `issue_cluster(source='live')` 까지 간다.
+  계약은 `cluster/README.md` 의 표.
   ⚠️ **compose 의 `spark` 서비스로는 아직 `SINK=spike` 를 못 돌린다** —
   `apache/spark:3.5.3-python3` 의 파이썬이 3.8.10 이라 못박은 psycopg 3.3.5 가 안 깔린다
   (2026-09-15 실측). 파이썬 3.11 기반 이미지는 배포 토폴로지 문제라 WP-27 쪽이다.
