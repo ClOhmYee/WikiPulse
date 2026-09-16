@@ -62,3 +62,21 @@ def build_ticker_index(rows: Iterable[tuple[str, str]]) -> dict[str, str]:
 def match_ticker(org_name: str, index: dict[str, str]) -> str | None:
     """정규화 정확 일치로 ticker 를 찾는다. 없으면 None."""
     return index.get(normalize_name(org_name))
+
+
+def merge_aliases(
+    index: dict[str, str], aliases: dict[str, str], blocklist: set[str]
+) -> dict[str, str]:
+    """종목 마스터 색인에 별칭(WP-47, aliases.py)을 겹쳐 새 dict 로 반환.
+
+    종목 마스터가 항상 이긴다(setdefault) — 별칭은 마스터가 못 잡은 자회사·구
+    사명·브랜드명만 메운다. blocklist 에 있는 정규화 키는 aliases 에 있어도
+    등록하지 않는다(짧은 이름 오탐 방지, aliases.py 참고).
+    """
+    merged = dict(index)
+    for alias_text, ticker in aliases.items():
+        key = normalize_name(alias_text)
+        if key in blocklist:
+            continue
+        merged.setdefault(key, ticker)
+    return merged

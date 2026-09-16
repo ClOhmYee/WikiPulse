@@ -40,8 +40,9 @@ from collections.abc import Callable, Iterator
 from gdelt.catalog import GkgFile, iter_slots, parse_ts
 from gdelt.sink import LocalSink
 
+from .aliases import ALIASES, BLOCKLIST_KEYS
 from .lift import Aggregate, IssuePredicate, OrgLift, aggregate, rank
-from .match import build_ticker_index, match_ticker
+from .match import build_ticker_index, match_ticker, merge_aliases
 from .parse import Record, parse_text
 from .writer import persist_org_mentions
 
@@ -134,13 +135,18 @@ def fold_file(predicate: IssuePredicate) -> Callable[[tuple[str, bytes]], Aggreg
 
 
 def load_ticker_index(database_url: str) -> dict[str, str]:
-    """stock 마스터에서 (ticker, name) 을 읽어 정규화 색인으로."""
+    """stock 마스터 + 별칭(WP-47) 을 합친 정규화 색인.
+
+    마스터 정확 일치가 우선이고, 별칭은 마스터가 못 잡은 자회사·브랜드명만
+    메운다(merge_aliases). blocklist 는 짧은 이름 오탐 방지(aliases.py 참고).
+    """
     import psycopg
 
     with psycopg.connect(database_url) as conn, conn.cursor() as cur:
         cur.execute("SELECT ticker, name FROM stock ORDER BY ticker")
         rows = cur.fetchall()
-    return build_ticker_index(rows)
+    index = build_ticker_index(rows)
+    return merge_aliases(index, ALIASES, BLOCKLIST_KEYS)
 
 
 def attach_tickers(
