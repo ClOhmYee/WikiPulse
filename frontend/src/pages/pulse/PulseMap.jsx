@@ -1,7 +1,6 @@
 import { useEffect, useId, useRef, useState } from "react";
-import { Maximize, Minus, Plus } from "lucide-react";
+import { Maximize, Minimize, RotateCcw, Minus, Plus } from "lucide-react";
 import { getIssueCategory } from "../../data/categories.js";
-import { isNewIssue } from "../../data/pulse/time.js";
 
 export default function PulseMap({
   scene,
@@ -11,6 +10,8 @@ export default function PulseMap({
   onSelect,
   onNodeSelect,
   meta,
+  expanded,
+  onToggleExpanded,
 }) {
   const svgRef = useRef(null),
     drag = useRef(null);
@@ -25,53 +26,46 @@ export default function PulseMap({
     media.addEventListener("change", update);
     return () => media.removeEventListener("change", update);
   }, []);
-  const compactColumns = Math.max(
-    2,
-    Math.ceil(Math.sqrt(scene.totalSlots * 0.65)),
-  );
-  const width = compact ? scene.cellSize * compactColumns : scene.width;
-  const height = compact
-    ? Math.max(2, Math.ceil(scene.totalSlots / compactColumns)) * scene.cellSize
-    : scene.height;
-  const displayClusters = scene.clusters.map((v) =>
-    compact
-      ? {
-          ...v,
-          x: ((v.slot % compactColumns) + 0.5) * scene.cellSize,
-          y: (Math.floor(v.slot / compactColumns) + 0.5) * scene.cellSize,
-        }
-      : v,
-  );
-  const selected = displayClusters.find((v) => v.issueKey === selectedKey);
-  const selectedX = selected?.x,
-    selectedY = selected?.y;
+  const [viewport, setViewport] = useState({ width: 1000, height: 650 });
   useEffect(() => {
-    if (selectedX !== undefined) {
-      const focusZoom = Math.max(
-        2,
-        Math.min(
-          10,
-          Math.min(width, height) / (scene.cellSize * (compact ? 1.25 : 1.8)),
-        ),
-      );
-      setCamera({
-        zoom: focusZoom,
-        x: width / 2 - selectedX * focusZoom,
-        y: height / 2 - selectedY * focusZoom,
-      });
-    }
+    const observer = new ResizeObserver(([entry]) => {
+      const { width, height } = entry.contentRect;
+      if (width && height)
+        setViewport({ width: width / 0.85, height: height / 0.85 });
+    });
+    observer.observe(svgRef.current);
+    return () => observer.disconnect();
+  }, []);
+  const { width, height } = viewport;
+  const selected = scene.clusters.find((v) => v.issueKey === selectedKey);
+  const selectedX = selected?.x ?? 0,
+    selectedY = selected?.y ?? 0;
+  const selectedRadius = selected?.radius;
+  useEffect(() => {
+    const zoom = selectedRadius
+      ? Math.min(
+          1.4,
+          width / (selectedRadius * 2 + 140),
+          height / (selectedRadius * 2 + 180),
+        )
+      : 1;
+    setCamera({
+      zoom,
+      x: width / 2 - selectedX * zoom,
+      y: height / 2 - selectedY * zoom,
+    });
   }, [
     selectedKey,
     selectedX,
     selectedY,
+    selectedRadius,
     width,
     height,
-    scene.cellSize,
-    compact,
+    meta.snapshotTs,
   ]);
   function zoomTo(next) {
     setCamera((old) => {
-      const zoom = Math.max(0.6, Math.min(12, next)),
+      const zoom = Math.max(0.08, Math.min(4, next)),
         factor = zoom / old.zoom;
       return {
         zoom,
@@ -91,7 +85,7 @@ export default function PulseMap({
     new DOMPoint(e.clientX, e.clientY).matrixTransform(
       svgRef.current.getScreenCTM().inverse(),
     );
-  const clusters = displayClusters.filter((v) => visibleKeys.has(v.issueKey));
+  const clusters = scene.clusters.filter((v) => visibleKeys.has(v.issueKey));
   return (
     <div
       className="pulse-map document-map"
@@ -100,16 +94,34 @@ export default function PulseMap({
       data-snapshot={meta.snapshotTs}
     >
       <div className="document-map__caption">
-        <strong>{clusters.length}개의 이슈</strong>
+        <strong>{clusters.length}개의 NEW 이슈</strong>
         <span>
           {clusters.reduce((n, v) => n + v.nodes.length, 0)}개 문서 · 문서를
-          선택해 연결 근거를 확인하세요
+          선택해 연결 근거를 확인하세요 · 드래그로 주변 탐색
         </span>
       </div>
       <svg
         ref={svgRef}
         viewBox={`0 0 ${width} ${height}`}
         role="group"
+        tabIndex="0"
+        onKeyDown={(e) => {
+          if (e.target !== e.currentTarget) return;
+          const delta = {
+            ArrowLeft: [80, 0],
+            ArrowRight: [-80, 0],
+            ArrowUp: [0, 80],
+            ArrowDown: [0, -80],
+          }[e.key];
+          if (delta) {
+            e.preventDefault();
+            setCamera((old) => ({
+              ...old,
+              x: old.x + delta[0],
+              y: old.y + delta[1],
+            }));
+          }
+        }}
         aria-label="이슈와 문서 관계 그래프"
         onPointerDown={(e) => {
           if (e.target.closest('[role="button"]')) return;
@@ -190,6 +202,8 @@ export default function PulseMap({
                 key={cluster.issueKey}
                 transform={`translate(${cluster.x} ${cluster.y})`}
                 className="document-cluster"
+                data-issue-key={cluster.issueKey}
+                data-rank={cluster.rank}
                 data-selected={active}
                 style={{ "--cluster-color": color }}
               >
@@ -225,16 +239,7 @@ export default function PulseMap({
                     textAnchor="middle"
                     y={cluster.radius + 24}
                   >
-                    {[
-                      cluster.hot && "HOT",
-                      isNewIssue(
-                        cluster.firstDetectedAt,
-                        meta.snapshotTs,
-                        meta.newWindowHours,
-                      ) && "NEW",
-                    ]
-                      .filter(Boolean)
-                      .join(" · ")}
+                    NEW
                   </text>
                 </g>
                 <g className="document-edges" aria-hidden="true">
@@ -343,25 +348,33 @@ export default function PulseMap({
           <button
             className="wp-icon-button"
             aria-label="지도 축소"
-            disabled={camera.zoom <= 0.6}
-            onClick={() => zoomTo(camera.zoom - 0.5)}
+            disabled={camera.zoom <= 0.08}
+            onClick={() => zoomTo(camera.zoom / 1.4)}
           >
             <Minus size={17} />
           </button>
           <button
             className="wp-icon-button"
             aria-label="지도 확대"
-            disabled={camera.zoom >= 12}
-            onClick={() => zoomTo(camera.zoom + 0.5)}
+            disabled={camera.zoom >= 4}
+            onClick={() => zoomTo(camera.zoom * 1.4)}
           >
             <Plus size={17} />
           </button>
           <button
             className="wp-icon-button"
             aria-label="지도 위치 초기화"
-            onClick={() => setCamera({ zoom: 1, x: 0, y: 0 })}
+            onClick={() => setCamera({ zoom: 1, x: width / 2, y: height / 2 })}
           >
-            <Maximize size={16} />
+            <RotateCcw size={16} />
+          </button>
+          <button
+            className="wp-icon-button"
+            aria-label={expanded ? "전체화면 닫기" : "펄스맵 전체화면"}
+            aria-expanded={expanded}
+            onClick={onToggleExpanded}
+          >
+            {expanded ? <Minimize size={17} /> : <Maximize size={17} />}
           </button>
         </div>
       </div>
