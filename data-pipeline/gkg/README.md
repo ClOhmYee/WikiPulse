@@ -25,7 +25,8 @@ lift 는 최대 `코퍼스 수 / 이슈 수` 까지 오른다(그 기관이 이�
 | --- | --- | --- |
 | `parse.py` | GKG 27컬럼 파싱 — 조직명(V1+V2)·테마·지역. Spark 없이 돈다 | `test_parse.py` |
 | `lift.py` | 이슈 술어 + 집계·랭킹. 병합 가능(Spark reduce 와 단일프로세스 공유) | `test_lift.py` |
-| `match.py` | 기관명 정규화 → 종목 마스터 정확일치 ticker | `test_match.py` |
+| `match.py` | 기관명 정규화 → 종목 마스터 정확일치 ticker + 별칭 병합 | `test_match.py` |
+| `aliases.py` | 자회사·브랜드명 별칭 테이블 + 짧은 이름 블록리스트(WP-47) | `test_match.py` |
 | `writer.py` | `cluster_org_mention` 멱등 저장(재계산 호환) | `test_writer.py`(pgserver 왕복) |
 | `driver.py` | Spark 배선 + CLI — `binaryFiles` 로 zip 분산 파싱 | `test_driver.py` |
 
@@ -64,13 +65,22 @@ spark-submit gkg/driver.py --cluster-id 42 --start ... --end ... \
 
 ## ticker 매칭 범위
 
-정규화(소문자·구두점 제거·법인격 접미어 제거) 후 **정확 일치**만 붙인다. 부분문자열
-매칭은 안 한다 — News Corp·Meta 오탐이 남는다(§10). 못 맞추면 `ticker=NULL` 로
-그대로 저장한다 — 미매칭 기관(언론사·정부기관이 절반 넘는다)도 RAG 컨텍스트다.
+정규화(소문자·구두점 제거·법인격 접미어 제거) 후 **정확 일치**를 먼저 붙이고,
+그다음 별칭 테이블(`aliases.py`, WP-47)로 자회사·구 사명·브랜드명을
+메운다(`match.merge_aliases`, `load_ticker_index`가 자동 적용). 부분문자열
+매칭은 안 한다 — News Corp·Meta 오탐이 남는다(§10). 별칭도 마스터 정확일치를
+못 이긴다(setdefault). 둘 다 실패하면 `ticker=NULL` 로 그대로 저장한다 —
+미매칭 기관(언론사·정부기관이 절반 넘는다)도 RAG 컨텍스트다.
 
-⚠️ 그래서 지금은 자회사·별칭이 안 붙는다: GKG 의 `florida power light company` 는
-종목 마스터의 모회사 `NextEra Energy` 와 정규화가 달라 NULL 이 된다. **별칭 테이블
-(WP-47)** 이 붙은 뒤 재조인해 해소한다 — 이슈 노트의 계획대로다.
+**별칭 실측(WP-47, 2026-09-16)**: Milton 실 GKG 표본(기관 271건)에서
+별칭 적용 전 16건 매칭 → 적용 후 30건(+14, FPL→NEE·Duke Energy Florida→DUK·
+Disney·Facebook·Google 등). 근거·전체 미매칭 목록은
+`ai/gkg-alias-poc/RESULT.md`.
+
+⚠️ **짧은 이름은 별칭에 안 올린다.** `meta`·`apple`·`delta`·`target`·`block`·
+`dodge`·`mcdonald`는 공용 명사·성씨·동사와 겹쳐 오탐 위험이 이득보다 크다
+(`aliases.py`의 `BLOCKLIST_KEYS`). 정확한 법인명("Meta Platforms", "Delta Air
+Lines")으로는 원래 정확 일치가 그대로 동작하니 손해가 아니다.
 
 ## 결손 내성 (인수 조건 4)
 
@@ -106,6 +116,7 @@ Generac 은 16슬롯 표본에선 이슈 기사 5건 미만이라 안 떴다 —
 
 - **EC2 실 HDFS 2노드 실행** — `binaryFiles` 를 `hdfs://` 경로로. 지금은 로컬 싱크
   레이아웃(`file://`)으로 검증. gdelt producer 가 `webhdfs` 로 적재하면 이어붙는다.
-- **별칭/자회사 매칭**(WP-47) — 위 ticker 매칭 범위 참조.
 - **클러스터 → 이슈 술어 자동 도출** — 지금은 테마·지역 인자. 위키 클러스터에서
   술어를 뽑는 변환은 별도 과제.
+- **별칭 테이블 확장** — 지금은 Milton 표본 1건에서 관찰된 15개 별칭뿐이다.
+  다른 사건 유형(기업형 등)을 실측하면서 갱신한다(`aliases.py` 갱신 방법 참고).

@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from gkg.match import build_ticker_index, match_ticker, normalize_name
+from gkg.aliases import ALIASES, BLOCKLIST_KEYS
+from gkg.match import build_ticker_index, match_ticker, merge_aliases, normalize_name
 
 
 def test_정규화는_법인격_접미어와_구두점을_뗀다():
@@ -48,3 +49,22 @@ def test_빈_정규화는_색인하지_않는다():
     index = build_ticker_index([("X", "The Group"), ("DUK", "Duke Energy")])
     assert "" not in index
     assert match_ticker("The Group", index) is None
+
+
+def test_별칭은_마스터가_못_잡은_것만_메운다():
+    # WP-47. 마스터에 이미 있는 정규화 이름은 별칭이 덮어쓰지 않는다.
+    index = build_ticker_index([("DUK", "Duke Energy Corporation")])
+    merged = merge_aliases(index, {"Duke Energy": "OTHER", "Florida Power Light": "NEE"}, set())
+    assert merged["duke energy"] == "DUK"  # 마스터가 이김
+    assert merged["florida power light"] == "NEE"  # 별칭이 빈 자리를 메움
+
+
+def test_블록리스트는_별칭에_있어도_등록되지_않는다():
+    merged = merge_aliases({}, {"Meta": "META"}, {"meta"})
+    assert match_ticker("Meta", merged) is None
+
+
+def test_실제_별칭_테이블이_블록리스트_단어를_안_쓴다():
+    # aliases.py 정합성 — 블록리스트로 지정한 위험 단어를 ALIASES 키로 쓰면 자기모순이다.
+    for alias_text in ALIASES:
+        assert normalize_name(alias_text) not in BLOCKLIST_KEYS, alias_text
