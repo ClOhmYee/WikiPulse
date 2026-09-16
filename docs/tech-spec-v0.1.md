@@ -60,7 +60,7 @@
 | OpenAI 임베딩 | `text-embedding-3-small` (1536차원) | GATEWAY 경유. `Authorization: Bearer` |
 | Anthropic | `/v1/messages` + `web_search_20250305` | GATEWAY 경유. `x-api-key`. 중계 실동작 확인 (2026-09-07) |
 | Wikimedia | EventStreams SSE, Pageviews API, 덤프, Clickstream | ⚠️ **연락처 없는 User-Agent는 차단된다.** `CONTACT_EMAIL` 필수 |
-| GDELT 2.0 GKG | 15분 파일 | 2025-06-13~07-04 전 구간 404 (결손) |
+| GDELT 2.0 GKG | 15분 파일 | ~~2025-06-13~07-04~~ → **2025-06-14 18:00~07-02 02:00 UTC 결손**(경계 이분 탐색 재확인, 2026-09-16, `docs/requirements-v0.1.md` §11) |
 | yfinance | `longBusinessSummary`, 일봉 | 비공식 API. 스로틀·스키마 변경 리스크 |
 | SEC / NASDAQ Trader | 종목 마스터 | ⚠️ Wikidata로 티커를 받지 말 것 (`wdt:P249` 40건 함정) |
 

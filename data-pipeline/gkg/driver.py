@@ -17,8 +17,9 @@
     테마·지역 술어로 받아 배선한다. Milton = `--theme HURRICANE --location florida`.
 
 결손 내성 (인수 조건 4)
-    plan_slots 가 존재하는 슬롯만 골라 넘긴다 — GDELT 결손(404, 예 2025-06-13~
-    07-04)으로 빠진 슬롯은 missing 으로 세고 배치는 멈추지 않는다. 손상된 zip 도
+    plan_slots 가 존재하는 슬롯만 골라 넘긴다 — GDELT 결손(404, 예 2025-06-14 18:00~
+    07-02 02:00 UTC, 2026-09-16 경계 재확인)으로 빠진 슬롯은 missing 으로 세고
+    배치는 멈추지 않는다. 손상된 zip 도
     from_zip_bytes 가 빈 결과로 흘려 한 파일이 잡 전체를 죽이지 않는다.
 
 Spark 로 zip 을 읽는 법
