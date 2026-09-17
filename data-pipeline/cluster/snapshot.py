@@ -10,8 +10,10 @@ Spark·DB 없이 테스트된다. 실 데이터 소스는 driver.py 가 배선�
     Clickstream 값에 별도 문턱을 두지 않는다 — 덤프 하한(n>=10)만. 절대 이동량으로는
         "같은 이슈"와 "배경 지식"이 안 갈린다(§11: Hormuz 배경 문서가 사건 문서보다
         30배 더 클릭됨). 포함 여부는 생성일 창이 정하고, n 은 weight 로만 쓴다.
+    시점 정합성 = 스냅샷 이후 생성된 문서와 스냅샷 당월·미래 Clickstream 은 제외한다.
+        따라서 과거 스냅샷을 재계산해도 나중에 생긴 근거가 소급 반영되지 않는다.
     Wikidata 관계는 게이트에서 빠졌다(§3.2 4번 — 속성 5종 전수 검사 실패). 화면 근거
-        간선(점선)으로만 그린다.
+        간선(점선)으로만 그리며, 스냅샷 이후 관측한 관계는 소급하지 않는다.
     ⚠️ 기존 문서가 사건으로 재조명되는 비-씨드(예: Mojtaba_Khamenei, 2009 생성)는
         생성일 창으로 못 잡는다 — WP-77 로 분리. 이 모듈은 다루지 않는다.
 
@@ -25,7 +27,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 
 from .score import SCORE_VERSION, pulse_score, size_score
 
@@ -79,7 +81,7 @@ class Neighbor:
     title: str
     clickstream_n: int         # 이동량. weight 로 쓴다.
     clickstream_month: str     # 근거 월 YYYY-MM. 선택 스냅샷 이전 월이어야 한다.
-    created_at: date | None     # 문서 생성일(mediawiki_history page_creation_timestamp).
+    created_at: datetime | None  # 실제 생성 시각(UTC, mediawiki_history page_creation_timestamp).
     directed: bool = True       # Clickstream 은 방향(씨드 -> 이웃) 이동이다.
 
 
@@ -155,7 +157,15 @@ def issue_key_of(source: str, seed: Seed) -> str:
     return f"{source}:{seed.wiki}:{seed.title}"
 
 
-def _within_creation_window(created_at: date | None, event_date: date, window_days: int) -> bool:
+def _as_utc(value: datetime, field_name: str) -> datetime:
+    if value.tzinfo is None or value.utcoffset() is None:
+        raise ValueError(f"{field_name} must be timezone-aware")
+    return value.astimezone(timezone.utc)
+
+
+def _within_creation_window(
+    created_at: datetime | None, event_date: date, window_days: int
+) -> bool:
     """문서 생성일이 사건일 ±창 안인가. 생성일 미상은 포함하지 않는다.
 
     생성일을 못 구한 이웃은 게이트를 통과시키지 않는다 — 근거 없이 넣으면
@@ -163,7 +173,19 @@ def _within_creation_window(created_at: date | None, event_date: date, window_da
     """
     if created_at is None:
         return False
-    return abs((created_at - event_date).days) <= window_days
+    created_date = _as_utc(created_at, "Neighbor.created_at").date()
+    return abs((created_date - event_date).days) <= window_days
+
+
+def _is_completed_clickstream_month(clickstream_month: str, snapshot_date: date) -> bool:
+    """근거 월이 스냅샷 월보다 이전의 완료된 월인가."""
+    if len(clickstream_month) != 7 or clickstream_month[4] != "-":
+        return False
+    try:
+        evidence_month = date.fromisoformat(f"{clickstream_month}-01")
+    except ValueError:
+        return False
+    return evidence_month < snapshot_date.replace(day=1)
 
 
 def _build_cluster(
@@ -196,6 +218,7 @@ def _build_cluster(
     members: list[Member] = [seed_member]
     edges: list[Edge] = []
     included_page_ids: set[int] = {seed.page_id}
+    snapshot_date = snapshot_ts.date()
 
     for nb in neighbors:
         if nb.page_id == seed.page_id:
@@ -204,8 +227,14 @@ def _build_cluster(
             continue                         # 중복 이웃 제거
         if nb.clickstream_n < CLICKSTREAM_FLOOR:
             continue                         # 덤프 하한 미만(있을 수 없지만 방어적)
-        if not _within_creation_window(nb.created_at, seed.event_date, window_days):
+        created_at = (_as_utc(nb.created_at, "Neighbor.created_at")
+                      if nb.created_at is not None else None)
+        if created_at is not None and created_at > snapshot_ts:
+            continue                         # 스냅샷 이후 생성 — 과거 지도에 소급 금지
+        if not _within_creation_window(created_at, seed.event_date, window_days):
             continue                         # 생성일 창 밖 — 게이트 탈락
+        if not _is_completed_clickstream_month(nb.clickstream_month, snapshot_date):
+            continue                         # 당월·미래·잘못된 월 근거는 사용하지 않는다
 
         included_page_ids.add(nb.page_id)
         members.append(Member(
@@ -230,6 +259,9 @@ def _build_cluster(
             continue
         if rel.target_page_id == seed.page_id:
             continue
+        observed_at = _as_utc(rel.observed_at, "WikidataRelation.observed_at")
+        if observed_at > snapshot_ts:
+            continue
         edges.append(Edge(
             source_page_id=seed.page_id,
             target_page_id=rel.target_page_id,
@@ -237,7 +269,7 @@ def _build_cluster(
             directed=False,
             weight=1.0,
             evidence_label=rel.label,
-            evidence_observed_at=rel.observed_at,
+            evidence_observed_at=observed_at,
         ))
 
     return Cluster(
@@ -277,6 +309,8 @@ def build_snapshot(
     """
     if source not in ("live", "replay"):
         raise ValueError(f"source must be live/replay, got {source!r}")
+
+    snapshot_ts = _as_utc(snapshot_ts, "snapshot_ts")
 
     wikidata = wikidata or {}
     prior_first_detected = prior_first_detected or {}

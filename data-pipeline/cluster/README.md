@@ -17,7 +17,7 @@ PostgreSQL 에 저장한다. 버블맵 조회 API(WP-74)가 이 산출물을 읽
 | `driver.py` | 실 데이터 소스 배선 + CLI — **씨드 경로 배선됨**(아래) | `tests/test_driver_seeds.py` · `tests/test_driver_pg.py` · `tests/test_driver.py` |
 
 ```
-pytest cluster/tests        # 42개. Docker 불필요(pgserver 번들 PostgreSQL)
+pytest cluster/tests        # Docker 불필요(pgserver 번들 PostgreSQL)
 ```
 
 ## 클러스터링 게이트 (제품 계약: WP-51·77, 명세 §3.2 4번·§11)
@@ -25,6 +25,7 @@ pytest cluster/tests        # 42개. Docker 불필요(pgserver 번들 PostgreSQL
 - **루트 씨드**(`is_seed=true`) = 조회수 최종 관문을 직접 통과한 문서. 각 루트 씨드가 클러스터를 연다.
 - **추가 씨드**(`is_seed=true`) = 루트 씨드의 Clickstream 이웃(월별 덤프, `n>=10`) 중 문서 생성일이 사건일 ±창(기본 30일) 안인 새 사건 문서.
 - **비-씨드**(`is_seed=false`) = 오래전에 생성된 Clickstream 이웃 중 사건기간 편집 재급증 비율 ≥5 **AND** 사건기간 편집 수 ≥20인 문서(WP-77).
+- **시점 정합성 상한** = UTC 기준 실제 생성 시각이 `snapshot_ts` 이후인 문서는 생성일 창 안이어도 제외한다. `clickstream_month`도 스냅샷 월보다 앞선 데이터 기간만 허용하고, Wikidata는 `observed_at <= snapshot_ts`인 보조 간선만 허용한다. 당월에 새로 생긴 LIVE 이슈는 완료 월에 관계가 없으면 씨드 단독일 수 있다. 이 상한은 원본 데이터 기간 기준이므로 과거 원본을 나중에 적재하는 리플레이도 계산할 수 있지만, 사건 당월이나 이후 기간의 근거를 더 이전 지도에 소급하지는 않는다.
 - Clickstream 값에 별도 문턱 없음 — 절대 이동량으로는 사건/배경이 안 갈린다(§11: Hormuz 배경 문서가 사건 문서보다 30배 더 클릭). 관계 `weight`는 `n` 100%이며 다른 실시간 신호를 섞지 않는다. 직전 월 검증 완료본을 우선하고, 미공개·검증 실패 시 최신 완료본(통상 전전월)을 유지하며 월간 합산은 하지 않는다.
 - Wikidata는 멤버 편입에 쓰지 않는다. 이미 포함된 멤버 사이 화면 보조 점선 간선만 계약에 남아 있으며 실제 소스 배선은 없다.
 
@@ -49,6 +50,9 @@ pytest cluster/tests        # 42개. Docker 불필요(pgserver 번들 PostgreSQL
 과거 시점을 `snapshot_ts` 로 넣어 같은 로직을 과거 덤프에 돌린다. `persist_snapshot` 은
 `(source, snapshot_ts)` 단위로 멱등이라 재계산이 중복을 쌓지 않는다. 클러스터 0개
 스냅샷도 `cluster_snapshot` 에 등록해 "완료된 빈 스냅샷"을 미저장 시점과 구분한다.
+재계산 시에도 해당 `snapshot_ts`까지 존재한 문서·관계와 그보다 앞선 Clickstream 데이터
+기간만 사용하므로 미래 기간의 근거가 과거 지도에 소급 반영되지 않는다. 로컬 적재 시각은
+이 event-time 상한에 포함하지 않는다.
 
 ## 실행 — spike → issue_cluster (WP-99 · -102)
 

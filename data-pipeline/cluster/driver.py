@@ -71,7 +71,7 @@ import argparse
 import os
 import sys
 from collections.abc import Sequence
-from datetime import date, datetime, timezone
+from datetime import datetime, timezone
 from pathlib import Path
 
 from batch.clickstream import NeighborRef, neighbors_for, read_shards
@@ -247,12 +247,12 @@ def build_neighbor_inputs(
     refs: list[NeighborRef],
     month: str,
     page_of_title: dict[str, tuple[int, str]],
-    created_of_page: dict[int, date | None],
+    created_of_page: dict[int, datetime | None],
 ) -> list[Neighbor]:
     """NeighborRef 를 cluster.snapshot.Neighbor 로 변환한다.
 
     page_of_title: 이웃 제목 → (page_id, wiki)   — wiki_page 조회(미배선)
-    created_of_page: page_id → 생성일             — mediawiki_history(WP-56, 미배선)
+    created_of_page: page_id → 실제 생성 시각(UTC) — mediawiki_history(WP-56, 미배선)
     두 소스가 아직 없으면 그 이웃은 건너뛴다(생성일 미상은 게이트가 어차피 탈락시킨다).
     """
     out: list[Neighbor] = []
@@ -273,7 +273,7 @@ def build_neighbor_inputs(
     return out
 
 
-def load_creation_dates(page_ids: list[int]) -> dict[int, object]:
+def load_creation_dates(page_ids: list[int]) -> dict[int, datetime]:
     """mediawiki_history page_creation_timestamp 로 생성일을 채운다. (미구현 — 골격)
 
     🔴 **비-씨드(Clickstream 이웃) 경로 전용이다.** 씨드 단독 스냅샷(WP-99)에서는
