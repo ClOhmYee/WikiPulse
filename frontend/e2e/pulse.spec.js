@@ -1,5 +1,6 @@
 import { test, expect } from "@playwright/test";
 import { issueId, pageId } from "../src/data/mock/identity.js";
+import { isNewIssue } from "../src/data/pulse/time.js";
 import {
   dates,
   timestamp,
@@ -50,6 +51,9 @@ for (const width of [1440, 390]) {
 test("fullscreen map opens a right-hand panel and both panels link to the report", async ({
   page,
 }) => {
+  const target = snapshotAt(dates.at(-1)).data.clusters.find(
+    (cluster) => cluster.issueKey === "digital-assets",
+  );
   await page.goto("/#/pulse");
   await page
     .getByRole("button", { name: "펄스맵 전체화면", exact: true })
@@ -67,10 +71,13 @@ test("fullscreen map opens a right-hand panel and both panels link to the report
   expect(bounds.width).toBeGreaterThan(1400);
   expect(bounds.height).toBeGreaterThan(950);
   await dialog
-    .locator('.document-cluster[data-rank="0"] .document-cluster__title')
+    .locator(
+      `.document-cluster[data-issue-key="${target.issueKey}"] .document-cluster__title`,
+    )
     .click();
   const panel = dialog.getByRole("complementary", { name: "선택한 사건" });
   await expect(panel).toBeVisible();
+  await expect(panel.locator("h2")).toHaveText(target.label);
   const panelBounds = await panel.boundingBox();
   const mapBounds = await dialog.locator(".document-map").boundingBox();
   expect(mapBounds.y).toBeCloseTo(bounds.y + 1, 0);
@@ -115,7 +122,10 @@ test("fullscreen map opens a right-hand panel and both panels link to the report
   await dialog.getByRole("button", { name: "클러스터 정보 닫기" }).click();
   await expect(dialog.getByRole("complementary")).toHaveCount(0);
   await dialog
-    .locator('.document-cluster[data-rank="0"] > [role="button"]:first-child')
+    .getByRole("button", {
+      name: `${target.label}, ${target.memberCount}개 문서`,
+      exact: true,
+    })
     .focus();
   await page.keyboard.press("Enter");
   await dialog
@@ -129,7 +139,10 @@ test("fullscreen map opens a right-hand panel and both panels link to the report
     "hidden",
   );
   await page.goBack();
-  await page.locator(".pulse-cluster-list button").first().click();
+  await page
+    .locator(".pulse-cluster-list button")
+    .filter({ hasText: target.label })
+    .click();
   await page
     .getByRole("button", { name: "펄스맵 전체화면", exact: true })
     .click();
@@ -148,14 +161,44 @@ test("full-year slider, month boundaries and archived report -> stock journey", 
   page.on("pageerror", (error) => errors.push(error.message));
   await page.goto("/#/pulse");
   const latest = snapshotAt(dates.at(-1));
-  const fresh = latest.data.clusters;
+  const clusters = latest.data.clusters;
   const map = page.getByRole("region", { name: "사건 관계 지도" });
+  await expect(map.locator(".document-cluster")).toHaveCount(clusters.length);
   await expect(map.locator(".document-node")).toHaveCount(
-    fresh.reduce((sum, c) => sum + c.nodes.length, 0),
+    clusters.reduce((sum, c) => sum + c.nodes.length, 0),
   );
   await expect(map.locator("[data-edge-id]")).toHaveCount(
-    fresh.reduce((sum, c) => sum + c.edges.length, 0),
+    clusters.reduce((sum, c) => sum + c.edges.length, 0),
   );
+  // NEW is a badge, not a filter: every snapshot cluster must remain on the map.
+  expect(
+    await map
+      .locator(".document-cluster")
+      .evaluateAll((elements) =>
+        elements.map((element) => element.dataset.issueKey).sort(),
+      ),
+  ).toEqual(clusters.map((cluster) => cluster.issueKey).sort());
+  const newKeys = clusters
+    .filter((cluster) =>
+      isNewIssue(
+        cluster.firstDetectedAt,
+        latest.meta.snapshotTs,
+        latest.meta.newWindowHours,
+      ),
+    )
+    .map((cluster) => cluster.issueKey)
+    .sort();
+  expect(newKeys.length).toBeGreaterThan(0);
+  expect(newKeys.length).toBeLessThan(clusters.length);
+  expect(
+    await map
+      .locator(".document-cluster__badge")
+      .evaluateAll((badges) =>
+        badges
+          .map((badge) => badge.closest(".document-cluster").dataset.issueKey)
+          .sort(),
+      ),
+  ).toEqual(newKeys);
   await expect(page.locator(".pulse-cluster-list")).not.toContainText("HOT");
   await expect(page.locator(".pulse-cluster-list")).toContainText("NEW");
   const slider = page.getByRole("slider", { name: "스냅샷 시각" });
@@ -247,16 +290,20 @@ test("dense map selection, filtering and desktop/mobile handoff", async ({
   const panel = page.getByRole("complementary", { name: "선택한 사건" });
   await expect(panel).toHaveCount(0);
   const latest = snapshotAt(dates.at(-1));
-  const fresh = latest.data.clusters;
+  const clusters = latest.data.clusters;
+  const technology = clusters.find(
+    (cluster) => cluster.issueKey === "ai-chip-controls",
+  );
+  const world = clusters.find(
+    (cluster) => cluster.issueKey === "iran-hormuz-2025",
+  );
   const map = page.getByRole("region", { name: "사건 관계 지도" });
   await expect(map.locator(".document-node")).toHaveCount(
-    fresh.reduce((sum, c) => sum + c.nodes.length, 0),
+    clusters.reduce((sum, c) => sum + c.nodes.length, 0),
   );
-  const node = map
-    .locator(
-      `[data-page-id="${pageId(fresh.find((c) => c.category === "technology").nodes[0].pageId)}"]`,
-    )
-    .first();
+  const node = map.locator(
+    `.document-cluster[data-issue-key="${technology.issueKey}"] .document-node[data-page-id="${pageId(technology.nodes[0].pageId)}"]`,
+  );
   const radius = await node.locator(".document-node__body").getAttribute("r");
   const position = await node.getAttribute("transform");
   const clusterPositions = () =>
@@ -267,7 +314,7 @@ test("dense map selection, filtering and desktop/mobile handoff", async ({
       );
   const originalPositions = await clusterPositions();
   await page.getByRole("button", { name: "기술", exact: true }).click();
-  const topTechnology = fresh
+  const topTechnology = clusters
     .filter((v) => v.category === "technology")
     .sort(
       (a, b) =>
@@ -291,7 +338,7 @@ test("dense map selection, filtering and desktop/mobile handoff", async ({
   });
   await page
     .locator(".pulse-cluster-list button")
-    .filter({ hasText: fresh[0].label })
+    .filter({ hasText: technology.label })
     .click();
   await page
     .getByRole("complementary", { name: "선택한 사건" })
@@ -310,7 +357,11 @@ test("dense map selection, filtering and desktop/mobile handoff", async ({
   expect((await map.boundingBox()).width).toBeGreaterThan(
     (await page.locator(".pulse-layout").boundingBox()).width - 4,
   );
-  await node.focus();
+  // Offscreen clusters stay in the data but leave the map's tab order.
+  await map
+    .locator('.document-cluster[data-rendered="true"] .document-node')
+    .first()
+    .focus();
   await page.keyboard.press("Enter");
   await expect(panel).toBeVisible();
   await page.setViewportSize({ width: 390, height: 844 });
@@ -325,11 +376,11 @@ test("dense map selection, filtering and desktop/mobile handoff", async ({
   });
   await page
     .locator(".pulse-cluster-list button")
-    .filter({ hasText: fresh[1].label })
+    .filter({ hasText: world.label })
     .click();
   await page
     .locator(".pulse-cluster-list button")
-    .filter({ hasText: fresh[0].label })
+    .filter({ hasText: technology.label })
     .click();
   await page.screenshot({
     path: "test-results/pulse-mobile-selected.png",
