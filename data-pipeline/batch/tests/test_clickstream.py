@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import gzip
 import json
+from datetime import datetime, timezone
+from pathlib import Path
 
 import pytest
 
@@ -16,6 +18,7 @@ from batch.clickstream import (
     parse_row,
     parse_rows,
     read_shards,
+    select_completed_month,
 )
 
 
@@ -165,3 +168,54 @@ def test_적재본_shard를_되읽는다(tmp_path):
         h.write(json.dumps({"prev": "A", "curr": "C", "n": 7}) + "\n")
     rows = list(read_shards(tmp_path))
     assert rows == [ClickstreamRow("A", "B", 42), ClickstreamRow("A", "C", 7)]
+
+
+# ---------------------------------------------------------------- 운영 월 선택
+
+def _complete_month(root: Path, month: str, wiki: str = "enwiki") -> None:
+    directory = root / wiki / month
+    directory.mkdir(parents=True)
+    (directory / "part-00000.jsonl.gz").write_bytes(b"")
+    (directory / "_manifest.json").write_text(
+        json.dumps({"wiki": wiki, "month": month, "shards": ["part-00000.jsonl.gz"]}),
+        encoding="utf-8",
+    )
+
+
+def test_직전월이_완료됐으면_그_월을_고른다(tmp_path):
+    _complete_month(tmp_path, "2026-07")
+    _complete_month(tmp_path, "2026-08")
+    _complete_month(tmp_path, "2026-09")  # 현재 월은 미래 정보라 사용 금지
+
+    month, directory = select_completed_month(
+        tmp_path, "enwiki", datetime(2026, 9, 17, tzinfo=timezone.utc))
+
+    assert month == "2026-08"
+    assert directory == tmp_path / "enwiki" / "2026-08"
+
+
+def test_직전월이_미완료면_가장_최근_완료월로_폴백한다(tmp_path):
+    _complete_month(tmp_path, "2026-06")
+    _complete_month(tmp_path, "2026-07")
+    (tmp_path / "enwiki" / "2026-08").mkdir(parents=True)  # 반쪽 적재, manifest 없음
+
+    month, _ = select_completed_month(
+        tmp_path, "enwiki", datetime(2026, 9, 2, tzinfo=timezone.utc))
+
+    assert month == "2026-07"
+
+
+def test_월_경계는_스냅샷_계약대로_UTC로_판정한다(tmp_path):
+    _complete_month(tmp_path, "2026-07")
+    _complete_month(tmp_path, "2026-08")
+
+    month, _ = select_completed_month(
+        tmp_path, "enwiki", datetime.fromisoformat("2026-09-01T00:30:00+09:00"))
+
+    assert month == "2026-07"  # UTC로는 8월 31일이므로 직전 월은 7월
+
+
+def test_사용할_완료월이_없으면_조용히_빈_이웃을_만들지_않는다(tmp_path):
+    with pytest.raises(FileNotFoundError, match="검증 완료 Clickstream"):
+        select_completed_month(
+            tmp_path, "enwiki", datetime(2026, 9, 17, tzinfo=timezone.utc))
