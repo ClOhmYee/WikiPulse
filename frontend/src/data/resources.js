@@ -30,6 +30,11 @@ export function memberView(member, eventId) {
     eventIds: [String(eventId)],
   };
 }
+const sumOptionalNumber = (values) => {
+  const known = values.filter((v) => Number.isFinite(v));
+  return known.length ? known.reduce((a, b) => a + b, 0) : null;
+};
+
 export function issueView(raw, aliases = []) {
   const members = raw.members || [];
   return {
@@ -53,7 +58,8 @@ export function issueView(raw, aliases = []) {
     startedAt: null,
     updatedAt: null,
     pulse: null,
-    edits: null,
+    // 문서별 editCount 합계. editorCount 는 API 계약에 아직 없어(-36 이후 후속) editors 는 null 유지.
+    edits: sumOptionalNumber(members.map((m) => m.editCount)),
     editors: null,
     pageviews: null,
     baseline: null,
