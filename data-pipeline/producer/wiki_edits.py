@@ -7,7 +7,7 @@ Kafka 가 필요한 게 처리량 때문은 아니다 (enwiki 초당 2건, 1건 
        이 프로듀서가 SSE 를 Kafka 토픽으로 옮겨야 Spark 가 붙는다.
     2. Spark 가 재시작하는 동안 이벤트가 사라지지 않는다. 토픽 보존 기간 안에서는
        오프셋을 되감아 재처리할 수 있다.
-    근거: docs/requirements-v0.1.md §3.1
+    근거: docs/requirements-v0.2.md §3.1
 """
 
 from __future__ import annotations

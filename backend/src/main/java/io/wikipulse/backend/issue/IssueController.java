@@ -16,7 +16,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * 이슈 피드·버블맵·상세. API 명세 v0.1 §2.
+ * 이슈 피드·버블맵·상세. API 명세 v0.2 §2.
  *
  * <p>피드와 버블맵은 같은 데이터를 카드/버블로 다르게 그릴 뿐이라 endpoint 를
  * 공유한다. snapshotTs 를 주면 그 시점(리플레이), 안 주면 최근 스냅샷.

@@ -4,7 +4,7 @@
 HDFS 에 적재한다. 이 원본을 Spark 배치가 읽어 이슈별 기관명·테마 lift 를 뽑고,
 그게 LLM 종목 검증의 RAG 컨텍스트가 된다.
 
-명세: [docs/requirements-v0.1.md](../../docs/requirements-v0.1.md) §3·§4·§5·§11
+명세: [docs/requirements-v0.2.md](../../docs/requirements-v0.2.md) §3·§4·§5·§11
 
 ```
 GDELT GKG (15분 파일)  ──[이 모듈]──▶  HDFS  ──▶  Spark 배치  ──▶  이슈↔종목 근거

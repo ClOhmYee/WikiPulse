@@ -1,6 +1,6 @@
 # db — PostgreSQL 스키마
 
-데이터 모델 v1 (`WP-35`). 명세: [docs/requirements-v0.1.md](../docs/requirements-v0.1.md) §3.2, §5
+데이터 모델 v1 (`WP-35`). 명세: [docs/requirements-v0.2.md](../docs/requirements-v0.2.md) §3.2, §5
 
 ```
 db/
@@ -65,9 +65,9 @@ LIVE 화면은 가장 최근 값을, 리플레이는 사용자가 고른 시점�
 | --- | --- |
 | `wiki_page` | 문서. `(wiki, title)` 이 자연키 |
 | `page_edit_window` | Spark 윈도우 집계 출력. **단기 보존** — 슬라이딩이라 편집 1건이 12행에 걸친다 |
-| `page_view_hourly` | Pageviews 조회수. 급증 2차 판정용 |
-| `page_baseline` | 문서 × 시간대(0~23, UTC) 기준선. 28일 EWMA |
-| `spike` | 급증 판정 통과분. 편집 급증 **AND** 조회수 급등 |
+| `page_view_hourly` | Pageviews 조회수. 편집 발생 후 2차·최종 판정용 |
+| `page_baseline` | 조회수 기준선. 생성 28일 이상은 직전 28일, 미만은 생성 이후 자료 |
+| `spike` | 사람 편집 1건 이상 **AND** 조회수 급등 통과분(WP-118) |
 
 ### 이슈
 
@@ -101,8 +101,7 @@ LIVE 화면은 가장 최근 값을, 리플레이는 사용자가 고른 시점�
 `text-embedding-3-small` 기준이다. 차원이 다르면 INSERT 가 거부된다 —
 테스트가 이걸 확인한다.
 
-**`spike.view_ratio` 가 NULL 일 수 있다.** Pageviews API 가 시간 단위라
-2차 판정이 최대 1시간 늦는다. NULL = 아직 판정 전이지 판정 실패가 아니다.
+~~`spike.view_ratio` 가 NULL이면 조회수 도착 전 감지 상태~~ → 새 계약에서는 조회수 관문을 통과한 뒤에만 LIVE `spike`를 저장한다(WP-118). NULL은 과거·리플레이 호환 값으로만 남긴다. 조회수 데이터가 늦으면 이슈 확정도 그만큼 늦어진다.
 
 **종목이 사라져도 알림·토론은 남는다.** `notification.ticker` 는
 `ON DELETE SET NULL` 이다. 상장폐지가 사용자 데이터를 지우면 안 된다.
