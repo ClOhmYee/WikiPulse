@@ -54,7 +54,7 @@ Spring의 `IssueController`/`PulseMapService`에 스냅샷 목록과 지도 조�
 - 발광은 재사용 SVG 그라디언트를 사용하고 프레임별 DOM 갱신은 약 30fps로 제한한다. 매 프레임 React 상태 갱신이나 데이터 요청을 추가하지 않는다. 선택 노드의 작은 그림자와 제목 박스 뒤의 제한된 블러를 사용하며, 스캔 중에는 블러 반경 대신 투명도를 변경한다.
 - 검증: `e2e/pulse-neon.spec.js`에서 화면 좌표 기준 스캔/노드 일치, 일시정지·전체화면·모션 감소·화면 밖 중단, 지도 범위 axe 검사, 데스크톱/모바일 캡처를 확인한다. 기존 `pulse.spec.js`, `pulse-zoom.spec.js`와 API 모드 `e2e-api/pulse.spec.js`도 회귀 범위에 포함한다. API 모드 검사는 HTTP 응답 가로채기이며 실제 백엔드 연동 증거가 아니다.
 
-## 확대·축소 렌더링
+## 확대·축소 렌더링 (WP-125)
 
 - `useMapCamera`는 보간 중 현재 카메라를 ref와 구독자에 전달하고, 배율이 안정되거나 드래그가 끝나면 React 상태에 반영한다. `useMapView`가 카메라 transform과 화면에 보이는 장식만 갱신한다. `PulseCluster`는 memo로 분리하고 제목 줄바꿈·노드 조회 표·선택 연결 정보를 캐시한다.
 - 클러스터 제목의 글꼴과 박스 치수는 고정하며, 그룹 transform의 `(zoom / DEFAULT_ZOOM)^0.35 / zoom` 배율로 기존 화면 크기를 유지한다. 블러·여백·모서리도 같은 그룹 안에서 확대·축소한다.
