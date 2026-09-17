@@ -155,14 +155,21 @@ z 경로다. 판정이 달라진 게 아니라 **입력 조건이 다르다**(`s
 | `GET /api/v1/issues/snapshots?source=live` | 200 · 1건 (`clusterCount":2`) |
 | `GET /api/v1/issues/149` | 200 · `members` 1건(`isSeed":true`), `relatedStocks":[]` |
 
-무인자 피드가 LIVE 를 잡는 경로는 `IssueClusterRepository.findLatestLiveSnapshot`
-(`SELECT max(snapshot_ts) … WHERE source='live'`)이다.
+무인자 피드가 LIVE 를 잡는 경로는 `IssueClusterRepository` 다 —
+~~`findLatestLiveSnapshot` (`SELECT max(snapshot_ts) FROM issue_cluster WHERE source='live'`)~~
+→ `findLatestSnapshot(source)` (`cluster_snapshot` 에서 LIVE 우선, 아래 항목).
+LIVE 가 있는 위 표의 결과는 그대로다.
 
-⚠️ **`?source=replay` 를 시각 없이 주면 빈 목록이 온다** (`total:0`,
-`meta.snapshotTs` 는 LIVE 시각). `IssueService.feed` 가 시각 미지정 시 **최신 LIVE
-스냅샷**을 먼저 고르고 그 시각에 `source=replay` 를 거는 구조라서다. 버그로 보고
-고치기 전에 의도를 확인할 것 — 리플레이는 사용자가 시점을 고르는 화면이라는 전제면
-맞는 동작이다. -102 가 만든 게 아니라 기존 계약이고, 이 스토리는 백엔드를 안 건드렸다.
+~~⚠️ `?source=replay` 를 시각 없이 주면 빈 목록이 온다 (`total:0`, `meta.snapshotTs` 는
+LIVE 시각). `IssueService.feed` 가 시각 미지정 시 최신 LIVE 스냅샷을 먼저 고르고 그
+시각에 `source=replay` 를 거는 구조라서다.~~ → **고쳤다** (2026-09-17, WP-106).
+
+시각 미지정이면 이제 `IssueClusterRepository.findLatestSnapshot(source)` 가 **요청한
+출처의 최신 완료 스냅샷**을 고른다. 출처도 없으면 최신 LIVE, LIVE 가 없으면 최신
+replay — `/issues/map` 의 `PulseMapRepository.findLatestSnapshot` 과 같은 규칙·같은
+SQL 이다. 두 endpoint 는 같은 데이터를 카드/버블로만 다르게 그리므로 시각 미지정에서
+서로 다른 시점을 고르면 두 화면이 조용히 어긋난다. 고친 계기는 **replay 만 적재된
+DB(이 README 의 Milton 6행)에서 `GET /api/v1/issues` 가 에러 없이 빈 피드를 낸 것**이다.
 
 ⚠️ **pgserver 로는 백엔드를 못 띄운다.** 번들 postgres 에 timezone DB
 (`share/postgresql/timezone`)가 없어 JDBC 가 보내는 `TimeZone` 파라미터를 전부 거절한다
