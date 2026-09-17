@@ -7,7 +7,11 @@
 
 특히 인수조건 4(verified=false 적재·재실행 갱신)의 두 핵심을 못 박는다:
     - ON CONFLICT upsert 가 LLM 검증 필드(verified·match_path·rationale·verified_at)를 보존
-    - stale 삭제가 미검증 후보만 지우고 검증된 행은 남김
+    - stale 삭제가 미확정(check_state<>DONE) 후보만 지우고 DONE 행은 남김
+
+V5(WP-49) 이후: cluster_id 는 스냅샷마다 새로 생기므로(cluster/snapshot.py) 후보
+재생성 INSERT 는 issue_key·ticker 로 과거 DONE 판정을 찾아 새 cluster_id 행에 그대로
+들고 온다 — 진행 중인 이슈가 재감지될 때마다 LLM 을 다시 안 부르기 위해서다.
 """
 
 from __future__ import annotations
@@ -28,54 +32,99 @@ def _vec(index: int, dim: int = DIM) -> str:
     return "[" + ",".join(v) + "]"
 
 
-def _new_cluster(conn) -> int:
+def _new_cluster(conn, **cols) -> int:
+    base = {"snapshot_ts": "now()", "pulse_score": "1.0"}
+    base.update(cols)
+    keys = ", ".join(base)
+    placeholders = ", ".join(["%s"] * len(base))
     rows = q(
         conn,
-        "INSERT INTO issue_cluster (snapshot_ts, pulse_score) "
-        "VALUES (now(), 1.0) RETURNING id",
+        f"INSERT INTO issue_cluster ({keys}) VALUES ({placeholders}) RETURNING id",
+        *base.values(),
     )
     return rows[0][0]
+
+
+# CandidateRepository.replaceCandidates() 의 INSERT 문 그대로(자리표시자만 :name -> %s).
+# 파라미터 순서: cid, ticker, tier, similarity, gdelt_lift, issue_key(SELECT절),
+#              issue_key(WHERE절), ticker(WHERE절) — issue_key·ticker 는 두 번씩 쓰인다.
+_UPSERT_CANDIDATE_SQL = """
+    INSERT INTO cluster_stock
+        (cluster_id, ticker, tier, similarity, gdelt_lift, verified,
+         issue_key, prompt_version, check_state, attempt_count,
+         match_path, confidence, rationale, verified_at)
+    SELECT %s, %s, %s, %s, %s,
+           COALESCE(prior.verified, false),
+           %s,
+           prior.prompt_version,
+           COALESCE(prior.check_state, 'PENDING'),
+           COALESCE(prior.attempt_count, 0),
+           prior.match_path, prior.confidence, prior.rationale, prior.verified_at
+      FROM (SELECT 1) AS dual
+      LEFT JOIN (
+          SELECT verified, prompt_version, check_state, attempt_count,
+                 match_path, confidence, rationale, verified_at
+            FROM cluster_stock
+           WHERE issue_key = CAST(%s AS text)
+             AND ticker = %s
+             AND check_state = 'DONE'
+           ORDER BY verified_at DESC NULLS LAST
+           LIMIT 1
+      ) AS prior ON true
+    ON CONFLICT (cluster_id, ticker) DO UPDATE
+       SET tier = EXCLUDED.tier,
+           similarity = EXCLUDED.similarity,
+           gdelt_lift = EXCLUDED.gdelt_lift
+"""
+
+def _delete_stale(conn, cid, keep: tuple[str, ...]) -> None:
+    """CandidateRepository.replaceCandidates() 의 stale 삭제 문 그대로.
+
+    Spring 의 NamedParameterJdbcTemplate 은 List 값을 :keep 자리에 넣으면 IN (?,?,...)로
+    자동 전개한다. psycopg3 는 튜플 하나를 IN %s 자리에 그대로 못 넣어(오탐 아님 —
+    파라미터화 방식 차이) 여기서 개수만큼 자리표시자를 직접 만든다.
+    """
+    placeholders = ", ".join(["%s"] * len(keep))
+    x(
+        conn,
+        f"DELETE FROM cluster_stock WHERE cluster_id = %s AND check_state <> 'DONE' "
+        f"AND ticker NOT IN ({placeholders})",
+        cid, *keep,
+    )
+
+
+def _upsert_candidate(conn, cid, ticker, tier, similarity, gdelt_lift, issue_key):
+    x(conn, _UPSERT_CANDIDATE_SQL, cid, ticker, tier, similarity, gdelt_lift,
+      issue_key, issue_key, ticker)
 
 
 # ---------------------------------------------------------------- 인수조건 4: 멱등 upsert
 
 def test_재실행_upsert가_LLM_검증필드를_보존한다(conn):
-    cid = _new_cluster(conn)
+    cid = _new_cluster(conn, issue_key="'nee-hurricane'")
     x(conn, "INSERT INTO stock (ticker, name, exchange) VALUES ('NEE', 'NextEra', 'NYSE')")
 
-    # 1) 후보 최초 적재 (워커: verified=false)
-    x(
-        conn,
-        "INSERT INTO cluster_stock (cluster_id, ticker, tier, similarity, gdelt_lift, verified) "
-        "VALUES (%s, 'NEE', 'EMBEDDING_ONLY', 0.20, NULL, false)",
-        cid,
-    )
+    # 1) 후보 최초 적재 (워커: verified=false, check_state=PENDING)
+    _upsert_candidate(conn, cid, "NEE", "EMBEDDING_ONLY", 0.20, None, "nee-hurricane")
     # 2) LLM 검증 단계가 확정 (별도 이슈 -68 이 채우는 필드)
     x(
         conn,
         "UPDATE cluster_stock SET verified=true, match_path='DIRECT_MENTION', "
-        "rationale='허리케인 직접 노출', verified_at=now() WHERE cluster_id=%s AND ticker='NEE'",
+        "check_state='DONE', rationale='허리케인 직접 노출', verified_at=now() "
+        "WHERE cluster_id=%s AND ticker='NEE'",
         cid,
     )
-    # 3) 워커 재실행 — CandidateRepository.replaceCandidates 의 upsert 문 그대로
-    x(
-        conn,
-        "INSERT INTO cluster_stock (cluster_id, ticker, tier, similarity, gdelt_lift, verified) "
-        "VALUES (%s, 'NEE', 'BOTH', 0.31, 10.5, false) "
-        "ON CONFLICT (cluster_id, ticker) DO UPDATE "
-        "   SET tier = EXCLUDED.tier, similarity = EXCLUDED.similarity, "
-        "       gdelt_lift = EXCLUDED.gdelt_lift",
-        cid,
-    )
+    # 3) 워커 재실행(같은 cluster_id) — upsert 문 그대로, tier·점수만 새로 계산됐다고 가정
+    _upsert_candidate(conn, cid, "NEE", "BOTH", 0.31, 10.5, "nee-hurricane")
 
     row = q(
         conn,
         "SELECT tier, similarity, gdelt_lift, verified, match_path, rationale, "
-        "       verified_at IS NOT NULL "
+        "       check_state, verified_at IS NOT NULL "
         "FROM cluster_stock WHERE cluster_id=%s AND ticker='NEE'",
         cid,
     )[0]
-    tier, sim, lift, verified, match_path, rationale, has_verified_at = row
+    tier, sim, lift, verified, match_path, rationale, check_state, has_verified_at = row
     # 신호는 갱신
     assert tier == "BOTH"
     assert sim == 0.31
@@ -84,30 +133,69 @@ def test_재실행_upsert가_LLM_검증필드를_보존한다(conn):
     assert verified is True
     assert match_path == "DIRECT_MENTION"
     assert rationale == "허리케인 직접 노출"
+    assert check_state == "DONE"
     assert has_verified_at is True
 
 
-def test_stale_삭제는_미검증만_지우고_검증행은_남긴다(conn):
+def test_stale_삭제는_미확정만_지우고_DONE_행은_남긴다(conn):
     cid = _new_cluster(conn)
     for t in ("NEE", "GNRC", "DUK"):
         x(conn, "INSERT INTO stock (ticker, name, exchange) VALUES (%s, %s, 'NYSE')", t, t)
-    # NEE=검증됨, GNRC·DUK=미검증
+    # NEE=DONE(탈락이어도 확정), GNRC·DUK=아직 PENDING
     x(
         conn,
-        "INSERT INTO cluster_stock (cluster_id, ticker, tier, verified) VALUES "
-        "(%s,'NEE','BOTH',true), (%s,'GNRC','GDELT_ONLY',false), (%s,'DUK','GDELT_ONLY',false)",
+        "INSERT INTO cluster_stock (cluster_id, ticker, tier, verified, check_state) VALUES "
+        "(%s,'NEE','BOTH',false,'DONE'), (%s,'GNRC','GDELT_ONLY',false,'PENDING'), "
+        "(%s,'DUK','GDELT_ONLY',false,'PENDING')",
         cid, cid, cid,
     )
-    # 이번 재실행 후보군(keep) = {NEE, GNRC}. CandidateRepository 의 stale 삭제 문 그대로.
+    # 이번 재실행 후보군(keep) = {NEE, GNRC}.
+    _delete_stale(conn, cid, ("NEE", "GNRC"))
+    left = {r[0] for r in q(conn, "SELECT ticker FROM cluster_stock WHERE cluster_id=%s", cid)}
+    # DUK(미확정·keep 밖)만 삭제. DONE 인 NEE 는 verified=false(탈락)여도, keep 밖이어도 남는다.
+    assert left == {"NEE", "GNRC"}
+
+
+# ---------------------------------------------------------------- WP-49: 재사용
+
+def test_같은_이슈의_새_스냅샷_cluster_id가_이전_DONE_판정을_들고온다(conn):
+    """핵심 계약 — cluster_id 가 스냅샷마다 바뀌어도 LLM 을 다시 안 부른다."""
+    x(conn, "INSERT INTO stock (ticker, name, exchange) VALUES ('CRWD', 'CrowdStrike', 'NASDAQ')")
+    c1 = _new_cluster(conn, issue_key="'crowdstrike-2024'", snapshot_ts="'2024-07-19T00:00Z'")
+    _upsert_candidate(conn, c1, "CRWD", "BOTH", 0.5, 9.0, "crowdstrike-2024")
     x(
         conn,
-        "DELETE FROM cluster_stock WHERE cluster_id=%s AND verified=false "
-        "AND ticker NOT IN (%s, %s)",
-        cid, "NEE", "GNRC",
+        "UPDATE cluster_stock SET check_state='DONE', verified=true, match_path='DIRECT_MENTION', "
+        "prompt_version='v1', rationale='결함 업데이트 배포 당사자', verified_at='2024-07-19T01:00Z' "
+        "WHERE cluster_id=%s AND ticker='CRWD'",
+        c1,
     )
-    left = {r[0] for r in q(conn, "SELECT ticker FROM cluster_stock WHERE cluster_id=%s", cid)}
-    # DUK(미검증·keep 밖)만 삭제. 검증된 NEE 는 keep 밖이어도 남는다.
-    assert left == {"NEE", "GNRC"}
+
+    # 다음 폴 주기 — 새 스냅샷, 새 cluster_id, 같은 issue_key. 워커가 후보를 다시 만든다.
+    c2 = _new_cluster(conn, issue_key="'crowdstrike-2024'", snapshot_ts="'2024-07-19T00:05Z'")
+    _upsert_candidate(conn, c2, "CRWD", "BOTH", 0.55, 9.2, "crowdstrike-2024")
+
+    row = q(
+        conn,
+        "SELECT verified, check_state, match_path, prompt_version, similarity FROM cluster_stock "
+        "WHERE cluster_id=%s AND ticker='CRWD'",
+        c2,
+    )[0]
+    assert row == (True, "DONE", "DIRECT_MENTION", "v1", 0.55)  # 판정은 이월, similarity 는 재계산값
+
+
+def test_issue_key가_없으면_재사용_안_하고_PENDING으로_시작한다(conn):
+    """V1 이전·issue_key 미배선 클러스터. NULL = NULL 은 매치되지 않아 그냥 새로 시작한다."""
+    x(conn, "INSERT INTO stock (ticker, name, exchange) VALUES ('NOKEY', 'No Key Co', 'NYSE')")
+    cid = _new_cluster(conn)  # issue_key 없음
+    _upsert_candidate(conn, cid, "NOKEY", "BOTH", 0.5, None, None)
+
+    row = q(
+        conn,
+        "SELECT verified, check_state FROM cluster_stock WHERE cluster_id=%s AND ticker='NOKEY'",
+        cid,
+    )[0]
+    assert row == (False, "PENDING")
 
 
 # ---------------------------------------------------------------- 후보 조회 SQL

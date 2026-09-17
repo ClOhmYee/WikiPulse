@@ -299,11 +299,11 @@ RAM 16 GB에서 Kafka + Spark + HDFS 데몬을 올리면 Spark executor 몫은 8
 - [ ] 리플레이 시연 구간 — 어느 사건·며칠. GDELT 결손(~~2025-06-13~07-04~~ → **2025-06-14 18:00~07-02 02:00 UTC로 재확인, 2026-09-16 이분 탐색**, §11) 밖에서
 - [x] ~~Top-K의 K (임베딩·GDELT 각각), 3등급 검증 발동 기준 N, 노출 개수 상한~~ — **확정 (2026-09-14, WP-22).** 임베딩 K=20 · GDELT K=10 · 3등급 발동 N=2(1·2등급 확정 통과 개수). 노출 상한은 두지 않는다(검증 통과분만 노출되어 자연 상한). `-39`·`-48` 실측 위에서 결정 — 근거·수치는 §6.3
 - [x] ~~임베딩 교집합 재측정~~ — **재측정 완료 (2026-09-10, WP-48).** 확정 이슈 텍스트 규칙(§6.2 D) + `text-embedding-3-small` + 정답셋 5사례로 S&P 500 대상 재측정. 임베딩∩GDELT 겹침은 K=10에서 0~2개(합집합이 맞다는 §6.3 재확인), 임베딩 단독 후보는 70~100%가 노이즈(3등급 조건부 검증의 근거), GDELT는 임베딩이 못 잡는 2차 효과 정답(CrowdStrike의 DAL, IBM의 MU)을 데려옴. 단 GDELT 제목-그렙 근사는 "회사=2차 영향"인 사건(Milton·은행위기)에서 죽음 — 실제 파이프라인의 GKG 기관명 필드로는 재측정 필요. 근거: `ai/candidate-overlap/RESULT.md`, §11
-- [ ] GDELT 기관명 → 종목 정규화 — 부분문자열 매칭은 News Corp·Meta 같은 오탐이 남. 별칭 테이블 필요
+- [x] ~~GDELT 기관명 → 종목 정규화~~ — **별칭 테이블 확정 (2026-09-16, WP-47).** 정확 일치 우선 + 별칭 사전(자회사·구 사명·브랜드명, `data-pipeline/gkg/aliases.py`)으로 보강. 부분문자열 매칭은 여전히 안 함. Milton 실 GKG 표본(기관 271건)에서 매칭 16건 → 30건으로 개선. 짧은 이름(meta·apple·delta 등)은 블록리스트로 등록 자체를 막는다 — 실측 중 `dodge`·`mcdonald`가 실제 오탐 위험으로 확인됨. 근거: `ai/gkg-alias-poc/RESULT.md`
 - [x] ~~알림 수단 — 웹 내 배지 / 브라우저 푸시 / 이메일~~ → **MVP 범위 제외로 무의미해짐 (2026-09-17, WP-104).** §2 참고
 - [x] ~~토론방 — 실시간(WebSocket) 필수인지, 모더레이션~~ → **MVP 범위 제외로 무의미해짐 (2026-09-17, WP-104).** §2 참고
 - [ ] GDELT·리플레이 덤프 보존 기간 — 디스크 307 GB × 2, GDELT 1년 zip 100~230 GB
-- [ ] 2노드 RAM 배분 — 서비스 박스에 DataNode·Worker를 얹을 때 Spring·PG와 나누는 기준
+- [ ] 2노드 RAM 배분 (16 GB × 2) — 두 대 다 DataNode + Spark Worker를 겸한다(§7). 서비스 박스: Nginx·Spring·PG·Redis + DataNode·Worker. **추가 박스가 더 빡빡하다**: Kafka + Spark Master + NameNode + DataNode + Worker가 한 대에 다 올라간다. 마스터가 워커를 겸하는 건 2노드에선 정상(안 그러면 실질 워커 1대)이고 프로젝트가 링크한 Hadoop SingleCluster 가이드도 그 전제지만, 추가 박스의 Worker executor 힙을 얼마나 줄지·마스터 데몬들(JVM 여럿)에 얼마 남길지 기준이 없다. t3 버스트라 CPU도 같이 본다
 - [x] ~~매칭 정확도 정답셋~~ — **확정 (2026-09-10, WP-39).** 사건형 3(Milton·CrowdStrike·2023 은행위기) + 기업형 2(IBM 실적 경고·PayPal 인수 무산) = 5건, 정답 20종목에 근거 기사를 달았다. 등급(§6.3) 채점 결과 CrowdStrike·IBM은 정답이 등급1(교집합)에서 다 잡히고 등급3(임베딩 단독)엔 정답이 0개 — §6.3 우선순위가 실측으로 확인됐다. 자세한 결과·GDELT 방식의 한계는 `ai/matching-goldset/RESULT.md`
 - [ ] 면책 문구 법적 검토
 - [x] ~~LLM 판정 재사용 키·재검증 시점(WP-49), 검증 실패 시 상태 처리(WP-50)~~ — **확정 (2026-09-16).** 재사용 키는 `(issue_key, ticker, prompt_version)` — `cluster_id`는 스냅샷마다 새로 생겨 캐시 키로 못 쓴다(`data-pipeline/cluster/snapshot.py` 확인). 재검증은 `prompt_version`을 올릴 때만 — 클러스터 멤버 변화·이슈 텍스트 미세 변화로는 재검증 안 함(MVP 범위, 크레딧 절약). 실패 처리는 `cluster_stock.check_state`(PENDING/DONE/FAILED)로 `verified`와 분리 — "아직 검증 안 됨"과 "GATEWAY 장애로 검증 실패"를 구분한다. 재시도 3회 후 FAILED로 파킹, 무한 재시도 안 함(장애 복구 직후 크레딧 스파이크 방지). 스키마: `db/migrations/V5__cluster_stock_reuse.sql`
