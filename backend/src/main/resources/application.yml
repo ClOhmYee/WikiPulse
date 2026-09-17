@@ -45,10 +45,23 @@ wikipulse:
       connect-timeout: 5s
       # read 는 게이트웨이 p99 지연을 덮게(페이로드는 항상 작다).
       read-timeout: 30s
+      # LLM 검증(WP-68) — POC 실측 모델을 못박음(-45). 임베딩과 같은 gateway 게이트웨이·신뢰성 계층.
+      verification-model: claude-sonnet-4-5-20250929
+      # 응답은 6필드 JSON. 한국어 rationale 절단 방지 마진(상한만 늘 뿐 짧은 응답엔 무영향).
+      verification-max-tokens: 800
     scheduler:
       enabled: ${WIKIPULSE_MATCHING_SCHEDULER_ENABLED:false}
       fixed-delay: PT5M
       batch-size: 20
+    # LLM 검증 워커 (WP-68, 명세 §6.3). 후보 생성 폴러와 별개로 켠다 —
+    # PENDING 후보가 쌓인 뒤에 켠다.
+    verification:
+      enabled: ${WIKIPULSE_MATCHING_VERIFICATION_ENABLED:false}
+      fixed-delay: PT5M
+      batch-size: 20
+      org-context-limit: 15
+      # 3등급(EMBEDDING_ONLY) 발동 문턱 — 1·2등급 확정 통과가 이 값 미만일 때만(WP-22).
+      tier3-threshold: 2
 
 # 외부 호출 신뢰성 계층 (WP-66). named instance gateway / wikipedia.
 # 전송 계층 실패만 다룬다(타임아웃·5xx·429·연결오류·회로개방). 스키마 검증·attempt_count·

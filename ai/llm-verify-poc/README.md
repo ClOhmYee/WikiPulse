@@ -6,6 +6,10 @@
 - 시스템 프롬프트: [prompts/verify_system_v1.txt](prompts/verify_system_v1.txt)
 - 출력 JSON 스키마: [schema/verify_response_v1.json](schema/verify_response_v1.json)
 - 근거·실측: [RESULT.md](RESULT.md)
+- GDELT 컨텍스트 OFF/ON 측정 계획(-68, 실행 보류): [CONTEXT_MEASUREMENT.md](CONTEXT_MEASUREMENT.md)
+
+> 🔴 프로덕션 구현은 백엔드 -68 에 있다. 이 프롬프트·스키마는 `backend/src/main/resources/llm/`
+> 로 복사됐고(`prompt_version=v1`), 런타임은 이 `ai/` 폴더를 참조하지 않는다.
 
 프로덕션 코드가 아니라 계약 검증용 실험이다. 실제 구현은 Spring(-68)에서 한다.
 
