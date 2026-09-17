@@ -75,6 +75,20 @@ gdelt` 로 namenode·datanode 가 뜬다. `db/migrations` 처럼 무언가 자�
 - 실제 HTTP: `/actuator/health` UP, `/api/issues` 빈 배열 → 시드 후 카드,
   `/api/issues/1` 관련종목 조인(NEE tier BOTH lift 10.5), `/api/stocks/NEE/issues`.
 
+### 수동 시드 시 빠뜨리기 쉬운 것 (2026-09-17 실측)
+
+`issue_cluster`·`cluster_member`·`cluster_stock`만 채우면 상세(`/issues/{id}`)는
+바로 뜨지만, 목록(`GET /issues`)과 펄스맵(`GET /issues/map`)은 시각 미지정 시
+**`cluster_snapshot`에서 최신 스냅샷을 고른다**(WP-106) — 이 테이블에
+행이 없으면 `issue_cluster`가 있어도 조용히 빈 목록이 온다. 시드에 반드시
+`cluster_snapshot` 행(같은 `snapshot_ts`·`source`)을 같이 넣는다.
+
+⚠️ **펄스맵은 추가로 `cluster_member.window_start`/`window_end`가 NULL이 아니어야
+한다.** 프론트 계약 검증(`frontend/src/data/pulse/contract.js`)이 이 두 값을
+필수로 보고, `window_end <= snapshotTs`까지 확인한다 — 하나라도 어긋나면
+"이 시점의 지도를 불러오지 못했습니다(metric window)"로 스냅샷 전체가 빠진다.
+`editCount`·`views` 등 나머지 지표는 nullable이라 이 둘만 특히 잘 놓친다.
+
 ## 스키마를 고쳤을 때
 
 `db/migrations` 는 볼륨이 비어 있을 때만(최초 1회) 적재된다. 스키마를 바꿨으면:
