@@ -59,7 +59,7 @@ docker exec -i wikipulse-postgres psql -U wikipulse -d wikipulse -c "DELETE FROM
 ## 서버 배포 시
 
 EC2 실물 DB에 그대로 적용 가능(스키마 동일, `db/migrations` 먼저 적용된
-상태여야 함 — `V5`까지). 이 데이터는 시연·개발용이며 실제 파이프라인
+상태여야 함 — `V6`까지). 이 데이터는 시연·개발용이며 실제 파이프라인
 산출물이 아니므로, 실 파이프라인이 같은 issue_key로 데이터를 쓰기
 시작하면 이 시드는 지우는 게 맞다:
 

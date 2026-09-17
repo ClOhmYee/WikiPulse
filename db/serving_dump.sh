@@ -43,10 +43,10 @@ DUMP="wikipulse-replay-${LABEL}-serving.dump"
 TABLES=(wiki_page issue_cluster cluster_snapshot cluster_member cluster_edge)
 TABLE_ARGS=(); for t in "${TABLES[@]}"; do TABLE_ARGS+=(-t "$t"); done
 
-#: migrations 적용 순서. V5 가 두 개라 파일명 알파벳 순(컨테이너 initdb 와 같은 순서)이다.
+#: migrations 적용 순서. 버전 숫자 오름차순(컨테이너 initdb 와 같은 순서)이다.
 MIGRATION_FILES=(V1__initial_schema.sql V2__pulse_snapshot_graph.sql
                  V3__baseline_hour_of_day.sql V4__baseline_view_stddev.sql
-                 V5__cluster_stock_reuse.sql V5__spike_source.sql)
+                 V5__spike_source.sql V6__cluster_stock_reuse.sql)
 
 COUNT_SQL="SELECT 'wiki_page',count(*) FROM wiki_page
 UNION ALL SELECT 'issue_cluster',count(*) FROM issue_cluster
