@@ -9,7 +9,7 @@ export const nodeRadius = (score) =>
   score === null ? 12 : 12 + 28 * Math.sqrt(score);
 const hash = (text) =>
   [...text].reduce((value, ch) => (value * 31 + ch.charCodeAt(0)) >>> 0, 7);
-// Cache document positions; rank cluster centers again for each snapshot.
+// Cache document positions; rank cluster centers for each filtered snapshot.
 export function createLayoutEngine() {
   const clusters = new Map();
   return (input) => {

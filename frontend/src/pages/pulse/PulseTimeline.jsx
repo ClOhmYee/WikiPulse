@@ -12,6 +12,7 @@ export default function PulseTimeline({
   selected,
   latest,
   onSelect,
+  compact = false,
 }) {
   const index = snapshots.findIndex(
     (item) => snapshotKey(item) === snapshotKey(selected),
@@ -31,19 +32,24 @@ export default function PulseTimeline({
         : true),
   );
   return (
-    <section className="pulse-timeline" aria-label="스냅샷 시간 탐색">
+    <section
+      className="pulse-timeline"
+      data-compact={compact}
+      aria-label="스냅샷 시간 탐색"
+    >
       <div className="pulse-timeline__heading">
         <div>
-          <span className="wp-muted">선택 시점</span>
+          {!compact && <span className="wp-muted">선택 시점</span>}
           <strong>{kstTimestamp(selected.snapshotTs)}</strong>
         </div>
         <button
           className="wp-text-button"
+          aria-label="최신으로 이동"
           onClick={() => onSelect(latest)}
           disabled={snapshotKey(selected) === snapshotKey(latest)}
         >
           <RotateCcw size={14} />
-          최신으로 이동
+          {compact ? "최신" : "최신으로 이동"}
         </button>
       </div>
       <div className="pulse-timeline__track">
@@ -86,28 +92,32 @@ export default function PulseTimeline({
               );
             }}
           />
-          <div className="pulse-timeline__ticks" aria-hidden="true">
-            {ticks.map((item) => (
-              <i
-                key={snapshotKey(item)}
-                style={{
-                  left: `${end === start ? 50 : ((Date.parse(item.snapshotTs) - start) / (end - start)) * 100}%`,
-                }}
-              />
-            ))}
-          </div>
-          <div className="pulse-timeline__labels">
-            <span>
-              {multiDay
-                ? kstDate(snapshots[0].snapshotTs)
-                : kstTime(snapshots[0].snapshotTs)}
-            </span>
-            <span>
-              {multiDay
-                ? kstDate(snapshots.at(-1).snapshotTs)
-                : kstTime(snapshots.at(-1).snapshotTs)}
-            </span>
-          </div>
+          {!compact && (
+            <div className="pulse-timeline__ticks" aria-hidden="true">
+              {ticks.map((item) => (
+                <i
+                  key={snapshotKey(item)}
+                  style={{
+                    left: `${end === start ? 50 : ((Date.parse(item.snapshotTs) - start) / (end - start)) * 100}%`,
+                  }}
+                />
+              ))}
+            </div>
+          )}
+          {!compact && (
+            <div className="pulse-timeline__labels">
+              <span>
+                {multiDay
+                  ? kstDate(snapshots[0].snapshotTs)
+                  : kstTime(snapshots[0].snapshotTs)}
+              </span>
+              <span>
+                {multiDay
+                  ? kstDate(snapshots.at(-1).snapshotTs)
+                  : kstTime(snapshots.at(-1).snapshotTs)}
+              </span>
+            </div>
+          )}
         </div>
         <button
           className="wp-icon-button"
@@ -118,9 +128,11 @@ export default function PulseTimeline({
           <ChevronRight size={18} />
         </button>
       </div>
-      <p className="wp-muted wp-small">
-        저장된 {snapshots.length}개 시점 · 간격은 실제 시간 차이를 나타냅니다.
-      </p>
+      {!compact && (
+        <p className="wp-muted wp-small">
+          저장된 {snapshots.length}개 시점 · 간격은 실제 시간 차이를 나타냅니다.
+        </p>
+      )}
     </section>
   );
 }

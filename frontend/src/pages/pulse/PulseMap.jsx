@@ -1,11 +1,18 @@
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { Maximize, Minimize, RotateCcw, Minus, Plus } from "lucide-react";
 import { getIssueCategory } from "../../data/categories.js";
 import { isNewIssue } from "../../data/pulse/time.js";
+import useMapCamera, {
+  MAP_SCALE,
+  mapPoint,
+  MIN_ZOOM,
+  MAX_ZOOM,
+  DEFAULT_ZOOM,
+} from "./useMapCamera.js";
 
 export default function PulseMap({
   scene,
-  visibleKeys,
+  cameraState,
   selectedKey,
   nodeId,
   onSelect,
@@ -17,7 +24,7 @@ export default function PulseMap({
   const svgRef = useRef(null),
     drag = useRef(null);
   const marker = useId().replaceAll(":", "");
-  const [camera, setCamera] = useState({ zoom: 1, x: 0, y: 0 });
+  const { camera, move, stop, zoomBy } = useMapCamera(svgRef);
   const [compact, setCompact] = useState(
     () => window.matchMedia("(max-width: 720px)").matches,
   );
@@ -27,54 +34,23 @@ export default function PulseMap({
     media.addEventListener("change", update);
     return () => media.removeEventListener("change", update);
   }, []);
-  const [viewport, setViewport] = useState({ width: 1000, height: 650 });
-  useEffect(() => {
-    const observer = new ResizeObserver(([entry]) => {
-      const { width, height } = entry.contentRect;
-      if (width && height)
-        setViewport({ width: width / 0.85, height: height / 0.85 });
-    });
-    observer.observe(svgRef.current);
-    return () => observer.disconnect();
-  }, []);
-  const { width, height } = viewport;
-  const selected = scene.clusters.find((v) => v.issueKey === selectedKey);
-  const selectedX = selected?.x ?? 0,
-    selectedY = selected?.y ?? 0;
-  const selectedRadius = selected?.radius;
-  useEffect(() => {
-    const zoom = selectedRadius
-      ? Math.min(
-          1.4,
-          width / (selectedRadius * 2 + 140),
-          height / (selectedRadius * 2 + 180),
-        )
-      : 1;
-    setCamera({
-      zoom,
-      x: width / 2 - selectedX * zoom,
-      y: height / 2 - selectedY * zoom,
-    });
-  }, [
-    selectedKey,
-    selectedX,
-    selectedY,
-    selectedRadius,
-    width,
-    height,
-    meta.snapshotTs,
-  ]);
-  function zoomTo(next) {
-    setCamera((old) => {
-      const zoom = Math.max(0.08, Math.min(4, next)),
-        factor = zoom / old.zoom;
-      return {
-        zoom,
-        x: width / 2 - (width / 2 - old.x) * factor,
-        y: height / 2 - (height / 2 - old.y) * factor,
+  useLayoutEffect(() => {
+    const saved = cameraState.current;
+    const canRestore =
+      saved && saved.scene === scene && saved.snapshotTs === meta.snapshotTs;
+    move(canRestore ? saved.camera : { zoom: DEFAULT_ZOOM, x: 0, y: 0 });
+    return () => {
+      // Keep the last rendered view across dialog remounts and viewport changes.
+      cameraState.current = {
+        camera: stop(),
+        scene,
+        snapshotTs: meta.snapshotTs,
       };
-    });
-  }
+    };
+  }, [meta.snapshotTs, scene, cameraState, stop, move]);
+  const titleSize = (compact ? 23 : 20) / camera.zoom;
+  const labelSize = (compact ? 14 : 13) / camera.zoom ** 0.8;
+  const showLabels = camera.zoom >= 0.8;
   const activate = (action) => (e) => {
     if (e.key === "Enter" || e.key === " ") {
       e.preventDefault();
@@ -82,11 +58,8 @@ export default function PulseMap({
       action();
     }
   };
-  const pointAt = (e) =>
-    new DOMPoint(e.clientX, e.clientY).matrixTransform(
-      svgRef.current.getScreenCTM().inverse(),
-    );
-  const clusters = scene.clusters.filter((v) => visibleKeys.has(v.issueKey));
+  const pointAt = (e) => mapPoint(svgRef.current, e.clientX, e.clientY);
+  const clusters = scene.clusters;
   const newCount = clusters.filter((v) =>
     isNewIssue(v.firstDetectedAt, meta.snapshotTs, meta.newWindowHours),
   ).length;
@@ -96,6 +69,7 @@ export default function PulseMap({
       role="region"
       aria-label="사건 관계 지도"
       data-snapshot={meta.snapshotTs}
+      data-zoom={camera.zoom}
     >
       <div className="document-map__caption">
         <strong>
@@ -103,12 +77,11 @@ export default function PulseMap({
         </strong>
         <span>
           {clusters.reduce((n, v) => n + v.nodes.length, 0)}개 문서 · 문서를
-          선택해 연결 근거를 확인하세요 · 드래그로 주변 탐색
+          선택해 연결 근거를 확인하세요 · 휠로 확대·축소 · 드래그로 주변 탐색
         </span>
       </div>
       <svg
         ref={svgRef}
-        viewBox={`0 0 ${width} ${height}`}
         role="group"
         tabIndex="0"
         onKeyDown={(e) => {
@@ -121,24 +94,25 @@ export default function PulseMap({
           }[e.key];
           if (delta) {
             e.preventDefault();
-            setCamera((old) => ({
+            const old = stop();
+            move({
               ...old,
               x: old.x + delta[0],
               y: old.y + delta[1],
-            }));
+            });
           }
         }}
         aria-label="이슈와 문서 관계 그래프"
         onPointerDown={(e) => {
           if (e.target.closest('[role="button"]')) return;
           const point = pointAt(e);
-          drag.current = { x: point.x, y: point.y, camera };
+          drag.current = { x: point.x, y: point.y, camera: stop() };
           e.currentTarget.setPointerCapture(e.pointerId);
         }}
         onPointerMove={(e) => {
           if (!drag.current) return;
           const point = pointAt(e);
-          setCamera({
+          move({
             ...drag.current.camera,
             x: drag.current.camera.x + point.x - drag.current.x,
             y: drag.current.camera.y + point.y - drag.current.y,
@@ -165,7 +139,10 @@ export default function PulseMap({
           </marker>
         </defs>
         <g
-          transform={`translate(${camera.x} ${camera.y}) scale(${camera.zoom})`}
+          style={{
+            transformBox: "view-box",
+            transform: `translate(50%, 50%) translate(${camera.x * MAP_SCALE}px, ${camera.y * MAP_SCALE}px) scale(${camera.zoom * MAP_SCALE})`,
+          }}
         >
           {clusters.map((cluster) => {
             const active = cluster.issueKey === selectedKey,
@@ -202,7 +179,7 @@ export default function PulseMap({
               titleLines.splice(3);
               titleLines[2] = `${titleLines[2].slice(0, lineLimit - 1)}…`;
             }
-            const lineHeight = compact ? 27 : 22;
+            const lineHeight = titleSize * 1.3;
             return (
               <g
                 key={cluster.issueKey}
@@ -227,10 +204,14 @@ export default function PulseMap({
                   />
                   <text
                     className="document-cluster__title"
+                    style={{
+                      fontSize: titleSize,
+                      strokeWidth: 4 / camera.zoom,
+                    }}
                     textAnchor="middle"
                     y={
                       -cluster.radius -
-                      18 -
+                      18 / camera.zoom -
                       (titleLines.length - 1) * lineHeight
                     }
                   >
@@ -297,9 +278,7 @@ export default function PulseMap({
                     data-page-id={node.pageId}
                     data-selected={active && nodeId === node.pageId}
                     data-related={active && connected.has(node.pageId)}
-                    data-label-visible={
-                      active || node.isSeed || camera.zoom >= 2.5
-                    }
+                    data-label-visible={showLabels}
                     data-pending={node.sizeScore === null}
                     role="button"
                     tabIndex="0"
@@ -323,7 +302,14 @@ export default function PulseMap({
                     {node.isSeed && (
                       <circle className="document-node__seed" r={3} />
                     )}
-                    <text textAnchor="middle" y={node.radius + 18}>
+                    <text
+                      textAnchor="middle"
+                      y={node.radius + 18 / camera.zoom}
+                      style={{
+                        fontSize: labelSize,
+                        strokeWidth: 4 / camera.zoom,
+                      }}
+                    >
                       {node.title.length > 25
                         ? `${node.title.slice(0, 24)}…`
                         : node.title}
@@ -360,23 +346,23 @@ export default function PulseMap({
           <button
             className="wp-icon-button"
             aria-label="지도 축소"
-            disabled={camera.zoom <= 0.08}
-            onClick={() => zoomTo(camera.zoom / 1.4)}
+            disabled={camera.zoom <= MIN_ZOOM}
+            onClick={() => zoomBy(1 / 1.2, { x: 0, y: 0 })}
           >
             <Minus size={17} />
           </button>
           <button
             className="wp-icon-button"
             aria-label="지도 확대"
-            disabled={camera.zoom >= 4}
-            onClick={() => zoomTo(camera.zoom * 1.4)}
+            disabled={camera.zoom >= MAX_ZOOM}
+            onClick={() => zoomBy(1.2, { x: 0, y: 0 })}
           >
             <Plus size={17} />
           </button>
           <button
             className="wp-icon-button"
             aria-label="지도 위치 초기화"
-            onClick={() => setCamera({ zoom: 1, x: width / 2, y: height / 2 })}
+            onClick={() => move({ zoom: DEFAULT_ZOOM, x: 0, y: 0 })}
           >
             <RotateCcw size={16} />
           </button>
