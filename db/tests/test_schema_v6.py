@@ -335,6 +335,50 @@ def test_recordReused_이전판정을_복사해_DONE으로_전이한다(conn):
     assert row == ("DONE", True, "SUPPLY_CHAIN", "weak", "재사용 근거", "milton-2024", "v1", True)
 
 
+# VerificationRepository.verifiedPassCountTier12 와 동일 SQL — 3등급(EMBEDDING_ONLY) 발동 게이트.
+# 재사용(-69) verified 행이 tier=BOTH/GDELT_ONLY 를 유지한 채 DONE 으로 남아 이 카운트에
+# 잡히는지가 서비스 게이트 정확성의 전제다. Java 단위 테스트는 이 카운트를 목으로 스텁하므로,
+# "재사용 write → 카운트 증가" 인과는 여기 실 DB 에서만 실측된다.
+_VERIFIED_PASS_COUNT_TIER12 = (
+    "SELECT count(*) "
+    "  FROM cluster_stock "
+    " WHERE cluster_id = %s AND check_state = 'DONE' AND verified = true "
+    "   AND tier IN ('BOTH', 'GDELT_ONLY')"
+)
+
+
+def test_재사용된_verified행이_tier12_게이트_카운트에_잡힌다(conn):
+    """-69 인과 실측: recordReused 로 쓴 DONE+verified+BOTH 행이 게이트 카운트를 0→1 로 올린다.
+
+    recordReused 는 tier 를 건드리지 않아 -67 이 심은 tier(BOTH)가 유지되고, verified=true·
+    check_state='DONE' 을 갱신하므로 카운트 조건을 그대로 만족한다.
+    """
+    _stock(conn, "RUS14")
+    cid = _cluster(conn, issue_key="'milton-2024'")
+    x(conn, "INSERT INTO cluster_stock (cluster_id, ticker, tier) VALUES (%s, 'RUS14', 'BOTH')", cid)
+
+    assert q(conn, _VERIFIED_PASS_COUNT_TIER12, cid)[0][0] == 0  # PENDING 은 안 잡힘
+
+    x(conn, _RECORD_REUSED, True, "REGION", "strong", "근거", "milton-2024", "v1", cid, "RUS14")
+
+    assert q(conn, _VERIFIED_PASS_COUNT_TIER12, cid)[0][0] == 1  # 재사용 verified 가 카운트에 잡힘
+
+
+def test_재사용된_EMBEDDING_ONLY_verified는_tier12_카운트에서_빠진다(conn):
+    """-69: EMBEDDING_ONLY 는 캐시 히트로 재사용돼 DONE+verified 가 돼도 tier12 게이트엔 안 잡힌다."""
+    _stock(conn, "RUS15")
+    cid = _cluster(conn, issue_key="'milton-2024'")
+    x(
+        conn,
+        "INSERT INTO cluster_stock (cluster_id, ticker, tier) VALUES (%s, 'RUS15', 'EMBEDDING_ONLY')",
+        cid,
+    )
+
+    x(conn, _RECORD_REUSED, True, "REGION", "strong", "근거", "milton-2024", "v1", cid, "RUS15")
+
+    assert q(conn, _VERIFIED_PASS_COUNT_TIER12, cid)[0][0] == 0  # tier3 는 게이트 카운트 밖
+
+
 # VerificationRepository.pendingCandidates 와 동일 SQL — 검증 순서(tier 우선 + 신호 강도)를 정한다.
 _PENDING_CANDIDATES = (
     "SELECT ticker, tier "

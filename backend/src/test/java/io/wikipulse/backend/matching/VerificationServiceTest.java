@@ -251,6 +251,46 @@ class VerificationServiceTest {
     }
 
     @Test
+    void 탈락판정도_재사용된다() {
+        // verified=false prior 도 캐시 히트다 — LLM 을 다시 부르지 않는다. reused 버킷에만 잡히고
+        // verified/rejected 는 0(이 둘은 "이번 실행 LLM 판정"만 센다).
+        when(repository.pendingCandidates(15L))
+                .thenReturn(List.of(new PendingCandidate("XOM", CandidateTier.BOTH)));
+        Verdict priorReject = new Verdict(false, null, null, null);
+        when(repository.findPriorVerdict(15L, "milton-2024-10", "XOM", "v1"))
+                .thenReturn(Optional.of(priorReject));
+
+        VerificationService.Result r = service().verifyCluster(15L);
+
+        verify(verifier, never()).verify(any());
+        verify(repository).recordReused(15L, "XOM", priorReject, "milton-2024-10", "v1");
+        assertThat(r.reused()).isEqualTo(1);
+        assertThat(r.verified()).isZero();
+        assertThat(r.rejected()).isZero();
+    }
+
+    @Test
+    void EMBEDDING_ONLY도_캐시_히트면_게이트를_건너뛰고_재사용된다() {
+        // 🔴 이 티켓의 핵심 설계: 캐시 조회가 tier3 게이트보다 앞이라, 게이트가 켜졌을(1·2등급
+        // 통과 N 이상) 상황에서도 EMBEDDING_ONLY 후보가 캐시 히트면 재사용된다(LLM 0 이라 적용이
+        // 결과를 완전하게 함). 게이트를 캐시 앞으로 옮기는 회귀를 막는다.
+        when(repository.pendingCandidates(16L))
+                .thenReturn(List.of(new PendingCandidate("MU", CandidateTier.EMBEDDING_ONLY)));
+        Verdict prior = new Verdict(true, "SUPPLY_CHAIN", "weak", "2차 효과 근거");
+        when(repository.findPriorVerdict(16L, "milton-2024-10", "MU", "v1"))
+                .thenReturn(Optional.of(prior));
+        // 게이트가 켜진 상태(1·2등급 통과가 임계값 이상) — 그런데도 캐시 히트라 스킵되지 않는다.
+        lenient().when(repository.verifiedPassCountTier12(16L)).thenReturn(2);
+
+        VerificationService.Result r = service().verifyCluster(16L);
+
+        verify(verifier, never()).verify(any());
+        verify(repository).recordReused(16L, "MU", prior, "milton-2024-10", "v1");
+        assertThat(r.reused()).isEqualTo(1);
+        assertThat(r.tier3Skipped()).isZero(); // 게이트에서 안 걸렸다 — 캐시가 앞이다.
+    }
+
+    @Test
     void 재사용된_verified행은_tier3_게이트_카운트에_반영된다() {
         // BOTH 후보는 캐시 히트로 재사용되어 DB 에 DONE+verified 로 남는다. 그 결과 tier1·2 확정
         // 통과 수가 임계값에 도달하면(DB 조회 verifiedPassCountTier12), EMBEDDING_ONLY 는 건너뛴다.

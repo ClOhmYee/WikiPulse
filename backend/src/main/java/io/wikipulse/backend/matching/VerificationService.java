@@ -83,6 +83,12 @@ public class VerificationService {
         int tier3Skipped = 0;
         int reused = 0;
 
+        // 🔴 이 메서드를 @Transactional 로 감싸지 말 것. 후보별 단건 커밋(현재 autocommit)이
+        // 세 가지의 전제다: (1) recordDone/recordReused 직후 verifiedPassCountTier12 의 DB 재조회가
+        // 방금 통과분을 본다(3등급 게이트 정확성), (2) 앞 클러스터의 DONE 이 같은 폴 배치 뒷
+        // 클러스터의 findPriorVerdict 캐시 히트로 보인다, (3) 전송 실패가 중간에 나도 이미 판정한
+        // 후보는 커밋된 채 남아 다음 폴에서 나머지만 재개된다(-50 멱등 재개). 트랜잭션으로 묶으면
+        // 중간 실패 시 판정·재사용 행이 함께 롤백돼 이 셋이 모두 깨진다.
         for (VerificationRepository.PendingCandidate c : pending) {
             // 재사용 캐시 (WP-69): 같은 (issue_key, ticker, prompt_version) 로 이미 DONE 인
             // 판정이 있으면 LLM 을 부르지 않고 그대로 복사한다. 🔴 tier3 게이트보다 앞이다 — 재사용은

@@ -156,6 +156,11 @@ public class VerificationRepository {
      * 자신은 세지 않는다({@code cluster_id <> :cid}) — PK 가 (cluster_id, ticker) 라 자기 행은
      * 하나뿐이고 지금 PENDING 이라 check_state='DONE' 필터로 이미 빠지지만, 의도를 명시한다.
      *
+     * <p>⚠️ issue_cluster.status 로 재사용원을 거르지 않는다 — DISCARDED 스냅샷의 판정도 재사용한다.
+     * 판정은 (issue_key, ticker) 관계에 대한 것이고 스냅샷 폐기는 그 관계를 부정하는 게 아니라
+     * 스냅샷 하나를 버리는 것이라, 같은 이슈의 다른 스냅샷이 그 판정을 이어쓰는 게 맞다(status
+     * 조인을 넣으면 index-only 조회가 깨지고 유효한 캐시 히트가 줄기만 한다).
+     *
      * @return 재사용할 판정, 없으면 {@link java.util.Optional#empty()}
      */
     public Optional<Verdict> findPriorVerdict(
