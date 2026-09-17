@@ -737,7 +737,7 @@ JOIN (VALUES
 ) AS v(title, weight, is_seed, ec, vw, vb, sp, sz) ON p.title = v.title
 WHERE p.wiki = 'enwiki';
 INSERT INTO issue_cluster (snapshot_ts, label, pulse_score, status, source, issue_key, first_detected_at, hot, category)
-VALUES ('2026-07-17T23:59:59Z', 'Harald V 국왕 서거 — Haakon 8세 즉위', 7.0, 'CONFIRMED', 'replay', 'demo-haakon-succession-2026-08-28', '2026-08-24T00:00:00Z', false, 'world')
+VALUES ('2026-07-17T23:59:59Z', 'Harald V 국왕 서거 — Haakon 8세 즉위', 7.0, 'CONFIRMED', 'replay', 'demo-haakon-succession-2026-08-28', '2026-07-17T00:00:00Z', false, 'world')
 RETURNING id \gset c2_
 INSERT INTO cluster_member (cluster_id, page_id, weight, is_seed, edit_count, views, view_baseline, spike_score, size_score, completeness, window_start, window_end)
 SELECT :c2_id, p.id, v.weight, v.is_seed, v.ec, v.vw, v.vb, v.sp, v.sz, 'complete', '2026-07-17T00:00:00Z', '2026-07-17T23:59:59Z'
@@ -765,7 +765,7 @@ JOIN (VALUES
 ) AS v(title, weight, is_seed, ec, vw, vb, sp, sz) ON p.title = v.title
 WHERE p.wiki = 'enwiki';
 INSERT INTO issue_cluster (snapshot_ts, label, pulse_score, status, source, issue_key, first_detected_at, hot, category)
-VALUES ('2026-07-18T23:59:59Z', 'Harald V 국왕 서거 — Haakon 8세 즉위', 8.0, 'CONFIRMED', 'replay', 'demo-haakon-succession-2026-08-28', '2026-08-24T00:00:00Z', false, 'world')
+VALUES ('2026-07-18T23:59:59Z', 'Harald V 국왕 서거 — Haakon 8세 즉위', 8.0, 'CONFIRMED', 'replay', 'demo-haakon-succession-2026-08-28', '2026-07-17T00:00:00Z', false, 'world')
 RETURNING id \gset c4_
 INSERT INTO cluster_member (cluster_id, page_id, weight, is_seed, edit_count, views, view_baseline, spike_score, size_score, completeness, window_start, window_end)
 SELECT :c4_id, p.id, v.weight, v.is_seed, v.ec, v.vw, v.vb, v.sp, v.sz, 'complete', '2026-07-18T00:00:00Z', '2026-07-18T23:59:59Z'
@@ -793,7 +793,7 @@ JOIN (VALUES
 ) AS v(title, weight, is_seed, ec, vw, vb, sp, sz) ON p.title = v.title
 WHERE p.wiki = 'enwiki';
 INSERT INTO issue_cluster (snapshot_ts, label, pulse_score, status, source, issue_key, first_detected_at, hot, category)
-VALUES ('2026-07-19T23:59:59Z', 'Harald V 국왕 서거 — Haakon 8세 즉위', 8.7, 'CONFIRMED', 'replay', 'demo-haakon-succession-2026-08-28', '2026-08-24T00:00:00Z', false, 'world')
+VALUES ('2026-07-19T23:59:59Z', 'Harald V 국왕 서거 — Haakon 8세 즉위', 8.7, 'CONFIRMED', 'replay', 'demo-haakon-succession-2026-08-28', '2026-07-17T00:00:00Z', false, 'world')
 RETURNING id \gset c6_
 INSERT INTO cluster_member (cluster_id, page_id, weight, is_seed, edit_count, views, view_baseline, spike_score, size_score, completeness, window_start, window_end)
 SELECT :c6_id, p.id, v.weight, v.is_seed, v.ec, v.vw, v.vb, v.sp, v.sz, 'complete', '2026-07-19T00:00:00Z', '2026-07-19T23:59:59Z'
@@ -821,7 +821,7 @@ JOIN (VALUES
 ) AS v(title, weight, is_seed, ec, vw, vb, sp, sz) ON p.title = v.title
 WHERE p.wiki = 'enwiki';
 INSERT INTO issue_cluster (snapshot_ts, label, pulse_score, status, source, issue_key, first_detected_at, hot, category)
-VALUES ('2026-07-20T23:59:59Z', 'Harald V 국왕 서거 — Haakon 8세 즉위', 8.1, 'CONFIRMED', 'replay', 'demo-haakon-succession-2026-08-28', '2026-08-24T00:00:00Z', false, 'world')
+VALUES ('2026-07-20T23:59:59Z', 'Harald V 국왕 서거 — Haakon 8세 즉위', 8.1, 'CONFIRMED', 'replay', 'demo-haakon-succession-2026-08-28', '2026-07-17T00:00:00Z', false, 'world')
 RETURNING id \gset c8_
 INSERT INTO cluster_member (cluster_id, page_id, weight, is_seed, edit_count, views, view_baseline, spike_score, size_score, completeness, window_start, window_end)
 SELECT :c8_id, p.id, v.weight, v.is_seed, v.ec, v.vw, v.vb, v.sp, v.sz, 'complete', '2026-07-20T00:00:00Z', '2026-07-20T23:59:59Z'
@@ -850,7 +850,7 @@ JOIN (VALUES
 ) AS v(title, weight, is_seed, ec, vw, vb, sp, sz) ON p.title = v.title
 WHERE p.wiki = 'enwiki';
 INSERT INTO issue_cluster (snapshot_ts, label, pulse_score, status, source, issue_key, first_detected_at, hot, category)
-VALUES ('2026-07-21T23:59:59Z', 'Harald V 국왕 서거 — Haakon 8세 즉위', 7.0, 'CONFIRMED', 'replay', 'demo-haakon-succession-2026-08-28', '2026-08-24T00:00:00Z', false, 'world')
+VALUES ('2026-07-21T23:59:59Z', 'Harald V 국왕 서거 — Haakon 8세 즉위', 7.0, 'CONFIRMED', 'replay', 'demo-haakon-succession-2026-08-28', '2026-07-17T00:00:00Z', false, 'world')
 RETURNING id \gset c10_
 INSERT INTO cluster_member (cluster_id, page_id, weight, is_seed, edit_count, views, view_baseline, spike_score, size_score, completeness, window_start, window_end)
 SELECT :c10_id, p.id, v.weight, v.is_seed, v.ec, v.vw, v.vb, v.sp, v.sz, 'complete', '2026-07-21T00:00:00Z', '2026-07-21T23:59:59Z'
@@ -878,7 +878,7 @@ JOIN (VALUES
 ) AS v(title, weight, is_seed, ec, vw, vb, sp, sz) ON p.title = v.title
 WHERE p.wiki = 'enwiki';
 INSERT INTO issue_cluster (snapshot_ts, label, pulse_score, status, source, issue_key, first_detected_at, hot, category)
-VALUES ('2026-07-22T23:59:59Z', 'Harald V 국왕 서거 — Haakon 8세 즉위', 6.9, 'CONFIRMED', 'replay', 'demo-haakon-succession-2026-08-28', '2026-08-24T00:00:00Z', false, 'world')
+VALUES ('2026-07-22T23:59:59Z', 'Harald V 국왕 서거 — Haakon 8세 즉위', 6.9, 'CONFIRMED', 'replay', 'demo-haakon-succession-2026-08-28', '2026-07-17T00:00:00Z', false, 'world')
 RETURNING id \gset c12_
 INSERT INTO cluster_member (cluster_id, page_id, weight, is_seed, edit_count, views, view_baseline, spike_score, size_score, completeness, window_start, window_end)
 SELECT :c12_id, p.id, v.weight, v.is_seed, v.ec, v.vw, v.vb, v.sp, v.sz, 'complete', '2026-07-22T00:00:00Z', '2026-07-22T23:59:59Z'
@@ -906,7 +906,7 @@ JOIN (VALUES
 ) AS v(title, weight, is_seed, ec, vw, vb, sp, sz) ON p.title = v.title
 WHERE p.wiki = 'enwiki';
 INSERT INTO issue_cluster (snapshot_ts, label, pulse_score, status, source, issue_key, first_detected_at, hot, category)
-VALUES ('2026-07-23T23:59:59Z', 'Harald V 국왕 서거 — Haakon 8세 즉위', 6.4, 'CONFIRMED', 'replay', 'demo-haakon-succession-2026-08-28', '2026-08-24T00:00:00Z', false, 'world')
+VALUES ('2026-07-23T23:59:59Z', 'Harald V 국왕 서거 — Haakon 8세 즉위', 6.4, 'CONFIRMED', 'replay', 'demo-haakon-succession-2026-08-28', '2026-07-17T00:00:00Z', false, 'world')
 RETURNING id \gset c14_
 INSERT INTO cluster_member (cluster_id, page_id, weight, is_seed, edit_count, views, view_baseline, spike_score, size_score, completeness, window_start, window_end)
 SELECT :c14_id, p.id, v.weight, v.is_seed, v.ec, v.vw, v.vb, v.sp, v.sz, 'complete', '2026-07-23T00:00:00Z', '2026-07-23T23:59:59Z'
@@ -934,7 +934,7 @@ JOIN (VALUES
 ) AS v(title, weight, is_seed, ec, vw, vb, sp, sz) ON p.title = v.title
 WHERE p.wiki = 'enwiki';
 INSERT INTO issue_cluster (snapshot_ts, label, pulse_score, status, source, issue_key, first_detected_at, hot, category)
-VALUES ('2026-07-24T23:59:59Z', 'Harald V 국왕 서거 — Haakon 8세 즉위', 5.9, 'CONFIRMED', 'replay', 'demo-haakon-succession-2026-08-28', '2026-08-24T00:00:00Z', false, 'world')
+VALUES ('2026-07-24T23:59:59Z', 'Harald V 국왕 서거 — Haakon 8세 즉위', 5.9, 'CONFIRMED', 'replay', 'demo-haakon-succession-2026-08-28', '2026-07-17T00:00:00Z', false, 'world')
 RETURNING id \gset c16_
 INSERT INTO cluster_member (cluster_id, page_id, weight, is_seed, edit_count, views, view_baseline, spike_score, size_score, completeness, window_start, window_end)
 SELECT :c16_id, p.id, v.weight, v.is_seed, v.ec, v.vw, v.vb, v.sp, v.sz, 'complete', '2026-07-24T00:00:00Z', '2026-07-24T23:59:59Z'
@@ -962,7 +962,7 @@ JOIN (VALUES
 ) AS v(title, weight, is_seed, ec, vw, vb, sp, sz) ON p.title = v.title
 WHERE p.wiki = 'enwiki';
 INSERT INTO issue_cluster (snapshot_ts, label, pulse_score, status, source, issue_key, first_detected_at, hot, category)
-VALUES ('2026-07-25T23:59:59Z', 'Harald V 국왕 서거 — Haakon 8세 즉위', 6.1, 'CONFIRMED', 'replay', 'demo-haakon-succession-2026-08-28', '2026-08-24T00:00:00Z', false, 'world')
+VALUES ('2026-07-25T23:59:59Z', 'Harald V 국왕 서거 — Haakon 8세 즉위', 6.1, 'CONFIRMED', 'replay', 'demo-haakon-succession-2026-08-28', '2026-07-17T00:00:00Z', false, 'world')
 RETURNING id \gset c18_
 INSERT INTO cluster_member (cluster_id, page_id, weight, is_seed, edit_count, views, view_baseline, spike_score, size_score, completeness, window_start, window_end)
 SELECT :c18_id, p.id, v.weight, v.is_seed, v.ec, v.vw, v.vb, v.sp, v.sz, 'complete', '2026-07-25T00:00:00Z', '2026-07-25T23:59:59Z'
@@ -990,7 +990,7 @@ JOIN (VALUES
 ) AS v(title, weight, is_seed, ec, vw, vb, sp, sz) ON p.title = v.title
 WHERE p.wiki = 'enwiki';
 INSERT INTO issue_cluster (snapshot_ts, label, pulse_score, status, source, issue_key, first_detected_at, hot, category)
-VALUES ('2026-07-26T23:59:59Z', 'Harald V 국왕 서거 — Haakon 8세 즉위', 6.1, 'CONFIRMED', 'replay', 'demo-haakon-succession-2026-08-28', '2026-08-24T00:00:00Z', false, 'world')
+VALUES ('2026-07-26T23:59:59Z', 'Harald V 국왕 서거 — Haakon 8세 즉위', 6.1, 'CONFIRMED', 'replay', 'demo-haakon-succession-2026-08-28', '2026-07-17T00:00:00Z', false, 'world')
 RETURNING id \gset c20_
 INSERT INTO cluster_member (cluster_id, page_id, weight, is_seed, edit_count, views, view_baseline, spike_score, size_score, completeness, window_start, window_end)
 SELECT :c20_id, p.id, v.weight, v.is_seed, v.ec, v.vw, v.vb, v.sp, v.sz, 'complete', '2026-07-26T00:00:00Z', '2026-07-26T23:59:59Z'
@@ -1018,7 +1018,7 @@ JOIN (VALUES
 ) AS v(title, weight, is_seed, ec, vw, vb, sp, sz) ON p.title = v.title
 WHERE p.wiki = 'enwiki';
 INSERT INTO issue_cluster (snapshot_ts, label, pulse_score, status, source, issue_key, first_detected_at, hot, category)
-VALUES ('2026-07-27T23:59:59Z', 'Harald V 국왕 서거 — Haakon 8세 즉위', 5.8, 'CONFIRMED', 'replay', 'demo-haakon-succession-2026-08-28', '2026-08-24T00:00:00Z', false, 'world')
+VALUES ('2026-07-27T23:59:59Z', 'Harald V 국왕 서거 — Haakon 8세 즉위', 5.8, 'CONFIRMED', 'replay', 'demo-haakon-succession-2026-08-28', '2026-07-17T00:00:00Z', false, 'world')
 RETURNING id \gset c22_
 INSERT INTO cluster_member (cluster_id, page_id, weight, is_seed, edit_count, views, view_baseline, spike_score, size_score, completeness, window_start, window_end)
 SELECT :c22_id, p.id, v.weight, v.is_seed, v.ec, v.vw, v.vb, v.sp, v.sz, 'complete', '2026-07-27T00:00:00Z', '2026-07-27T23:59:59Z'
@@ -1046,7 +1046,7 @@ JOIN (VALUES
 ) AS v(title, weight, is_seed, ec, vw, vb, sp, sz) ON p.title = v.title
 WHERE p.wiki = 'enwiki';
 INSERT INTO issue_cluster (snapshot_ts, label, pulse_score, status, source, issue_key, first_detected_at, hot, category)
-VALUES ('2026-07-28T23:59:59Z', 'Harald V 국왕 서거 — Haakon 8세 즉위', 5.8, 'CONFIRMED', 'replay', 'demo-haakon-succession-2026-08-28', '2026-08-24T00:00:00Z', false, 'world')
+VALUES ('2026-07-28T23:59:59Z', 'Harald V 국왕 서거 — Haakon 8세 즉위', 5.8, 'CONFIRMED', 'replay', 'demo-haakon-succession-2026-08-28', '2026-07-17T00:00:00Z', false, 'world')
 RETURNING id \gset c24_
 INSERT INTO cluster_member (cluster_id, page_id, weight, is_seed, edit_count, views, view_baseline, spike_score, size_score, completeness, window_start, window_end)
 SELECT :c24_id, p.id, v.weight, v.is_seed, v.ec, v.vw, v.vb, v.sp, v.sz, 'complete', '2026-07-28T00:00:00Z', '2026-07-28T23:59:59Z'
@@ -1074,7 +1074,7 @@ JOIN (VALUES
 ) AS v(title, weight, is_seed, ec, vw, vb, sp, sz) ON p.title = v.title
 WHERE p.wiki = 'enwiki';
 INSERT INTO issue_cluster (snapshot_ts, label, pulse_score, status, source, issue_key, first_detected_at, hot, category)
-VALUES ('2026-07-29T23:59:59Z', 'Harald V 국왕 서거 — Haakon 8세 즉위', 5.4, 'CONFIRMED', 'replay', 'demo-haakon-succession-2026-08-28', '2026-08-24T00:00:00Z', false, 'world')
+VALUES ('2026-07-29T23:59:59Z', 'Harald V 국왕 서거 — Haakon 8세 즉위', 5.4, 'CONFIRMED', 'replay', 'demo-haakon-succession-2026-08-28', '2026-07-17T00:00:00Z', false, 'world')
 RETURNING id \gset c26_
 INSERT INTO cluster_member (cluster_id, page_id, weight, is_seed, edit_count, views, view_baseline, spike_score, size_score, completeness, window_start, window_end)
 SELECT :c26_id, p.id, v.weight, v.is_seed, v.ec, v.vw, v.vb, v.sp, v.sz, 'complete', '2026-07-29T00:00:00Z', '2026-07-29T23:59:59Z'
@@ -1102,7 +1102,7 @@ JOIN (VALUES
 ) AS v(title, weight, is_seed, ec, vw, vb, sp, sz) ON p.title = v.title
 WHERE p.wiki = 'enwiki';
 INSERT INTO issue_cluster (snapshot_ts, label, pulse_score, status, source, issue_key, first_detected_at, hot, category)
-VALUES ('2026-07-30T23:59:59Z', 'Harald V 국왕 서거 — Haakon 8세 즉위', 5.2, 'CONFIRMED', 'replay', 'demo-haakon-succession-2026-08-28', '2026-08-24T00:00:00Z', false, 'world')
+VALUES ('2026-07-30T23:59:59Z', 'Harald V 국왕 서거 — Haakon 8세 즉위', 5.2, 'CONFIRMED', 'replay', 'demo-haakon-succession-2026-08-28', '2026-07-17T00:00:00Z', false, 'world')
 RETURNING id \gset c28_
 INSERT INTO cluster_member (cluster_id, page_id, weight, is_seed, edit_count, views, view_baseline, spike_score, size_score, completeness, window_start, window_end)
 SELECT :c28_id, p.id, v.weight, v.is_seed, v.ec, v.vw, v.vb, v.sp, v.sz, 'complete', '2026-07-30T00:00:00Z', '2026-07-30T23:59:59Z'
@@ -1130,7 +1130,7 @@ JOIN (VALUES
 ) AS v(title, weight, is_seed, ec, vw, vb, sp, sz) ON p.title = v.title
 WHERE p.wiki = 'enwiki';
 INSERT INTO issue_cluster (snapshot_ts, label, pulse_score, status, source, issue_key, first_detected_at, hot, category)
-VALUES ('2026-07-31T23:59:59Z', 'Harald V 국왕 서거 — Haakon 8세 즉위', 5.3, 'CONFIRMED', 'replay', 'demo-haakon-succession-2026-08-28', '2026-08-24T00:00:00Z', false, 'world')
+VALUES ('2026-07-31T23:59:59Z', 'Harald V 국왕 서거 — Haakon 8세 즉위', 5.3, 'CONFIRMED', 'replay', 'demo-haakon-succession-2026-08-28', '2026-07-17T00:00:00Z', false, 'world')
 RETURNING id \gset c30_
 INSERT INTO cluster_member (cluster_id, page_id, weight, is_seed, edit_count, views, view_baseline, spike_score, size_score, completeness, window_start, window_end)
 SELECT :c30_id, p.id, v.weight, v.is_seed, v.ec, v.vw, v.vb, v.sp, v.sz, 'complete', '2026-07-31T00:00:00Z', '2026-07-31T23:59:59Z'
@@ -1158,7 +1158,7 @@ JOIN (VALUES
 ) AS v(title, weight, is_seed, ec, vw, vb, sp, sz) ON p.title = v.title
 WHERE p.wiki = 'enwiki';
 INSERT INTO issue_cluster (snapshot_ts, label, pulse_score, status, source, issue_key, first_detected_at, hot, category)
-VALUES ('2026-08-01T23:59:59Z', 'Harald V 국왕 서거 — Haakon 8세 즉위', 5.7, 'CONFIRMED', 'replay', 'demo-haakon-succession-2026-08-28', '2026-08-24T00:00:00Z', false, 'world')
+VALUES ('2026-08-01T23:59:59Z', 'Harald V 국왕 서거 — Haakon 8세 즉위', 5.7, 'CONFIRMED', 'replay', 'demo-haakon-succession-2026-08-28', '2026-07-17T00:00:00Z', false, 'world')
 RETURNING id \gset c32_
 INSERT INTO cluster_member (cluster_id, page_id, weight, is_seed, edit_count, views, view_baseline, spike_score, size_score, completeness, window_start, window_end)
 SELECT :c32_id, p.id, v.weight, v.is_seed, v.ec, v.vw, v.vb, v.sp, v.sz, 'complete', '2026-08-01T00:00:00Z', '2026-08-01T23:59:59Z'
@@ -1186,7 +1186,7 @@ JOIN (VALUES
 ) AS v(title, weight, is_seed, ec, vw, vb, sp, sz) ON p.title = v.title
 WHERE p.wiki = 'enwiki';
 INSERT INTO issue_cluster (snapshot_ts, label, pulse_score, status, source, issue_key, first_detected_at, hot, category)
-VALUES ('2026-08-02T23:59:59Z', 'Harald V 국왕 서거 — Haakon 8세 즉위', 6.3, 'CONFIRMED', 'replay', 'demo-haakon-succession-2026-08-28', '2026-08-24T00:00:00Z', false, 'world')
+VALUES ('2026-08-02T23:59:59Z', 'Harald V 국왕 서거 — Haakon 8세 즉위', 6.3, 'CONFIRMED', 'replay', 'demo-haakon-succession-2026-08-28', '2026-07-17T00:00:00Z', false, 'world')
 RETURNING id \gset c34_
 INSERT INTO cluster_member (cluster_id, page_id, weight, is_seed, edit_count, views, view_baseline, spike_score, size_score, completeness, window_start, window_end)
 SELECT :c34_id, p.id, v.weight, v.is_seed, v.ec, v.vw, v.vb, v.sp, v.sz, 'complete', '2026-08-02T00:00:00Z', '2026-08-02T23:59:59Z'
@@ -1214,7 +1214,7 @@ JOIN (VALUES
 ) AS v(title, weight, is_seed, ec, vw, vb, sp, sz) ON p.title = v.title
 WHERE p.wiki = 'enwiki';
 INSERT INTO issue_cluster (snapshot_ts, label, pulse_score, status, source, issue_key, first_detected_at, hot, category)
-VALUES ('2026-08-03T23:59:59Z', 'Harald V 국왕 서거 — Haakon 8세 즉위', 5.8, 'CONFIRMED', 'replay', 'demo-haakon-succession-2026-08-28', '2026-08-24T00:00:00Z', false, 'world')
+VALUES ('2026-08-03T23:59:59Z', 'Harald V 국왕 서거 — Haakon 8세 즉위', 5.8, 'CONFIRMED', 'replay', 'demo-haakon-succession-2026-08-28', '2026-07-17T00:00:00Z', false, 'world')
 RETURNING id \gset c36_
 INSERT INTO cluster_member (cluster_id, page_id, weight, is_seed, edit_count, views, view_baseline, spike_score, size_score, completeness, window_start, window_end)
 SELECT :c36_id, p.id, v.weight, v.is_seed, v.ec, v.vw, v.vb, v.sp, v.sz, 'complete', '2026-08-03T00:00:00Z', '2026-08-03T23:59:59Z'
@@ -1242,7 +1242,7 @@ JOIN (VALUES
 ) AS v(title, weight, is_seed, ec, vw, vb, sp, sz) ON p.title = v.title
 WHERE p.wiki = 'enwiki';
 INSERT INTO issue_cluster (snapshot_ts, label, pulse_score, status, source, issue_key, first_detected_at, hot, category)
-VALUES ('2026-08-04T23:59:59Z', 'Harald V 국왕 서거 — Haakon 8세 즉위', 5.6, 'CONFIRMED', 'replay', 'demo-haakon-succession-2026-08-28', '2026-08-24T00:00:00Z', false, 'world')
+VALUES ('2026-08-04T23:59:59Z', 'Harald V 국왕 서거 — Haakon 8세 즉위', 5.6, 'CONFIRMED', 'replay', 'demo-haakon-succession-2026-08-28', '2026-07-17T00:00:00Z', false, 'world')
 RETURNING id \gset c38_
 INSERT INTO cluster_member (cluster_id, page_id, weight, is_seed, edit_count, views, view_baseline, spike_score, size_score, completeness, window_start, window_end)
 SELECT :c38_id, p.id, v.weight, v.is_seed, v.ec, v.vw, v.vb, v.sp, v.sz, 'complete', '2026-08-04T00:00:00Z', '2026-08-04T23:59:59Z'
@@ -1270,7 +1270,7 @@ JOIN (VALUES
 ) AS v(title, weight, is_seed, ec, vw, vb, sp, sz) ON p.title = v.title
 WHERE p.wiki = 'enwiki';
 INSERT INTO issue_cluster (snapshot_ts, label, pulse_score, status, source, issue_key, first_detected_at, hot, category)
-VALUES ('2026-08-05T23:59:59Z', 'Harald V 국왕 서거 — Haakon 8세 즉위', 5.7, 'CONFIRMED', 'replay', 'demo-haakon-succession-2026-08-28', '2026-08-24T00:00:00Z', false, 'world')
+VALUES ('2026-08-05T23:59:59Z', 'Harald V 국왕 서거 — Haakon 8세 즉위', 5.7, 'CONFIRMED', 'replay', 'demo-haakon-succession-2026-08-28', '2026-07-17T00:00:00Z', false, 'world')
 RETURNING id \gset c40_
 INSERT INTO cluster_member (cluster_id, page_id, weight, is_seed, edit_count, views, view_baseline, spike_score, size_score, completeness, window_start, window_end)
 SELECT :c40_id, p.id, v.weight, v.is_seed, v.ec, v.vw, v.vb, v.sp, v.sz, 'complete', '2026-08-05T00:00:00Z', '2026-08-05T23:59:59Z'
@@ -1298,7 +1298,7 @@ JOIN (VALUES
 ) AS v(title, weight, is_seed, ec, vw, vb, sp, sz) ON p.title = v.title
 WHERE p.wiki = 'enwiki';
 INSERT INTO issue_cluster (snapshot_ts, label, pulse_score, status, source, issue_key, first_detected_at, hot, category)
-VALUES ('2026-08-06T23:59:59Z', 'Harald V 국왕 서거 — Haakon 8세 즉위', 5.3, 'CONFIRMED', 'replay', 'demo-haakon-succession-2026-08-28', '2026-08-24T00:00:00Z', false, 'world')
+VALUES ('2026-08-06T23:59:59Z', 'Harald V 국왕 서거 — Haakon 8세 즉위', 5.3, 'CONFIRMED', 'replay', 'demo-haakon-succession-2026-08-28', '2026-07-17T00:00:00Z', false, 'world')
 RETURNING id \gset c42_
 INSERT INTO cluster_member (cluster_id, page_id, weight, is_seed, edit_count, views, view_baseline, spike_score, size_score, completeness, window_start, window_end)
 SELECT :c42_id, p.id, v.weight, v.is_seed, v.ec, v.vw, v.vb, v.sp, v.sz, 'complete', '2026-08-06T00:00:00Z', '2026-08-06T23:59:59Z'
@@ -1326,7 +1326,7 @@ JOIN (VALUES
 ) AS v(title, weight, is_seed, ec, vw, vb, sp, sz) ON p.title = v.title
 WHERE p.wiki = 'enwiki';
 INSERT INTO issue_cluster (snapshot_ts, label, pulse_score, status, source, issue_key, first_detected_at, hot, category)
-VALUES ('2026-08-07T23:59:59Z', 'Harald V 국왕 서거 — Haakon 8세 즉위', 6.0, 'CONFIRMED', 'replay', 'demo-haakon-succession-2026-08-28', '2026-08-24T00:00:00Z', false, 'world')
+VALUES ('2026-08-07T23:59:59Z', 'Harald V 국왕 서거 — Haakon 8세 즉위', 6.0, 'CONFIRMED', 'replay', 'demo-haakon-succession-2026-08-28', '2026-07-17T00:00:00Z', false, 'world')
 RETURNING id \gset c44_
 INSERT INTO cluster_member (cluster_id, page_id, weight, is_seed, edit_count, views, view_baseline, spike_score, size_score, completeness, window_start, window_end)
 SELECT :c44_id, p.id, v.weight, v.is_seed, v.ec, v.vw, v.vb, v.sp, v.sz, 'complete', '2026-08-07T00:00:00Z', '2026-08-07T23:59:59Z'
@@ -1354,7 +1354,7 @@ JOIN (VALUES
 ) AS v(title, weight, is_seed, ec, vw, vb, sp, sz) ON p.title = v.title
 WHERE p.wiki = 'enwiki';
 INSERT INTO issue_cluster (snapshot_ts, label, pulse_score, status, source, issue_key, first_detected_at, hot, category)
-VALUES ('2026-08-08T23:59:59Z', 'Harald V 국왕 서거 — Haakon 8세 즉위', 6.1, 'CONFIRMED', 'replay', 'demo-haakon-succession-2026-08-28', '2026-08-24T00:00:00Z', false, 'world')
+VALUES ('2026-08-08T23:59:59Z', 'Harald V 국왕 서거 — Haakon 8세 즉위', 6.1, 'CONFIRMED', 'replay', 'demo-haakon-succession-2026-08-28', '2026-07-17T00:00:00Z', false, 'world')
 RETURNING id \gset c46_
 INSERT INTO cluster_member (cluster_id, page_id, weight, is_seed, edit_count, views, view_baseline, spike_score, size_score, completeness, window_start, window_end)
 SELECT :c46_id, p.id, v.weight, v.is_seed, v.ec, v.vw, v.vb, v.sp, v.sz, 'complete', '2026-08-08T00:00:00Z', '2026-08-08T23:59:59Z'
@@ -1382,7 +1382,7 @@ JOIN (VALUES
 ) AS v(title, weight, is_seed, ec, vw, vb, sp, sz) ON p.title = v.title
 WHERE p.wiki = 'enwiki';
 INSERT INTO issue_cluster (snapshot_ts, label, pulse_score, status, source, issue_key, first_detected_at, hot, category)
-VALUES ('2026-08-09T23:59:59Z', 'Harald V 국왕 서거 — Haakon 8세 즉위', 6.2, 'CONFIRMED', 'replay', 'demo-haakon-succession-2026-08-28', '2026-08-24T00:00:00Z', false, 'world')
+VALUES ('2026-08-09T23:59:59Z', 'Harald V 국왕 서거 — Haakon 8세 즉위', 6.2, 'CONFIRMED', 'replay', 'demo-haakon-succession-2026-08-28', '2026-07-17T00:00:00Z', false, 'world')
 RETURNING id \gset c48_
 INSERT INTO cluster_member (cluster_id, page_id, weight, is_seed, edit_count, views, view_baseline, spike_score, size_score, completeness, window_start, window_end)
 SELECT :c48_id, p.id, v.weight, v.is_seed, v.ec, v.vw, v.vb, v.sp, v.sz, 'complete', '2026-08-09T00:00:00Z', '2026-08-09T23:59:59Z'
@@ -1410,7 +1410,7 @@ JOIN (VALUES
 ) AS v(title, weight, is_seed, ec, vw, vb, sp, sz) ON p.title = v.title
 WHERE p.wiki = 'enwiki';
 INSERT INTO issue_cluster (snapshot_ts, label, pulse_score, status, source, issue_key, first_detected_at, hot, category)
-VALUES ('2026-08-10T23:59:59Z', 'Harald V 국왕 서거 — Haakon 8세 즉위', 6.8, 'CONFIRMED', 'replay', 'demo-haakon-succession-2026-08-28', '2026-08-24T00:00:00Z', false, 'world')
+VALUES ('2026-08-10T23:59:59Z', 'Harald V 국왕 서거 — Haakon 8세 즉위', 6.8, 'CONFIRMED', 'replay', 'demo-haakon-succession-2026-08-28', '2026-07-17T00:00:00Z', false, 'world')
 RETURNING id \gset c50_
 INSERT INTO cluster_member (cluster_id, page_id, weight, is_seed, edit_count, views, view_baseline, spike_score, size_score, completeness, window_start, window_end)
 SELECT :c50_id, p.id, v.weight, v.is_seed, v.ec, v.vw, v.vb, v.sp, v.sz, 'complete', '2026-08-10T00:00:00Z', '2026-08-10T23:59:59Z'
@@ -1438,7 +1438,7 @@ JOIN (VALUES
 ) AS v(title, weight, is_seed, ec, vw, vb, sp, sz) ON p.title = v.title
 WHERE p.wiki = 'enwiki';
 INSERT INTO issue_cluster (snapshot_ts, label, pulse_score, status, source, issue_key, first_detected_at, hot, category)
-VALUES ('2026-08-11T23:59:59Z', 'Harald V 국왕 서거 — Haakon 8세 즉위', 6.3, 'CONFIRMED', 'replay', 'demo-haakon-succession-2026-08-28', '2026-08-24T00:00:00Z', false, 'world')
+VALUES ('2026-08-11T23:59:59Z', 'Harald V 국왕 서거 — Haakon 8세 즉위', 6.3, 'CONFIRMED', 'replay', 'demo-haakon-succession-2026-08-28', '2026-07-17T00:00:00Z', false, 'world')
 RETURNING id \gset c52_
 INSERT INTO cluster_member (cluster_id, page_id, weight, is_seed, edit_count, views, view_baseline, spike_score, size_score, completeness, window_start, window_end)
 SELECT :c52_id, p.id, v.weight, v.is_seed, v.ec, v.vw, v.vb, v.sp, v.sz, 'complete', '2026-08-11T00:00:00Z', '2026-08-11T23:59:59Z'
@@ -1466,7 +1466,7 @@ JOIN (VALUES
 ) AS v(title, weight, is_seed, ec, vw, vb, sp, sz) ON p.title = v.title
 WHERE p.wiki = 'enwiki';
 INSERT INTO issue_cluster (snapshot_ts, label, pulse_score, status, source, issue_key, first_detected_at, hot, category)
-VALUES ('2026-08-12T23:59:59Z', 'Harald V 국왕 서거 — Haakon 8세 즉위', 5.7, 'CONFIRMED', 'replay', 'demo-haakon-succession-2026-08-28', '2026-08-24T00:00:00Z', false, 'world')
+VALUES ('2026-08-12T23:59:59Z', 'Harald V 국왕 서거 — Haakon 8세 즉위', 5.7, 'CONFIRMED', 'replay', 'demo-haakon-succession-2026-08-28', '2026-07-17T00:00:00Z', false, 'world')
 RETURNING id \gset c54_
 INSERT INTO cluster_member (cluster_id, page_id, weight, is_seed, edit_count, views, view_baseline, spike_score, size_score, completeness, window_start, window_end)
 SELECT :c54_id, p.id, v.weight, v.is_seed, v.ec, v.vw, v.vb, v.sp, v.sz, 'complete', '2026-08-12T00:00:00Z', '2026-08-12T23:59:59Z'
@@ -1494,7 +1494,7 @@ JOIN (VALUES
 ) AS v(title, weight, is_seed, ec, vw, vb, sp, sz) ON p.title = v.title
 WHERE p.wiki = 'enwiki';
 INSERT INTO issue_cluster (snapshot_ts, label, pulse_score, status, source, issue_key, first_detected_at, hot, category)
-VALUES ('2026-08-13T23:59:59Z', 'Harald V 국왕 서거 — Haakon 8세 즉위', 6.1, 'CONFIRMED', 'replay', 'demo-haakon-succession-2026-08-28', '2026-08-24T00:00:00Z', false, 'world')
+VALUES ('2026-08-13T23:59:59Z', 'Harald V 국왕 서거 — Haakon 8세 즉위', 6.1, 'CONFIRMED', 'replay', 'demo-haakon-succession-2026-08-28', '2026-07-17T00:00:00Z', false, 'world')
 RETURNING id \gset c56_
 INSERT INTO cluster_member (cluster_id, page_id, weight, is_seed, edit_count, views, view_baseline, spike_score, size_score, completeness, window_start, window_end)
 SELECT :c56_id, p.id, v.weight, v.is_seed, v.ec, v.vw, v.vb, v.sp, v.sz, 'complete', '2026-08-13T00:00:00Z', '2026-08-13T23:59:59Z'
@@ -1522,7 +1522,7 @@ JOIN (VALUES
 ) AS v(title, weight, is_seed, ec, vw, vb, sp, sz) ON p.title = v.title
 WHERE p.wiki = 'enwiki';
 INSERT INTO issue_cluster (snapshot_ts, label, pulse_score, status, source, issue_key, first_detected_at, hot, category)
-VALUES ('2026-08-14T23:59:59Z', 'Harald V 국왕 서거 — Haakon 8세 즉위', 5.5, 'CONFIRMED', 'replay', 'demo-haakon-succession-2026-08-28', '2026-08-24T00:00:00Z', false, 'world')
+VALUES ('2026-08-14T23:59:59Z', 'Harald V 국왕 서거 — Haakon 8세 즉위', 5.5, 'CONFIRMED', 'replay', 'demo-haakon-succession-2026-08-28', '2026-07-17T00:00:00Z', false, 'world')
 RETURNING id \gset c58_
 INSERT INTO cluster_member (cluster_id, page_id, weight, is_seed, edit_count, views, view_baseline, spike_score, size_score, completeness, window_start, window_end)
 SELECT :c58_id, p.id, v.weight, v.is_seed, v.ec, v.vw, v.vb, v.sp, v.sz, 'complete', '2026-08-14T00:00:00Z', '2026-08-14T23:59:59Z'
@@ -1550,7 +1550,7 @@ JOIN (VALUES
 ) AS v(title, weight, is_seed, ec, vw, vb, sp, sz) ON p.title = v.title
 WHERE p.wiki = 'enwiki';
 INSERT INTO issue_cluster (snapshot_ts, label, pulse_score, status, source, issue_key, first_detected_at, hot, category)
-VALUES ('2026-08-15T23:59:59Z', 'Harald V 국왕 서거 — Haakon 8세 즉위', 5.8, 'CONFIRMED', 'replay', 'demo-haakon-succession-2026-08-28', '2026-08-24T00:00:00Z', false, 'world')
+VALUES ('2026-08-15T23:59:59Z', 'Harald V 국왕 서거 — Haakon 8세 즉위', 5.8, 'CONFIRMED', 'replay', 'demo-haakon-succession-2026-08-28', '2026-07-17T00:00:00Z', false, 'world')
 RETURNING id \gset c60_
 INSERT INTO cluster_member (cluster_id, page_id, weight, is_seed, edit_count, views, view_baseline, spike_score, size_score, completeness, window_start, window_end)
 SELECT :c60_id, p.id, v.weight, v.is_seed, v.ec, v.vw, v.vb, v.sp, v.sz, 'complete', '2026-08-15T00:00:00Z', '2026-08-15T23:59:59Z'
@@ -1578,7 +1578,7 @@ JOIN (VALUES
 ) AS v(title, weight, is_seed, ec, vw, vb, sp, sz) ON p.title = v.title
 WHERE p.wiki = 'enwiki';
 INSERT INTO issue_cluster (snapshot_ts, label, pulse_score, status, source, issue_key, first_detected_at, hot, category)
-VALUES ('2026-08-16T23:59:59Z', 'Harald V 국왕 서거 — Haakon 8세 즉위', 6.1, 'CONFIRMED', 'replay', 'demo-haakon-succession-2026-08-28', '2026-08-24T00:00:00Z', false, 'world')
+VALUES ('2026-08-16T23:59:59Z', 'Harald V 국왕 서거 — Haakon 8세 즉위', 6.1, 'CONFIRMED', 'replay', 'demo-haakon-succession-2026-08-28', '2026-07-17T00:00:00Z', false, 'world')
 RETURNING id \gset c62_
 INSERT INTO cluster_member (cluster_id, page_id, weight, is_seed, edit_count, views, view_baseline, spike_score, size_score, completeness, window_start, window_end)
 SELECT :c62_id, p.id, v.weight, v.is_seed, v.ec, v.vw, v.vb, v.sp, v.sz, 'complete', '2026-08-16T00:00:00Z', '2026-08-16T23:59:59Z'
@@ -1606,7 +1606,7 @@ JOIN (VALUES
 ) AS v(title, weight, is_seed, ec, vw, vb, sp, sz) ON p.title = v.title
 WHERE p.wiki = 'enwiki';
 INSERT INTO issue_cluster (snapshot_ts, label, pulse_score, status, source, issue_key, first_detected_at, hot, category)
-VALUES ('2026-08-17T23:59:59Z', 'Harald V 국왕 서거 — Haakon 8세 즉위', 9.0, 'CONFIRMED', 'replay', 'demo-haakon-succession-2026-08-28', '2026-08-24T00:00:00Z', false, 'world')
+VALUES ('2026-08-17T23:59:59Z', 'Harald V 국왕 서거 — Haakon 8세 즉위', 9.0, 'CONFIRMED', 'replay', 'demo-haakon-succession-2026-08-28', '2026-07-17T00:00:00Z', false, 'world')
 RETURNING id \gset c64_
 INSERT INTO cluster_member (cluster_id, page_id, weight, is_seed, edit_count, views, view_baseline, spike_score, size_score, completeness, window_start, window_end)
 SELECT :c64_id, p.id, v.weight, v.is_seed, v.ec, v.vw, v.vb, v.sp, v.sz, 'complete', '2026-08-17T00:00:00Z', '2026-08-17T23:59:59Z'
@@ -1634,7 +1634,7 @@ JOIN (VALUES
 ) AS v(title, weight, is_seed, ec, vw, vb, sp, sz) ON p.title = v.title
 WHERE p.wiki = 'enwiki';
 INSERT INTO issue_cluster (snapshot_ts, label, pulse_score, status, source, issue_key, first_detected_at, hot, category)
-VALUES ('2026-08-18T23:59:59Z', 'Harald V 국왕 서거 — Haakon 8세 즉위', 12.8, 'CONFIRMED', 'replay', 'demo-haakon-succession-2026-08-28', '2026-08-24T00:00:00Z', false, 'world')
+VALUES ('2026-08-18T23:59:59Z', 'Harald V 국왕 서거 — Haakon 8세 즉위', 12.8, 'CONFIRMED', 'replay', 'demo-haakon-succession-2026-08-28', '2026-07-17T00:00:00Z', false, 'world')
 RETURNING id \gset c66_
 INSERT INTO cluster_member (cluster_id, page_id, weight, is_seed, edit_count, views, view_baseline, spike_score, size_score, completeness, window_start, window_end)
 SELECT :c66_id, p.id, v.weight, v.is_seed, v.ec, v.vw, v.vb, v.sp, v.sz, 'complete', '2026-08-18T00:00:00Z', '2026-08-18T23:59:59Z'
@@ -1662,7 +1662,7 @@ JOIN (VALUES
 ) AS v(title, weight, is_seed, ec, vw, vb, sp, sz) ON p.title = v.title
 WHERE p.wiki = 'enwiki';
 INSERT INTO issue_cluster (snapshot_ts, label, pulse_score, status, source, issue_key, first_detected_at, hot, category)
-VALUES ('2026-08-19T23:59:59Z', 'Harald V 국왕 서거 — Haakon 8세 즉위', 8.5, 'CONFIRMED', 'replay', 'demo-haakon-succession-2026-08-28', '2026-08-24T00:00:00Z', false, 'world')
+VALUES ('2026-08-19T23:59:59Z', 'Harald V 국왕 서거 — Haakon 8세 즉위', 8.5, 'CONFIRMED', 'replay', 'demo-haakon-succession-2026-08-28', '2026-07-17T00:00:00Z', false, 'world')
 RETURNING id \gset c68_
 INSERT INTO cluster_member (cluster_id, page_id, weight, is_seed, edit_count, views, view_baseline, spike_score, size_score, completeness, window_start, window_end)
 SELECT :c68_id, p.id, v.weight, v.is_seed, v.ec, v.vw, v.vb, v.sp, v.sz, 'complete', '2026-08-19T00:00:00Z', '2026-08-19T23:59:59Z'
@@ -1690,7 +1690,7 @@ JOIN (VALUES
 ) AS v(title, weight, is_seed, ec, vw, vb, sp, sz) ON p.title = v.title
 WHERE p.wiki = 'enwiki';
 INSERT INTO issue_cluster (snapshot_ts, label, pulse_score, status, source, issue_key, first_detected_at, hot, category)
-VALUES ('2026-08-20T23:59:59Z', 'Harald V 국왕 서거 — Haakon 8세 즉위', 6.8, 'CONFIRMED', 'replay', 'demo-haakon-succession-2026-08-28', '2026-08-24T00:00:00Z', false, 'world')
+VALUES ('2026-08-20T23:59:59Z', 'Harald V 국왕 서거 — Haakon 8세 즉위', 6.8, 'CONFIRMED', 'replay', 'demo-haakon-succession-2026-08-28', '2026-07-17T00:00:00Z', false, 'world')
 RETURNING id \gset c70_
 INSERT INTO cluster_member (cluster_id, page_id, weight, is_seed, edit_count, views, view_baseline, spike_score, size_score, completeness, window_start, window_end)
 SELECT :c70_id, p.id, v.weight, v.is_seed, v.ec, v.vw, v.vb, v.sp, v.sz, 'complete', '2026-08-20T00:00:00Z', '2026-08-20T23:59:59Z'
@@ -1718,7 +1718,7 @@ JOIN (VALUES
 ) AS v(title, weight, is_seed, ec, vw, vb, sp, sz) ON p.title = v.title
 WHERE p.wiki = 'enwiki';
 INSERT INTO issue_cluster (snapshot_ts, label, pulse_score, status, source, issue_key, first_detected_at, hot, category)
-VALUES ('2026-08-21T23:59:59Z', 'Harald V 국왕 서거 — Haakon 8세 즉위', 6.4, 'CONFIRMED', 'replay', 'demo-haakon-succession-2026-08-28', '2026-08-24T00:00:00Z', false, 'world')
+VALUES ('2026-08-21T23:59:59Z', 'Harald V 국왕 서거 — Haakon 8세 즉위', 6.4, 'CONFIRMED', 'replay', 'demo-haakon-succession-2026-08-28', '2026-07-17T00:00:00Z', false, 'world')
 RETURNING id \gset c72_
 INSERT INTO cluster_member (cluster_id, page_id, weight, is_seed, edit_count, views, view_baseline, spike_score, size_score, completeness, window_start, window_end)
 SELECT :c72_id, p.id, v.weight, v.is_seed, v.ec, v.vw, v.vb, v.sp, v.sz, 'complete', '2026-08-21T00:00:00Z', '2026-08-21T23:59:59Z'
@@ -1746,7 +1746,7 @@ JOIN (VALUES
 ) AS v(title, weight, is_seed, ec, vw, vb, sp, sz) ON p.title = v.title
 WHERE p.wiki = 'enwiki';
 INSERT INTO issue_cluster (snapshot_ts, label, pulse_score, status, source, issue_key, first_detected_at, hot, category)
-VALUES ('2026-08-22T23:59:59Z', 'Harald V 국왕 서거 — Haakon 8세 즉위', 6.2, 'CONFIRMED', 'replay', 'demo-haakon-succession-2026-08-28', '2026-08-24T00:00:00Z', false, 'world')
+VALUES ('2026-08-22T23:59:59Z', 'Harald V 국왕 서거 — Haakon 8세 즉위', 6.2, 'CONFIRMED', 'replay', 'demo-haakon-succession-2026-08-28', '2026-07-17T00:00:00Z', false, 'world')
 RETURNING id \gset c74_
 INSERT INTO cluster_member (cluster_id, page_id, weight, is_seed, edit_count, views, view_baseline, spike_score, size_score, completeness, window_start, window_end)
 SELECT :c74_id, p.id, v.weight, v.is_seed, v.ec, v.vw, v.vb, v.sp, v.sz, 'complete', '2026-08-22T00:00:00Z', '2026-08-22T23:59:59Z'
@@ -1774,7 +1774,7 @@ JOIN (VALUES
 ) AS v(title, weight, is_seed, ec, vw, vb, sp, sz) ON p.title = v.title
 WHERE p.wiki = 'enwiki';
 INSERT INTO issue_cluster (snapshot_ts, label, pulse_score, status, source, issue_key, first_detected_at, hot, category)
-VALUES ('2026-08-23T23:59:59Z', 'Harald V 국왕 서거 — Haakon 8세 즉위', 14.1, 'CONFIRMED', 'replay', 'demo-haakon-succession-2026-08-28', '2026-08-24T00:00:00Z', false, 'world')
+VALUES ('2026-08-23T23:59:59Z', 'Harald V 국왕 서거 — Haakon 8세 즉위', 14.1, 'CONFIRMED', 'replay', 'demo-haakon-succession-2026-08-28', '2026-07-17T00:00:00Z', false, 'world')
 RETURNING id \gset c76_
 INSERT INTO cluster_member (cluster_id, page_id, weight, is_seed, edit_count, views, view_baseline, spike_score, size_score, completeness, window_start, window_end)
 SELECT :c76_id, p.id, v.weight, v.is_seed, v.ec, v.vw, v.vb, v.sp, v.sz, 'complete', '2026-08-23T00:00:00Z', '2026-08-23T23:59:59Z'
@@ -1802,7 +1802,7 @@ JOIN (VALUES
 ) AS v(title, weight, is_seed, ec, vw, vb, sp, sz) ON p.title = v.title
 WHERE p.wiki = 'enwiki';
 INSERT INTO issue_cluster (snapshot_ts, label, pulse_score, status, source, issue_key, first_detected_at, hot, category)
-VALUES ('2026-08-24T23:59:59Z', 'Harald V 국왕 서거 — Haakon 8세 즉위', 21.0, 'CONFIRMED', 'replay', 'demo-haakon-succession-2026-08-28', '2026-08-24T00:00:00Z', false, 'world')
+VALUES ('2026-08-24T23:59:59Z', 'Harald V 국왕 서거 — Haakon 8세 즉위', 21.0, 'CONFIRMED', 'replay', 'demo-haakon-succession-2026-08-28', '2026-07-17T00:00:00Z', false, 'world')
 RETURNING id \gset c78_
 INSERT INTO cluster_member (cluster_id, page_id, weight, is_seed, edit_count, views, view_baseline, spike_score, size_score, completeness, window_start, window_end)
 SELECT :c78_id, p.id, v.weight, v.is_seed, v.ec, v.vw, v.vb, v.sp, v.sz, 'complete', '2026-08-24T00:00:00Z', '2026-08-24T23:59:59Z'
@@ -1830,7 +1830,7 @@ JOIN (VALUES
 ) AS v(title, weight, is_seed, ec, vw, vb, sp, sz) ON p.title = v.title
 WHERE p.wiki = 'enwiki';
 INSERT INTO issue_cluster (snapshot_ts, label, pulse_score, status, source, issue_key, first_detected_at, hot, category)
-VALUES ('2026-08-25T23:59:59Z', 'Harald V 국왕 서거 — Haakon 8세 즉위', 15.3, 'CONFIRMED', 'replay', 'demo-haakon-succession-2026-08-28', '2026-08-24T00:00:00Z', false, 'world')
+VALUES ('2026-08-25T23:59:59Z', 'Harald V 국왕 서거 — Haakon 8세 즉위', 15.3, 'CONFIRMED', 'replay', 'demo-haakon-succession-2026-08-28', '2026-07-17T00:00:00Z', false, 'world')
 RETURNING id \gset c80_
 INSERT INTO cluster_member (cluster_id, page_id, weight, is_seed, edit_count, views, view_baseline, spike_score, size_score, completeness, window_start, window_end)
 SELECT :c80_id, p.id, v.weight, v.is_seed, v.ec, v.vw, v.vb, v.sp, v.sz, 'complete', '2026-08-25T00:00:00Z', '2026-08-25T23:59:59Z'
@@ -1858,7 +1858,7 @@ JOIN (VALUES
 ) AS v(title, weight, is_seed, ec, vw, vb, sp, sz) ON p.title = v.title
 WHERE p.wiki = 'enwiki';
 INSERT INTO issue_cluster (snapshot_ts, label, pulse_score, status, source, issue_key, first_detected_at, hot, category)
-VALUES ('2026-08-26T23:59:59Z', 'Harald V 국왕 서거 — Haakon 8세 즉위', 11.8, 'CONFIRMED', 'replay', 'demo-haakon-succession-2026-08-28', '2026-08-24T00:00:00Z', false, 'world')
+VALUES ('2026-08-26T23:59:59Z', 'Harald V 국왕 서거 — Haakon 8세 즉위', 11.8, 'CONFIRMED', 'replay', 'demo-haakon-succession-2026-08-28', '2026-07-17T00:00:00Z', false, 'world')
 RETURNING id \gset c82_
 INSERT INTO cluster_member (cluster_id, page_id, weight, is_seed, edit_count, views, view_baseline, spike_score, size_score, completeness, window_start, window_end)
 SELECT :c82_id, p.id, v.weight, v.is_seed, v.ec, v.vw, v.vb, v.sp, v.sz, 'complete', '2026-08-26T00:00:00Z', '2026-08-26T23:59:59Z'
@@ -1886,7 +1886,7 @@ JOIN (VALUES
 ) AS v(title, weight, is_seed, ec, vw, vb, sp, sz) ON p.title = v.title
 WHERE p.wiki = 'enwiki';
 INSERT INTO issue_cluster (snapshot_ts, label, pulse_score, status, source, issue_key, first_detected_at, hot, category)
-VALUES ('2026-08-27T23:59:59Z', 'Harald V 국왕 서거 — Haakon 8세 즉위', 34.4, 'CONFIRMED', 'replay', 'demo-haakon-succession-2026-08-28', '2026-08-24T00:00:00Z', false, 'world')
+VALUES ('2026-08-27T23:59:59Z', 'Harald V 국왕 서거 — Haakon 8세 즉위', 34.4, 'CONFIRMED', 'replay', 'demo-haakon-succession-2026-08-28', '2026-07-17T00:00:00Z', false, 'world')
 RETURNING id \gset c84_
 INSERT INTO cluster_member (cluster_id, page_id, weight, is_seed, edit_count, views, view_baseline, spike_score, size_score, completeness, window_start, window_end)
 SELECT :c84_id, p.id, v.weight, v.is_seed, v.ec, v.vw, v.vb, v.sp, v.sz, 'complete', '2026-08-27T00:00:00Z', '2026-08-27T23:59:59Z'
@@ -1914,7 +1914,7 @@ JOIN (VALUES
 ) AS v(title, weight, is_seed, ec, vw, vb, sp, sz) ON p.title = v.title
 WHERE p.wiki = 'enwiki';
 INSERT INTO issue_cluster (snapshot_ts, label, pulse_score, status, source, issue_key, first_detected_at, hot, category)
-VALUES ('2026-08-28T23:59:59Z', 'Harald V 국왕 서거 — Haakon 8세 즉위', 51.0, 'CONFIRMED', 'replay', 'demo-haakon-succession-2026-08-28', '2026-08-24T00:00:00Z', false, 'world')
+VALUES ('2026-08-28T23:59:59Z', 'Harald V 국왕 서거 — Haakon 8세 즉위', 51.0, 'CONFIRMED', 'replay', 'demo-haakon-succession-2026-08-28', '2026-07-17T00:00:00Z', false, 'world')
 RETURNING id \gset c86_
 INSERT INTO cluster_member (cluster_id, page_id, weight, is_seed, edit_count, views, view_baseline, spike_score, size_score, completeness, window_start, window_end)
 SELECT :c86_id, p.id, v.weight, v.is_seed, v.ec, v.vw, v.vb, v.sp, v.sz, 'complete', '2026-08-28T00:00:00Z', '2026-08-28T23:59:59Z'
@@ -1943,7 +1943,7 @@ JOIN (VALUES
 ) AS v(title, weight, is_seed, ec, vw, vb, sp, sz) ON p.title = v.title
 WHERE p.wiki = 'enwiki';
 INSERT INTO issue_cluster (snapshot_ts, label, pulse_score, status, source, issue_key, first_detected_at, hot, category)
-VALUES ('2026-08-29T23:59:59Z', 'Harald V 국왕 서거 — Haakon 8세 즉위', 42.0, 'CONFIRMED', 'replay', 'demo-haakon-succession-2026-08-28', '2026-08-24T00:00:00Z', false, 'world')
+VALUES ('2026-08-29T23:59:59Z', 'Harald V 국왕 서거 — Haakon 8세 즉위', 42.0, 'CONFIRMED', 'replay', 'demo-haakon-succession-2026-08-28', '2026-07-17T00:00:00Z', false, 'world')
 RETURNING id \gset c88_
 INSERT INTO cluster_member (cluster_id, page_id, weight, is_seed, edit_count, views, view_baseline, spike_score, size_score, completeness, window_start, window_end)
 SELECT :c88_id, p.id, v.weight, v.is_seed, v.ec, v.vw, v.vb, v.sp, v.sz, 'complete', '2026-08-29T00:00:00Z', '2026-08-29T23:59:59Z'
@@ -1972,7 +1972,7 @@ JOIN (VALUES
 ) AS v(title, weight, is_seed, ec, vw, vb, sp, sz) ON p.title = v.title
 WHERE p.wiki = 'enwiki';
 INSERT INTO issue_cluster (snapshot_ts, label, pulse_score, status, source, issue_key, first_detected_at, hot, category)
-VALUES ('2026-08-30T23:59:59Z', 'Harald V 국왕 서거 — Haakon 8세 즉위', 35.3, 'CONFIRMED', 'replay', 'demo-haakon-succession-2026-08-28', '2026-08-24T00:00:00Z', false, 'world')
+VALUES ('2026-08-30T23:59:59Z', 'Harald V 국왕 서거 — Haakon 8세 즉위', 35.3, 'CONFIRMED', 'replay', 'demo-haakon-succession-2026-08-28', '2026-07-17T00:00:00Z', false, 'world')
 RETURNING id \gset c90_
 INSERT INTO cluster_member (cluster_id, page_id, weight, is_seed, edit_count, views, view_baseline, spike_score, size_score, completeness, window_start, window_end)
 SELECT :c90_id, p.id, v.weight, v.is_seed, v.ec, v.vw, v.vb, v.sp, v.sz, 'complete', '2026-08-30T00:00:00Z', '2026-08-30T23:59:59Z'
@@ -2001,7 +2001,7 @@ JOIN (VALUES
 ) AS v(title, weight, is_seed, ec, vw, vb, sp, sz) ON p.title = v.title
 WHERE p.wiki = 'enwiki';
 INSERT INTO issue_cluster (snapshot_ts, label, pulse_score, status, source, issue_key, first_detected_at, hot, category)
-VALUES ('2026-08-31T23:59:59Z', 'Harald V 국왕 서거 — Haakon 8세 즉위', 32.2, 'CONFIRMED', 'replay', 'demo-haakon-succession-2026-08-28', '2026-08-24T00:00:00Z', false, 'world')
+VALUES ('2026-08-31T23:59:59Z', 'Harald V 국왕 서거 — Haakon 8세 즉위', 32.2, 'CONFIRMED', 'replay', 'demo-haakon-succession-2026-08-28', '2026-07-17T00:00:00Z', false, 'world')
 RETURNING id \gset c92_
 INSERT INTO cluster_member (cluster_id, page_id, weight, is_seed, edit_count, views, view_baseline, spike_score, size_score, completeness, window_start, window_end)
 SELECT :c92_id, p.id, v.weight, v.is_seed, v.ec, v.vw, v.vb, v.sp, v.sz, 'complete', '2026-08-31T00:00:00Z', '2026-08-31T23:59:59Z'
@@ -2030,7 +2030,7 @@ JOIN (VALUES
 ) AS v(title, weight, is_seed, ec, vw, vb, sp, sz) ON p.title = v.title
 WHERE p.wiki = 'enwiki';
 INSERT INTO issue_cluster (snapshot_ts, label, pulse_score, status, source, issue_key, first_detected_at, hot, category)
-VALUES ('2026-09-01T23:59:59Z', 'Harald V 국왕 서거 — Haakon 8세 즉위', 30.3, 'CONFIRMED', 'replay', 'demo-haakon-succession-2026-08-28', '2026-08-24T00:00:00Z', false, 'world')
+VALUES ('2026-09-01T23:59:59Z', 'Harald V 국왕 서거 — Haakon 8세 즉위', 30.3, 'CONFIRMED', 'replay', 'demo-haakon-succession-2026-08-28', '2026-07-17T00:00:00Z', false, 'world')
 RETURNING id \gset c94_
 INSERT INTO cluster_member (cluster_id, page_id, weight, is_seed, edit_count, views, view_baseline, spike_score, size_score, completeness, window_start, window_end)
 SELECT :c94_id, p.id, v.weight, v.is_seed, v.ec, v.vw, v.vb, v.sp, v.sz, 'complete', '2026-09-01T00:00:00Z', '2026-09-01T23:59:59Z'
@@ -2059,7 +2059,7 @@ JOIN (VALUES
 ) AS v(title, weight, is_seed, ec, vw, vb, sp, sz) ON p.title = v.title
 WHERE p.wiki = 'enwiki';
 INSERT INTO issue_cluster (snapshot_ts, label, pulse_score, status, source, issue_key, first_detected_at, hot, category)
-VALUES ('2026-09-02T23:59:59Z', 'Harald V 국왕 서거 — Haakon 8세 즉위', 26.0, 'CONFIRMED', 'replay', 'demo-haakon-succession-2026-08-28', '2026-08-24T00:00:00Z', false, 'world')
+VALUES ('2026-09-02T23:59:59Z', 'Harald V 국왕 서거 — Haakon 8세 즉위', 26.0, 'CONFIRMED', 'replay', 'demo-haakon-succession-2026-08-28', '2026-07-17T00:00:00Z', false, 'world')
 RETURNING id \gset c96_
 INSERT INTO cluster_member (cluster_id, page_id, weight, is_seed, edit_count, views, view_baseline, spike_score, size_score, completeness, window_start, window_end)
 SELECT :c96_id, p.id, v.weight, v.is_seed, v.ec, v.vw, v.vb, v.sp, v.sz, 'complete', '2026-09-02T00:00:00Z', '2026-09-02T23:59:59Z'
@@ -2088,7 +2088,7 @@ JOIN (VALUES
 ) AS v(title, weight, is_seed, ec, vw, vb, sp, sz) ON p.title = v.title
 WHERE p.wiki = 'enwiki';
 INSERT INTO issue_cluster (snapshot_ts, label, pulse_score, status, source, issue_key, first_detected_at, hot, category)
-VALUES ('2026-09-03T23:59:59Z', 'Harald V 국왕 서거 — Haakon 8세 즉위', 22.2, 'CONFIRMED', 'replay', 'demo-haakon-succession-2026-08-28', '2026-08-24T00:00:00Z', false, 'world')
+VALUES ('2026-09-03T23:59:59Z', 'Harald V 국왕 서거 — Haakon 8세 즉위', 22.2, 'CONFIRMED', 'replay', 'demo-haakon-succession-2026-08-28', '2026-07-17T00:00:00Z', false, 'world')
 RETURNING id \gset c98_
 INSERT INTO cluster_member (cluster_id, page_id, weight, is_seed, edit_count, views, view_baseline, spike_score, size_score, completeness, window_start, window_end)
 SELECT :c98_id, p.id, v.weight, v.is_seed, v.ec, v.vw, v.vb, v.sp, v.sz, 'complete', '2026-09-03T00:00:00Z', '2026-09-03T23:59:59Z'
@@ -2117,7 +2117,7 @@ JOIN (VALUES
 ) AS v(title, weight, is_seed, ec, vw, vb, sp, sz) ON p.title = v.title
 WHERE p.wiki = 'enwiki';
 INSERT INTO issue_cluster (snapshot_ts, label, pulse_score, status, source, issue_key, first_detected_at, hot, category)
-VALUES ('2026-09-04T23:59:59Z', 'Harald V 국왕 서거 — Haakon 8세 즉위', 21.9, 'CONFIRMED', 'replay', 'demo-haakon-succession-2026-08-28', '2026-08-24T00:00:00Z', false, 'world')
+VALUES ('2026-09-04T23:59:59Z', 'Harald V 국왕 서거 — Haakon 8세 즉위', 21.9, 'CONFIRMED', 'replay', 'demo-haakon-succession-2026-08-28', '2026-07-17T00:00:00Z', false, 'world')
 RETURNING id \gset c100_
 INSERT INTO cluster_member (cluster_id, page_id, weight, is_seed, edit_count, views, view_baseline, spike_score, size_score, completeness, window_start, window_end)
 SELECT :c100_id, p.id, v.weight, v.is_seed, v.ec, v.vw, v.vb, v.sp, v.sz, 'complete', '2026-09-04T00:00:00Z', '2026-09-04T23:59:59Z'
@@ -2146,7 +2146,7 @@ JOIN (VALUES
 ) AS v(title, weight, is_seed, ec, vw, vb, sp, sz) ON p.title = v.title
 WHERE p.wiki = 'enwiki';
 INSERT INTO issue_cluster (snapshot_ts, label, pulse_score, status, source, issue_key, first_detected_at, hot, category)
-VALUES ('2026-09-05T23:59:59Z', 'Harald V 국왕 서거 — Haakon 8세 즉위', 20.7, 'CONFIRMED', 'replay', 'demo-haakon-succession-2026-08-28', '2026-08-24T00:00:00Z', false, 'world')
+VALUES ('2026-09-05T23:59:59Z', 'Harald V 국왕 서거 — Haakon 8세 즉위', 20.7, 'CONFIRMED', 'replay', 'demo-haakon-succession-2026-08-28', '2026-07-17T00:00:00Z', false, 'world')
 RETURNING id \gset c102_
 INSERT INTO cluster_member (cluster_id, page_id, weight, is_seed, edit_count, views, view_baseline, spike_score, size_score, completeness, window_start, window_end)
 SELECT :c102_id, p.id, v.weight, v.is_seed, v.ec, v.vw, v.vb, v.sp, v.sz, 'complete', '2026-09-05T00:00:00Z', '2026-09-05T23:59:59Z'
@@ -2175,7 +2175,7 @@ JOIN (VALUES
 ) AS v(title, weight, is_seed, ec, vw, vb, sp, sz) ON p.title = v.title
 WHERE p.wiki = 'enwiki';
 INSERT INTO issue_cluster (snapshot_ts, label, pulse_score, status, source, issue_key, first_detected_at, hot, category)
-VALUES ('2026-09-06T23:59:59Z', 'Harald V 국왕 서거 — Haakon 8세 즉위', 21.3, 'CONFIRMED', 'replay', 'demo-haakon-succession-2026-08-28', '2026-08-24T00:00:00Z', false, 'world')
+VALUES ('2026-09-06T23:59:59Z', 'Harald V 국왕 서거 — Haakon 8세 즉위', 21.3, 'CONFIRMED', 'replay', 'demo-haakon-succession-2026-08-28', '2026-07-17T00:00:00Z', false, 'world')
 RETURNING id \gset c104_
 INSERT INTO cluster_member (cluster_id, page_id, weight, is_seed, edit_count, views, view_baseline, spike_score, size_score, completeness, window_start, window_end)
 SELECT :c104_id, p.id, v.weight, v.is_seed, v.ec, v.vw, v.vb, v.sp, v.sz, 'complete', '2026-09-06T00:00:00Z', '2026-09-06T23:59:59Z'
@@ -2204,7 +2204,7 @@ JOIN (VALUES
 ) AS v(title, weight, is_seed, ec, vw, vb, sp, sz) ON p.title = v.title
 WHERE p.wiki = 'enwiki';
 INSERT INTO issue_cluster (snapshot_ts, label, pulse_score, status, source, issue_key, first_detected_at, hot, category)
-VALUES ('2026-09-07T23:59:59Z', 'Harald V 국왕 서거 — Haakon 8세 즉위', 19.8, 'CONFIRMED', 'replay', 'demo-haakon-succession-2026-08-28', '2026-08-24T00:00:00Z', false, 'world')
+VALUES ('2026-09-07T23:59:59Z', 'Harald V 국왕 서거 — Haakon 8세 즉위', 19.8, 'CONFIRMED', 'replay', 'demo-haakon-succession-2026-08-28', '2026-07-17T00:00:00Z', false, 'world')
 RETURNING id \gset c106_
 INSERT INTO cluster_member (cluster_id, page_id, weight, is_seed, edit_count, views, view_baseline, spike_score, size_score, completeness, window_start, window_end)
 SELECT :c106_id, p.id, v.weight, v.is_seed, v.ec, v.vw, v.vb, v.sp, v.sz, 'complete', '2026-09-07T00:00:00Z', '2026-09-07T23:59:59Z'
@@ -2233,7 +2233,7 @@ JOIN (VALUES
 ) AS v(title, weight, is_seed, ec, vw, vb, sp, sz) ON p.title = v.title
 WHERE p.wiki = 'enwiki';
 INSERT INTO issue_cluster (snapshot_ts, label, pulse_score, status, source, issue_key, first_detected_at, hot, category)
-VALUES ('2026-09-08T23:59:59Z', 'Harald V 국왕 서거 — Haakon 8세 즉위', 17.4, 'CONFIRMED', 'replay', 'demo-haakon-succession-2026-08-28', '2026-08-24T00:00:00Z', false, 'world')
+VALUES ('2026-09-08T23:59:59Z', 'Harald V 국왕 서거 — Haakon 8세 즉위', 17.4, 'CONFIRMED', 'replay', 'demo-haakon-succession-2026-08-28', '2026-07-17T00:00:00Z', false, 'world')
 RETURNING id \gset c108_
 INSERT INTO cluster_member (cluster_id, page_id, weight, is_seed, edit_count, views, view_baseline, spike_score, size_score, completeness, window_start, window_end)
 SELECT :c108_id, p.id, v.weight, v.is_seed, v.ec, v.vw, v.vb, v.sp, v.sz, 'complete', '2026-09-08T00:00:00Z', '2026-09-08T23:59:59Z'
@@ -2262,7 +2262,7 @@ JOIN (VALUES
 ) AS v(title, weight, is_seed, ec, vw, vb, sp, sz) ON p.title = v.title
 WHERE p.wiki = 'enwiki';
 INSERT INTO issue_cluster (snapshot_ts, label, pulse_score, status, source, issue_key, first_detected_at, hot, category)
-VALUES ('2026-09-09T23:59:59Z', 'Harald V 국왕 서거 — Haakon 8세 즉위', 31.3, 'CONFIRMED', 'replay', 'demo-haakon-succession-2026-08-28', '2026-08-24T00:00:00Z', false, 'world')
+VALUES ('2026-09-09T23:59:59Z', 'Harald V 국왕 서거 — Haakon 8세 즉위', 31.3, 'CONFIRMED', 'replay', 'demo-haakon-succession-2026-08-28', '2026-07-17T00:00:00Z', false, 'world')
 RETURNING id \gset c110_
 INSERT INTO cluster_member (cluster_id, page_id, weight, is_seed, edit_count, views, view_baseline, spike_score, size_score, completeness, window_start, window_end)
 SELECT :c110_id, p.id, v.weight, v.is_seed, v.ec, v.vw, v.vb, v.sp, v.sz, 'complete', '2026-09-09T00:00:00Z', '2026-09-09T23:59:59Z'
@@ -2291,7 +2291,7 @@ JOIN (VALUES
 ) AS v(title, weight, is_seed, ec, vw, vb, sp, sz) ON p.title = v.title
 WHERE p.wiki = 'enwiki';
 INSERT INTO issue_cluster (snapshot_ts, label, pulse_score, status, source, issue_key, first_detected_at, hot, category)
-VALUES ('2026-09-10T23:59:59Z', 'Harald V 국왕 서거 — Haakon 8세 즉위', 27.7, 'CONFIRMED', 'replay', 'demo-haakon-succession-2026-08-28', '2026-08-24T00:00:00Z', false, 'world')
+VALUES ('2026-09-10T23:59:59Z', 'Harald V 국왕 서거 — Haakon 8세 즉위', 27.7, 'CONFIRMED', 'replay', 'demo-haakon-succession-2026-08-28', '2026-07-17T00:00:00Z', false, 'world')
 RETURNING id \gset c112_
 INSERT INTO cluster_member (cluster_id, page_id, weight, is_seed, edit_count, views, view_baseline, spike_score, size_score, completeness, window_start, window_end)
 SELECT :c112_id, p.id, v.weight, v.is_seed, v.ec, v.vw, v.vb, v.sp, v.sz, 'complete', '2026-09-10T00:00:00Z', '2026-09-10T23:59:59Z'
@@ -2320,7 +2320,7 @@ JOIN (VALUES
 ) AS v(title, weight, is_seed, ec, vw, vb, sp, sz) ON p.title = v.title
 WHERE p.wiki = 'enwiki';
 INSERT INTO issue_cluster (snapshot_ts, label, pulse_score, status, source, issue_key, first_detected_at, hot, category)
-VALUES ('2026-09-11T23:59:59Z', 'Harald V 국왕 서거 — Haakon 8세 즉위', 29.0, 'CONFIRMED', 'replay', 'demo-haakon-succession-2026-08-28', '2026-08-24T00:00:00Z', false, 'world')
+VALUES ('2026-09-11T23:59:59Z', 'Harald V 국왕 서거 — Haakon 8세 즉위', 29.0, 'CONFIRMED', 'replay', 'demo-haakon-succession-2026-08-28', '2026-07-17T00:00:00Z', false, 'world')
 RETURNING id \gset c114_
 INSERT INTO cluster_member (cluster_id, page_id, weight, is_seed, edit_count, views, view_baseline, spike_score, size_score, completeness, window_start, window_end)
 SELECT :c114_id, p.id, v.weight, v.is_seed, v.ec, v.vw, v.vb, v.sp, v.sz, 'complete', '2026-09-11T00:00:00Z', '2026-09-11T23:59:59Z'
@@ -2349,7 +2349,7 @@ JOIN (VALUES
 ) AS v(title, weight, is_seed, ec, vw, vb, sp, sz) ON p.title = v.title
 WHERE p.wiki = 'enwiki';
 INSERT INTO issue_cluster (snapshot_ts, label, pulse_score, status, source, issue_key, first_detected_at, hot, category)
-VALUES ('2026-09-12T23:59:59Z', 'Harald V 국왕 서거 — Haakon 8세 즉위', 24.2, 'CONFIRMED', 'replay', 'demo-haakon-succession-2026-08-28', '2026-08-24T00:00:00Z', false, 'world')
+VALUES ('2026-09-12T23:59:59Z', 'Harald V 국왕 서거 — Haakon 8세 즉위', 24.2, 'CONFIRMED', 'replay', 'demo-haakon-succession-2026-08-28', '2026-07-17T00:00:00Z', false, 'world')
 RETURNING id \gset c116_
 INSERT INTO cluster_member (cluster_id, page_id, weight, is_seed, edit_count, views, view_baseline, spike_score, size_score, completeness, window_start, window_end)
 SELECT :c116_id, p.id, v.weight, v.is_seed, v.ec, v.vw, v.vb, v.sp, v.sz, 'complete', '2026-09-12T00:00:00Z', '2026-09-12T23:59:59Z'
@@ -2378,7 +2378,7 @@ JOIN (VALUES
 ) AS v(title, weight, is_seed, ec, vw, vb, sp, sz) ON p.title = v.title
 WHERE p.wiki = 'enwiki';
 INSERT INTO issue_cluster (snapshot_ts, label, pulse_score, status, source, issue_key, first_detected_at, hot, category)
-VALUES ('2026-09-13T23:59:59Z', 'Harald V 국왕 서거 — Haakon 8세 즉위', 18.2, 'CONFIRMED', 'replay', 'demo-haakon-succession-2026-08-28', '2026-08-24T00:00:00Z', false, 'world')
+VALUES ('2026-09-13T23:59:59Z', 'Harald V 국왕 서거 — Haakon 8세 즉위', 18.2, 'CONFIRMED', 'replay', 'demo-haakon-succession-2026-08-28', '2026-07-17T00:00:00Z', false, 'world')
 RETURNING id \gset c118_
 INSERT INTO cluster_member (cluster_id, page_id, weight, is_seed, edit_count, views, view_baseline, spike_score, size_score, completeness, window_start, window_end)
 SELECT :c118_id, p.id, v.weight, v.is_seed, v.ec, v.vw, v.vb, v.sp, v.sz, 'complete', '2026-09-13T00:00:00Z', '2026-09-13T23:59:59Z'
@@ -2407,7 +2407,7 @@ JOIN (VALUES
 ) AS v(title, weight, is_seed, ec, vw, vb, sp, sz) ON p.title = v.title
 WHERE p.wiki = 'enwiki';
 INSERT INTO issue_cluster (snapshot_ts, label, pulse_score, status, source, issue_key, first_detected_at, hot, category)
-VALUES ('2026-09-14T23:59:59Z', 'Harald V 국왕 서거 — Haakon 8세 즉위', 15.1, 'CONFIRMED', 'replay', 'demo-haakon-succession-2026-08-28', '2026-08-24T00:00:00Z', false, 'world')
+VALUES ('2026-09-14T23:59:59Z', 'Harald V 국왕 서거 — Haakon 8세 즉위', 15.1, 'CONFIRMED', 'replay', 'demo-haakon-succession-2026-08-28', '2026-07-17T00:00:00Z', false, 'world')
 RETURNING id \gset c120_
 INSERT INTO cluster_member (cluster_id, page_id, weight, is_seed, edit_count, views, view_baseline, spike_score, size_score, completeness, window_start, window_end)
 SELECT :c120_id, p.id, v.weight, v.is_seed, v.ec, v.vw, v.vb, v.sp, v.sz, 'complete', '2026-09-14T00:00:00Z', '2026-09-14T23:59:59Z'
@@ -2436,7 +2436,7 @@ JOIN (VALUES
 ) AS v(title, weight, is_seed, ec, vw, vb, sp, sz) ON p.title = v.title
 WHERE p.wiki = 'enwiki';
 INSERT INTO issue_cluster (snapshot_ts, label, pulse_score, status, source, issue_key, first_detected_at, hot, category)
-VALUES ('2026-09-15T23:59:59Z', 'Harald V 국왕 서거 — Haakon 8세 즉위', 12.8, 'CONFIRMED', 'replay', 'demo-haakon-succession-2026-08-28', '2026-08-24T00:00:00Z', false, 'world')
+VALUES ('2026-09-15T23:59:59Z', 'Harald V 국왕 서거 — Haakon 8세 즉위', 12.8, 'CONFIRMED', 'replay', 'demo-haakon-succession-2026-08-28', '2026-07-17T00:00:00Z', false, 'world')
 RETURNING id \gset c122_
 INSERT INTO cluster_member (cluster_id, page_id, weight, is_seed, edit_count, views, view_baseline, spike_score, size_score, completeness, window_start, window_end)
 SELECT :c122_id, p.id, v.weight, v.is_seed, v.ec, v.vw, v.vb, v.sp, v.sz, 'complete', '2026-09-15T00:00:00Z', '2026-09-15T23:59:59Z'
