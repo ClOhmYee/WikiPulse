@@ -1,6 +1,6 @@
-"""cluster_stock 재사용·재시도 컬럼 검증 — V5 (WP-44 재오픈·-49·-50).
+"""cluster_stock 재사용·재시도 컬럼 검증 — V6 (WP-44 재오픈·-49·-50).
 
-conftest 픽스처(conn)가 V1~V5 를 순서대로 적재한다.
+conftest 픽스처(conn)가 V1~V6 를 순서대로 적재한다.
 """
 
 from __future__ import annotations
@@ -78,7 +78,7 @@ def test_attempt_count는_음수_불가(conn):
 def test_같은_issue_key_ticker가_여러_스냅샷_cluster_id에_걸쳐_반복된다(conn):
     """cluster_id 는 스냅샷마다 새로 생긴다 — issue_key+ticker 중복은 제약 위반이 아니다.
 
-    UNIQUE 로 묶었으면 두 번째 INSERT 가 깨졌어야 한다(V5 마이그레이션 설명 참고).
+    UNIQUE 로 묶었으면 두 번째 INSERT 가 깨졌어야 한다(V6 마이그레이션 설명 참고).
     """
     _stock(conn, "RUS5")
     c1 = _cluster(conn, issue_key="'milton-2024'", snapshot_ts="'2024-10-09T12:00Z'")
