@@ -8,7 +8,7 @@ Wikipedia EventStreams 를 Kafka 로 옮기고, Spark Structured Streaming 이
 - `WP-32` GDELT GKG 15분 폴링 → HDFS 적재 Producer — [gdelt/README.md](gdelt/README.md)
 - `WP-65` GDELT GKG 기관명 lift 집계 → `cluster_org_mention` Spark 배치 — [gkg/README.md](gkg/README.md)
 
-명세: [docs/requirements-v0.1.md](../docs/requirements-v0.1.md) §3
+명세: [docs/requirements-v0.2.md](../docs/requirements-v0.2.md) §3
 
 > 이 폴더엔 서로 다른 잡이 산다. 위 두 개는 위키 편집 실시간 경로(Kafka·Spark),
 > `gdelt/` 는 뉴스 원본을 HDFS 에 쌓는 별도 배치성 수집기다. 각각 따로 뜬다.
@@ -85,7 +85,7 @@ docker compose run --rm spark
 | `WIKIS` | `enwiki` | 쉼표로 여러 개. `*` 면 전 위키 |
 | `KAFKA_BOOTSTRAP_SERVERS` | `localhost:9092` | 컨테이너 안에서는 `kafka:29092` |
 | `KAFKA_TOPIC` | `wiki.edits` | |
-| `WINDOW_SIZE` / `SLIDE_SIZE` | `1 hour` / `5 minutes` | 급증 판정 수식 확정 전 임시값 (`WP-38`) |
+| `WINDOW_SIZE` / `SLIDE_SIZE` | `1 hour` / `5 minutes` | 현재 집계 구현값. v0.2에서는 편집 횟수 임계가 아니라 조회수 검사 후보를 내는 주기를 결정하며 WP-118에서 재검토 |
 | `STARTING_OFFSETS` | `latest` | 처음부터 읽으려면 `earliest` |
 | `SINK` | `console` | `spike` 면 판정까지 가서 `spike(source='live')` 에 적재 (WP-100) |
 | `DATABASE_URL` | (없음) | `SINK=spike` 에 필수. 없으면 기동 때 멈춘다 — 조용히 콘솔로 안 떨어진다 |
@@ -159,6 +159,23 @@ EventStreams ──producer/wiki_edits.py──▶ Kafka wiki.edits
 `source` 는 리플레이 경로(`mediawiki_history` 덤프)가 붙을 자리다. 실시간과
 리플레이가 같은 형태로 들어와야 급증 탐지 로직을 한 벌만 짠다. 명세 §3.2.
 
+## 운영·리플레이 계약 (2026-09-17 확정)
+
+- 과거 MVP 구간은 **2026-07-17~2026-09-17**로 고정하고, 이후 LIVE 데이터를 계속 누적한다.
+- 과거와 LIVE는 정규화·감지·클러스터링·요약·종목 매칭 계약을 공유한다. 과거는 미리
+  계산한 스냅샷, LIVE는 같은 계약의 최신 스냅샷이다.
+- 조회수 최종 관문은 약 1시간 늦게 오는 `other/pageviews` 시간별 덤프다.
+  `pageview_complete` 일별 `agent=user` 덤프는 품질 검증용으로 함께 보존하며,
+  AQS 일별 API는 LIVE 최종 관문에 쓰지 않는다.
+- 목표 지연은 사건 발생 후 통상 1~2시간, 시간별 원본 도착 후 내부 처리 15분 이내다.
+  조회수 미도착은 후보 대기이고 빈 정상 결과가 아니다.
+- 고정 2개월의 편집·시간별 조회수·일별 user 조회수·GDELT·Clickstream 원본은 실제
+  공통 파이프라인 재생과 API·화면 검증이 끝나기 전에 삭제하지 않는다.
+- 버블 점수·멤버는 시점별 스냅샷, 요약·검증 종목은 `issue_key` 단위 결과다. 과거 조회에는
+  선택 시점까지 완료된 결과만 보여야 하며 미래 결과를 소급하지 않는다.
+- GATEWAY·GDELT 실패는 재시도/처리 중이다. 모든 보강 작업 완료 후 통과 종목이 없을 때만
+  정상 0건으로 확정한다.
+
 🔴 **`title` 은 공백형이 canonical 이다** (`Hurricane Milton`). 덤프는 밑줄형
 (`Hurricane_Milton`)으로 오는데, 그대로 두면 같은 문서가 `(wiki, title)` 두 개로
 갈라진다. historical baseline 조회에서 LIVE 제목이 miss 하면 **기존 문서가 신규
@@ -196,10 +213,23 @@ Kafka·Docker 없이 돈다. Spark 테스트는 로컬 `local[2]` 로 실제 집
 
 ## 아직 안 한 것
 
-- **PostgreSQL 싱크** — 데이터 모델(`WP-35`)이 확정된 뒤에 붙인다. 지금
-  스키마를 넣으면 두 번 고치게 된다. 현재 싱크는 콘솔이다.
-- **급증 판정** — z-score 임계·조회수 2차 판정 (`WP-38`)
-- **클러스터링** — Clickstream + Wikidata
-- **1인 반복 편집·되돌리기 필터** — 지금은 봇만 거른다
-- **EC2 배포** — `WP-26`(Kafka)·`-27`(Spark). 이 compose 는 로컬 개발용이고
-  운영 구성과 다르다 (복제 계수 1, 단일 브로커).
+- **v0.2 최종 이슈 판정 계약 적용** — 편집 발생을 후보 관문으로만 쓰고, 문서 생성일부터
+  현재까지(최대 28일) 조회수 급등으로 최종 판정하는 경로는 `WP-118`에서 구현한다.
+  운영 입력은 `other/pageviews` 시간별 덤프이며 미도착 후보 재평가와 내부 15분 SLA 계측도
+  포함한다. 현재 `spike/detector.py`의 편집 임계·신규 문서 별도 식은 이전 계약이다.
+- **클러스터 멤버 역할 적용** — 루트 씨드 외 Clickstream 이웃에 대해 생성 시각 동시성
+  추가 씨드와 `재급증 비율 >= 5 AND 사건기간 편집 수 >= 20` 비-seed를 저장하는 실행 경로가
+  아직 없다. Wikidata는 멤버 편입 관문이 아니다.
+- **시점별 AI 산출물 연결과 상태 정합성** — 같은 `issue_key`의 각 스냅샷 클러스터에
+  선택 시점까지 완료된 리포트·검증 종목을 연결하고 `DETECTED -> VERIFYING -> CONFIRMED`
+  상태를 실제 실행 단계와 맞춘다. GATEWAY·GDELT 실패와 정상 0건도 구분한다. 실제 2개월 원본으로
+  1,112개 데모 시드를 교체하는 검증까지 `WP-119`·`WP-120` 범위다.
+- **실제 종목 가격 공급** — `stock_price` 실데이터 적재와 백엔드·프론트 조회 경로가 없다.
+  종목 상세 MVP 완료 전에 `WP-124`에서 실데이터·가격 API·그래프를 연결한다.
+- **되돌리기 판정** — 서로 다른 편집자 2명 이상 관문은 구현됐지만, identity revert 필드는
+  아직 급증 판정에서 사용하지 않는다.
+- **EC2 구성의 저장소 재현성** — Kafka(`WP-26`)와 Spark 2노드
+  (`WP-27`) 설치·분산 실행은 2026-09-17 완료했다. 다만 EC2의 `~/infra/*`
+  compose·설정은 저장소에 없고, Spark 3.5.3 기본 Python 3.8에서는 고정한
+  `psycopg 3.3.5`를 설치할 수 없어 `SINK=spike` 운영 경로가 아직 막혀 있다.
+  루트 `docker-compose.yml`은 로컬 개발용이며 운영 구성과 같지 않다.

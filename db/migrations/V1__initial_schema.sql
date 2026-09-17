@@ -1,5 +1,5 @@
 -- WikiPulse 데이터 모델 v1  (WP-35)
--- 명세: docs/requirements-v0.1.md §3.2, §5
+-- 명세: docs/requirements-v0.2.md §3.2, §5
 --
 -- 설계에서 결정한 것 세 가지. 나머지는 각 테이블 주석에 붙였다.
 --
@@ -36,7 +36,8 @@ CREATE TABLE wiki_page (
 );
 
 COMMENT ON TABLE wiki_page IS
-    '위키 문서. EventStreams 에 page_id 가 없어 (wiki, title) 이 자연키다.';
+    '위키 문서. EventStreams 에 page_id 가 없어 (wiki, title) 이 자연키다. '
+    'first_seen 은 우리 시스템의 최초 관측 시각이며 실제 문서 생성 시각이 아니다.';
 
 
 CREATE TABLE page_edit_window (
@@ -86,7 +87,8 @@ CREATE TABLE page_baseline (
 COMMENT ON TABLE page_baseline IS
     '문서 × 요일·시간대(0~167) 기준선. 28일치를 EWMA 로 굴린다. '
     '동시간대로 나누는 이유는 위키 편집이 요일·시간대를 크게 타기 때문이다. '
-    'sample_days 가 적으면(신규 문서) 판정을 보류한다 — 표본이 얇으면 z 값이 폭발한다.';
+    '생성 28일 미만 문서는 생성 이후 표본을 즉시 쓰며, 통계 산출 불가 또는 기준 조회수 0이면 '
+    '현재 조회수 100 이상을 급등으로 본다(WP-118).';
 
 COMMENT ON COLUMN page_baseline.hour_of_week IS
     '월요일 00시 UTC = 0, 일요일 23시 = 167';
@@ -105,12 +107,12 @@ CREATE TABLE spike (
 );
 
 COMMENT ON TABLE spike IS
-    '급증 판정을 통과한 문서. 편집 급증(edit_z)과 조회수 급등(view_ratio)을 '
-    '둘 다 넘어야 들어온다 — 편집만 튀고 조회수가 안 따라오면 편집 전쟁·정리 작업이다. '
-    '판정 수식은 아직 확정 전이라(WP-38) 컬럼만 잡아뒀다.';
+    '사람 편집 1건 이상 발생 후 조회수 급등 관문까지 통과한 문서만 들어온다. '
+    'edit_z 는 과거·리플레이 호환 지표이며 LIVE 1차 관문으로 쓰지 않는다(WP-118).';
 
 COMMENT ON COLUMN spike.view_ratio IS
-    'Pageviews 가 1시간 늦어서 판정 시점에 NULL 일 수 있다. NULL = 아직 2차 판정 전.';
+    '조회수 급등 배수. 새 LIVE 행은 조회수 관문 통과 후 저장하므로 판정 대기 상태를 NULL 로 '
+    '표현하지 않는다. NULL 은 과거·리플레이 호환 값이다(WP-118).';
 
 CREATE INDEX spike_detected_at_idx ON spike (detected_at DESC);
 
@@ -282,7 +284,7 @@ CREATE TABLE member (
 );
 
 COMMENT ON COLUMN member.password_hash IS
-    '자체 로그인용. OAuth 만 쓰기로 하면 NULL 이다 — 인증 방식은 아직 미정.';
+    '향후 자체 로그인용. 회원 기능은 MVP 범위에서 제외되어 인증 방식도 이번 범위에서는 정하지 않는다(WP-104).';
 
 
 CREATE TABLE watchlist (

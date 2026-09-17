@@ -1,15 +1,16 @@
 # API 명세서 — WikiPulse (WikiPulse)
 
-- 버전: **v0.1 (2026-09-08)**
+- 버전: **v0.2 (2026-09-17 개정)**
+- v0.2 변경: LIVE 이슈는 `사람 편집 1건 → 조회수 급등` 순차 관문을 통과한 경우만 노출 (WP-118)
 - 정본: 이 파일. 개정은 MR로 한다.
-- 상위 문서: [requirements-v0.1.md](requirements-v0.1.md) — 무엇을 만드는가. 이 문서는 **그 화면들이 서버에 무엇을 묻는가**만 적는다.
+- 상위 문서: [requirements-v0.2.md](requirements-v0.2.md) — 무엇을 만드는가. 이 문서는 **그 화면들이 서버에 무엇을 묻는가**만 적는다.
 - 데이터 모델: [erd-v0.1.md](erd-v0.1.md) / `db/migrations/V1__initial_schema.sql`. **응답 필드의 의미와 단위는 그쪽 컬럼 주석이 정본이다.** 여기 다시 적지 않는다.
 
 ---
 
 ## 0. 이 문서가 정리한 것 — 계약이 두 벌이었다
 
-아래 표는 **2026-09-08 통합 결정 이전 상태**다. 2026-09-09 WP-76에서 BE의 Issue/Stock 경로는 `/api/v1`과 응답 봉투로 변경되었고, 이슈 상세에 `pageId/wiki/title/weight/isSeed/editCount/views`를 가진 `members`가 추가되었다. 펄스맵의 스냅샷 목록·일괄 그래프 조회는 별도 계약이며 WP-74에서 구현한다. [펄스맵 구현·계약](frontend/PULSE_MAP.md)을 참고한다.
+아래 표는 **2026-09-08 통합 결정 이전 상태**다. 2026-09-09 WP-76에서 BE의 Issue/Stock 경로는 `/api/v1`과 응답 봉투로 변경되었고, 이슈 상세에 `pageId/wiki/title/weight/isSeed/editCount/views`를 가진 `members`가 추가되었다. 펄스맵의 스냅샷 목록·일괄 그래프 조회도 WP-74에서 구현되었다. [펄스맵 구현·계약](frontend/PULSE_MAP.md)을 참고한다.
 
 | | FE 제안 (`frontend/docs/openapi.yaml`, `0.2.0-proposal`) | BE 구현 (`backend/`, WP-36) |
 | --- | --- | --- |
@@ -24,7 +25,7 @@
 - **봉투·페이지네이션·오류 규약은 FE 제안 쪽을 쓴다.** 이미 설계돼 있고 프론트 조회 계층이 그 형태를 기대한다. BE의 적용은 WP-76에 포함되었다.
 - base path는 `/api/v1`. ~~`/api`~~ → 버전 없는 경로는 계약이 바뀔 때 갈아탈 자리가 없다.
 
-⚠️ **`frontend/docs/openapi.yaml`은 이 결정 이후 낡았다.** 연동 착수 시 이 문서에 맞춰 갱신한다. 그때까지 FE의 mock 모드는 그대로 돌아간다 (fixture는 API 계약과 무관).
+~~`frontend/docs/openapi.yaml`은 이 결정 이후 낡았다~~ → **현재 OpenAPI는 Spring 컨트롤러의 8개 GET 경로와 DTO를 반영했다** (2026-09-15, WP-95·97). 구현되지 않은 미래 API는 OpenAPI에 넣지 않는다. FE mock과 실제 API의 통합 실행 여부는 별도 검증 기록으로 구분한다.
 
 ---
 
@@ -78,7 +79,7 @@
 
 - 모든 시각은 **ISO 8601 UTC (`2026-09-08T04:00:00Z`)**다. 표시용 시간대 변환은 FE가 한다.
   ⚠️ FE 제안 계약은 `+09:00` 오프셋이었다. DB가 `TIMESTAMPTZ`, JPA가 `time_zone: UTC`라 UTC로 맞춘다.
-- `pulseScore`는 **배수**이지 퍼센트·확률·정확도가 아니다 (명세 §9).
+- `pulseScore`는 **단위 없는 급등 점수**다. 배수·퍼센트·확률·정확도·수익률로 해석하지 않는다. 조회수 중심의 새 점수식은 WP-118 구현·회귀 검증 대상이다.
 - `similarity`는 코사인(0~1), `gdeltLift`는 배수. 둘 다 `null` 가능 — 그 경로로 안 들어온 후보다.
 - 결측을 `0`으로 치환하지 않는다. 차트 중간 날짜가 없으면 그 포인트를 생략하고 보간하지 않는다.
 
@@ -95,11 +96,15 @@ DB `CHECK` 제약과 **같은 값을 그대로** 쓴다. 번역하지 않는다.
 
 🔴 `DISCARDED` 클러스터와 `verified=false` 종목은 **어떤 조회 API로도 나가지 않는다.** LLM 검증에서 떨어진 것이라 화면에 뜨면 안 된다.
 
+`status`는 이슈 판정 단계가 아니라 판정 후 AI 보강 상태다. `DETECTED`는 요약·종목 검증 전, `VERIFYING`은 처리 중, `CONFIRMED`는 요약 생성과 종목 검증 작업이 끝난 상태다. 조회수 미도착은 아직 이슈가 아닌 후보 대기이며, GATEWAY·GDELT 실패는 재시도/`VERIFYING`으로 남긴다. 모든 작업이 끝난 뒤 검증 통과 종목이 없는 `CONFIRMED`만 정상 0건이다. 미처리·장애 데이터를 시연 편의로 `CONFIRMED`에 올리면 안 된다.
+
+과거 스냅샷을 조회할 때 버블 점수·멤버는 해당 `cluster_id`의 시점 값을 사용한다. 요약·검증 종목은 `issue_key` 단위 결과를 재사용하되 `createdAt/effectiveAt <= snapshotTs`인 결과만 노출해야 한다. 미래에 생성된 결과를 같은 `issue_key`의 과거 화면에 소급 노출하지 않는다. 현재 DTO·저장 구조에 유효 시각 계약이 부족하므로 WP-119·120에서 보완한다.
+
 ---
 
 ## 2. 이슈 — 피드 · 버블맵 · 상세
 
-피드와 펄스맵은 이슈를 공유하지만 독립 페이지다. 피드 내부에서 카드/리스트를 전환한다. 펄스맵은 시점별 문서 그래프가 필요하므로 아래 목록 응답 외에 `GET /api/v1/issues/map` 계약을 추가했다(2026-09-09, WP-72·73). [필드·행동 명세](frontend/PULSE_MAP.md), [OpenAPI](../frontend/docs/pulse-openapi.json). 서버 구현은 WP-74의 후속 작업이다.
+피드와 펄스맵은 이슈를 공유하지만 독립 페이지다. 피드 내부에서 카드/리스트를 전환한다. 펄스맵은 시점별 문서 그래프가 필요하므로 아래 목록 응답 외에 `GET /api/v1/issues/map` 계약을 추가했고 서버 구현까지 완료했다(2026-09-15, WP-74·95). [필드·행동 명세](frontend/PULSE_MAP.md), [통합 OpenAPI](../frontend/docs/openapi.yaml)를 참고한다.
 
 ### `GET /api/v1/issues`
 
@@ -155,8 +160,8 @@ DB `CHECK` 제약과 **같은 값을 그대로** 쓴다. 번역하지 않는다.
 }
 ```
 
-- `summary`는 `issue_report`. 아직 없으면 `null`.
-- `members`는 `weight` 내림차순. `isSeed=false`는 급증을 직접 통과하지 않고 Clickstream·Wikidata 관계로 딸려온 문서다 — 화면에서 구분해 보여줄 수 있게 내보낸다.
+- `summary`는 `issue_report`. 아직 없으면 `null`. 운영 파이프라인의 생성·적재는 WP-119에서 구현한다. 현재 로컬 데모 값은 시드에서 생성한 요약이다.
+- `members`는 `weight` 내림차순. `isSeed=true`는 최종 급증 관문을 직접 통과한 루트 문서 또는 생성 시각 동시성으로 편입된 새 사건 문서다. `isSeed=false`는 Clickstream 이웃 중 사건기간 편집 재급증 기준을 통과한 기존 문서다. Wikidata 관계는 멤버 편입 사유가 아니다.
 - `relatedStocks`는 아래 endpoint와 **같은 객체**이며, 상세 진입 시 왕복을 줄이려고 상위 5개만 미리 담는다. 전체는 아래로 부른다.
 
 ### `GET /api/v1/issues/{id}/stocks`
@@ -175,11 +180,13 @@ DB `CHECK` 제약과 **같은 값을 그대로** 쓴다. 번역하지 않는다.
 - **`verified=true`만 나간다.** 필터가 아니라 규칙이다.
 - 정렬: `tier` (`BOTH` → `GDELT_ONLY` → `EMBEDDING_ONLY`) → `gdeltLift` 내림차순 → `similarity` 내림차순. 명세 §6.3의 검증 우선순위와 같은 순서다.
 - `rationale`이 **연관 근거다.** 상관계수가 아니다 (명세 §9).
-- 노출 개수 상한은 아직 없다 (WP-22). `limit`으로만 자른다.
+- 제품 정책상 노출 개수 상한은 두지 않기로 확정했다(WP-22). `limit`은 전송 응답 크기만 제한한다.
 
 ---
 
-## 3. 문서 (wiki page)
+## 3. 문서 (wiki page) — MVP 제외·미구현
+
+단일 위키 문서 상세 화면은 MVP에서 제외했다. 아래 계약은 향후 기능 참고용이며 현재 Spring 컨트롤러와 통합 OpenAPI에는 없다. MVP 클라이언트가 호출해서는 안 된다.
 
 이슈의 근거 문서 화면용.
 
@@ -214,7 +221,7 @@ DB `CHECK` 제약과 **같은 값을 그대로** 쓴다. 번역하지 않는다.
 ```
 
 - `baseline`은 시간대(0~23, UTC) 기준이라 시계열과 축이 다르다. 차트에 겹칠 때 FE가 시각→`hourOfDay`로 접어서 매핑한다. ~~요일·시간대(0~167)·`hourOfWeek`~~ → 2026-09-15 변경 (WP-84).
-- `viewRatio`가 `null`이면 **아직 2차 판정 전**이지 판정 실패가 아니다 (Pageviews 최대 1시간 지연).
+- 새 판정 계약(WP-118)에서는 조회수 2차 관문을 통과한 문서만 `spikes`에 들어가므로 LIVE 응답의 `viewRatio`는 판정 근거를 가져야 한다. `null`은 과거 스키마·리플레이 호환 값이며 신규 LIVE 이슈의 정상 상태로 사용하지 않는다.
 
 ~~Wiki Intelligence 화면의 MVP 포함 여부 확인 필요~~ → 단일 위키 문서 상세는 페이지 구성에서 제외했다(2026-09-09, [페이지 구성 정본](frontend/PAGES.md)). 위 문서 데이터 API 제안은 이번 페이지 정리에서 변경하지 않는다. 화면 제거를 데이터 모델이나 endpoint 삭제로 해석하지 않는다.
 
@@ -261,9 +268,9 @@ DB `CHECK` 제약과 **같은 값을 그대로** 쓴다. 번역하지 않는다.
 
 ---
 
-## 5. 회원 · 관심종목 · 알림 · 토론
+## 5. 회원 · 관심종목 · 알림 · 토론 — MVP 제외·미구현
 
-⚠️ **인증 방식이 아직 미정이다** (명세 §10, `member.password_hash`가 nullable인 이유). 아래는 자체 로그인 + Bearer 토큰을 가정한 형태이며, OAuth로 정하면 `/auth/*`만 갈린다. 나머지 endpoint는 그대로다.
+~~MVP 인증·관심종목·알림·토론 API~~ → **전부 MVP 범위에서 제외** (2026-09-17, WP-104). 아래는 v0.1 당시의 미래 기능 초안이며 현재 Spring 컨트롤러와 통합 OpenAPI에는 없다. 인증 방식·알림 수단·WebSocket 여부도 이번 MVP에서 결정하지 않는다.
 
 | endpoint | 하는 일 |
 | --- | --- |
@@ -295,12 +302,13 @@ DB `CHECK` 제약과 **같은 값을 그대로** 쓴다. 번역하지 않는다.
 
 `author`가 `null`이면 탈퇴한 사용자다 — FE는 "삭제된 사용자"로 표시한다.
 
-**WebSocket**: `/ws/issues/{id}` — 새 댓글 push. `/ws/me` — 알림 push.
-⚠️ 실시간이 필수인지 아직 미정이다 (명세 §10). 미정인 동안은 위 REST 폴링으로 화면이 성립한다. WebSocket은 폴링을 대체하는 최적화이지 전제가 아니다.
+**과거 초안의 WebSocket**: `/ws/issues/{id}` — 새 댓글 push. `/ws/me` — 알림 push. MVP에서는 구현하지 않는다.
 
 ---
 
-## 6. 통합 검색
+## 6. 통합 검색 — 미래 계약·미구현
+
+통합 검색은 현재 MVP 핵심 루프와 Spring 컨트롤러에 없다. 아래 계약은 향후 기능 참고용이며 통합 OpenAPI에는 포함하지 않는다.
 
 ### `GET /api/v1/search?q=`
 
@@ -317,22 +325,22 @@ FE 공통 헤더용. 이슈·문서·종목을 한 번에.
 
 ---
 
-## 7. 구현 현황 (2026-09-08)
+## 7. 구현 현황 (2026-09-17)
 
 | endpoint | 상태 |
 | --- | --- |
-| `GET /issues`, `GET /issues/{id}` | **구현됨** — 단 `/api` 경로에 봉투 없음. v0.1에 맞추는 작업 필요 |
-| `GET /stocks/{ticker}`, `GET /stocks/{ticker}/issues` | **구현됨** — 위와 같음 |
-| 그 외 전부 | 미구현 |
+| `GET /api/v1/issues`, `/issues/{id}`, `/issues/{id}/stocks` | **구현됨** — 응답 봉투 적용 |
+| `GET /api/v1/issues/snapshots`, `/issues/map` | **구현됨** — 완료 스냅샷 목록과 원자적 그래프 |
+| `GET /api/v1/stocks`, `/stocks/{ticker}`, `/stocks/{ticker}/issues` | **구현됨** — 응답 봉투 적용 |
+| `/pages/*`, `/stocks/{ticker}/prices`, `/search`, 5절 기능 | 미구현. 문서 상세·회원·관심종목·알림·토론은 MVP 제외. 단 `/stocks/{ticker}/prices`는 종목 상세 MVP에 필요 |
 
-FE는 현재 `VITE_DATA_SOURCE=mock`으로 fixture를 읽는다. api 모드 어댑터(`frontend/src/data/api/adapters.js`)가 이 문서 형태로 갱신되면 붙는다.
+기계 판독 정본은 `frontend/docs/openapi.yaml`이다. 8개 GET 경로를 Spring 컨트롤러·DTO와 대조했으며, 실제 Spring·PostgreSQL·파이프라인 통합 검증 여부는 `frontend/docs/VALIDATION.md`에 따로 기록한다. OpenAPI가 있다는 사실만으로 배포 또는 실데이터 연동이 끝났다고 보지 않는다.
 
 ---
 
-## 8. 미결
+## 8. 남은 MVP API 작업
 
-- **인증 방식** (자체 / OAuth) — 정해지면 5절 `/auth/*`만 확정된다
-- **노출 개수 상한 N** (WP-22) — 지금은 `limit`으로만 자른다
-- **WebSocket 필수 여부** (명세 §10)
-- **알림 전달 수단** (명세 §10) — 위 API는 저장·읽음만 다룬다
-- `frontend/docs/openapi.yaml` 갱신 — 이 문서 확정 후 기계 판독용 계약을 다시 만든다
+- `GET /api/v1/stocks/{ticker}/prices` — 종목 상세 주가 그래프용. 아직 컨트롤러·OpenAPI에 없고, 로컬 `stock_price`도 0건이다. WP-64는 적재기 구현까지만 완료했으며 실데이터·API·FE 연결은 WP-124에서 추적한다.
+- 운영 이슈 요약 writer와 상태 전이(WP-119), 종목 매칭 로컬 E2E(WP-120)가 실제 데이터를 채운 뒤 8개 GET의 실데이터 응답을 다시 검증한다.
+- 2026-07-17~09-17 로컬 시드는 모든 스냅샷을 `CONFIRMED`로 고정하고 요약·종목을 이슈별 마지막 `cluster_id`에만 연결한다. 이 시드는 API 형태·시간 슬라이더 시연용이며 상태 전이, 과거 시점 보강 데이터, 실제 매칭 E2E 검증 근거가 아니다.
+- 관련 종목의 **제품 노출 상한은 두지 않기로 확정**했다(WP-22). 다만 현재 `/issues/{id}/stocks`의 전송 `limit` 기본 50·최대 100은 API 응답 크기 보호용이며 제품 정책상 노출 상한과 다른 값이다.

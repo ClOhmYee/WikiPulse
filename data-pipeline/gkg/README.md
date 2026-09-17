@@ -9,7 +9,7 @@ HDFS  YYYY/MM/DD/<ts>.gkg.csv.zip  ──[이 배치]──▶  cluster_org_ment
       (gdelt/ 가 적재)                              (org_name, ticker, lift, ...)
 ```
 
-명세: [docs/requirements-v0.1.md](../../docs/requirements-v0.1.md) §6.2 (b)·§6.3·§11
+명세: [docs/requirements-v0.2.md](../../docs/requirements-v0.2.md) §6.2 (b)·§6.3·§11
 
 ## lift
 

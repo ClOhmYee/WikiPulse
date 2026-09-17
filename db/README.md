@@ -1,6 +1,6 @@
 # db — PostgreSQL 스키마
 
-데이터 모델 v1 (`WP-35`). 명세: [docs/requirements-v0.1.md](../docs/requirements-v0.1.md) §3.2, §5
+데이터 모델 v1 (`WP-35`). 명세: [docs/requirements-v0.2.md](../docs/requirements-v0.2.md) §3.2, §5
 
 ```
 db/
@@ -65,16 +65,16 @@ LIVE 화면은 가장 최근 값을, 리플레이는 사용자가 고른 시점�
 | --- | --- |
 | `wiki_page` | 문서. `(wiki, title)` 이 자연키 |
 | `page_edit_window` | Spark 윈도우 집계 출력. **단기 보존** — 슬라이딩이라 편집 1건이 12행에 걸친다 |
-| `page_view_hourly` | Pageviews 조회수. 급증 2차 판정용 |
-| `page_baseline` | 문서 × 시간대(0~23, UTC) 기준선. 28일 EWMA |
-| `spike` | 급증 판정 통과분. 편집 급증 **AND** 조회수 급등 |
+| `page_view_hourly` | Pageviews 조회수. 편집 발생 후 2차·최종 판정용 |
+| `page_baseline` | 조회수 기준선. 생성 28일 이상은 직전 28일, 미만은 생성 이후 자료 |
+| `spike` | 사람 편집 1건 이상 **AND** 조회수 급등 통과분(WP-118) |
 
 ### 이슈
 
 | 테이블 | 무엇 |
 | --- | --- |
 | `issue_cluster` | 한 시점의 클러스터 = 버블 하나. `status` 로 3단계 노출 |
-| `cluster_member` | 묶인 문서. `weight` 는 Clickstream 이동량, `is_seed` 는 직접 급증 여부 |
+| `cluster_member` | 묶인 문서. `weight`는 Clickstream 이동량. `is_seed=true`는 루트 급증 문서 또는 생성일 동시성으로 편입된 새 사건 문서, `false`는 재급증 기준으로 편입된 기존 문서. Wikidata는 멤버십을 만들지 않음 |
 | `issue_report` | LLM 요약 |
 
 ### 종목
@@ -101,11 +101,11 @@ LIVE 화면은 가장 최근 값을, 리플레이는 사용자가 고른 시점�
 `text-embedding-3-small` 기준이다. 차원이 다르면 INSERT 가 거부된다 —
 테스트가 이걸 확인한다.
 
-**`spike.view_ratio` 가 NULL 일 수 있다.** Pageviews API 가 시간 단위라
-2차 판정이 최대 1시간 늦는다. NULL = 아직 판정 전이지 판정 실패가 아니다.
+~~`spike.view_ratio` 가 NULL이면 조회수 도착 전 감지 상태~~ → 새 계약에서는 조회수 관문을 통과한 뒤에만 LIVE `spike`를 저장한다(WP-118). NULL은 과거·리플레이 호환 값으로만 남긴다. 조회수 데이터가 늦으면 이슈 확정도 그만큼 늦어진다.
 
-**종목이 사라져도 알림·토론은 남는다.** `notification.ticker` 는
-`ON DELETE SET NULL` 이다. 상장폐지가 사용자 데이터를 지우면 안 된다.
+**회원·관심종목·알림·토론 테이블은 향후 기능용으로만 남아 있다.** MVP에서는 관련
+API·UI·운영 적재를 구현하지 않는다(WP-104). 스키마 자체의 삭제 전파 규칙은
+그대로이며, `notification.ticker` 는 `ON DELETE SET NULL` 이다.
 
 ## 테스트
 
@@ -124,7 +124,7 @@ uv pip install --python .venv/Scripts/python.exe -r requirements-test.txt
 확인하는 것:
 
 - DDL 이 실제로 실행된다 (문법·타입·제약)
-- 명세 §3.2 흐름을 실제 INSERT 로 한 바퀴 돌린다 — 편집 급증 → 조회수 →
+- 명세 §3.2 흐름을 실제 INSERT 로 한 바퀴 돌린다 — 사람 편집 발생 → 조회수 급등 →
   클러스터 → 종목 매칭 → 피드 조회. 중간에 컬럼이 모자라면 걸린다
 - CHECK 제약이 오타를 진짜로 막는다 (`CONFIRMD`, `GDELT`, `VIBES`)
 - pgvector 코사인 Top-K 가 된다

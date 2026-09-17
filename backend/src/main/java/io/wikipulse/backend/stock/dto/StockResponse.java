@@ -4,7 +4,7 @@ import com.fasterxml.jackson.annotation.JsonInclude;
 import io.wikipulse.backend.stock.Stock;
 
 /**
- * 종목 상세. API 명세 v0.1 §4 `GET /stocks/{ticker}`.
+ * 종목 상세. API 명세 v0.2 §4 `GET /stocks/{ticker}`.
  * embedding 은 내보내지 않는다(1,536차원, 화면이 쓸 일 없음). 주가는 별도 endpoint.
  */
 @JsonInclude(JsonInclude.Include.NON_NULL)

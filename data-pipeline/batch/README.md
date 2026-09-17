@@ -3,7 +3,7 @@
 `WP-56`. `mediawiki_history` 월 덤프를 실시간과 **같은 `edit_event` 형태**로
 바꿔 적재한다. baseline 산출(`-60`)과 리플레이 검증(`-61`)의 원천이다.
 
-명세: [docs/requirements-v0.1.md](../../docs/requirements-v0.1.md) §3.2 8번, §4, §5, §11
+명세: [docs/requirements-v0.2.md](../../docs/requirements-v0.2.md) §3.2 8번, §4, §5, §11
 
 ```
 mediawiki_history TSV.bz2  ──▶  edit_event JSONL.gz (shard)
@@ -228,20 +228,24 @@ python -m batch.clickstream_ingest --wiki enwiki --month 2025-06 --dry-run  # �
 다운로드·shard·매니페스트 장치는 위 mediawiki 적재와 같은 것을 재사용한다
 (`ShardWriter`·`download`·재실행 skip).
 
+운영 클러스터링은 스냅샷 **직전 월**의 `_manifest.json`까지 생성된 완료본을 우선한다.
+직전 월 덤프가 아직 공개되지 않았거나 다운로드·스키마·매니페스트 검증에 실패하면
+가장 최근 검증 완료본(통상 전전월)을 그대로 사용한다. 새 월은 검증 후 한 번에 교체하며
+서로 다른 월의 `n`을 합산하지 않는다.
+`clickstream.select_completed_month(root, wiki, snapshot_ts)`가 이 선택과 폴백을 담당한다.
+현재 `cluster/driver.py`는 page_id·생성일 조인이 미배선이라 이 함수를 호출하는 최종 E2E는
+아직 연결되지 않았다(아래 "아직 안 한 것").
+
 ## 무엇을 남기나
 
 - **`type='link'` 만.** `external`(검색·외부 유입)·`other`(같은 문서)는 문서 간
   이동이 아니라 이웃 신호가 아니다.
-- **문턱 없음.** 위키미디어가 이미 `n>=10` 만 공개한다. `n` 은 `cluster_member.weight`
-  로만 쓰고, 클러스터 포함 여부는 생성일 창이 정한다 (명세 §3.2 4번·§10 폐기 절).
-- **제목 정규화.** Clickstream 밑줄 → `wiki_page` 공백. ~~두 소스 canonical 통일은
-  `WP-79`~~ → **공백형으로 확정** (2026-09-13, 명세 §5.1). ⚠️ **공통 함수
-  (`producer/normalize.py`)로 통합하는 것은 아직 안 했다** — 이 파일만 남았다
-  (`pageview.py` 는 2026-09-15 적용 완료). ~~결과는 같다~~ → **같지 않다**: 이 파일의
-  자체 `canonical_title` 은 `replace("_", " ")` 뿐이라 **연속 축약·trim 이 없다.**
-  `Hurricane__Milton` 이 공통 함수로는 `Hurricane Milton`, 여기서는 `Hurricane  Milton`
-  (공백 2개)이 되어 같은 문서가 두 키로 갈라진다. 덤프에서 연속 밑줄을 본 적은 없어
-  지금 틀린 결과를 내고 있진 않지만, "결과 동일"은 근거 없는 서술이었다.
+- **문턱·혼합 없음.** 위키미디어가 이미 `n>=10` 만 공개한다. 관계 가중치는 `n` 100%를
+  `cluster_member.weight`로 쓰며 실시간 신호를 섞지 않는다. 클러스터 포함 여부는 생성일
+  시간 동시성·사건기간 재급증 조건이 정한다 (명세 §3.2 4번·§10 폐기 절).
+- **제목 정규화.** Clickstream 밑줄 → `wiki_page` 공백. ~~자체 `replace("_", " ")`~~ →
+  `producer.normalize.canonical_title` 공통 함수를 import하도록 통합됐다(2026-09-17 확인).
+  연속 구분자 축약과 앞뒤 trim도 다른 수집 경로와 동일하게 적용된다.
 
 ## 이웃 조회
 
