@@ -7,7 +7,7 @@ import org.springframework.stereotype.Repository;
 
 /**
  * LLM 검증 워커의 DB 접근 (WP-68). 후보 생성(-67, {@link CandidateRepository})과 분리해
- * 검증 단계의 읽기/쓰기만 담는다. 네이티브 SQL — cluster_stock(V5)·cluster_org_mention·
+ * 검증 단계의 읽기/쓰기만 담는다. 네이티브 SQL — cluster_stock(V6)·cluster_org_mention·
  * issue_cluster·stock 을 그대로 읽고 쓴다.
  *
  * <p>백엔드는 스키마를 소유하지 않는다. 이 SQL 의 실 DB 검증은 db/ pgserver 테스트 몫이다
