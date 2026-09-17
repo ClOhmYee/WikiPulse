@@ -154,7 +154,7 @@ docker compose run --rm spark            # 윈도우 집계 잡
 
 | 어디 | 무엇 |
 | --- | --- |
-| `backend` | `DATABASE_URL`, `DB_USER`, `DB_PASSWORD` |
+| `backend` | `DATABASE_URL`, `DB_USER`, `DB_PASSWORD`, `LLM_GATEWAY_KEY`, `WIKIPULSE_MATCHING_SCHEDULER_ENABLED`, `WIKIPULSE_MATCHING_VERIFICATION_ENABLED` |
 | `frontend` | `VITE_DATA_SOURCE` (`mock`/`api`), `VITE_API_BASE_URL` |
 | `data-pipeline` | `CONTACT_EMAIL`, `KAFKA_BOOTSTRAP_SERVERS`, `KAFKA_TOPIC`, `WIKIS`, `WINDOW_SIZE`, `SLIDE_SIZE`, `STARTING_OFFSETS` |
 | GATEWAY 쓰는 곳 | GATEWAY API 키 — 🔴 저장소에 넣지 않는다 |
@@ -170,9 +170,9 @@ docker compose run --rm spark            # 윈도우 집계 잡
 | Kafka 토픽 | `wiki.edits`, 보존 **168시간(7일)** | 명세 §5 재처리 창 |
 | 대상 위키 | `enwiki` (namespace 0) | 전 위키는 초당 31건, enwiki 2건 |
 | 편집 윈도우 | 1시간 / 5분 슬라이드 (기본값) | 실데이터 붙은 뒤 튜닝 |
-| 급증 판정 | 편집 z ≥ 3 **AND** 절대 편집수 ≥ 10. 신규 문서(baseline 없음)는 절대 편집수만 | 명세 §11 — Hormuz 평상시 최대 z 1.9 / 사건 최소 z 11.2 |
-| 조회수 2차 판정 | z ≥ 3 **AND** 2배 이상 | 같은 곳 |
-| 기준선 | 28일, 문서 × 시간대(0~23, UTC) EWMA | `page_baseline` |
+| 이슈 1차 관문 | `enwiki` namespace 0에서 봇이 아닌 편집 **1건 이상** | 팀 결정 2026-09-17, WP-118 |
+| 조회수 2차·최종 관문 | 생성 28일 이상: 직전 28일 대비 z ≥ 3 **AND** 2배 이상 **AND** 100회 이상. 생성 28일 미만: 생성 이후 자료를 즉시 사용하며 통계 산출 불가/기준 0이면 100회 이상 | 명세 §3.2 |
+| 조회수 기준선 | 생성 28일 이상은 직전 28일, 미만은 생성 시각부터 현재 직전까지 | `page_baseline`; 짧은 표본 구현은 WP-118 |
 | 종목 임베딩 텍스트 | `{회사명}. {섹터} — {산업}. {longBusinessSummary}`, 2,000자 상한 | 명세 §6.1 |
 | 이슈 대표 텍스트 | `{문서 제목}: {도입부 앞 N문장}` 나열. N = 문서 1개면 6, 2~3개면 4, 4개↑면 2. 2,000자 상한 | 명세 §6.2 |
 | 🔴 파이프라인 내부 텍스트 | **영어** | 한국어로 만들면 코사인이 절반 (0.160 → 0.081) |
@@ -198,6 +198,8 @@ docker compose run --rm spark            # 윈도우 집계 잡
 - 이슈 임베딩 저장 위치 (-49, ERD §4)
 - 클러스터링 파라미터 — Clickstream 엣지 최소 이동량, Wikidata 관계 종류 (-51)
 - LIVE 2차 판정 소스: 시간별 덤프(빠름·봇 미구분) vs 일별 API(느림·정확)
+- Docker Compose에서 GATEWAY 키·후보 생성/검증 워커 설정 전달 및 로컬 E2E 검증(WP-120)
+- 실시간 이슈 요약 생성과 `issue_report` 멱등 적재(WP-119)
 
 **운영**
 

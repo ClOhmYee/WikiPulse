@@ -21,14 +21,14 @@
 
 ### 2. 상태, 실패, 두 종류의 ‘확정’
 
-- **근거:** `IssueDetailResponse.status`와 지도 `Cluster.status`는 `DETECTED / VERIFYING / CONFIRMED`를 전달한다. [snapshot.py](../../data-pipeline/cluster/snapshot.py)는 항상 `DETECTED`로 생산한다. [detector.py](../../data-pipeline/spike/detector.py)의 “편집·조회수 모두 통과(확정)”는 LLM의 종목·이슈 검증 완료와 별개다.
+- **근거:** `IssueDetailResponse.status`와 지도 `Cluster.status`는 `DETECTED / VERIFYING / CONFIRMED`를 전달한다. 새 계약에서는 편집 1건→조회수 급등을 모두 통과한 뒤에만 이슈가 만들어지므로, 이 상태값은 조회수 판정 단계가 아니라 이후 종목 매칭·요약 검증 진행 상태다(WP-118).
 - **현재 FE 처리:** 서버 상태를 AI 검증 전·AI 검증 중·AI 검증 완료로 표시한다. API를 쓴다는 이유로 LIVE·확정으로 승격하지 않는다. 요약 부재를 오류나 검증 실패로 단정하지 않는다. 지도 결측은 `pending`이면 집계 중, `unavailable`이면 미제공, 실제 0이면 0으로 구분한다.
 - **협의 질문:** 검증 실패·재시도·장시간 검증 중을 사용자에게 구분할 필드는 무엇인가? `verification_failed` 같은 별도 상태 또는 `failureReason / retryAfter / updatedAt`이 필요한가? 확정 상태를 급증 점수보다 먼저 정렬할 것인가?
 - **후속 작업:** BE 워커 실패 계약·표시 문구·정렬 정책을 함께 정한다. **WP-94**의 detector 런타임 연결도 상태 생산의 선행 작업이다.
 
 ### 3. 급증 점수 단위, HOT, 점수 버전
 
-- **근거:** **WP-93**은 기존 문서의 편집·조회수 점수를 z-score 단위로 통일했다. 신규 문서는 `edit_count * sqrt(editor_count)`를 유지한다. [score.py](../../data-pipeline/cluster/score.py)는 `sizeScore=s/(s+5)`, `SCORE_VERSION=v1`, [snapshot.py](../../data-pipeline/cluster/snapshot.py)는 HOT 임계 5를 유지한다.
+- **근거:** 현재 코드는 WP-93의 편집·조회수 혼합 점수를 사용한다. 제품 계약 변경 후 조회수 중심 `pulse_score`로 바꾸는 작업과 UI 크기 회귀는 WP-118 범위다. API의 `sizeScore=s/(s+5)` 변환 자체는 서버 점수가 바뀌어도 유지한다.
 - **현재 FE 처리:** `pulseScore`를 단위 없는 급증 점수로 표시하며 배수·확률·정확도·수익률로 읽지 않는다. `sizeScore`, HOT, `scoreVersion`은 서버 값에 따른다. 화면마다 최댓값으로 다시 정규화하지 않는다.
 - **협의 질문:** detector 산식 변경도 `scoreVersion`에 포함하는가? 과거 스냅샷을 재계산할 것인가, 버전별 비교를 제한할 것인가? 신규/기존 문서 점수와 HOT 임계의 비교 기준은 무엇인가?
 - **후속 작업:** -93 후속으로 점수 버전·재집계·HOT 기준을 정하고 이전/새 버전 혼합 검증을 추가한다. 점수 변경이 현재 운영 데이터에 적용됐다는 증거는 이번 FE 검사에 포함하지 않는다.

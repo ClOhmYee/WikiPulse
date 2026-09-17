@@ -14,7 +14,7 @@ erDiagram
     wiki_page          ||--o{ page_edit_window   : "윈도우 집계"
     wiki_page          ||--o{ page_view_hourly   : "조회수"
     wiki_page          ||--o{ page_baseline      : "시간대 기준선"
-    wiki_page          ||--o{ spike              : "급증 판정 통과"
+    wiki_page          ||--o{ spike              : "편집 후 조회수 관문 통과"
     wiki_page          ||--o{ cluster_member     : "클러스터 편입"
 
     issue_cluster      ||--o{ cluster_member     : "묶인 문서"
@@ -40,8 +40,9 @@ erDiagram
 읽는 방향은 명세 §3.2 흐름과 같다.
 
 ```
-wiki_page → page_edit_window → (page_baseline 대비) → spike
-                             ↘ page_view_hourly ↗
+wiki_page → page_edit_window(편집 1건 이상) → page_view_hourly
+                                             ↓ (28일 또는 생성 이후 기준선)
+                                           spike
 spike → issue_cluster ─┬─ cluster_member   (어떤 문서가 묶였나)
                        ├─ issue_report     (LLM 요약)
                        ├─ cluster_org_mention (GDELT 기관 — LLM 의 RAG 입력)
@@ -58,10 +59,10 @@ spike → issue_cluster ─┬─ cluster_member   (어떤 문서가 묶였나)
 | `page_edit_window` | `(page_id, window_start)` | `page_id` | 슬라이딩이라 편집 1건이 여러 행에 걸린다 |
 | `page_view_hourly` | `(page_id, ts_hour)` | `page_id` | |
 | `page_baseline` | `(page_id, hour_of_day)` | `page_id` | `hour_of_day` 0~23 (UTC 시). ~~`hour_of_week` 0~167~~ → 2026-09-15 (WP-84, `V3__baseline_hour_of_day.sql`). `view_stddev` 추가 — 2026-09-15 (WP-90, `V4__baseline_view_stddev.sql`). 조회수 z 의 유일한 입력이고, NULL 이면 조회수 단독 발동을 안 한다 |
-| `spike` | `id` | `page_id` | `UNIQUE (source, page_id, window_start)` — 같은 출처가 같은 창을 두 번 못 넣는다. ~~`UNIQUE (page_id, window_start)`~~ → 2026-09-15 (WP-100, `V5__spike_source.sql`). `source` ∈ {`live`, `replay`} 가 키에 들어간 이유는, 안 들어가면 LIVE 판정이 리플레이 행을 `ON CONFLICT` 로 덮어쓰며 출처까지 바꾸기 때문이다. 두 출처가 같은 문서·창을 **다른 행으로** 갖는다 |
+| `spike` | `id` | `page_id` | 편집 1건 이상 발생 후 조회수 급등까지 통과한 문서만 저장한다(WP-118). `UNIQUE (source, page_id, window_start)` — 같은 출처가 같은 창을 두 번 못 넣는다. `source` ∈ {`live`, `replay`} |
 | `issue_cluster` | `id` | — | `snapshot_ts` 가 시점을 가른다 |
 | `cluster_member` | `(cluster_id, page_id)` | `cluster_id`, `page_id` | 한 문서가 여러 클러스터에 들어갈 수 있다 |
-| `issue_report` | `cluster_id` | `cluster_id` | PK가 곧 FK = **1:1** |
+| `issue_report` | `cluster_id` | `cluster_id` | PK가 곧 FK = **1:1**. 운영 writer는 WP-119 구현 대상 |
 | `stock` | `ticker` | — | 티커가 자연키. 대리키 없음 |
 | `stock_price` | `(ticker, trade_date)` | `ticker` | 약 640만 행, 파티셔닝 없음 |
 | `cluster_stock` | `(cluster_id, ticker)` | `cluster_id`, `ticker` | **매칭 결과의 정본** |
