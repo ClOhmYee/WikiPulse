@@ -49,3 +49,61 @@ wikipulse:
       enabled: ${WIKIPULSE_MATCHING_SCHEDULER_ENABLED:false}
       fixed-delay: PT5M
       batch-size: 20
+
+# 외부 호출 신뢰성 계층 (WP-66). named instance gateway / wikipedia.
+# 전송 계층 실패만 다룬다(타임아웃·5xx·429·연결오류·회로개방). 스키마 검증·attempt_count·
+# check_state 전이는 −68 몫이라 여기 없다.
+# ⚠️ @TimeLimiter 는 없다 — resilience4j TimeLimiter 는 CompletableFuture 반환에만 동작하는데
+#    두 클라이언트는 동기 반환이다. 단일 호출 최악 블록은 read-timeout × max-attempts + wait-duration
+#    (GATEWAY ≈ 30s×2 + 0.5s ≈ 60.5s, wiki ≈ 10s×2 + 0.5s)까지 가지만, 반복되면 CircuitBreaker 가
+#    열어 이후 폴은 빠른 실패로 막는다(근거는 matching/RESULT.md).
+# 애스펙트 순서(resilience4j 기본): Retry(바깥) → CircuitBreaker → RateLimiter(안쪽).
+#   Retry 가 fallback 을 소유해, 전이성만 재시도하고 소진 후에만 폴백을 부른다.
+resilience4j:
+  retry:
+    instances:
+      gateway:
+        max-attempts: 2            # 초기 1 + 재시도 1
+        wait-duration: 500ms
+        retry-exceptions:
+          - io.wikipulse.backend.matching.TransientUpstreamException
+        # 🔴 HardUpstreamException(429·키만료·쿼터)은 여기 없다 → 재시도 안 함(공유 예산 보호).
+      wikipedia:
+        max-attempts: 2
+        wait-duration: 500ms
+        retry-exceptions:
+          - io.wikipulse.backend.matching.TransientUpstreamException
+  circuitbreaker:
+    instances:
+      gateway:
+        sliding-window-type: COUNT_BASED
+        sliding-window-size: 10
+        minimum-number-of-calls: 5   # 5콜 미만이면 열지 않음(초기 blip 무시)
+        failure-rate-threshold: 50
+        wait-duration-in-open-state: 60s
+        permitted-number-of-calls-in-half-open-state: 2
+        record-exceptions:
+          # 전이성·하드 둘 다 게이트웨이 불건강 신호 → 회로에 센다. 그 외(스키마/키/RL 거부)는 안 셈.
+          - io.wikipulse.backend.matching.UpstreamTransportException
+      wikipedia:
+        sliding-window-type: COUNT_BASED
+        sliding-window-size: 10
+        minimum-number-of-calls: 5
+        failure-rate-threshold: 50
+        wait-duration-in-open-state: 60s
+        permitted-number-of-calls-in-half-open-state: 2
+        record-exceptions:
+          - io.wikipulse.backend.matching.UpstreamTransportException
+  ratelimiter:
+    instances:
+      gateway:
+        # 공유 예산 폭주 상한. 단일 폴러라 평상시엔 안 걸리고, 오설정(과대 batch) 폭주만 캡.
+        # timeout-duration 0 = 초과 시 대기 없이 즉시 거부 → 폴백 → 클러스터 PENDING.
+        limit-for-period: 20
+        limit-refresh-period: 1s
+        timeout-duration: 0
+      wikipedia:
+        # 위키미디어 예절 — 초당 완만.
+        limit-for-period: 10
+        limit-refresh-period: 1s
+        timeout-duration: 0

@@ -64,14 +64,15 @@ class StockCandidateServiceTest {
 
     @Test
     void 임베딩_경로_예외는_전파되어_클러스터가_미완료로_남는다() {
-        // GATEWAY·위키 전이성 실패는 삼키지 않는다(fix-impact 반려안 B). 예외가 전파되면
+        // GATEWAY·위키 전송 실패는 삼키지 않는다(fix-impact 반려안 B). -66 이후 클라이언트 폴백이
+        // UpstreamUnavailableException 으로 정규화해 던지고, 소스·서비스가 전파한다. 예외가 전파되면
         // replaceCandidates 에 도달하지 못해 아무 행도 안 쓰이고, 폴러가 다음 주기에 재시도한다.
         when(repository.memberTitlesByPulse(9L)).thenReturn(List.of("Some Title"));
         when(embeddingSource.embed(List.of("Some Title")))
-                .thenThrow(new org.springframework.web.client.RestClientException("503"));
+                .thenThrow(new UpstreamUnavailableException("GATEWAY 임베딩 호출 불가", new RuntimeException("503")));
 
         org.assertj.core.api.Assertions.assertThatThrownBy(() -> service().generateFor(9L))
-                .isInstanceOf(org.springframework.web.client.RestClientException.class);
+                .isInstanceOf(UpstreamUnavailableException.class);
 
         verify(repository, never()).replaceCandidates(org.mockito.ArgumentMatchers.anyLong(),
                 org.mockito.ArgumentMatchers.any());
