@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -19,6 +20,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Captor;
+import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -66,6 +68,8 @@ class VerificationServiceTest {
 
     @Test
     void tier_순서대로_검증하고_통과분을_DONE으로_기록한다() {
+        // pendingCandidates 는 tier 우선 정렬(BOTH→GDELT_ONLY)로 준다(SQL ORDER BY 는 pgserver 검증).
+        // 여기선 서비스가 그 순서를 보존해 처리하는지를 본다.
         when(repository.pendingCandidates(1L)).thenReturn(List.of(
                 new PendingCandidate("NEE", CandidateTier.BOTH),
                 new PendingCandidate("MNST", CandidateTier.GDELT_ONLY)));
@@ -75,11 +79,13 @@ class VerificationServiceTest {
 
         assertThat(r.verified()).isEqualTo(1);
         assertThat(r.rejected()).isEqualTo(1);
-        // 🔴 재사용 키(issue_key·prompt_version)와 rationale_ko 가 기록된다.
-        verify(repository).recordDone(eq(1L), eq("NEE"), respCaptor.capture(),
+        // 서비스가 repo 가 준 순서(BOTH 먼저)를 지켜 처리한다.
+        InOrder order = inOrder(repository);
+        order.verify(repository).recordDone(eq(1L), eq("NEE"), respCaptor.capture(),
                 eq("milton-2024-10"), eq("v1"));
+        order.verify(repository).recordDone(eq(1L), eq("MNST"), any(), eq("milton-2024-10"), eq("v1"));
+        // 🔴 재사용 키(issue_key·prompt_version)와 rationale_ko 가 기록된다.
         assertThat(respCaptor.getValue().rationaleKo()).isEqualTo("한국어 근거");
-        verify(repository).recordDone(eq(1L), eq("MNST"), any(), eq("milton-2024-10"), eq("v1"));
     }
 
     @Test

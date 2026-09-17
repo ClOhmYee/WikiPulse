@@ -94,4 +94,43 @@ class VerificationResponseTest {
                 .isInstanceOf(SchemaViolationException.class)
                 .hasMessageContaining("rationale_ko");
     }
+
+    @Test
+    void object_가_아니면_위반() {
+        assertThatThrownBy(() -> parse("[1, 2, 3]"))
+                .isInstanceOf(SchemaViolationException.class)
+                .hasMessageContaining("object 아님");
+    }
+
+    @Test
+    void verified_가_boolean_아니면_위반() {
+        assertThatThrownBy(() -> parse("""
+                {"issue_class":"SINGLE_COMPANY_EVENT","verified":"true",
+                 "match_path":null,"confidence":null,"rationale_en":null,"rationale_ko":null}
+                """))
+                .isInstanceOf(SchemaViolationException.class)
+                .hasMessageContaining("boolean");
+    }
+
+    @Test
+    void confidence_enum_밖이면_위반() {
+        assertThatThrownBy(() -> parse("""
+                {"issue_class":"SECTOR_OR_REGION_EVENT","verified":true,
+                 "match_path":"REGION","confidence":"medium",
+                 "rationale_en":"x","rationale_ko":"y"}
+                """))
+                .isInstanceOf(SchemaViolationException.class)
+                .hasMessageContaining("confidence");
+    }
+
+    @Test
+    void verified_true_인데_rationale_en_이_비면_위반() {
+        assertThatThrownBy(() -> parse("""
+                {"issue_class":"SECTOR_OR_REGION_EVENT","verified":true,
+                 "match_path":"REGION","confidence":"strong",
+                 "rationale_en":"","rationale_ko":"근거"}
+                """))
+                .isInstanceOf(SchemaViolationException.class)
+                .hasMessageContaining("rationale_en");
+    }
 }

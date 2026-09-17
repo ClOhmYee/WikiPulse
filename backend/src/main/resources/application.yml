@@ -47,7 +47,8 @@ wikipulse:
       read-timeout: 30s
       # LLM 검증(WP-68) — POC 실측 모델을 못박음(-45). 임베딩과 같은 gateway 게이트웨이·신뢰성 계층.
       verification-model: claude-sonnet-4-5-20250929
-      verification-max-tokens: 400
+      # 응답은 6필드 JSON. 한국어 rationale 절단 방지 마진(상한만 늘 뿐 짧은 응답엔 무영향).
+      verification-max-tokens: 800
     scheduler:
       enabled: ${WIKIPULSE_MATCHING_SCHEDULER_ENABLED:false}
       fixed-delay: PT5M

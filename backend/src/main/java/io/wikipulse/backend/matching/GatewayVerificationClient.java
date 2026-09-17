@@ -26,6 +26,16 @@ import org.springframework.web.client.RestClientException;
  *
  * <p>이 클라이언트는 <b>전송만</b> 한다. 응답 JSON 의 스키마 검증·정정 재요청은 {@link LlmVerifier}
  * 몫이다(−66/−68 경계, {@link GatewayEmbeddingClient} 의 "200 무벡터는 −68 소관"과 같은 분리).
+ *
+ * <p>⚠️ <b>알려진 잔여 위험 — 200 무텍스트의 상한 없는 재폴</b>: 200 인데 {@code content[0].text}
+ * 가 비면 {@link IllegalStateException}(전송 taxonomy 아님 → 재시도·회로 대상 아님)이 워커까지
+ * 전파돼 클러스터가 PENDING 으로 남고 {@code attempt_count} 는 안 오른다. 같은 응답이 지속되면
+ * 폴 주기마다 <b>실호출이 반복</b>돼 크레딧이 샌다. 이는 {@link GatewayEmbeddingClient} 의 200 무벡터
+ * 처리(−66 이 "회로를 안 연다"로 확정, {@code ExternalCallResilienceTest})와 <b>같은 계약</b>이라
+ * −68 에서 바꾸지 않았다. 실제 트리거는 좁다: 크레딧 소진은 보통 429/401(→ 하드 → 회로 개방 →
+ * 빠른 실패)로 오고, {@code max_tokens} 절단은 <b>부분 텍스트가 있어</b> 스키마 실패 경로(정정→
+ * {@code attempt_count} 상한 → FAILED)로 흘러 유한하다. 상한 없이 남는 건 "200 + 진짜 빈 content"
+ * 뿐이다. 경계에서 크레딧을 막는 근본 해소는 −66 공용 계약 변경이라 후속으로 둔다.
  */
 @Component
 public class GatewayVerificationClient {

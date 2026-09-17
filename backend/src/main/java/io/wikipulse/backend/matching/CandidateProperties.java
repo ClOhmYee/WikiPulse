@@ -119,8 +119,14 @@ public class CandidateProperties {
          * 실측됐다(-45 RESULT.md). 모델을 바꾸면 prompt_version 재검토가 필요하다.
          */
         private String verificationModel = "claude-sonnet-4-5-20250929";
-        /** 검증 응답 상한 토큰. 응답은 짧은 JSON 하나라 작게 잡는다(POC 400). */
-        private int verificationMaxTokens = 400;
+        /**
+         * 검증 응답 상한 토큰. 응답은 짧은 JSON 하나(6필드)다. POC 는 400 으로 실측했으나,
+         * verified=true 는 rationale_en·rationale_ko 두 자유텍스트를 요구하고 한국어는 문자당
+         * 토큰이 무거워 400 에서 절단될 수 있다 — 절단되면 파싱 실패로 정정 1회 후 폐기되어
+         * 정상 판정이 조용히 누락되고 토큰만 2배 든다. 안전 마진으로 800 을 준다(상한만 늘 뿐
+         * 400 에 맞던 응답엔 영향 없음).
+         */
+        private int verificationMaxTokens = 800;
         /** 🔴 환경변수 LLM_GATEWAY_KEY. 저장소에 넣지 않는다. */
         private String apiKey = "";
         /** 🔴 타임아웃 필수. read 는 게이트웨이 p99 지연을 덮게 잡는다(페이로드는 항상 작다). */
