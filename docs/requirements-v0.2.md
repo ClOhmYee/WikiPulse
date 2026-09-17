@@ -139,7 +139,7 @@ RDB는 PostgreSQL 하나다. MySQL을 따로 두지 않는다 — pgvector 때�
 **공백형을 고른 이유**
 
 1. MediaWiki가 밑줄로 주든 공백으로 주든 **공백형으로 정규화해 돌려준다**. 밑줄은 URL 표기이지 제목이 아니다.
-2. `edit_event` 계약(`data-pipeline/README.md`)·API 명세(`docs/api-v0.1.md`)·DB 테스트가 **이미 전부 공백형**이다. 밑줄을 고르면 확정된 API 계약을 깨야 한다.
+2. `edit_event` 계약(`data-pipeline/README.md`)·API 명세(`docs/api-v0.2.md`)·DB 테스트가 **이미 전부 공백형**이다. 밑줄을 고르면 확정된 API 계약을 깨야 한다.
 3. 밑줄을 내는 곳이 `batch/normalize_dump.py` 하나뿐이라 바꿀 곳이 제일 적다.
 4. 공백형이 곧 MediaWiki의 표시 제목이라 **표시용 컬럼을 따로 둘 필요가 없다** (아래).
 

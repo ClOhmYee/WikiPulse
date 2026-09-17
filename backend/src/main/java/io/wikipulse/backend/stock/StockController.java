@@ -11,7 +11,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-/** 종목. API 명세 v0.1 §4. */
+/** 종목. API 명세 v0.2 §4. */
 @RestController
 @RequestMapping("/api/v1/stocks")
 public class StockController {

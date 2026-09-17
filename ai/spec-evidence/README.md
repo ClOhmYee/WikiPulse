@@ -45,7 +45,7 @@ py -3 dump_sizes.py
    **2025-06-14 18:00 ~ 2025-07-02 02:00 UTC**뿐이다(양끝 경계 각각 확인,
    내부는 표본 4곳 전부 여전히 404 — 연속 결손 맞음). 원래 경계가 처음부터
    근사치였던 것으로 보인다("전부 404"는 맞았지만 범위가 넓게 잡혀 있었다).
-   `docs/requirements-v0.2.md`·`tech-spec-v0.1.md`·`data-pipeline/gdelt`·
+   `docs/requirements-v0.2.md`·`tech-spec-v0.2.md`·`data-pipeline/gdelt`·
    `gkg`의 관련 서술을 이 값으로 갱신했다(WP-53 후속, 이 커밋).
 
 2. **`mediawiki_history` 는 매달 스냅샷 디렉터리를 통째로 새로 깎고 옛것을
