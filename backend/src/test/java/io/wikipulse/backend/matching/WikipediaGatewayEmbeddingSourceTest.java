@@ -59,12 +59,15 @@ class WikipediaGatewayEmbeddingSourceTest {
 
     @Test
     void 위키_전이성_실패는_삼키지_않고_전파한다() {
-        // WikipediaExtractClient 가 타임아웃·5xx·429 를 예외로 던지면(이 커밋의 계약) 소스는
-        // 그대로 전파해야 한다 — 삼켜 빈 텍스트로 만들면 클러스터가 조기 done 으로 굳는다(finding#4).
-        when(wikipedia.intro("Iran")).thenThrow(new RestClientException("504 Gateway Timeout"));
+        // WikipediaExtractClient 가 타임아웃·5xx·429 를 예외로 던지면 소스는 그대로 전파해야 한다 —
+        // 삼켜 빈 텍스트로 만들면 클러스터가 조기 done 으로 굳는다(finding#4). -66 이후 클라이언트 폴백은
+        // 전송 실패를 UpstreamUnavailableException 으로 정규화하므로 실제 표면 타입도 이것이다.
+        when(wikipedia.intro("Iran"))
+                .thenThrow(new UpstreamUnavailableException("Wikipedia 도입부 호출 불가",
+                        new RestClientException("504 Gateway Timeout")));
 
         assertThatThrownBy(() -> source().embed(List.of("Iran")))
-                .isInstanceOf(RestClientException.class);
+                .isInstanceOf(UpstreamUnavailableException.class);
         verify(embeddingClient, never()).embed(anyString());
     }
 }

@@ -34,9 +34,14 @@ import org.springframework.test.context.DynamicPropertySource;
         properties = {
             "spring.main.banner-mode=off",
             "resilience4j.retry.instances.gateway.wait-duration=20ms",
+            "resilience4j.retry.instances.wikipedia.wait-duration=20ms",
             "resilience4j.circuitbreaker.instances.gateway.sliding-window-size=4",
             "resilience4j.circuitbreaker.instances.gateway.minimum-number-of-calls=4",
-            "resilience4j.circuitbreaker.instances.gateway.wait-duration-in-open-state=60s"
+            "resilience4j.circuitbreaker.instances.gateway.wait-duration-in-open-state=60s",
+            // RL 은 이 클래스의 관심사가 아니다(RL 캡은 GatewayRateLimiterTest 담당). 높게 잡아 재시도·CB
+            // 테스트가 누적 호출로 RL 에 걸리는 결합을 제거한다.
+            "resilience4j.ratelimiter.instances.gateway.limit-for-period=1000",
+            "resilience4j.ratelimiter.instances.wikipedia.limit-for-period=1000"
         })
 class ExternalCallResilienceTest {
 
@@ -70,12 +75,17 @@ class ExternalCallResilienceTest {
     @Autowired
     GatewayEmbeddingClient gatewayClient;
     @Autowired
+    WikipediaExtractClient wikiClient;
+    @Autowired
     CircuitBreakerRegistry circuitBreakerRegistry;
 
     @BeforeEach
     void reset() {
-        circuitBreakerRegistry.circuitBreaker("gateway").reset(); // 메서드 간 CB 상태 누수 방지.
+        // 메서드 간 CB 상태 누수 방지. RL 은 위 properties 에서 높게 잡아 결합을 제거했다(리셋 API 없음).
+        circuitBreakerRegistry.circuitBreaker("gateway").reset();
+        circuitBreakerRegistry.circuitBreaker("wikipedia").reset();
         gateway.resetCount();
+        wiki.resetCount();
     }
 
     @Test
@@ -151,6 +161,40 @@ class ExternalCallResilienceTest {
 
         System.out.printf("[AFTER][hang→open] 개방후 embed elapsedMs=%d (read타임아웃 300ms 대비)%n", elapsedMs);
         assertThat(elapsedMs).isLessThan(100); // read 타임아웃보다 훨씬 짧게 = 안 언다.
+    }
+
+    @Test
+    void 스키마오류_200무벡터는_전송실패가_아니라_회로를_안_연다() {
+        // 🔴 -66/-68 경계 가드: 200 인데 벡터 없음(크레딧 소진 바디 등)은 스키마 문제(-68 소관).
+        // 폴백이 IllegalStateException 을 원형 rethrow 하고(UpstreamUnavailableException 로 안 감쌈),
+        // record-exceptions 가 UpstreamTransportException 뿐이라 회로에 안 세어져 CB 가 안 열린다.
+        gateway.mode(FakeUpstream.Mode.CREDIT_EXHAUSTED);
+
+        for (int i = 0; i < 6; i++) {
+            assertThatThrownBy(() -> gatewayClient.embed("x"))
+                    .isInstanceOf(IllegalStateException.class) // UpstreamUnavailableException 아님
+                    .hasMessageContaining("벡터가 없다");
+        }
+
+        // 스키마 실패는 재시도 대상도 회로 기록 대상도 아님 → 호출 6회(재시도 0)·회로 CLOSED 유지.
+        System.out.printf("[AFTER][schema 200-novec] gateway호출=%d state=%s%n",
+                gateway.requestCount(), circuitBreakerRegistry.circuitBreaker("gateway").getState());
+        assertThat(gateway.requestCount()).isEqualTo(6);
+        assertThat(circuitBreakerRegistry.circuitBreaker("gateway").getState())
+                .isEqualTo(CircuitBreaker.State.CLOSED);
+    }
+
+    @Test
+    void wikipedia_전이성_500도_재시도_후_폴백신호() {
+        // Wikipedia 게이트웨이도 같은 골격이 발동하는지(별도 named instance). 위키는 크레딧 무관이라
+        // 429 도 전이성이지만 여기선 5xx 로 재시도 경로만 확인한다.
+        wiki.mode(FakeUpstream.Mode.STATUS_500);
+
+        assertThatThrownBy(() -> wikiClient.intro("Iran"))
+                .isInstanceOf(UpstreamUnavailableException.class);
+
+        System.out.printf("[AFTER][wiki retry 500] wiki호출=%d%n", wiki.requestCount());
+        assertThat(wiki.requestCount()).isEqualTo(2); // max-attempts 2
     }
 
     /** DB 자동설정을 뺀 최소 컨텍스트: 두 클라이언트 + 설정 + resilience4j·AOP 자동설정. */

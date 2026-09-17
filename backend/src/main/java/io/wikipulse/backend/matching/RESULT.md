@@ -50,7 +50,12 @@ Spring 백엔드가 밖으로 거는 HTTP(GATEWAY 게이트웨이 임베딩, Wik
 
 측정: 2026-09-16, `ExternalCallBeforeCharacterizationTest` (N=3, connect 200 ms / read 300 ms). 5케이스 전부 통과.
 
-| 케이스 | GATEWAY 호출 수 | 폴러 스레드 블록(ms) | 표면 예외(실측) | 관찰 |
+⚠️ "표면 예외" 열은 **−66 의 `UpstreamFailures.classify` 도입 *전*** 클라이언트에서 실측한 raw 타입이다.
+현행 트리에서는 클라이언트가 이 예외들을 `Transient/HardUpstreamException` 으로 번역하므로 이 열은
+그대로 재현되지 않는다(호출 수 3·9 와 D=`IllegalStateException` 은 현행에서도 재현됨). before 특성화
+테스트는 예외 타입을 assert 하지 않고 호출 수·블록 시간만 본다.
+
+| 케이스 | GATEWAY 호출 수 | 폴러 스레드 블록(ms) | 표면 예외(−66 이전 raw) | 관찰 |
 | --- | --- | --- | --- | --- |
 | A 500 | 3 (=N) | 55 | `HttpServerErrorException$InternalServerError` | 5xx 를 클러스터마다 삼키고 진행. 빠른 실패 없음 |
 | B 429 | 3 (=N) | 77 | `HttpClientErrorException$TooManyRequests` | 429 도 A 와 동일 경로. 레이트리밋/과금 신호 구분 안 됨 |
@@ -75,9 +80,10 @@ Spring 백엔드가 밖으로 거는 HTTP(GATEWAY 게이트웨이 임베딩, Wik
 
 측정: 2026-09-16, [`ExternalCallResilienceTest`](../../../../../../test/java/io/wikipulse/backend/matching/ExternalCallResilienceTest.java) ·
 [`GatewayRateLimiterTest`](../../../../../../test/java/io/wikipulse/backend/matching/GatewayRateLimiterTest.java)
-(Spring 컨텍스트, 애스펙트 발동. CB 창 4·min-calls 4·retry wait 20ms 로 축약). 5케이스 전부 통과.
+(Spring 컨텍스트, 애스펙트 발동. CB 창 4·min-calls 4·retry wait 20ms 로 축약). 7케이스 전부 통과.
 
-named instance `gateway`: `@RateLimiter` → `@CircuitBreaker` → `@Retry`(fallback). Wikipedia 는 동일 골격, 429 만 전이성.
+named instance `gateway`: 소스 어노테이션 나열은 `@RateLimiter`·`@CircuitBreaker`·`@Retry`(fallback) 순이지만,
+**실행 순서**는 반대로 Retry(바깥)→CircuitBreaker→RateLimiter(안쪽)다(아래 설계 노트). Wikipedia 는 동일 골격, 429 만 전이성.
 
 | 케이스 | before | after | 확인 목표 |
 | --- | --- | --- | --- |
@@ -87,6 +93,8 @@ named instance `gateway`: `@RateLimiter` → `@CircuitBreaker` → `@Retry`(fall
 | hang→개방 | 폴당 N×readTimeout 정지, 매 폴 반복 | 개방 후 embed **4 ms** 즉시 실패(read 300 ms·프로덕션 30 s 무시) | ③스레드 안 얼음 |
 | RL 처리량 캡 | 상한 없음 | limit 3 초과 시 **초과 2회는 업스트림 0**(3만 통과) | ②공유 예산 폭주 상한 |
 | 폴백 | 없음(예외 raw 전파) | 🔴 가짜 벡터/빈 문자열 아님 — `UpstreamUnavailableException` 던져 클러스터 PENDING 유지 | −68 로 신호 위임 |
+| 스키마 200-무벡터 | (해당 없음) | `IllegalStateException` 원형 rethrow(폴백이 안 감쌈)·회로 CLOSED 유지 | −66/−68 경계 가드(스키마는 CB 대상 아님) |
+| Wikipedia 전이성 500 | — | **업스트림 2회**(재시도) 후 `UpstreamUnavailableException` | 별도 게이트웨이도 동일 골격 발동 |
 
 ### after 요약
 

@@ -35,8 +35,10 @@ class GatewayRateLimiterTest {
         wiki = new FakeUpstream(FakeUpstream.WIKI_OK_BODY, 1500);
         registry.add("wikipulse.matching.gateway.base-url", () -> "http://127.0.0.1:" + gateway.port());
         registry.add("wikipulse.matching.gateway.api-key", () -> "test-key");
-        registry.add("wikipulse.matching.gateway.connect-timeout", () -> "200ms");
-        registry.add("wikipulse.matching.gateway.read-timeout", () -> "300ms");
+        registry.add("wikipulse.matching.gateway.connect-timeout", () -> "500ms");
+        // OK 응답 3회 성공 카운트가 정확성의 전제라 read-timeout 을 넉넉히 잡는다(hang 테스트 없음).
+        // 짧게 잡으면 부하 걸린 CI 에서 loopback OK 가 타임아웃→전이성으로 새어 ok==3 이 깨질 수 있다.
+        registry.add("wikipulse.matching.gateway.read-timeout", () -> "5s");
         registry.add("wikipulse.matching.wikipedia.api-url", () -> "http://127.0.0.1:" + wiki.port() + "/w/api.php");
     }
 

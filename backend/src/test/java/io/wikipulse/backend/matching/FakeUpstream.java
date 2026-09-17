@@ -6,6 +6,7 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -47,6 +48,7 @@ final class FakeUpstream implements AutoCloseable {
     }
 
     private final HttpServer server;
+    private final ExecutorService executor;
     private final AtomicInteger requests = new AtomicInteger();
     private final String okBody;
     private final long hangMillis;
@@ -57,7 +59,14 @@ final class FakeUpstream implements AutoCloseable {
         this.hangMillis = hangMillis;
         this.server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
         this.server.createContext("/", this::handle);
-        this.server.setExecutor(Executors.newCachedThreadPool());
+        // 🔴 데몬 스레드 — server.stop() 은 setExecutor 로 넣은 풀을 안 내린다(JDK 계약). HANG 핸들러가
+        // 1.5s 스레드를 물고 있어, 비-데몬이면 테스트 종료 후에도 최대 keepalive 만큼 JVM 정리를 지연시킨다.
+        this.executor = Executors.newCachedThreadPool(r -> {
+            Thread t = new Thread(r, "fake-upstream");
+            t.setDaemon(true);
+            return t;
+        });
+        this.server.setExecutor(executor);
         this.server.start();
     }
 
@@ -115,5 +124,6 @@ final class FakeUpstream implements AutoCloseable {
     @Override
     public void close() {
         server.stop(0);
+        executor.shutdownNow(); // stop() 은 커스텀 executor 를 안 내린다 — 직접 종료.
     }
 }
