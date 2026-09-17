@@ -64,25 +64,27 @@ export default function PulsePreview({
         <>
           <div className="signal-preview__top">
             <CategoryTag category={getIssueCategory(cluster.category)} />
-            {onClose && (
+            <div className="pulse-preview__actions">
               <button
                 className="wp-icon-button"
-                onClick={onClose}
-                aria-label="클러스터 정보 닫기"
+                onClick={() => onToggleEvent(savedKey || cluster.id)}
+                aria-pressed={Boolean(savedKey)}
+                aria-label={
+                  savedKey ? "선택한 사건 저장 해제" : "선택한 사건 저장"
+                }
               >
-                <X size={18} />
+                <Bookmark size={18} fill={savedKey ? "currentColor" : "none"} />
               </button>
-            )}
-            <button
-              className="wp-icon-button"
-              onClick={() => onToggleEvent(savedKey || cluster.id)}
-              aria-pressed={Boolean(savedKey)}
-              aria-label={
-                savedKey ? "선택한 사건 저장 해제" : "선택한 사건 저장"
-              }
-            >
-              <Bookmark size={18} fill={savedKey ? "currentColor" : "none"} />
-            </button>
+              {onClose && (
+                <button
+                  className="wp-icon-button"
+                  onClick={onClose}
+                  aria-label="클러스터 정보 닫기"
+                >
+                  <X size={18} />
+                </button>
+              )}
+            </div>
           </div>
           <SignalBadges cluster={cluster} meta={meta} />
           <IssueState status={cluster.status} />
