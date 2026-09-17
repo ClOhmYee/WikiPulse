@@ -32,7 +32,7 @@
 
 | | 버전 | 출처 |
 | --- | --- | --- |
-| Python | **3.11** (팀 표준) | 저장소 스크립트에 버전 표기는 아직 없다 |
+| Python | 일반 파이프라인 **3.11**, Spark 이미지 **3.8.10** | `data-pipeline/Dockerfile`은 `python:3.11-slim`로 고정. `apache/spark:3.5.3-python3`은 2026-09-17 실측 3.8.10이라 `psycopg 3.3.5` 설치 불가; 운영 `SINK=spike` 미해결 |
 | Kafka | **3.9.0** (`apache/kafka:3.9.0`) | `data-pipeline/docker-compose.yml` (저장소) — **로컬 개발용** |
 | Spark | **3.5.3** (`apache/spark:3.5.3-python3`) | 같은 파일 (저장소) — **로컬 개발용** |
 | Kafka 커넥터 | `spark-sql-kafka-0-10_2.12:3.5.3` | 같은 파일 |
@@ -62,7 +62,7 @@
 | 프로젝트 GATEWAY | `https://llm-gateway.example.com/{원래 호스트}/…` 프록시 | 🔴 키는 저장소에 넣지 않는다. 각자 `.env`. |
 | OpenAI 임베딩 | `text-embedding-3-small` (1536차원) | GATEWAY 경유. `Authorization: Bearer` |
 | Anthropic | `/v1/messages` + `web_search_20250305` | GATEWAY 경유. `x-api-key`. 중계 실동작 확인 (2026-09-07) |
-| Wikimedia | EventStreams SSE, Pageviews API, 덤프, Clickstream | ⚠️ **연락처 없는 User-Agent는 차단된다.** `CONTACT_EMAIL` 필수 |
+| Wikimedia | EventStreams SSE, `other/pageviews` 시간별 덤프, `pageview_complete` 일별 user 덤프, Clickstream | 운영 조회수 최종 관문은 시간별 덤프. 일별 user는 품질 검증. AQS 일별 API는 PoC용만. ⚠️ **연락처 없는 User-Agent는 차단된다.** `CONTACT_EMAIL` 필수 |
 | GDELT 2.0 GKG | 15분 파일 | ~~2025-06-13~07-04~~ → **2025-06-14 18:00~07-02 02:00 UTC 결손**(경계 이분 탐색 재확인, 2026-09-16, `docs/requirements-v0.2.md` §11) |
 | yfinance | `longBusinessSummary`, 일봉 | 비공식 API. 스로틀·스키마 변경 리스크 |
 | SEC / NASDAQ Trader | 종목 마스터 | ⚠️ Wikidata로 티커를 받지 말 것 (`wdt:P249` 40건 함정) |
@@ -194,12 +194,18 @@ docker compose run --rm spark            # 윈도우 집계 잡
 | 편집 윈도우 | 1시간 / 5분 슬라이드 (기본값) | 실데이터 붙은 뒤 튜닝 |
 | 이슈 1차 관문 | `enwiki` namespace 0에서 봇이 아닌 편집 **1건 이상** | 팀 결정 2026-09-17, WP-118 |
 | 조회수 2차·최종 관문 | 생성 28일 이상: 직전 28일 대비 z ≥ 3 **AND** 2배 이상 **AND** 100회 이상. 생성 28일 미만: 생성 이후 자료를 즉시 사용하며 통계 산출 불가/기준 0이면 100회 이상 | 명세 §3.2 |
+| 운영 조회수 소스 | `other/pageviews` 시간별 덤프. `pageview_complete` 일별 `agent=user`는 품질 검증용 병행 보존. AQS 일별 API는 LIVE 최종 관문에서 제외 | 약 1시간 지연을 받아들이고 품질 우선 |
+| 처리 지연 목표 | 사건 발생 후 통상 1~2시간 이내 최종 노출, 시간별 원본 도착 후 내부 처리 15분 이내 | 지연 상한이 아니라 MVP 운영 목표. 미도착은 후보 대기 |
 | 조회수 기준선 | 생성 28일 이상은 직전 28일, 미만은 생성 시각부터 현재 직전까지 | `page_baseline`; 짧은 표본 구현은 WP-118 |
 | 실제 문서 생성 시각 | 리플레이: `mediawiki_history.page_creation_timestamp`. LIVE: MediaWiki 최초 리비전 시각(`prop=revisions`, `rvdir=newer`, `rvlimit=1`). `wiki_page.first_seen`으로 대체 금지 | 저장 컬럼·LIVE 수집은 WP-118 구현 대상 |
+| 클러스터 멤버 역할 | 루트 씨드=최종 급증 통과 문서, 추가 씨드=Clickstream 이웃 중 생성일 시간 동시성 통과 새 사건 문서, 비-seed=기존 문서 중 재급증 비율 ≥5 AND 사건기간 편집 ≥20 | WP-51·77. 현재 `cluster/snapshot.py`는 추가 씨드 승격·비-seed 재급증을 미구현 |
 | 종목 임베딩 텍스트 | `{회사명}. {섹터} — {산업}. {longBusinessSummary}`, 2,000자 상한 | 명세 §6.1 |
 | 이슈 대표 텍스트 | `{문서 제목}: {도입부 앞 N문장}` 나열. N = 문서 1개면 6, 2~3개면 4, 4개↑면 2. 2,000자 상한 | 명세 §6.2 |
 | 🔴 파이프라인 내부 텍스트 | **영어** | 한국어로 만들면 코사인이 절반 (0.160 → 0.081) |
 | 후보 우선순위 | `BOTH` → `GDELT_ONLY` → `EMBEDDING_ONLY` | 명세 §6.3 |
+| 과거/LIVE 범위 | 과거 2026-07-17~09-17 고정, 이후 LIVE 계속 누적. 정규화부터 종목 매칭까지 같은 계약 | 과거=미리 계산한 스냅샷, LIVE=최신 스냅샷 |
+| 시점별 재사용 | 점수·멤버는 시점별 스냅샷. 요약·검증 종목은 `issue_key` 단위로 재사용하되 조회 시각까지 완료된 결과만 노출 | 미래 결과의 과거 소급 노출 금지, WP-119·120 |
+| 처리 실패 의미 | 조회수 미도착=후보 대기, GATEWAY/GDELT 실패=재시도/처리 중, 전체 완료 뒤 통과 종목 없음=정상 0건 | 빈 배열로 장애를 숨기지 않음 |
 | Spark Worker 자원 | 2 코어 · 4 g × 2대. `spark.cores.max 4` · `executor.cores 2` · `executor.memory 2g` | 2026-09-17 기동값 |
 | Spark HDFS 기본 경로 | `/wikipulse/spark` | WP-27 |
 
@@ -221,17 +227,22 @@ docker compose run --rm spark            # 윈도우 집계 잡
 - ~~인증 방식·WebSocket·알림 전달 수단~~ → 회원·관심종목·알림·토론과 함께 MVP 범위에서 제외 (2026-09-17, WP-104)
 - ~~Top-K의 K, 3등급 검증 발동 기준 N, 노출 개수 상한~~ → **K=20/10, N=2, 제품 노출 상한 없음으로 확정** (2026-09-14, WP-22)
 - ~~이슈 임베딩 저장 위치~~ → **저장하지 않고 후보 생성 시 계산하며, 판정 결과는 `(issue_key, ticker, prompt_version)`으로 재사용** (2026-09-16, WP-49)
-- ~~Clickstream 엣지 최소 이동량·Wikidata 관계 종류~~ → **별도 Clickstream 문턱 없음, Wikidata 관문 폐기** (2026-09-09, WP-51). 포함 여부는 생성일 시간 동시성·사건기간 편집 재급증으로 판정
+- ~~Clickstream 엣지 최소 이동량·Wikidata 관계 종류~~ → **별도 Clickstream 문턱 없음, Wikidata 멤버 편입 관문 폐기** (2026-09-09, WP-51). 포함 여부는 생성일 시간 동시성·사건기간 편집 재급증으로 판정. 이미 포함된 멤버 사이 Wikidata 화면 보조 간선 계약은 남지만 소스 배선은 없음
+- ~~LIVE 조회수 최종 관문 소스~~ → **`other/pageviews` 시간별 덤프**로 확정. `pageview_complete` 일별 user는 품질 검증, AQS 일별 API는 운영 관문에서 제외 (2026-09-17, WP-118)
+- ~~리플레이 범위·MVP 원본 보존~~ → **2026-07-17~09-17 고정 2개월**, 실제 공통 파이프라인 재생·E2E 검증 완료 전 편집·시간별/일별 조회수·GDELT·Clickstream 원본 삭제 금지
 
 **남은 설계·검증**
 
 - 문서 실제 생성 시각 저장 필드와 LIVE 수집 배선(WP-118). `first_seen`은 시스템 최초 관측 시각이라 대체할 수 없음
-- LIVE 2차 판정 소스: 시간별 덤프(빠름·봇 미구분) vs 일별 API(느림·정확)
+- 시간별 조회수 원본 미도착 후보 보관·재평가와 원본 도착 후 15분 이내 처리 계측(WP-118)
 - Docker Compose에서 GATEWAY 키·후보 생성/검증 워커 설정 전달 및 로컬 E2E 검증(WP-120)
 - 실시간 이슈 요약 생성과 `issue_report` 멱등 적재(WP-119)
+- 같은 `issue_key`의 요약·검증 결과를 유효 시각과 함께 재사용하고 과거 조회에 미래 결과가 섞이지 않게 하는 저장·조회 방식(WP-119·120). 데모 시드는 마지막 스냅샷에만 보강 데이터를 붙여 과거 상세가 비어 있음
+- 2026-07-17~09-17 실제 원본 공통 리플레이로 1,112개 수작업 시드를 교체하고 이후 LIVE 누적까지 연결(WP-120)
+- 종목 상세 가격 API·FE 연결(WP-124). yfinance 적재기(WP-64)는 있으나 `/stocks/{ticker}/prices`와 로컬 가격 데이터는 없음
 
 **운영**
 
 - 2노드 RAM 배분, t3 CPU 크레딧 실측
-- `page_edit_window` 보존 기간, GDELT·리플레이 덤프 보존 기간
+- `page_edit_window`와 2026-09-18 이후 LIVE 원본의 장기 보존 기간. 고정 MVP 2개월 원본은 실제 재생 검증 전 삭제 금지로 확정
 - GATEWAY 키 서비스별 사용 조건 확인갱신 절차 (-52)

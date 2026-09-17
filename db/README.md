@@ -74,7 +74,7 @@ LIVE 화면은 가장 최근 값을, 리플레이는 사용자가 고른 시점�
 | 테이블 | 무엇 |
 | --- | --- |
 | `issue_cluster` | 한 시점의 클러스터 = 버블 하나. `status` 로 3단계 노출 |
-| `cluster_member` | 묶인 문서. `weight` 는 Clickstream 이동량, `is_seed` 는 직접 급증 여부 |
+| `cluster_member` | 묶인 문서. `weight`는 Clickstream 이동량. `is_seed=true`는 루트 급증 문서 또는 생성일 동시성으로 편입된 새 사건 문서, `false`는 재급증 기준으로 편입된 기존 문서. Wikidata는 멤버십을 만들지 않음 |
 | `issue_report` | LLM 요약 |
 
 ### 종목

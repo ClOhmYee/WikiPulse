@@ -62,7 +62,7 @@ spike → issue_cluster ─┬─ cluster_member   (어떤 문서가 묶였나)
 | `page_baseline` | `(page_id, hour_of_day)` | `page_id` | `hour_of_day` 0~23 (UTC 시). ~~`hour_of_week` 0~167~~ → 2026-09-15 (WP-84, `V3__baseline_hour_of_day.sql`). `view_stddev` 추가 — 2026-09-15 (WP-90, `V4__baseline_view_stddev.sql`). 조회수 z 의 유일한 입력이고, NULL 이면 조회수 단독 발동을 안 한다 |
 | `spike` | `id` | `page_id` | 편집 1건 이상 발생 후 조회수 급등까지 통과한 문서만 저장한다(WP-118). `UNIQUE (source, page_id, window_start)` — 같은 출처가 같은 창을 두 번 못 넣는다. `source` ∈ {`live`, `replay`} |
 | `issue_cluster` | `id` | — | `snapshot_ts` 가 시점을 가른다 |
-| `cluster_member` | `(cluster_id, page_id)` | `cluster_id`, `page_id` | 한 문서가 여러 클러스터에 들어갈 수 있다 |
+| `cluster_member` | `(cluster_id, page_id)` | `cluster_id`, `page_id` | 한 문서가 여러 클러스터에 들어갈 수 있다. `is_seed=true`는 루트 급증 문서 또는 생성일 동시성으로 편입된 새 사건 문서, `false`는 재급증 기준으로 편입된 기존 문서다. Wikidata는 멤버십을 만들지 않는다 |
 | `issue_report` | `cluster_id` | `cluster_id` | PK가 곧 FK = **1:1**. 운영 writer는 WP-119 구현 대상 |
 | `stock` | `ticker` | — | 티커가 자연키. 대리키 없음 |
 | `stock_price` | `(ticker, trade_date)` | `ticker` | 약 640만 행, 파티셔닝 없음 |
@@ -109,7 +109,7 @@ ORDER BY s.embedding <=> :q     -- <=> 여야 HNSW 인덱스를 탄다
 LIMIT :k;
 ```
 
-**이슈 임베딩은 저장하지 않는다.** 후보 생성 시 계산해 쓰고 버린다. 같은 이슈의 LLM 판정을 반복하지 않도록 `cluster_stock`의 `(issue_key, ticker, prompt_version)` 기준으로 최근 완료 결과를 재사용한다(WP-49, `V5__cluster_stock_reuse.sql`).
+**이슈 임베딩은 저장하지 않는다.** 후보 생성 시 계산해 쓰고 버린다. 같은 이슈의 LLM 판정을 반복하지 않도록 `cluster_stock`의 `(issue_key, ticker, prompt_version)` 기준으로 최근 완료 결과를 재사용한다(WP-49, `V6__cluster_stock_reuse.sql`). 재사용 판정이 존재해도 API는 시점별 `cluster_id`를 읽으므로 스냅샷과 결과를 연결해야 한다. 단 과거 조회에는 선택 시점까지 완료된 결과만 보여야 하며, 최신 결과를 모든 과거 `cluster_id`에 무조건 복사하면 미래 정보가 소급된다. 결과 생성/유효 시각과 as-of 연결은 WP-119·120에서 보완한다.
 
 ---
 
@@ -117,6 +117,7 @@ LIMIT :k;
 
 - **리플레이 스냅샷과 토론의 수명이 엮여 있다.** `comment_thread`가 `issue_cluster`에 CASCADE로 달려 있는데 클러스터는 재계산 대상이다. 다만 토론은 MVP 제외 기능이므로 이번 구현에서는 사용하지 않는다.
 - **실제 문서 생성 시각 저장 위치** — 생성 28일 미만 판정에는 `first_seen`이 아니라 실제 최초 리비전 시각이 필요하다. 리플레이는 `mediawiki_history.page_creation_timestamp`, LIVE는 MediaWiki 최초 리비전 API를 쓰며, 저장 컬럼은 WP-118 구현에서 추가한다.
+- **`issue_key` 결과의 as-of 연결** — 점수·멤버는 시점별 스냅샷, 요약·검증 종목은 이슈 단위 재사용이지만 현재 스키마는 결과의 유효 시각과 과거 조회 규칙을 충분히 표현하지 못한다. WP-119·120에서 마이그레이션 여부를 정한다.
 - **`page_edit_window` 보존 기간** — 정해지면 파티션·삭제 잡이 붙는다
 - **마이그레이션 도구** — 파일명만 Flyway 규칙(`V1__`)을 따랐다. Flyway/Liquibase 확정은 백엔드 합의 사항
 - **인증 컬럼** — 회원 기능이 MVP에서 제외되어 `member.password_hash`의 자체 로그인/OAuth 결정도 이번 범위에서 하지 않는다
