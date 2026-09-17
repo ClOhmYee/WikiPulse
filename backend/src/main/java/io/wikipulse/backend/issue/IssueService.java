@@ -33,14 +33,16 @@ public class IssueService {
     public ApiResponse<List<IssueCardResponse>> feed(
             Instant snapshotTs, String status, String source, Integer offset, Integer limit) {
 
-        Instant target = (snapshotTs != null)
-                ? snapshotTs
-                : clusterRepository.findLatestLiveSnapshot().orElse(null);
-
         int off = QueryParams.offset(offset);
         int lim = QueryParams.limit(limit);
         List<String> statuses = QueryParams.statuses(status);
         String src = QueryParams.source(source);
+
+        // 시각 미지정이면 요청한 출처의 최신 스냅샷(출처도 없으면 최신 LIVE,
+        // 없으면 최신 replay). /issues/map 과 같은 규칙이라 두 화면이 같은 시점을 본다.
+        Instant target = (snapshotTs != null)
+                ? snapshotTs
+                : clusterRepository.findLatestSnapshot(src).orElse(null);
 
         // 아직 스냅샷이 하나도 없으면 빈 목록 + total 0.
         if (target == null) {
