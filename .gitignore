@@ -46,3 +46,9 @@ backend/build/
 data-pipeline/dumps/
 data-pipeline/out/
 data-pipeline/data/
+
+# 서빙 DB dump (WP-109). 수십~수백 MB 라 저장소에 넣지 않는다 — 전달은 파일로
+# 하고, 만든 방법·행 수·복원 절차는 같은 폴더의 manifest.md(추적 대상)가 적는다.
+artifacts/*.dump
+artifacts/*.sql
+artifacts/*.tar.gz
