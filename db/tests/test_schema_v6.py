@@ -246,6 +246,139 @@ def test_recordDone_탈락은_경로_필드를_null로_두고_DONE으로_전이�
     assert row == ("DONE", False, None, None, None, "iran-2026", "v1")
 
 
+# VerificationRepository.findPriorVerdict 와 동일 SQL — 재사용 캐시 조회(-69).
+# %s 순서: issue_key, ticker, prompt_version, cluster_id(<>). 부분 인덱스
+# (issue_key, ticker, prompt_version) WHERE check_state='DONE' 를 탄다.
+_FIND_PRIOR_VERDICT = (
+    "SELECT verified, match_path, confidence, rationale "
+    "  FROM cluster_stock "
+    " WHERE issue_key = %s AND ticker = %s "
+    "   AND prompt_version = %s "
+    "   AND check_state = 'DONE' "
+    "   AND cluster_id <> %s "
+    " ORDER BY verified_at DESC NULLS LAST "
+    " LIMIT 1"
+)
+
+# VerificationRepository.recordReused 와 동일 SQL — 이전 판정 복사 기록(-69).
+_RECORD_REUSED = (
+    "UPDATE cluster_stock "
+    "   SET check_state    = 'DONE', "
+    "       verified       = %s, "
+    "       match_path     = %s, "
+    "       confidence     = %s, "
+    "       rationale      = %s, "
+    "       verified_at    = now(), "
+    "       issue_key      = %s, "
+    "       prompt_version = %s "
+    " WHERE cluster_id = %s AND ticker = %s"
+)
+
+
+def test_findPriorVerdict_다른_스냅샷의_최근_DONE을_준다(conn):
+    """-69: 진행 중 이슈가 새 cluster_id 로 재감지될 때, 다른 스냅샷의 최근 DONE 판정을 찾는다."""
+    _stock(conn, "RUS11")
+    c_old = _cluster(conn, issue_key="'milton-2024'", snapshot_ts="'2024-10-09T12:00Z'")
+    c_new = _cluster(conn, issue_key="'milton-2024'", snapshot_ts="'2024-10-09T13:00Z'")
+    # 이전 스냅샷의 확정 판정.
+    x(
+        conn,
+        "INSERT INTO cluster_stock (cluster_id, ticker, tier, issue_key, prompt_version, "
+        " check_state, verified, match_path, confidence, rationale, verified_at) "
+        "VALUES (%s, 'RUS11', 'BOTH', 'milton-2024', 'v1', 'DONE', true, "
+        " 'REGION', 'strong', '복사될 근거', '2024-10-09T12:30Z')",
+        c_old,
+    )
+    # 새 스냅샷의 미검증 후보(자기 행) — DONE 이 아니라 조회에서 빠진다.
+    x(
+        conn,
+        "INSERT INTO cluster_stock (cluster_id, ticker, tier) VALUES (%s, 'RUS11', 'BOTH')",
+        c_new,
+    )
+
+    row = q(conn, _FIND_PRIOR_VERDICT, "milton-2024", "RUS11", "v1", c_new)[0]
+    assert row == (True, "REGION", "strong", "복사될 근거")
+
+
+def test_findPriorVerdict_자기_클러스터_행은_제외한다(conn):
+    """🔴 -69: cluster_id <> :cid — 현재 처리 중인 클러스터의 판정은 재사용원으로 세지 않는다.
+
+    유일한 DONE 이 조회 대상 cluster_id 자신이면 결과가 없어야 한다.
+    """
+    _stock(conn, "RUS12")
+    cid = _cluster(conn, issue_key="'iran-2026'")
+    x(
+        conn,
+        "INSERT INTO cluster_stock (cluster_id, ticker, tier, issue_key, prompt_version, "
+        " check_state, verified, match_path, confidence, rationale, verified_at) "
+        "VALUES (%s, 'RUS12', 'BOTH', 'iran-2026', 'v1', 'DONE', true, "
+        " 'REGION', 'strong', '근거', now())",
+        cid,
+    )
+    assert q(conn, _FIND_PRIOR_VERDICT, "iran-2026", "RUS12", "v1", cid) == []
+
+
+def test_recordReused_이전판정을_복사해_DONE으로_전이한다(conn):
+    """-69: LLM 없이 이전 판정 값을 그대로 써 DONE 으로 전이. verified_at 갱신·재사용 키 채움."""
+    ticker = "RUS13"
+    cid = _pending_candidate(conn, ticker)
+
+    x(conn, _RECORD_REUSED, True, "SUPPLY_CHAIN", "weak", "재사용 근거", "milton-2024", "v1", cid, ticker)
+
+    row = q(
+        conn,
+        "SELECT check_state, verified, match_path, confidence, rationale, issue_key, prompt_version, "
+        "       verified_at IS NOT NULL "
+        "FROM cluster_stock WHERE ticker = %s",
+        ticker,
+    )[0]
+    assert row == ("DONE", True, "SUPPLY_CHAIN", "weak", "재사용 근거", "milton-2024", "v1", True)
+
+
+# VerificationRepository.verifiedPassCountTier12 와 동일 SQL — 3등급(EMBEDDING_ONLY) 발동 게이트.
+# 재사용(-69) verified 행이 tier=BOTH/GDELT_ONLY 를 유지한 채 DONE 으로 남아 이 카운트에
+# 잡히는지가 서비스 게이트 정확성의 전제다. Java 단위 테스트는 이 카운트를 목으로 스텁하므로,
+# "재사용 write → 카운트 증가" 인과는 여기 실 DB 에서만 실측된다.
+_VERIFIED_PASS_COUNT_TIER12 = (
+    "SELECT count(*) "
+    "  FROM cluster_stock "
+    " WHERE cluster_id = %s AND check_state = 'DONE' AND verified = true "
+    "   AND tier IN ('BOTH', 'GDELT_ONLY')"
+)
+
+
+def test_재사용된_verified행이_tier12_게이트_카운트에_잡힌다(conn):
+    """-69 인과 실측: recordReused 로 쓴 DONE+verified+BOTH 행이 게이트 카운트를 0→1 로 올린다.
+
+    recordReused 는 tier 를 건드리지 않아 -67 이 심은 tier(BOTH)가 유지되고, verified=true·
+    check_state='DONE' 을 갱신하므로 카운트 조건을 그대로 만족한다.
+    """
+    _stock(conn, "RUS14")
+    cid = _cluster(conn, issue_key="'milton-2024'")
+    x(conn, "INSERT INTO cluster_stock (cluster_id, ticker, tier) VALUES (%s, 'RUS14', 'BOTH')", cid)
+
+    assert q(conn, _VERIFIED_PASS_COUNT_TIER12, cid)[0][0] == 0  # PENDING 은 안 잡힘
+
+    x(conn, _RECORD_REUSED, True, "REGION", "strong", "근거", "milton-2024", "v1", cid, "RUS14")
+
+    assert q(conn, _VERIFIED_PASS_COUNT_TIER12, cid)[0][0] == 1  # 재사용 verified 가 카운트에 잡힘
+
+
+def test_재사용된_EMBEDDING_ONLY_verified는_tier12_카운트에서_빠진다(conn):
+    """-69: EMBEDDING_ONLY 는 캐시 히트로 재사용돼 DONE+verified 가 돼도 tier12 게이트엔 안 잡힌다."""
+    _stock(conn, "RUS15")
+    cid = _cluster(conn, issue_key="'milton-2024'")
+    x(
+        conn,
+        "INSERT INTO cluster_stock (cluster_id, ticker, tier) VALUES (%s, 'RUS15', 'EMBEDDING_ONLY')",
+        cid,
+    )
+
+    x(conn, _RECORD_REUSED, True, "REGION", "strong", "근거", "milton-2024", "v1", cid, "RUS15")
+
+    assert q(conn, _VERIFIED_PASS_COUNT_TIER12, cid)[0][0] == 0  # tier3 는 게이트 카운트 밖
+
+
 # VerificationRepository.pendingCandidates 와 동일 SQL — 검증 순서(tier 우선 + 신호 강도)를 정한다.
 _PENDING_CANDIDATES = (
     "SELECT ticker, tier "
