@@ -105,6 +105,37 @@ def _z(value: float, mean: float, stddev: float | None) -> float | None:
     return (value - mean) / stddev
 
 
+def may_spike(window: Window) -> bool:
+    """기준선을 **읽기 전에** "어떤 기준선이 와도 급증일 수 없는" 윈도우를 거른다.
+
+    🔴 **판정이 아니다. 필요조건일 뿐이다** — `detect(...).is_spike` 가 참이면 이 함수도
+    반드시 참이다(역은 성립하지 않는다). 그래서 이걸로 미리 걸러도 판정 결과는 한 건도
+    안 바뀐다. 임계값은 여기서 새로 정하지 않고 위 상수를 그대로 본다 —
+    값을 복제하면 한쪽만 고쳐졌을 때 조용히 갈린다.
+
+    왜 필요한가 (WP-109, bulk 리플레이)
+        `SpikeRuntime.evaluate` 는 윈도우마다 `page_baseline` 을 먼저 읽는다. 문서 하나당
+        왕복 1회라 60일 전체(문서 수백만)를 그대로 넣으면 왕복이 문서 수만큼 난다.
+        아래 세 관문은 **기준선과 무관한 절대 하한**이라 기준선을 안 읽고도 판정 가능한
+        탈락을 먼저 거를 수 있다.
+
+    근거 (이 파일 안에서 닫힌다)
+        - `_detect_new_page`  : `edit_count >= MIN_ABSOLUTE_EDITS` AND
+                                `editor_count >= MIN_DISTINCT_EDITORS` 둘 다 필요
+        - `_detect_existing_page` : `edit_pass` 도 같은 두 조건을 포함하고,
+                                `view_pass` 는 `views >= MIN_ABSOLUTE_VIEWS` 를 포함한다
+        → 편집 관문 후보도 아니고 조회수 관문 후보도 아니면 어느 경로로도 못 통과한다.
+
+    ⚠️ 상한이 아니라 하한만 본다. 통과했다고 급증이 아니다 — 반드시 `detect()` 를 부른다.
+    """
+    edits_possible = (
+        window.edit_count >= MIN_ABSOLUTE_EDITS
+        and window.editor_count >= MIN_DISTINCT_EDITORS
+    )
+    views_possible = window.views is not None and window.views >= MIN_ABSOLUTE_VIEWS
+    return edits_possible or views_possible
+
+
 def detect(window: Window, baseline: Baseline | None) -> SpikeDecision:
     """급증 여부와 점수를 판정한다.
 
