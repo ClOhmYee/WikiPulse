@@ -14559,128 +14559,110 @@ VALUES ('2026-09-16T23:59:59Z', 'replay', 16, 'v1-demo', 24, now());
 -- 최신 스냅샷만 채운다.)
 
 INSERT INTO issue_report (cluster_id, summary, model)
-SELECT id, '2026-07-17~09-17 실제 위키백과 편집·조회 시계열 기반 리플레이 데모. '
-  || '2026 Iran War — Strait of Hormuz Crisis 관련 문서 6개의 실측 신호를 매일 스냅샷으로 재구성했다.',
-  'demo-manual-2026-09-17'
+SELECT id, '2026년 2월 28일 미국과 이스라엘이 이란 최고지도자 알리 하메네이를 포함한 이란 고위 관료들을 공습으로 살해하면서 이란과의 전쟁이 발발했다. 이에 대한 보복으로 이란 혁명수비대는 호르무즈 해협을 봉쇄하고 상선을 공격하며 기뢰를 설치해 세계 에너지 무역의 주요 통로를 차단했다. 하메네이 사후 그의 둘째 아들 모즈타바 하메네이가 이란의 세 번째 최고지도자로 취임했다.',
+  'claude-sonnet-4-5-20250929'
 FROM issue_cluster WHERE issue_key = 'demo-iran-hormuz-2026' ORDER BY snapshot_ts DESC LIMIT 1
 ON CONFLICT (cluster_id) DO NOTHING;
 
 INSERT INTO issue_report (cluster_id, summary, model)
-SELECT id, '2026-07-17~09-17 실제 위키백과 편집·조회 시계열 기반 리플레이 데모. '
-  || 'Harald V 국왕 서거 — Haakon 8세 즉위 관련 문서 2개의 실측 신호를 매일 스냅샷으로 재구성했다.',
-  'demo-manual-2026-09-17'
+SELECT id, '노르웨이 국왕 하랄 5세가 2026년 8월 28일 사망했다. 그의 아들인 호콘 마그누스가 호콘 8세로 즉위하여 노르웨이의 새로운 국왕이 되었다.',
+  'claude-sonnet-4-5-20250929'
 FROM issue_cluster WHERE issue_key = 'demo-haakon-succession-2026-08-28' ORDER BY snapshot_ts DESC LIMIT 1
 ON CONFLICT (cluster_id) DO NOTHING;
 
 INSERT INTO issue_report (cluster_id, summary, model)
-SELECT id, '2026-07-17~09-17 실제 위키백과 편집·조회 시계열 기반 리플레이 데모. '
-  || '2026 FIFA World Cup Final 관련 문서 6개의 실측 신호를 매일 스냅샷으로 재구성했다.',
-  'demo-manual-2026-09-17'
+SELECT id, '2026 FIFA 월드컵 결승전이 7월 19일 미국 뉴저지의 메트라이프 스타디움에서 열렸으며, 스페인과 아르헨티나가 맞붙었다. 스페인이 우승하여 2024 유럽선수권대회에 이어 2026 월드컵 챔피언이 되었다.',
+  'claude-sonnet-4-5-20250929'
 FROM issue_cluster WHERE issue_key = 'demo-fifa-2026-final' ORDER BY snapshot_ts DESC LIMIT 1
 ON CONFLICT (cluster_id) DO NOTHING;
 
 INSERT INTO issue_report (cluster_id, summary, model)
-SELECT id, '2026-07-17~09-17 실제 위키백과 편집·조회 시계열 기반 리플레이 데모. '
-  || 'Roblox 관련 문서 1개의 실측 신호를 매일 스냅샷으로 재구성했다.',
-  'demo-manual-2026-09-17'
+SELECT id, '온라인 게임 플랫폼 Roblox가 2025년 2월 기준 일평균 8,530만 명의 활성 사용자를 기록했다고 보고했다. 이 플랫폼은 미국 16세 이하 어린이의 절반이 매월 이용할 정도로 인기를 끌고 있다.',
+  'claude-sonnet-4-5-20250929'
 FROM issue_cluster WHERE issue_key = 'demo-roblox-2026-08-10' ORDER BY snapshot_ts DESC LIMIT 1
 ON CONFLICT (cluster_id) DO NOTHING;
 
 INSERT INTO issue_report (cluster_id, summary, model)
-SELECT id, '2026-07-17~09-17 실제 위키백과 편집·조회 시계열 기반 리플레이 데모. '
-  || 'Jansen Panettiere 관련 문서 1개의 실측 신호를 매일 스냅샷으로 재구성했다.',
-  'demo-manual-2026-09-17'
+SELECT id, '미국 배우 잰슨 패네티어가 2023년 2월 19일 사망했습니다. 그는 여러 영화 작품과 애니메이션 성우로 활동했으며, 28세의 나이로 세상을 떠났습니다.',
+  'claude-sonnet-4-5-20250929'
 FROM issue_cluster WHERE issue_key = 'demo-jansen-panettiere' ORDER BY snapshot_ts DESC LIMIT 1
 ON CONFLICT (cluster_id) DO NOTHING;
 
 INSERT INTO issue_report (cluster_id, summary, model)
-SELECT id, '2026-07-17~09-17 실제 위키백과 편집·조회 시계열 기반 리플레이 데모. '
-  || 'Peter Cullen 관련 문서 1개의 실측 신호를 매일 스냅샷으로 재구성했다.',
-  'demo-manual-2026-09-17'
+SELECT id, '트랜스포머의 옵티머스 프라임과 곰돌이 푸의 이요르 등을 맡은 캐나다계 미국인 성우 피터 컬렌이 2026년 8월 26일 사망했습니다. 그는 1980년대 오리지널 트랜스포머 애니메이션 시리즈부터 2007년 실사 영화까지 옵티머스 프라임 역을 맡았으며, 2023년 미국 텔레비전 예술과학 아카데미로부터 평생 공로상을 받았습니다.',
+  'claude-sonnet-4-5-20250929'
 FROM issue_cluster WHERE issue_key = 'demo-peter-cullen' ORDER BY snapshot_ts DESC LIMIT 1
 ON CONFLICT (cluster_id) DO NOTHING;
 
 INSERT INTO issue_report (cluster_id, summary, model)
-SELECT id, '2026-07-17~09-17 실제 위키백과 편집·조회 시계열 기반 리플레이 데모. '
-  || 'Pralhad Joshi 관련 문서 1개의 실측 신호를 매일 스냅샷으로 재구성했다.',
-  'demo-manual-2026-09-17'
+SELECT id, 'Pralhad Joshi가 2026년 7월 인도 교육부 장관직을 맡았으며, 기존에 맡고 있던 소비자·식품·공공배급부 장관과 신재생에너지부 장관직을 계속 유지하고 있다. 그는 2004년부터 Dharwad 선거구의 하원의원으로 활동해왔으며, 과거 의회부 장관으로서 370조 폐지, 시민권 수정 법안 등 주요 법안 통과에 중요한 역할을 했다.',
+  'claude-sonnet-4-5-20250929'
 FROM issue_cluster WHERE issue_key = 'demo-pralhad-joshi' ORDER BY snapshot_ts DESC LIMIT 1
 ON CONFLICT (cluster_id) DO NOTHING;
 
 INSERT INTO issue_report (cluster_id, summary, model)
-SELECT id, '2026-07-17~09-17 실제 위키백과 편집·조회 시계열 기반 리플레이 데모. '
-  || 'Sitee 관련 문서 1개의 실측 신호를 매일 스냅샷으로 재구성했다.',
-  'demo-manual-2026-09-17'
+SELECT id, '1993년 몰디브 드라마 영화 ''Sitee''에 대한 조회와 편집이 급증하고 있습니다. 이 영화는 Ahmed Nimal이 감독의 친구에게 실제 일어난 사건을 바탕으로 제작했으며, 5개 환초의 서로 다른 섬에서 촬영한 노래 장면이 포함되어 있습니다.',
+  'claude-sonnet-4-5-20250929'
 FROM issue_cluster WHERE issue_key = 'demo-sitee' ORDER BY snapshot_ts DESC LIMIT 1
 ON CONFLICT (cluster_id) DO NOTHING;
 
 INSERT INTO issue_report (cluster_id, summary, model)
-SELECT id, '2026-07-17~09-17 실제 위키백과 편집·조회 시계열 기반 리플레이 데모. '
-  || 'Joshua Kushner 관련 문서 1개의 실측 신호를 매일 스냅샷으로 재구성했다.',
-  'demo-manual-2026-09-17'
+SELECT id, 'Joshua Kushner가 Bob Iger와 함께 2026년 8월 로스앤젤레스 레이커스를 역대 최고가인 125억 달러에 인수했습니다. Kushner는 벤처캐피털 회사 Thrive Capital의 창립자이자 Oscar Health의 공동 창립자이며, Jared Kushner의 남동생입니다.',
+  'claude-sonnet-4-5-20250929'
 FROM issue_cluster WHERE issue_key = 'demo-joshua-kushner' ORDER BY snapshot_ts DESC LIMIT 1
 ON CONFLICT (cluster_id) DO NOTHING;
 
 INSERT INTO issue_report (cluster_id, summary, model)
-SELECT id, '2026-07-17~09-17 실제 위키백과 편집·조회 시계열 기반 리플레이 데모. '
-  || 'Kaylee Hottle 관련 문서 1개의 실측 신호를 매일 스냅샷으로 재구성했다.',
-  'demo-manual-2026-09-17'
+SELECT id, '2008년생 미국 농아 배우 카일리 호틀이 2026년 7월 21일 사망했다. 그녀는 ''고질라 vs. 콩''(2021)과 그 속편 ''고질라 x 콩: 뉴 엠파이어''(2024)에 출연했으며, 후자로 새턴상 젊은 배우상 부문 후보에 올랐다.',
+  'claude-sonnet-4-5-20250929'
 FROM issue_cluster WHERE issue_key = 'demo-kaylee-hottle' ORDER BY snapshot_ts DESC LIMIT 1
 ON CONFLICT (cluster_id) DO NOTHING;
 
 INSERT INTO issue_report (cluster_id, summary, model)
-SELECT id, '2026-07-17~09-17 실제 위키백과 편집·조회 시계열 기반 리플레이 데모. '
-  || 'Widow''s Bay 관련 문서 1개의 실측 신호를 매일 스냅샷으로 재구성했다.',
-  'demo-manual-2026-09-17'
+SELECT id, 'Apple TV+의 코미디 호러 시리즈 ''Widow''s Bay''가 2026년 4월 공개되어 비평적 호평을 받았다. 이 작품은 제78회 프라임타임 에미상에서 작품상을 포함해 기록적인 14개 부문을 수상했으며, 2026년 6월 시즌 2로 제작이 확정되었다.',
+  'claude-sonnet-4-5-20250929'
 FROM issue_cluster WHERE issue_key = 'demo-widows-bay' ORDER BY snapshot_ts DESC LIMIT 1
 ON CONFLICT (cluster_id) DO NOTHING;
 
 INSERT INTO issue_report (cluster_id, summary, model)
-SELECT id, '2026-07-17~09-17 실제 위키백과 편집·조회 시계열 기반 리플레이 데모. '
-  || 'Prichard Colón 관련 문서 1개의 실측 신호를 매일 스냅샷으로 재구성했다.',
-  'demo-manual-2026-09-17'
+SELECT id, '푸에르토리코 출신 프로 복서 프리차드 콜론이 2026년 8월 13일 사망했다. 그는 2015년 경기 중 반복적인 뒷머리 가격으로 뇌출혈을 일으켜 221일간 혼수상태에 빠진 후 식물인간 상태로 지내왔다.',
+  'claude-sonnet-4-5-20250929'
 FROM issue_cluster WHERE issue_key = 'demo-prichard-colon' ORDER BY snapshot_ts DESC LIMIT 1
 ON CONFLICT (cluster_id) DO NOTHING;
 
 INSERT INTO issue_report (cluster_id, summary, model)
-SELECT id, '2026-07-17~09-17 실제 위키백과 편집·조회 시계열 기반 리플레이 데모. '
-  || 'Bill Oddie 관련 문서 1개의 실측 신호를 매일 스냅샷으로 재구성했다.',
-  'demo-manual-2026-09-17'
+SELECT id, '영국의 코미디언이자 자연보호운동가, 야생동물 프로그램 진행자였던 Bill Oddie가 2026년 7월 25일 사망했습니다. 그는 영국 코미디 트리오 The Goodies의 멤버였으며, BBC의 Springwatch, Autumnwatch 등 다수의 야생동물 프로그램을 진행했습니다.',
+  'claude-sonnet-4-5-20250929'
 FROM issue_cluster WHERE issue_key = 'demo-bill-oddie' ORDER BY snapshot_ts DESC LIMIT 1
 ON CONFLICT (cluster_id) DO NOTHING;
 
 INSERT INTO issue_report (cluster_id, summary, model)
-SELECT id, '2026-07-17~09-17 실제 위키백과 편집·조회 시계열 기반 리플레이 데모. '
-  || 'David Jonsson 관련 문서 1개의 실측 신호를 매일 스냅샷으로 재구성했다.',
-  'demo-manual-2026-09-17'
+SELECT id, '영국 배우 David Jonsson에 대한 관심이 급증하고 있습니다. 그는 1993년생으로 웨스트엔드 연극과 BBC/HBO 시리즈 Industry, 그리고 Alien: Romulus 등의 영화에 출연했으며, 2022년부터 여러 매체에서 주목받는 인물로 선정되었습니다.',
+  'claude-sonnet-4-5-20250929'
 FROM issue_cluster WHERE issue_key = 'demo-david-jonsson' ORDER BY snapshot_ts DESC LIMIT 1
 ON CONFLICT (cluster_id) DO NOTHING;
 
 INSERT INTO issue_report (cluster_id, summary, model)
-SELECT id, '2026-07-17~09-17 실제 위키백과 편집·조회 시계열 기반 리플레이 데모. '
-  || 'John Tuggle 관련 문서 1개의 실측 신호를 매일 스냅샷으로 재구성했다.',
-  'demo-manual-2026-09-17'
+SELECT id, '1983년 NFL 드래프트에서 최종 픽으로 지명된 후 뉴욕 자이언츠에서 뛴 존 터글이 신인 시즌 후 암 진단을 받고 2년 후 사망했습니다.',
+  'claude-sonnet-4-5-20250929'
 FROM issue_cluster WHERE issue_key = 'demo-john-tuggle' ORDER BY snapshot_ts DESC LIMIT 1
 ON CONFLICT (cluster_id) DO NOTHING;
 
 INSERT INTO issue_report (cluster_id, summary, model)
-SELECT id, '2026-07-17~09-17 실제 위키백과 편집·조회 시계열 기반 리플레이 데모. '
-  || 'Franco Baresi 관련 문서 1개의 실측 신호를 매일 스냅샷으로 재구성했다.',
-  'demo-manual-2026-09-17'
+SELECT id, '이탈리아의 전설적인 축구 선수이자 AC 밀란의 주장을 15시즌 동안 역임했던 프랑코 바레시가 2026년 7월 31일 사망했습니다. 그는 역대 최고의 수비수 중 한 명으로 평가받으며, 1982년 FIFA 월드컵 우승을 포함해 AC 밀란에서 다수의 유럽컵과 세리에A 타이틀을 획득했습니다.',
+  'claude-sonnet-4-5-20250929'
 FROM issue_cluster WHERE issue_key = 'demo-franco-baresi' ORDER BY snapshot_ts DESC LIMIT 1
 ON CONFLICT (cluster_id) DO NOTHING;
 
 INSERT INTO issue_report (cluster_id, summary, model)
-SELECT id, '2026-07-17~09-17 실제 위키백과 편집·조회 시계열 기반 리플레이 데모. '
-  || 'Marie-France van Heel 관련 문서 1개의 실측 신호를 매일 스냅샷으로 재구성했다.',
-  'demo-manual-2026-09-17'
+SELECT id, '영국 노동당의 앤디 번햄이 총리로 재직 중이며, 그의 배우자인 마리-프랑스 반 힐은 1970년생 마케팅 임원이다. 이에 따라 영국 총리의 배우자로서 관심이 집중되고 있는 것으로 보인다.',
+  'claude-sonnet-4-5-20250929'
 FROM issue_cluster WHERE issue_key = 'demo-marie-france-van-heel' ORDER BY snapshot_ts DESC LIMIT 1
 ON CONFLICT (cluster_id) DO NOTHING;
 
 INSERT INTO issue_report (cluster_id, summary, model)
-SELECT id, '2026-07-17~09-17 실제 위키백과 편집·조회 시계열 기반 리플레이 데모. '
-  || 'Michael Polansky 관련 문서 1개의 실측 신호를 매일 스냅샷으로 재구성했다.',
-  'demo-manual-2026-09-17'
+SELECT id, '미국의 기업가이자 벤처 캐피탈리스트인 마이클 폴란스키(1983년생)가 레이디 가가와 약혼했으며, 그녀와 함께 여러 곡을 공동 작곡했다는 사실이 주목받고 있다.',
+  'claude-sonnet-4-5-20250929'
 FROM issue_cluster WHERE issue_key = 'demo-michael-polansky' ORDER BY snapshot_ts DESC LIMIT 1
 ON CONFLICT (cluster_id) DO NOTHING;
 
