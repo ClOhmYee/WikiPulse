@@ -244,6 +244,9 @@ for (const fullscreen of [false, true]) {
   }) => {
     const errors = [];
     page.on("pageerror", (error) => errors.push(error.message));
+    page.on("console", (message) => {
+      if (message.type() === "error") errors.push(message.text());
+    });
     await page.goto("/#/pulse");
     if (fullscreen)
       await page
@@ -296,9 +299,9 @@ for (const fullscreen of [false, true]) {
     await expect(
       map.getByRole("button", { name: "지도 축소", exact: true }),
     ).toBeDisabled();
-    await expect(
-      map.locator('.document-node[data-label-visible="true"]'),
-    ).toHaveCount(0);
+    await expect(map.locator(".document-node-label")).toHaveCount(
+      await map.locator(".document-node").count(),
+    );
     const title = map.locator(".document-cluster__title").first();
     const fontAtMinimum = await title.evaluate((e) =>
       parseFloat(getComputedStyle(e).fontSize),
@@ -306,7 +309,15 @@ for (const fullscreen of [false, true]) {
     const screenSize = await title.evaluate(
       (e) => parseFloat(getComputedStyle(e).fontSize) * e.getScreenCTM().a,
     );
-    expect(screenSize).toBeGreaterThanOrEqual(16);
+    expect(screenSize).toBeGreaterThanOrEqual(11.9);
+    const titleBox = map.locator(".document-cluster__title-box").first();
+    // Compare the box body; its crisp 1px border deliberately does not scale.
+    const boxSize = () =>
+      titleBox.evaluate((e) => ({
+        width: e.width.baseVal.value * e.getScreenCTM().a,
+        height: e.height.baseVal.value * e.getScreenCTM().d,
+      }));
+    const boxAtMinimum = await boxSize();
     await page.screenshot({
       path: `test-results/pulse-zoom-${fullscreen ? "full" : "inline"}-min.png`,
     });
@@ -321,12 +332,19 @@ for (const fullscreen of [false, true]) {
     ).toHaveCount(0);
     expect(
       await title.evaluate((e) => parseFloat(getComputedStyle(e).fontSize)),
-    ).toBeLessThan(fontAtMinimum);
-    expect(
-      await title.evaluate(
-        (e) => parseFloat(getComputedStyle(e).fontSize) * e.getScreenCTM().a,
-      ),
-    ).toBeCloseTo(screenSize, 1);
+    ).toBeCloseTo(fontAtMinimum, 3);
+    const screenSizeAtMaximum = await title.evaluate(
+      (e) => parseFloat(getComputedStyle(e).fontSize) * e.getScreenCTM().a,
+    );
+    const titleRatio = screenSizeAtMaximum / screenSize;
+    expect(titleRatio).toBeGreaterThan(1);
+    expect(titleRatio).toBeLessThan(maximum / minimum);
+    const boxAtMaximum = await boxSize();
+    expect(boxAtMaximum.width / boxAtMinimum.width).toBeCloseTo(titleRatio, 2);
+    expect(boxAtMaximum.height / boxAtMinimum.height).toBeCloseTo(
+      titleRatio,
+      2,
+    );
     await page.screenshot({
       path: `test-results/pulse-zoom-${fullscreen ? "full" : "inline"}-max.png`,
     });

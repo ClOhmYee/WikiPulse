@@ -21,6 +21,15 @@ export default function useMapCamera(svgRef) {
   const current = useRef(camera);
   const target = useRef(camera);
   const frame = useRef(null);
+  const listeners = useRef(new Set());
+  const subscribe = useCallback((listener) => {
+    listeners.current.add(listener);
+    return () => listeners.current.delete(listener);
+  }, []);
+  const paint = useCallback((next) => {
+    current.current = next;
+    for (const listener of listeners.current) listener(next);
+  }, []);
 
   const stop = useCallback(() => {
     cancelAnimationFrame(frame.current);
@@ -29,12 +38,16 @@ export default function useMapCamera(svgRef) {
     return current.current;
   }, []);
 
-  const move = useCallback((next) => {
-    cancelAnimationFrame(frame.current);
-    frame.current = null;
-    current.current = target.current = next;
-    setCamera(next);
-  }, []);
+  const move = useCallback(
+    (next, settled = true) => {
+      cancelAnimationFrame(frame.current);
+      frame.current = null;
+      target.current = next;
+      paint(next);
+      if (settled) setCamera(next);
+    },
+    [paint],
+  );
 
   const zoomBy = useCallback(
     (factor, anchor) => {
@@ -51,9 +64,12 @@ export default function useMapCamera(svgRef) {
         return;
       }
       if (frame.current !== null) return;
-      let previous = performance.now();
+      let previous = null;
       const tick = (now) => {
-        const amount = 1 - Math.exp(-(now - previous) / 65);
+        // Start on the RAF clock: its first timestamp may precede the input
+        // handler's performance.now(), which would extrapolate past the zoom.
+        const elapsed = previous === null ? 0 : Math.max(0, now - previous);
+        const amount = 1 - Math.exp(-elapsed / 65);
         previous = now;
         const from = current.current,
           to = target.current;
@@ -67,13 +83,14 @@ export default function useMapCamera(svgRef) {
               x: from.x + (to.x - from.x) * amount,
               y: from.y + (to.y - from.y) * amount,
             };
-        current.current = next;
-        setCamera(next);
+        paint(next);
+        // React owns the settled view; animation only updates the camera layer.
+        if (settled) setCamera(next);
         frame.current = settled ? null : requestAnimationFrame(tick);
       };
       frame.current = requestAnimationFrame(tick);
     },
-    [move],
+    [move, paint],
   );
 
   useEffect(() => {
@@ -81,8 +98,6 @@ export default function useMapCamera(svgRef) {
     const wheel = (event) => {
       if (!event.deltaY) return;
       event.preventDefault();
-      const matrix = svg.getScreenCTM();
-      if (!matrix) return;
       const anchor = mapPoint(svg, event.clientX, event.clientY);
       const unit =
         event.deltaMode === 1
@@ -100,5 +115,5 @@ export default function useMapCamera(svgRef) {
     };
   }, [svgRef, zoomBy, stop]);
 
-  return { camera, move, stop, zoomBy };
+  return { camera, current, subscribe, move, stop, zoomBy };
 }

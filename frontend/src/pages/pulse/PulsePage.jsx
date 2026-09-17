@@ -28,6 +28,7 @@ export default function PulsePage({ savedEvents, onToggleEvent, onSource }) {
   const [notice, setNotice] = useState("");
   const [query, setQuery] = useState("");
   const [expanded, setExpanded] = useState(false);
+  const [scanEnabled, setScanEnabled] = useState(true);
   const returnScroll = useRef(null);
   const cameraState = useRef(null);
   const [category, setCategory] = useState("all");
@@ -289,6 +290,8 @@ export default function PulsePage({ savedEvents, onToggleEvent, onSource }) {
                       cameraState={cameraState}
                       expanded={expanded}
                       onToggleExpanded={toggleExpanded}
+                      scanEnabled={scanEnabled}
+                      onToggleScan={() => setScanEnabled((value) => !value)}
                       selectedKey={visibleSelected?.issueKey}
                       nodeId={nodeId}
                       meta={map.data.meta}

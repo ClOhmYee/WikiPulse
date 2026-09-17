@@ -98,9 +98,44 @@ test("pulse uses the graph contract without downloading catalogue fixtures", asy
   });
   const calls = await serve(page);
   await page.goto("/#/pulse");
+  const latest = pulseMaps.at(-1);
+  const clusters = latest.data.clusters;
+  await expect(page.locator(".document-cluster")).toHaveCount(clusters.length);
   await expect(page.locator(".document-node")).toHaveCount(
-    pulseMaps.at(-1).data.clusters.reduce((sum, c) => sum + c.nodes.length, 0),
+    clusters.reduce((sum, c) => sum + c.nodes.length, 0),
   );
+  await expect(page.locator("[data-edge-id]")).toHaveCount(
+    clusters.reduce((sum, c) => sum + c.edges.length, 0),
+  );
+  expect(
+    await page
+      .locator(".document-cluster")
+      .evaluateAll((elements) =>
+        elements.map((element) => element.dataset.issueKey).sort(),
+      ),
+  ).toEqual(clusters.map((cluster) => cluster.issueKey).sort());
+  const newKeys = clusters
+    .filter((cluster) =>
+      isNewIssue(
+        cluster.firstDetectedAt,
+        latest.meta.snapshotTs,
+        latest.meta.newWindowHours,
+      ),
+    )
+    .map((cluster) => cluster.issueKey)
+    .sort();
+  expect(newKeys.length).toBeGreaterThan(0);
+  expect(newKeys.length).toBeLessThan(clusters.length);
+  expect(
+    await page
+      .locator(".document-cluster__badge")
+      .evaluateAll((badges) =>
+        badges
+          .map((badge) => badge.closest(".document-cluster").dataset.issueKey)
+          .sort(),
+      ),
+  ).toEqual(newKeys);
+  await expect(page.locator(".pulse-cluster-list")).not.toContainText("HOT");
   await expect(
     page.getByRole("button", { name: "API 데이터", exact: true }),
   ).toBeVisible();
@@ -114,9 +149,17 @@ test("nullable graph labels and issue keys keep numeric detail navigation", asyn
   page,
 }) => {
   const body = structuredClone(pulseMaps.at(-1));
-  const cluster = body.data.clusters.find((c) =>
-    isNewIssue(c.firstDetectedAt, body.meta.snapshotTs),
+  const cluster = body.data.clusters.find(
+    (c) => c.issueKey === "ai-chip-controls",
   );
+  // Nullable fallback and detail navigation must also work for non-NEW issues.
+  expect(
+    isNewIssue(
+      cluster.firstDetectedAt,
+      body.meta.snapshotTs,
+      body.meta.newWindowHours,
+    ),
+  ).toBe(false);
   cluster.label = null;
   cluster.issueKey = null;
   const detail = (await mockClient.getIssue(cluster.id)).data;
@@ -177,7 +220,14 @@ test("rapid time changes discard a slower response and preserve graph/panel time
   await expect(page.locator(".document-node")).toHaveCount(
     pulseMaps.at(-1).data.clusters.reduce((sum, c) => sum + c.nodes.length, 0),
   );
-  await page.locator(".pulse-cluster-list button").first().click();
+  const target = pulseMaps
+    .at(-1)
+    .data.clusters.find((cluster) => cluster.issueKey === "winter-olympics");
+  await page
+    .locator(".pulse-cluster-list button")
+    .filter({ hasText: target.label })
+    .click();
+  await expect(page.locator(".pulse-preview h2")).toHaveText(target.label);
   await page.getByRole("button", { name: "이전 시점" }).click();
   await started;
   await expect(page.locator(".pulse-loading")).toBeVisible();
@@ -192,6 +242,7 @@ test("rapid time changes discard a slower response and preserve graph/panel time
     "data-snapshot",
     pulseMaps.at(-1).meta.snapshotTs,
   );
+  await expect(page.locator(".pulse-preview h2")).toHaveText(target.label);
   await expect(page.locator(".pulse-timeline")).toContainText(
     kstTimestamp(pulseMaps.at(-1).meta.snapshotTs),
   );
@@ -245,8 +296,14 @@ test("500 nodes and 1000 edges remain interactive in the browser", async ({
   await expect(page.locator(".document-node")).toHaveCount(500);
   await expect(page.locator("[data-edge-id]")).toHaveCount(1000);
   const started = Date.now();
-  await page.locator(".pulse-cluster-list button").nth(10).click();
-  await page.locator(".pulse-preview .pulse-document").nth(10).click();
+  await page
+    .locator(".pulse-cluster-list button")
+    .filter({ hasText: "성능 검증 이슈 11" })
+    .click();
+  await page
+    .locator(".pulse-preview .pulse-document")
+    .filter({ hasText: "검증 문서 11-11" })
+    .click();
   await expect(
     page.locator('.document-node[data-selected="true"]'),
   ).toHaveCount(1);
