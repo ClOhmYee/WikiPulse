@@ -65,8 +65,8 @@
 
 - **근거:** `/stocks/{ticker}/issues`는 `IssueCardResponse` 배열이며 문서 제안의 `tier/matchPath/rationale`를 제공하지 않는다. `StockService.TICKER_ISSUE_LIMIT=50`이며 pagination meta가 없다. `/issues/{id}/stocks`는 limit 기본 50, 최대 100이고 offset·total·hasMore가 없다. 상세 `relatedStocks`는 상위 5개다.
 - **현재 FE 처리:** 역방향 목록에서는 제공되는 이슈 카드만 표시한다. 상세의 5개 preview를 전체 목록으로 간주하지 않는다. 관련 종목은 지원 한도 내에서 요청하며 응답 개수를 전체 개수라고 단정하지 않는다. 정상 페이지네이션은 `/issues`와 `/stocks`의 `meta.pagination`을 따른다.
-- **협의 질문:** 역방향에도 관계 메타를 제공할 것인가? 관련 목록 두 개도 offset/cursor와 total/hasMore를 제공할 것인가? 전체 상한 N은 무엇인가?
-- **후속 작업:** **WP-22**의 노출 상한과 함께 확정하고 preview/전체/더 보기 UI를 맞춘다.
+- **확정:** 제품 정책상 검증 통과 종목의 전체 노출 상한은 두지 않는다(WP-22). 현재 API의 50/100 제한은 전송 응답 크기 보호용이며 제품 노출 상한이 아니다.
+- **남은 질문:** 역방향에도 관계 메타를 제공할 것인가? 관련 목록 두 개에 offset/cursor와 total/hasMore를 제공할 것인가?
 
 ### 9. 실제 서비스 검증과 실패 응답
 
