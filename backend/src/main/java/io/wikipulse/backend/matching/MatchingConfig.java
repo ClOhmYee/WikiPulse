@@ -15,10 +15,21 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 @EnableConfigurationProperties(CandidateProperties.class)
 public class MatchingConfig {
 
-    /** 폴러가 켜질 때만 @Scheduled 가 동작하도록 스케줄링을 조건부로 켠다. */
+    /** 후보 생성 폴러가 켜질 때만 @Scheduled 가 동작하도록 스케줄링을 조건부로 켠다. */
     @Configuration
     @EnableScheduling
     @ConditionalOnProperty(prefix = "wikipulse.matching.scheduler", name = "enabled", havingValue = "true")
     static class SchedulingConfig {
+    }
+
+    /**
+     * LLM 검증 폴러(-68)가 켜질 때도 스케줄링을 켠다 — 후보 생성 폴러와 독립으로 켤 수 있어야
+     * 한다(검증만 돌리는 서버 구성). @EnableScheduling 은 후처리기를 싱글턴으로 등록하므로
+     * 두 조건부 설정이 동시에 켜져도 중복 없이 한 번만 활성화된다.
+     */
+    @Configuration
+    @EnableScheduling
+    @ConditionalOnProperty(prefix = "wikipulse.matching.verification", name = "enabled", havingValue = "true")
+    static class VerificationSchedulingConfig {
     }
 }
