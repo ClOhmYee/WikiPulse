@@ -133,6 +133,10 @@ services:
     image: apache/spark:3.5.3-python3
     container_name: wikipulse-spark
     profiles: ["pipeline"]
+    # named volume(spark-checkpoint)는 root:root로 생성되는데 이미지 기본 사용자는
+    # UID 185(spark)라 체크포인트 쓰기가 Permission denied로 죽는다(2026-09-17 실측,
+    # 로컬 --profile pipeline 최초 실행). 개발 전용 compose라 root로 우회한다.
+    user: root
     depends_on:
       kafka:
         condition: service_healthy

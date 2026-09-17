@@ -40,13 +40,13 @@ COMMENT ON COLUMN cluster_stock.issue_key IS
 
 COMMENT ON COLUMN cluster_stock.prompt_version IS
     'LLM 검증에 쓴 프롬프트 버전(ai/llm-verify-poc/prompts/verify_system_v1.txt 의 '
-    "'v1' 같은 값). 재사용 조회는 issue_key+ticker+prompt_version 이 모두 같을 때만 "
+    '''v1'' 같은 값). 재사용 조회는 issue_key+ticker+prompt_version 이 모두 같을 때만 '
     '캐시를 쓴다 — 프롬프트를 올리면 이전 판정은 재사용 대상이 아니다(-49).';
 
 COMMENT ON COLUMN cluster_stock.check_state IS
-    "PENDING(아직 시도 안 함) / DONE(판정 완료 — verified 가 true/false 둘 다 유효한 "
-    "결과) / FAILED(3회 재시도 후 파킹, verified 는 의미 없음). "
-    "verified 단독으로는 '아직 안 됨'과 '검증 실패'가 안 갈려서 분리했다(-50).";
+    'PENDING(아직 시도 안 함) / DONE(판정 완료 — verified 가 true/false 둘 다 유효한 '
+    '결과) / FAILED(3회 재시도 후 파킹, verified 는 의미 없음). '
+    'verified 단독으로는 ''아직 안 됨''과 ''검증 실패''가 안 갈려서 분리했다(-50).';
 
 COMMENT ON COLUMN cluster_stock.attempt_count IS
     'GATEWAY 까지 실제로 도달했지만 스키마를 못 지켜 폐기된 시도 횟수(-45 재시도 규칙과는 '
