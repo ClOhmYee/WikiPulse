@@ -1,6 +1,7 @@
 package io.wikipulse.backend.matching;
 
 import java.util.List;
+import java.util.Optional;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Repository;
@@ -28,6 +29,13 @@ public class VerificationRepository {
 
     /** 후보 종목의 프롬프트 입력. business_summary 가 NULL 이면 빈 문자열. */
     public record CandidateInfo(String name, String summary) {
+    }
+
+    /**
+     * 재사용할 이전 판정 (WP-69). cluster_stock 에 저장된 판정 컬럼만 담는다 —
+     * rationale 은 화면용 rationale_ko 다(rationale_en·issue_class 는 저장 안 돼 재사용 불가·불필요).
+     */
+    public record Verdict(boolean verified, String matchPath, String confidence, String rationale) {
     }
 
     /**
@@ -132,6 +140,75 @@ public class VerificationRepository {
                 .addValue("matchPath", resp.matchPath())
                 .addValue("confidence", resp.confidence())
                 .addValue("rationaleKo", resp.rationaleKo())
+                .addValue("issueKey", issueKey)
+                .addValue("promptVersion", promptVersion));
+    }
+
+    /**
+     * 이전 판정 재사용 조회 (WP-69). 같은 (issue_key, ticker, prompt_version) 로 이미 DONE 인
+     * 판정이 있으면 그걸 돌려준다 — LLM 을 다시 부르지 않고 복사해 쓴다(크레딧·지연 절약).
+     *
+     * <p>🔴 재사용 키는 cluster_id 가 아니다 — 진행 중인 이슈가 재감지될 때마다 새 cluster_id 가
+     * 생겨 매번 캐시 미스한다(V6 마이그레이션 주석). issue_key 로 스냅샷을 가로질러 찾는다.
+     * V6 부분 인덱스 {@code (issue_key, ticker, prompt_version) WHERE check_state='DONE'} 를 탄다.
+     *
+     * <p>여러 스냅샷에 DONE 이 걸쳐 있으면 verified_at 최신 1행. 🔴 현재 처리 중인 cluster_id 행
+     * 자신은 세지 않는다({@code cluster_id <> :cid}) — PK 가 (cluster_id, ticker) 라 자기 행은
+     * 하나뿐이고 지금 PENDING 이라 check_state='DONE' 필터로 이미 빠지지만, 의도를 명시한다.
+     *
+     * @return 재사용할 판정, 없으면 {@link java.util.Optional#empty()}
+     */
+    public Optional<Verdict> findPriorVerdict(
+            long clusterId, String issueKey, String ticker, String promptVersion) {
+        List<Verdict> rows = jdbc.query("""
+                SELECT verified, match_path, confidence, rationale
+                  FROM cluster_stock
+                 WHERE issue_key = :issueKey AND ticker = :ticker
+                   AND prompt_version = :promptVersion
+                   AND check_state = 'DONE'
+                   AND cluster_id <> :cid
+                 ORDER BY verified_at DESC NULLS LAST
+                 LIMIT 1
+                """, new MapSqlParameterSource()
+                .addValue("cid", clusterId)
+                .addValue("issueKey", issueKey)
+                .addValue("ticker", ticker)
+                .addValue("promptVersion", promptVersion),
+                (rs, n) -> new Verdict(
+                        rs.getBoolean("verified"),
+                        rs.getString("match_path"),
+                        rs.getString("confidence"),
+                        rs.getString("rationale")));
+        return rows.isEmpty() ? Optional.empty() : Optional.of(rows.get(0));
+    }
+
+    /**
+     * 재사용 판정 기록 (WP-69). {@link #recordDone} 과 같은 컬럼을 이전 판정({@link Verdict})
+     * 값으로 채운다 — LLM 응답 없이. 이 (cluster_id, ticker) 행이 DONE+verified 로 남아
+     * {@link #verifiedPassCountTier12} 에도 자연히 잡힌다.
+     * rationale 컬럼엔 저장돼 있던 rationale_ko 를 그대로 넣는다.
+     */
+    public void recordReused(
+            long clusterId, String ticker, Verdict verdict,
+            String issueKey, String promptVersion) {
+        jdbc.update("""
+                UPDATE cluster_stock
+                   SET check_state    = 'DONE',
+                       verified       = :verified,
+                       match_path     = :matchPath,
+                       confidence     = :confidence,
+                       rationale      = :rationale,
+                       verified_at    = now(),
+                       issue_key      = :issueKey,
+                       prompt_version = :promptVersion
+                 WHERE cluster_id = :cid AND ticker = :ticker
+                """, new MapSqlParameterSource()
+                .addValue("cid", clusterId)
+                .addValue("ticker", ticker)
+                .addValue("verified", verdict.verified())
+                .addValue("matchPath", verdict.matchPath())
+                .addValue("confidence", verdict.confidence())
+                .addValue("rationale", verdict.rationale())
                 .addValue("issueKey", issueKey)
                 .addValue("promptVersion", promptVersion));
     }

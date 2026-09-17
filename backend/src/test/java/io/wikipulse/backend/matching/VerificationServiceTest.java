@@ -13,6 +13,7 @@ import static org.mockito.Mockito.when;
 
 import io.wikipulse.backend.matching.VerificationRepository.CandidateInfo;
 import io.wikipulse.backend.matching.VerificationRepository.PendingCandidate;
+import io.wikipulse.backend.matching.VerificationRepository.Verdict;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
@@ -64,6 +65,9 @@ class VerificationServiceTest {
                 .thenReturn(List.of("NextEra Energy", "Duke Energy"));
         lenient().when(repository.issueKeyOf(anyLong())).thenReturn("milton-2024-10");
         lenient().when(repository.candidateInfo(any())).thenReturn(new CandidateInfo("Some Name", "biz"));
+        // 기본은 캐시 미스 — 대부분의 테스트는 재사용 없이 LLM 판정 경로를 본다(-69).
+        lenient().when(repository.findPriorVerdict(anyLong(), any(), any(), any()))
+                .thenReturn(Optional.empty());
     }
 
     @Test
@@ -176,5 +180,98 @@ class VerificationServiceTest {
         verify(verifier).verify(inputCaptor.capture());
         assertThat(inputCaptor.getValue().gdeltContext()).isEqualTo("NextEra Energy, Duke Energy");
         assertThat(inputCaptor.getValue().issueText()).isEqualTo("issue text");
+    }
+
+    // ── 판정 재사용 캐시 (WP-69) ──────────────────────────────────────
+
+    @Test
+    void 캐시_히트면_LLM을_안_부르고_판정을_복사한다() {
+        when(repository.pendingCandidates(10L))
+                .thenReturn(List.of(new PendingCandidate("NEE", CandidateTier.BOTH)));
+        Verdict prior = new Verdict(true, "REGION", "strong", "복사된 한국어 근거");
+        when(repository.findPriorVerdict(10L, "milton-2024-10", "NEE", "v1"))
+                .thenReturn(Optional.of(prior));
+
+        VerificationService.Result r = service().verifyCluster(10L);
+
+        // LLM 은 안 부른다 — 크레딧 0.
+        verify(verifier, never()).verify(any());
+        // 판정을 그대로 복사해 재사용 키와 함께 기록한다.
+        verify(repository).recordReused(10L, "NEE", prior, "milton-2024-10", "v1");
+        verify(repository, never()).recordDone(anyLong(), any(), any(), any(), any());
+        // reused 는 별도 버킷 — verified/rejected 에는 안 잡힌다.
+        assertThat(r.reused()).isEqualTo(1);
+        assertThat(r.verified()).isZero();
+        assertThat(r.rejected()).isZero();
+    }
+
+    @Test
+    void 캐시_미스면_verify를_부른다() {
+        when(repository.pendingCandidates(11L))
+                .thenReturn(List.of(new PendingCandidate("NEE", CandidateTier.BOTH)));
+        // commonStubs 의 기본 미스(Optional.empty) 사용.
+        when(verifier.verify(any())).thenReturn(Optional.of(pass()));
+
+        VerificationService.Result r = service().verifyCluster(11L);
+
+        // 현재 prompt_version 으로 캐시를 조회한 뒤, 미스라 LLM 을 부른다.
+        verify(repository).findPriorVerdict(11L, "milton-2024-10", "NEE", "v1");
+        verify(verifier).verify(any());
+        verify(repository, never()).recordReused(anyLong(), any(), any(), any(), any());
+        assertThat(r.reused()).isZero();
+        assertThat(r.verified()).isEqualTo(1);
+    }
+
+    @Test
+    void prompt_version은_캐시_조회_키에_들어간다() {
+        // prompt_version 이 다른 이전 판정은 현재 버전 조회에서 미스가 된다(-49): 서비스는 항상
+        // 현재 PROMPT_VERSION 으로만 조회하므로, 조회 인자에 "v1" 이 들어가는지로 이 규칙을 본다.
+        when(repository.pendingCandidates(12L))
+                .thenReturn(List.of(new PendingCandidate("NEE", CandidateTier.BOTH)));
+        when(verifier.verify(any())).thenReturn(Optional.of(pass()));
+
+        service().verifyCluster(12L);
+
+        verify(repository).findPriorVerdict(eq(12L), eq("milton-2024-10"), eq("NEE"), eq("v1"));
+    }
+
+    @Test
+    void issue_key가_null이면_캐시를_안_쓰고_verify를_부른다() {
+        when(repository.issueKeyOf(13L)).thenReturn(null); // V2 옛 클러스터.
+        when(repository.pendingCandidates(13L))
+                .thenReturn(List.of(new PendingCandidate("NEE", CandidateTier.BOTH)));
+        when(verifier.verify(any())).thenReturn(Optional.of(pass()));
+
+        VerificationService.Result r = service().verifyCluster(13L);
+
+        // issue_key 가 없으면 조회 자체를 안 한다 — 캐시를 못 쓴다.
+        verify(repository, never()).findPriorVerdict(anyLong(), any(), any(), any());
+        verify(verifier).verify(any());
+        assertThat(r.reused()).isZero();
+    }
+
+    @Test
+    void 재사용된_verified행은_tier3_게이트_카운트에_반영된다() {
+        // BOTH 후보는 캐시 히트로 재사용되어 DB 에 DONE+verified 로 남는다. 그 결과 tier1·2 확정
+        // 통과 수가 임계값에 도달하면(DB 조회 verifiedPassCountTier12), EMBEDDING_ONLY 는 건너뛴다.
+        when(repository.pendingCandidates(14L)).thenReturn(List.of(
+                new PendingCandidate("A", CandidateTier.BOTH),
+                new PendingCandidate("B", CandidateTier.GDELT_ONLY),
+                new PendingCandidate("C", CandidateTier.EMBEDDING_ONLY)));
+        Verdict pass = new Verdict(true, "REGION", "strong", "근거");
+        when(repository.findPriorVerdict(eq(14L), eq("milton-2024-10"), eq("A"), eq("v1")))
+                .thenReturn(Optional.of(pass));
+        when(repository.findPriorVerdict(eq(14L), eq("milton-2024-10"), eq("B"), eq("v1")))
+                .thenReturn(Optional.of(pass));
+        // 재사용된 두 verified 행이 DONE 으로 남아 DB 카운트가 임계값(2)에 도달한 상태.
+        when(repository.verifiedPassCountTier12(14L)).thenReturn(2);
+
+        VerificationService.Result r = service().verifyCluster(14L);
+
+        assertThat(r.reused()).isEqualTo(2);
+        assertThat(r.tier3Skipped()).isEqualTo(1);
+        // C(EMBEDDING_ONLY)는 캐시 미스(commonStubs 기본)지만 게이트에서 걸려 LLM·기록 안 한다.
+        verify(verifier, never()).verify(any());
+        verify(repository, never()).recordReused(anyLong(), eq("C"), any(), any(), any());
     }
 }

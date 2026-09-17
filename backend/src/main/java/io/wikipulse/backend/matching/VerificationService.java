@@ -49,8 +49,15 @@ public class VerificationService {
         this.props = props;
     }
 
-    /** 검증 결과 요약. 로그·측정용. */
-    public record Result(long clusterId, int verified, int rejected, int schemaFailed, int tier3Skipped) {
+    /**
+     * 검증 결과 요약. 로그·측정용.
+     *
+     * <p>{@code reused} 는 LLM 을 부르지 않고 이전 판정을 복사한 후보 수(WP-69) — verified/
+     * rejected 와 별개 버킷이다. verified/rejected 는 "이번 실행에서 LLM 이 새로 내린 판정" 의미를
+     * 유지한다. 재사용률 = reused / (verified + rejected + schemaFailed + reused).
+     */
+    public record Result(
+            long clusterId, int verified, int rejected, int schemaFailed, int tier3Skipped, int reused) {
     }
 
     /**
@@ -61,7 +68,7 @@ public class VerificationService {
     public Result verifyCluster(long clusterId) {
         List<VerificationRepository.PendingCandidate> pending = repository.pendingCandidates(clusterId);
         if (pending.isEmpty()) {
-            return new Result(clusterId, 0, 0, 0, 0);
+            return new Result(clusterId, 0, 0, 0, 0, 0);
         }
 
         // 클러스터 단위 입력은 한 번만 만든다 — 후보마다 같은 이슈 텍스트·GDELT 컨텍스트를 공유한다.
@@ -74,8 +81,26 @@ public class VerificationService {
         int rejected = 0;
         int schemaFailed = 0;
         int tier3Skipped = 0;
+        int reused = 0;
 
         for (VerificationRepository.PendingCandidate c : pending) {
+            // 재사용 캐시 (WP-69): 같은 (issue_key, ticker, prompt_version) 로 이미 DONE 인
+            // 판정이 있으면 LLM 을 부르지 않고 그대로 복사한다. 🔴 tier3 게이트보다 앞이다 — 재사용은
+            // LLM 0 이라 EMBEDDING_ONLY 라도 히트면 적용하는 게 결과가 완전해진다(게이트는 실 LLM
+            // 호출만 막는다). issue_key 가 없는(V2 옛) 클러스터는 캐시를 못 써 아래로 내려간다.
+            if (issueKey != null) {
+                Optional<VerificationRepository.Verdict> prior =
+                        repository.findPriorVerdict(clusterId, issueKey, c.ticker(), LlmVerifier.PROMPT_VERSION);
+                if (prior.isPresent()) {
+                    repository.recordReused(
+                            clusterId, c.ticker(), prior.get(), issueKey, LlmVerifier.PROMPT_VERSION);
+                    reused++;
+                    log.debug("판정 재사용 cluster={} ticker={} verified={}",
+                            clusterId, c.ticker(), prior.get().verified());
+                    continue; // LLM 0. 재사용된 verified 행은 DB 에 DONE 으로 남아 게이트 카운트에 잡힌다.
+                }
+            }
+
             // 3등급 게이트: EMBEDDING_ONLY 는 1·2등급 확정 통과가 N 미만일 때만.
             if (c.tier() == CandidateTier.EMBEDDING_ONLY
                     && repository.verifiedPassCountTier12(clusterId)
@@ -107,9 +132,9 @@ public class VerificationService {
             }
         }
 
-        Result summary = new Result(clusterId, verified, rejected, schemaFailed, tier3Skipped);
-        log.info("검증 cluster={} 통과={} 탈락={} 스키마실패={} 3등급스킵={}",
-                clusterId, verified, rejected, schemaFailed, tier3Skipped);
+        Result summary = new Result(clusterId, verified, rejected, schemaFailed, tier3Skipped, reused);
+        log.info("검증 cluster={} 통과={} 탈락={} 스키마실패={} 3등급스킵={} 재사용={}",
+                clusterId, verified, rejected, schemaFailed, tier3Skipped, reused);
         return summary;
     }
 }

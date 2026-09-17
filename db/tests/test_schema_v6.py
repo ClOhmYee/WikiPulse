@@ -246,6 +246,95 @@ def test_recordDone_탈락은_경로_필드를_null로_두고_DONE으로_전이�
     assert row == ("DONE", False, None, None, None, "iran-2026", "v1")
 
 
+# VerificationRepository.findPriorVerdict 와 동일 SQL — 재사용 캐시 조회(-69).
+# %s 순서: issue_key, ticker, prompt_version, cluster_id(<>). 부분 인덱스
+# (issue_key, ticker, prompt_version) WHERE check_state='DONE' 를 탄다.
+_FIND_PRIOR_VERDICT = (
+    "SELECT verified, match_path, confidence, rationale "
+    "  FROM cluster_stock "
+    " WHERE issue_key = %s AND ticker = %s "
+    "   AND prompt_version = %s "
+    "   AND check_state = 'DONE' "
+    "   AND cluster_id <> %s "
+    " ORDER BY verified_at DESC NULLS LAST "
+    " LIMIT 1"
+)
+
+# VerificationRepository.recordReused 와 동일 SQL — 이전 판정 복사 기록(-69).
+_RECORD_REUSED = (
+    "UPDATE cluster_stock "
+    "   SET check_state    = 'DONE', "
+    "       verified       = %s, "
+    "       match_path     = %s, "
+    "       confidence     = %s, "
+    "       rationale      = %s, "
+    "       verified_at    = now(), "
+    "       issue_key      = %s, "
+    "       prompt_version = %s "
+    " WHERE cluster_id = %s AND ticker = %s"
+)
+
+
+def test_findPriorVerdict_다른_스냅샷의_최근_DONE을_준다(conn):
+    """-69: 진행 중 이슈가 새 cluster_id 로 재감지될 때, 다른 스냅샷의 최근 DONE 판정을 찾는다."""
+    _stock(conn, "RUS11")
+    c_old = _cluster(conn, issue_key="'milton-2024'", snapshot_ts="'2024-10-09T12:00Z'")
+    c_new = _cluster(conn, issue_key="'milton-2024'", snapshot_ts="'2024-10-09T13:00Z'")
+    # 이전 스냅샷의 확정 판정.
+    x(
+        conn,
+        "INSERT INTO cluster_stock (cluster_id, ticker, tier, issue_key, prompt_version, "
+        " check_state, verified, match_path, confidence, rationale, verified_at) "
+        "VALUES (%s, 'RUS11', 'BOTH', 'milton-2024', 'v1', 'DONE', true, "
+        " 'REGION', 'strong', '복사될 근거', '2024-10-09T12:30Z')",
+        c_old,
+    )
+    # 새 스냅샷의 미검증 후보(자기 행) — DONE 이 아니라 조회에서 빠진다.
+    x(
+        conn,
+        "INSERT INTO cluster_stock (cluster_id, ticker, tier) VALUES (%s, 'RUS11', 'BOTH')",
+        c_new,
+    )
+
+    row = q(conn, _FIND_PRIOR_VERDICT, "milton-2024", "RUS11", "v1", c_new)[0]
+    assert row == (True, "REGION", "strong", "복사될 근거")
+
+
+def test_findPriorVerdict_자기_클러스터_행은_제외한다(conn):
+    """🔴 -69: cluster_id <> :cid — 현재 처리 중인 클러스터의 판정은 재사용원으로 세지 않는다.
+
+    유일한 DONE 이 조회 대상 cluster_id 자신이면 결과가 없어야 한다.
+    """
+    _stock(conn, "RUS12")
+    cid = _cluster(conn, issue_key="'iran-2026'")
+    x(
+        conn,
+        "INSERT INTO cluster_stock (cluster_id, ticker, tier, issue_key, prompt_version, "
+        " check_state, verified, match_path, confidence, rationale, verified_at) "
+        "VALUES (%s, 'RUS12', 'BOTH', 'iran-2026', 'v1', 'DONE', true, "
+        " 'REGION', 'strong', '근거', now())",
+        cid,
+    )
+    assert q(conn, _FIND_PRIOR_VERDICT, "iran-2026", "RUS12", "v1", cid) == []
+
+
+def test_recordReused_이전판정을_복사해_DONE으로_전이한다(conn):
+    """-69: LLM 없이 이전 판정 값을 그대로 써 DONE 으로 전이. verified_at 갱신·재사용 키 채움."""
+    ticker = "RUS13"
+    cid = _pending_candidate(conn, ticker)
+
+    x(conn, _RECORD_REUSED, True, "SUPPLY_CHAIN", "weak", "재사용 근거", "milton-2024", "v1", cid, ticker)
+
+    row = q(
+        conn,
+        "SELECT check_state, verified, match_path, confidence, rationale, issue_key, prompt_version, "
+        "       verified_at IS NOT NULL "
+        "FROM cluster_stock WHERE ticker = %s",
+        ticker,
+    )[0]
+    assert row == ("DONE", True, "SUPPLY_CHAIN", "weak", "재사용 근거", "milton-2024", "v1", True)
+
+
 # VerificationRepository.pendingCandidates 와 동일 SQL — 검증 순서(tier 우선 + 신호 강도)를 정한다.
 _PENDING_CANDIDATES = (
     "SELECT ticker, tier "
