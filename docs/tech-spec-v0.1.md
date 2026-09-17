@@ -1,7 +1,7 @@
 # 기술 명세서 — WikiPulse (WikiPulse)
 
 - 버전: **v0.1 (2026-09-08)**
-- 상위 문서: [requirements-v0.1.md](requirements-v0.1.md) — **왜 이 컴포넌트가 있는가는 §3.1이 정본이다.** 여기 다시 적지 않는다.
+- 상위 문서: [requirements-v0.2.md](requirements-v0.2.md) — **왜 이 컴포넌트가 있는가는 §3.1이 정본이다.** 여기 다시 적지 않는다.
 - 이 문서가 다루는 것: **무엇이 어느 버전으로, 어느 서버 어느 포트에서, 어떻게 뜨는가.**
 - API는 [api-v0.1.md](api-v0.1.md), 데이터 모델은 [erd-v0.1.md](erd-v0.1.md).
 
@@ -60,7 +60,7 @@
 | OpenAI 임베딩 | `text-embedding-3-small` (1536차원) | GATEWAY 경유. `Authorization: Bearer` |
 | Anthropic | `/v1/messages` + `web_search_20250305` | GATEWAY 경유. `x-api-key`. 중계 실동작 확인 (2026-09-07) |
 | Wikimedia | EventStreams SSE, Pageviews API, 덤프, Clickstream | ⚠️ **연락처 없는 User-Agent는 차단된다.** `CONTACT_EMAIL` 필수 |
-| GDELT 2.0 GKG | 15분 파일 | ~~2025-06-13~07-04~~ → **2025-06-14 18:00~07-02 02:00 UTC 결손**(경계 이분 탐색 재확인, 2026-09-16, `docs/requirements-v0.1.md` §11) |
+| GDELT 2.0 GKG | 15분 파일 | ~~2025-06-13~07-04~~ → **2025-06-14 18:00~07-02 02:00 UTC 결손**(경계 이분 탐색 재확인, 2026-09-16, `docs/requirements-v0.2.md` §11) |
 | yfinance | `longBusinessSummary`, 일봉 | 비공식 API. 스로틀·스키마 변경 리스크 |
 | SEC / NASDAQ Trader | 종목 마스터 | ⚠️ Wikidata로 티커를 받지 말 것 (`wdt:P249` 40건 함정) |
 

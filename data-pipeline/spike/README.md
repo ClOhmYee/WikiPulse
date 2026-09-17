@@ -4,7 +4,7 @@
 
 `WP-38`. 편집·조회수 급증을 판정하는 수식과 기준선 산출.
 
-명세: [docs/requirements-v0.1.md](../../docs/requirements-v0.1.md) §3.2, §6, §11
+명세: [docs/requirements-v0.2.md](../../docs/requirements-v0.2.md) §3.2, §6, §11
 
 ```
 28일 기준선 (baseline.py, Spark 배치)

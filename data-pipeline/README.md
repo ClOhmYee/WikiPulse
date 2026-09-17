@@ -8,7 +8,7 @@ Wikipedia EventStreams 를 Kafka 로 옮기고, Spark Structured Streaming 이
 - `WP-32` GDELT GKG 15분 폴링 → HDFS 적재 Producer — [gdelt/README.md](gdelt/README.md)
 - `WP-65` GDELT GKG 기관명 lift 집계 → `cluster_org_mention` Spark 배치 — [gkg/README.md](gkg/README.md)
 
-명세: [docs/requirements-v0.1.md](../docs/requirements-v0.1.md) §3
+명세: [docs/requirements-v0.2.md](../docs/requirements-v0.2.md) §3
 
 > 이 폴더엔 서로 다른 잡이 산다. 위 두 개는 위키 편집 실시간 경로(Kafka·Spark),
 > `gdelt/` 는 뉴스 원본을 HDFS 에 쌓는 별도 배치성 수집기다. 각각 따로 뜬다.

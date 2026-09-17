@@ -2,7 +2,7 @@
 
 - 버전: **v0.1 (2026-09-08)**
 - 정본: 이 파일. 개정은 MR로 한다.
-- 상위 문서: [requirements-v0.1.md](requirements-v0.1.md) — 무엇을 만드는가. 이 문서는 **그 화면들이 서버에 무엇을 묻는가**만 적는다.
+- 상위 문서: [requirements-v0.2.md](requirements-v0.2.md) — 무엇을 만드는가. 이 문서는 **그 화면들이 서버에 무엇을 묻는가**만 적는다.
 - 데이터 모델: [erd-v0.1.md](erd-v0.1.md) / `db/migrations/V1__initial_schema.sql`. **응답 필드의 의미와 단위는 그쪽 컬럼 주석이 정본이다.** 여기 다시 적지 않는다.
 
 ---
