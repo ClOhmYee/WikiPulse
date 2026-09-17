@@ -1,6 +1,7 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { Maximize, Minimize, RotateCcw, Minus, Plus } from "lucide-react";
 import { getIssueCategory } from "../../data/categories.js";
+import { isNewIssue } from "../../data/pulse/time.js";
 
 export default function PulseMap({
   scene,
@@ -86,6 +87,9 @@ export default function PulseMap({
       svgRef.current.getScreenCTM().inverse(),
     );
   const clusters = scene.clusters.filter((v) => visibleKeys.has(v.issueKey));
+  const newCount = clusters.filter((v) =>
+    isNewIssue(v.firstDetectedAt, meta.snapshotTs, meta.newWindowHours),
+  ).length;
   return (
     <div
       className="pulse-map document-map"
@@ -94,7 +98,9 @@ export default function PulseMap({
       data-snapshot={meta.snapshotTs}
     >
       <div className="document-map__caption">
-        <strong>{clusters.length}개의 NEW 이슈</strong>
+        <strong>
+          {clusters.length}개 이슈{newCount ? ` · ${newCount}개 NEW` : ""}
+        </strong>
         <span>
           {clusters.reduce((n, v) => n + v.nodes.length, 0)}개 문서 · 문서를
           선택해 연결 근거를 확인하세요 · 드래그로 주변 탐색
@@ -234,13 +240,19 @@ export default function PulseMap({
                       </tspan>
                     ))}
                   </text>
-                  <text
-                    className="document-cluster__badge"
-                    textAnchor="middle"
-                    y={cluster.radius + 24}
-                  >
-                    NEW
-                  </text>
+                  {isNewIssue(
+                    cluster.firstDetectedAt,
+                    meta.snapshotTs,
+                    meta.newWindowHours,
+                  ) && (
+                    <text
+                      className="document-cluster__badge"
+                      textAnchor="middle"
+                      y={cluster.radius + 24}
+                    >
+                      NEW
+                    </text>
+                  )}
                 </g>
                 <g className="document-edges" aria-hidden="true">
                   {cluster.edges.map((edge) => {

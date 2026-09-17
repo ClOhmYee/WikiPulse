@@ -5,7 +5,6 @@ import { useAsyncResource } from "../../data/hooks/useAsyncResource.js";
 import { issueCategories } from "../../data/categories.js";
 import {
   calendarDays,
-  isNewIssue,
   kstDate,
   kstTimestamp,
   snapshotKey,
@@ -50,23 +49,12 @@ export default function PulsePage({ savedEvents, onToggleEvent, onSource }) {
   );
   const map = useAsyncResource(loadMap, key);
   const clusters = map.data?.data.clusters;
-  const newClusters = useMemo(
-    () =>
-      clusters?.filter((v) =>
-        isNewIssue(
-          v.firstDetectedAt,
-          map.data.meta.snapshotTs,
-          map.data.meta.newWindowHours,
-        ),
-      ) || [],
-    [clusters, map.data?.meta.snapshotTs, map.data?.meta.newWindowHours],
-  );
   const [layoutEngine] = useState(() => createLayoutEngine());
   const scene = useMemo(
-    () => layoutEngine(newClusters),
-    [layoutEngine, newClusters],
+    () => layoutEngine(clusters || []),
+    [layoutEngine, clusters],
   );
-  const selected = newClusters.find((v) => v.issueKey === selectedKey);
+  const selected = (clusters || []).find((v) => v.issueKey === selectedKey);
   useEffect(() => {
     if (map.data) onSource?.(map.data.meta);
   }, [map.data, onSource]);
@@ -87,14 +75,14 @@ export default function PulsePage({ savedEvents, onToggleEvent, onSource }) {
   }, [clusters, selected, selectedKey, nodeId]);
   const filtered = useMemo(
     () =>
-      newClusters.filter(
+      (clusters || []).filter(
         (v) =>
           (category === "all" || v.category === category) &&
           `${v.label} ${v.summary || ""} ${v.nodes.map((n) => n.title).join(" ")}`
             .toLowerCase()
             .includes(query.trim().toLowerCase()),
       ) || [],
-    [newClusters, category, query],
+    [clusters, category, query],
   );
   const visibleSelected = filtered.find((v) => v.issueKey === selectedKey);
   function selectCluster(issueKey) {
@@ -294,11 +282,11 @@ export default function PulsePage({ savedEvents, onToggleEvent, onSource }) {
                   ) : (
                     <div className="pulse-empty">
                       <h2>
-                        {newClusters.length
+                        {(clusters || []).length
                           ? "일치하는 사건이 없습니다"
-                          : "이 시점에 새로 감지된 이슈가 없습니다"}
+                          : "이 시점에 감지된 이슈가 없습니다"}
                       </h2>
-                      {newClusters.length > 0 && (
+                      {(clusters || []).length > 0 && (
                         <button
                           className="wp-button"
                           onClick={() => {
