@@ -12,6 +12,83 @@ const pulseMaps = await Promise.all(
       mockClient.getPulseMap({ source, snapshotTs }),
     ),
 );
+
+test("fullscreen keeps timeline and exit usable during loading, errors and empty snapshots", async ({
+  page,
+}) => {
+  let mode = "loading";
+  let release;
+  const gate = new Promise((resolve) => {
+    release = resolve;
+  });
+  await serve(page, async ({ route, url }) => {
+    if (
+      !url.pathname.endsWith("/map") ||
+      url.searchParams.get("snapshotTs") !== pulseMaps.at(-2).meta.snapshotTs
+    )
+      return false;
+    if (mode === "loading") await gate;
+    if (mode === "error") {
+      await route.fulfill({
+        status: 503,
+        json: { error: { code: "UNAVAILABLE" } },
+      });
+    } else {
+      const body = structuredClone(pulseMaps.at(-2));
+      body.data.clusters = [];
+      Object.assign(body.meta, {
+        clusterCount: 0,
+        nodeCount: 0,
+        edgeCount: 0,
+        truncated: false,
+      });
+      await route.fulfill({ json: body });
+    }
+    return true;
+  });
+  await page.goto("/#/pulse");
+  await page
+    .getByRole("button", { name: "펄스맵 전체화면", exact: true })
+    .click();
+  const dialog = page.getByRole("dialog", { name: "펄스맵 전체화면" });
+  const slider = dialog.getByRole("slider", { name: "스냅샷 시각" });
+  await dialog.getByRole("button", { name: "시간축 표시" }).hover();
+  await dialog.getByRole("button", { name: "이전 시점" }).click();
+  await expect(dialog.locator(".pulse-loading")).toBeVisible();
+  await expect(slider).toBeInViewport();
+  await expect(
+    dialog.getByRole("button", { name: "전체화면 닫기" }),
+  ).toBeInViewport();
+  mode = "error";
+  release();
+  await expect(dialog.getByRole("alert")).toContainText(
+    "이 시점의 지도를 불러오지 못했습니다",
+  );
+  await expect(slider).toBeInViewport();
+  mode = "empty";
+  await dialog.getByRole("button", { name: "지도 다시 불러오기" }).click();
+  await expect(
+    dialog.getByRole("heading", { name: "이 시점에 감지된 이슈가 없습니다" }),
+  ).toBeVisible();
+  await dialog.getByRole("button", { name: "시간축 표시" }).hover();
+  await expect(slider).toBeInViewport();
+  await dialog.getByRole("button", { name: "최신으로 이동" }).click();
+  await expect(dialog.locator(".document-map")).toHaveAttribute(
+    "data-snapshot",
+    pulseMaps.at(-1).meta.snapshotTs,
+  );
+  await expect(dialog).toBeVisible();
+  await dialog.getByRole("button", { name: "이전 시점" }).click();
+  await expect(
+    dialog.getByRole("heading", { name: "이 시점에 감지된 이슈가 없습니다" }),
+  ).toBeVisible();
+  await dialog.getByRole("button", { name: "전체화면 닫기" }).click();
+  await expect(dialog).toHaveCount(0);
+  await expect(page.getByRole("slider", { name: "스냅샷 시각" })).toBeFocused();
+  expect(await page.evaluate(() => document.body.style.overflow)).not.toBe(
+    "hidden",
+  );
+});
 test("pulse uses the graph contract without downloading catalogue fixtures", async ({
   page,
 }) => {
@@ -22,12 +99,7 @@ test("pulse uses the graph contract without downloading catalogue fixtures", asy
   const calls = await serve(page);
   await page.goto("/#/pulse");
   await expect(page.locator(".document-node")).toHaveCount(
-    pulseMaps
-      .at(-1)
-      .data.clusters.filter((c) =>
-        isNewIssue(c.firstDetectedAt, pulseMaps.at(-1).meta.snapshotTs),
-      )
-      .reduce((sum, c) => sum + c.nodes.length, 0),
+    pulseMaps.at(-1).data.clusters.reduce((sum, c) => sum + c.nodes.length, 0),
   );
   await expect(
     page.getByRole("button", { name: "API 데이터", exact: true }),
@@ -54,7 +126,10 @@ test("nullable graph labels and issue keys keep numeric detail navigation", asyn
     return true;
   });
   await page.goto("/#/pulse");
-  await page.locator(".pulse-cluster-list button").first().click();
+  await page
+    .locator(".pulse-cluster-list button")
+    .filter({ hasText: cluster.nodes[0].title })
+    .click();
   await expect(page.locator(".pulse-preview h2")).toHaveText(
     cluster.nodes[0].title,
   );
@@ -100,12 +175,7 @@ test("rapid time changes discard a slower response and preserve graph/panel time
   });
   await page.goto("/#/pulse");
   await expect(page.locator(".document-node")).toHaveCount(
-    pulseMaps
-      .at(-1)
-      .data.clusters.filter((c) =>
-        isNewIssue(c.firstDetectedAt, pulseMaps.at(-1).meta.snapshotTs),
-      )
-      .reduce((sum, c) => sum + c.nodes.length, 0),
+    pulseMaps.at(-1).data.clusters.reduce((sum, c) => sum + c.nodes.length, 0),
   );
   await page.locator(".pulse-cluster-list button").first().click();
   await page.getByRole("button", { name: "이전 시점" }).click();
@@ -158,12 +228,7 @@ test("API error retries and mismatched or invalid graph data never masquerade as
   state = "ok";
   await page.getByRole("button", { name: "지도 다시 불러오기" }).click();
   await expect(page.locator(".document-node")).toHaveCount(
-    pulseMaps
-      .at(-1)
-      .data.clusters.filter((c) =>
-        isNewIssue(c.firstDetectedAt, pulseMaps.at(-1).meta.snapshotTs),
-      )
-      .reduce((sum, c) => sum + c.nodes.length, 0),
+    pulseMaps.at(-1).data.clusters.reduce((sum, c) => sum + c.nodes.length, 0),
   );
 });
 test("500 nodes and 1000 edges remain interactive in the browser", async ({

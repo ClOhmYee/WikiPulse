@@ -45,13 +45,15 @@
 
 | | 버전 | 상태 |
 | --- | --- | --- |
-| PostgreSQL | **미정** | 아직 설치 전 (WP-29). pgvector가 붙는 버전으로 고른다 |
-| pgvector | 차원 **1536** 고정 | `vector(1536)` — `text-embedding-3-small` 기준. 모델을 바꾸면 DDL도 바꿔야 한다 |
-| Hadoop / HDFS | **미정** | 아직 설치 전 (WP-28). 프로젝트 안내는 3.5.0 SingleCluster 가이드 |
-| Spark (EC2) | **미정** | 아직 설치 전 (WP-27). 로컬 3.5.3과 맞추는 편이 안전 |
-| Kafka (EC2) | **미정** | 아직 설치 전 (WP-26) |
+| PostgreSQL | **17** (`pgvector/pgvector:0.8.6-pg17-bookworm`) | 설치 완료 (WP-29), 기본 EC2. 2026-09-17 실측. ⚠️ 앱 사용자·스키마 적재·백엔드 연결까지 됐는지는 별개다 |
+| pgvector | **0.8.6**, 차원 **1536** 고정 | 같은 이미지 (2026-09-17 실측). `vector(1536)` — `text-embedding-3-small` 기준. 모델을 바꾸면 DDL도 바꿔야 한다 |
+| Hadoop / HDFS | **3.5.0** (`apache/hadoop:3.5.0`) | 설치 완료 (WP-28). NameNode 1 + DataNode 2, 복제 2. 2026-09-17 실측 |
+| Spark (EC2) | **3.5.3** (`apache/spark:3.5.3-python3`) | 설치 완료 (WP-27). Standalone 2노드, client 모드. 2026-09-17 실측 |
+| Kafka (EC2) | **3.9.0** (`apache/kafka:3.9.0`) | 설치 완료 (WP-26), 추가 EC2. KRaft 단일 broker + controller. 2026-09-17 실측 |
 | Redis | **채택 여부 미정** | CLAUDE.md 인프라 절에 이름만 있고 명세 §3.1 컴포넌트 표에는 없다. 지금 필요한 캐시가 무엇인지부터 정할 것 |
-| Nginx / Jenkins | **미정** | 배포 방식 미정 |
+| Nginx / Jenkins | **미설치** | 2026-09-17 확인 — 기본 EC2 서비스 스택은 아직 안 올렸다. 배포 방식 미정 |
+
+⚠️ **로컬 개발 스택의 Hadoop 은 3.4.1, EC2 는 3.5.0 이다** (2026-09-17 확인). 서로 다른 환경이라 그 자체로 불일치는 아니지만, 한쪽만 보고 다른 쪽을 "고치지" 말 것. 맞출지 여부는 결정된 바 없다. Kafka(3.9.0)·Spark(3.5.3)는 양쪽이 같다.
 
 ### 외부 의존
 
@@ -116,7 +118,26 @@ service.example.com   (기본, 서비스)      data.example.com  (추가, 데이
 
 ⚠️ **로컬에서 Kafka UI(8080)와 Spring Boot(8080)가 부딪힌다.** compose의 `ui` 프로파일은 기본으로 안 뜨지만, 둘을 같이 띄우려면 한쪽 포트를 바꿔야 한다.
 
-HDFS·Spark 포트는 설치 전이라 적지 않는다 — 깔고 나서 실측 날짜와 함께 채운다.
+#### HDFS·Spark (EC2 실물, 2026-09-17 실측)
+
+| 포트 | 무엇 | 어디 | 인바운드 허용 |
+| --- | --- | --- | --- |
+| 8020 | HDFS NameNode RPC | 추가 EC2 | 기본 → 추가 |
+| 9866 / 9867 | DataNode 전송 / IPC | 양쪽 | 서로 |
+| 9870 / 9864 | NameNode / DataNode 웹 UI | 각 서버 | 외부 차단 |
+| 7077 | Spark Master RPC | 추가 EC2 | 기본 → 추가 |
+| 7078 | Spark Worker RPC | 양쪽 | Master 쪽 → 각 Worker |
+| 7079 / 7080 | Driver RPC / BlockManager | 추가 EC2 (Driver 위치) | 기본 → 추가 |
+| 7100 | Executor BlockManager | 양쪽 | 서로 |
+| 18080 / 18081 / 4040 | Master UI / Worker UI / 앱 UI | 각 서버 | 외부 차단. SSH 터널로 접근 |
+
+⚠️ **executor 의 RPC 포트는 임의 포트지만 인바운드로 열 필요가 없다** (2026-09-17 실측). Netty RPC 가 executor → Driver 로 먼저 맺은 연결을 되쓴다. 기본 EC2 Worker 는 **7078·7100 두 개만** 열린 상태에서 2노드 분산 실행이 통과했다. 넓게 열지 말 것.
+
+🔴 **Driver 는 추가 EC2 에서만 돈다.** 기본 EC2 에 7079·7080·4040 을 똑같이 열지 않는다.
+
+⚠️ **18080 을 Master UI 로 쓰고 있다.** History Server 기본 포트와 같아 나중에 충돌한다.
+
+⚠️ **동시 Spark 애플리케이션 1개 기준이다.** 고정 포트 + `spark.port.maxRetries 0` 이라 병렬 제출은 충돌한다.
 
 ---
 
@@ -178,6 +199,8 @@ docker compose run --rm spark            # 윈도우 집계 잡
 | 이슈 대표 텍스트 | `{문서 제목}: {도입부 앞 N문장}` 나열. N = 문서 1개면 6, 2~3개면 4, 4개↑면 2. 2,000자 상한 | 명세 §6.2 |
 | 🔴 파이프라인 내부 텍스트 | **영어** | 한국어로 만들면 코사인이 절반 (0.160 → 0.081) |
 | 후보 우선순위 | `BOTH` → `GDELT_ONLY` → `EMBEDDING_ONLY` | 명세 §6.3 |
+| Spark Worker 자원 | 2 코어 · 4 g × 2대. `spark.cores.max 4` · `executor.cores 2` · `executor.memory 2g` | 2026-09-17 기동값 |
+| Spark HDFS 기본 경로 | `/wikipulse/spark` | WP-27 |
 
 ---
 
@@ -185,7 +208,8 @@ docker compose run --rm spark            # 윈도우 집계 잡
 
 **설치·버전**
 
-- PostgreSQL·Hadoop·Spark·Kafka의 EC2 설치 버전 (-26 ~ -29)
+- ~~PostgreSQL·Hadoop·Spark·Kafka의 EC2 설치 버전 (-26 ~ -29)~~ → **전부 확정** (2026-09-17, §1)
+- Nginx·Jenkins·HTTPS·배포 방식 — 기본 EC2 서비스 스택 미설치
 - Node 버전 고정
 - 마이그레이션 도구 (Flyway / Liquibase)
 - Redis를 쓰는가 — 쓴다면 무엇을 캐시하는가

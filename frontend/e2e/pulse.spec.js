@@ -1,4 +1,3 @@
-import { isNewIssue } from "../src/data/pulse/time.js";
 import { test, expect } from "@playwright/test";
 import { issueId, pageId } from "../src/data/mock/identity.js";
 import {
@@ -6,6 +5,47 @@ import {
   timestamp,
   snapshotAt,
 } from "../src/data/mock/fixtures/history.js";
+
+for (const width of [1440, 390]) {
+  test(`fullscreen restores the launch scroll position at ${width}px`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width, height: 844 });
+    await page.goto("/#/pulse");
+    const open = page.getByRole("button", {
+      name: "펄스맵 전체화면",
+      exact: true,
+    });
+    const dialog = page.getByRole("dialog", { name: "펄스맵 전체화면" });
+    for (const [index, closeWithEscape] of [false, true].entries()) {
+      await open.scrollIntoViewIfNeeded();
+      // Keep the opener visible, but use a different position on each visit.
+      await page.evaluate(
+        (offset) => window.scrollBy({ top: offset, behavior: "instant" }),
+        index * 40,
+      );
+      const before = await page.evaluate(() => ({ x: scrollX, y: scrollY }));
+      expect(before.y).toBeGreaterThan(100);
+      await open.click();
+      await expect(dialog).toBeVisible();
+      if (closeWithEscape) await page.keyboard.press("Escape");
+      else
+        await dialog
+          .getByRole("button", { name: "전체화면 닫기", exact: true })
+          .click();
+      await expect(dialog).toHaveCount(0);
+      await expect(open).toBeFocused();
+      await expect
+        .poll(() => page.evaluate(() => ({ x: scrollX, y: scrollY })))
+        .toEqual(before);
+      // Check after layout/focus/scroll anchoring have had time to settle too.
+      await page.waitForTimeout(250);
+      expect(await page.evaluate(() => ({ x: scrollX, y: scrollY }))).toEqual(
+        before,
+      );
+    }
+  });
+}
 
 test("fullscreen map opens a right-hand panel and both panels link to the report", async ({
   page,
@@ -16,6 +56,12 @@ test("fullscreen map opens a right-hand panel and both panels link to the report
     .click();
   const dialog = page.getByRole("dialog", { name: "펄스맵 전체화면" });
   await expect(dialog).toBeVisible();
+  await expect(dialog.locator(".pulse-fullscreen__heading")).toHaveCount(0);
+  const controls = dialog.locator(".document-map__controls");
+  await expect(controls.getByRole("button").last()).toHaveAttribute(
+    "aria-label",
+    "전체화면 닫기",
+  );
   await expect(dialog.getByRole("complementary")).toHaveCount(0);
   const bounds = await dialog.boundingBox();
   expect(bounds.width).toBeGreaterThan(1400);
@@ -27,12 +73,26 @@ test("fullscreen map opens a right-hand panel and both panels link to the report
   await expect(panel).toBeVisible();
   const panelBounds = await panel.boundingBox();
   const mapBounds = await dialog.locator(".document-map").boundingBox();
+  expect(mapBounds.y).toBeCloseTo(bounds.y + 1, 0);
+  const saveBounds = await panel
+    .getByRole("button", { name: "선택한 사건 저장", exact: true })
+    .boundingBox();
+  const closeBounds = await panel
+    .getByRole("button", { name: "클러스터 정보 닫기" })
+    .boundingBox();
+  expect(closeBounds.x).toBeGreaterThanOrEqual(saveBounds.x + saveBounds.width);
+  expect(closeBounds.y).toBeCloseTo(saveBounds.y, 1);
   expect(panelBounds.x).toBeGreaterThanOrEqual(
     mapBounds.x + mapBounds.width - 1,
   );
   const href = await panel
     .getByRole("link", { name: "이슈 리포트 보기" })
     .getAttribute("href");
+  await dialog.locator(".document-map > svg").hover();
+  await expect(dialog.locator(".pulse-fullscreen__time-drawer")).toBeHidden();
+  await expect(
+    panel.getByRole("button", { name: "클러스터 정보 닫기" }),
+  ).toBeInViewport();
   await page.screenshot({ path: "test-results/pulse-fullscreen-desktop.png" });
   await page.keyboard.press("Escape");
   await expect(dialog).toHaveCount(0);
@@ -49,6 +109,8 @@ test("fullscreen map opens a right-hand panel and both panels link to the report
   await expect(
     dialog.getByRole("link", { name: "이슈 리포트 보기" }),
   ).toBeInViewport();
+  await dialog.locator(".document-map__controls").hover();
+  await expect(dialog.locator(".pulse-fullscreen__time-drawer")).toBeHidden();
   await page.screenshot({ path: "test-results/pulse-fullscreen-mobile.png" });
   await dialog.getByRole("button", { name: "클러스터 정보 닫기" }).click();
   await expect(dialog.getByRole("complementary")).toHaveCount(0);
@@ -86,13 +148,7 @@ test("full-year slider, month boundaries and archived report -> stock journey", 
   page.on("pageerror", (error) => errors.push(error.message));
   await page.goto("/#/pulse");
   const latest = snapshotAt(dates.at(-1));
-  const fresh = latest.data.clusters.filter((c) =>
-    isNewIssue(
-      c.firstDetectedAt,
-      latest.meta.snapshotTs,
-      latest.meta.newWindowHours,
-    ),
-  );
+  const fresh = latest.data.clusters;
   const map = page.getByRole("region", { name: "사건 관계 지도" });
   await expect(map.locator(".document-node")).toHaveCount(
     fresh.reduce((sum, c) => sum + c.nodes.length, 0),
@@ -133,12 +189,9 @@ test("full-year slider, month boundaries and archived report -> stock journey", 
     "data-snapshot",
     timestamp("2025-12-31"),
   );
-  await expect(
-    page.getByRole("heading", {
-      name: "이 시점에 새로 감지된 이슈가 없습니다",
-    }),
-  ).toBeVisible();
-  await expect(map).toHaveCount(0);
+  await expect(map.locator(".document-cluster")).toHaveCount(
+    snapshotAt("2025-12-31").data.clusters.length,
+  );
   await page.keyboard.press("End");
   await expect(map).toHaveAttribute("data-snapshot", latest.meta.snapshotTs);
   await page
@@ -185,30 +238,53 @@ test("dense map selection, filtering and desktop/mobile handoff", async ({
   page,
 }) => {
   await page.goto("/#/pulse");
+  const timeline = page.getByRole("region", { name: "스냅샷 시간 탐색" });
+  await expect(timeline).toHaveAttribute("data-compact", "true");
+  expect((await timeline.boundingBox()).height).toBeLessThan(75);
+  await timeline.screenshot({
+    path: "test-results/pulse-timeline-inline-desktop.png",
+  });
+  const panel = page.getByRole("complementary", { name: "선택한 사건" });
+  await expect(panel).toHaveCount(0);
   const latest = snapshotAt(dates.at(-1));
-  const fresh = latest.data.clusters.filter((c) =>
-    isNewIssue(
-      c.firstDetectedAt,
-      latest.meta.snapshotTs,
-      latest.meta.newWindowHours,
-    ),
-  );
+  const fresh = latest.data.clusters;
   const map = page.getByRole("region", { name: "사건 관계 지도" });
   await expect(map.locator(".document-node")).toHaveCount(
     fresh.reduce((sum, c) => sum + c.nodes.length, 0),
   );
   const node = map
-    .locator(`[data-page-id="${pageId(fresh[0].nodes[0].pageId)}"]`)
+    .locator(
+      `[data-page-id="${pageId(fresh.find((c) => c.category === "technology").nodes[0].pageId)}"]`,
+    )
     .first();
   const radius = await node.locator(".document-node__body").getAttribute("r");
   const position = await node.getAttribute("transform");
+  const clusterPositions = () =>
+    map
+      .locator(".document-cluster")
+      .evaluateAll((elements) =>
+        elements.map((element) => element.getAttribute("transform")),
+      );
+  const originalPositions = await clusterPositions();
   await page.getByRole("button", { name: "기술", exact: true }).click();
+  const topTechnology = fresh
+    .filter((v) => v.category === "technology")
+    .sort(
+      (a, b) =>
+        b.pulseScore - a.pulseScore || a.issueKey.localeCompare(b.issueKey),
+    )[0];
+  const center = map.locator('.document-cluster[data-rank="0"]');
+  await expect(center).toHaveAttribute("transform", "translate(0 0)");
+  await expect(center.locator(".document-cluster__title")).toContainText(
+    topTechnology.label,
+  );
   await expect(node).toHaveAttribute("transform", position);
   await expect(node.locator(".document-node__body")).toHaveAttribute(
     "r",
     radius,
   );
   await page.getByRole("button", { name: "전체", exact: true }).click();
+  expect(await clusterPositions()).toEqual(originalPositions);
   await page.screenshot({
     path: "test-results/pulse-desktop.png",
     fullPage: true,
@@ -226,7 +302,22 @@ test("dense map selection, filtering and desktop/mobile handoff", async ({
     path: "test-results/pulse-desktop-selected.png",
     fullPage: true,
   });
+  await panel.getByRole("button", { name: "클러스터 정보 닫기" }).click();
+  await expect(panel).toHaveCount(0);
+  await expect(
+    map.locator('.document-cluster[data-selected="true"]'),
+  ).toHaveCount(0);
+  expect((await map.boundingBox()).width).toBeGreaterThan(
+    (await page.locator(".pulse-layout").boundingBox()).width - 4,
+  );
+  await node.focus();
+  await page.keyboard.press("Enter");
+  await expect(panel).toBeVisible();
   await page.setViewportSize({ width: 390, height: 844 });
+  expect((await timeline.boundingBox()).height).toBeLessThan(115);
+  await timeline.screenshot({
+    path: "test-results/pulse-timeline-inline-mobile.png",
+  });
   await page.getByRole("button", { name: "지도 위치 초기화" }).click();
   await page.screenshot({
     path: "test-results/pulse-mobile.png",
@@ -249,7 +340,9 @@ test("dense map selection, filtering and desktop/mobile handoff", async ({
       () => document.documentElement.scrollWidth - innerWidth,
     ),
   ).toBeLessThanOrEqual(1);
-  const panel = await page.locator(".pulse-preview").boundingBox(),
+  const panelBounds = await page.locator(".pulse-preview").boundingBox(),
     graph = await map.boundingBox();
-  expect(panel.y).toBeGreaterThanOrEqual(graph.y + graph.height - 1);
+  expect(panelBounds.y).toBeGreaterThanOrEqual(graph.y + graph.height - 1);
+  await panel.getByRole("button", { name: "클러스터 정보 닫기" }).click();
+  await expect(panel).toHaveCount(0);
 });
