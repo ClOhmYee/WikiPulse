@@ -25,7 +25,9 @@ from __future__ import annotations
 
 import gzip
 import json
+import re
 from collections.abc import Iterable, Iterator
+from datetime import datetime, timezone
 from pathlib import Path
 from dataclasses import dataclass
 
@@ -41,6 +43,8 @@ CLICKSTREAM_COLUMNS = 4
 
 #: 문서 간 이동만 신호다. external·other 는 이웃이 아니다.
 KEEP_TYPE = "link"
+
+MONTH_PATTERN = re.compile(r"^\d{4}-(0[1-9]|1[0-2])$")
 
 
 class SchemaMismatch(Exception):
@@ -104,6 +108,52 @@ def read_shards(directory: str | Path) -> Iterator[ClickstreamRow]:
                     continue
                 rec = json.loads(line)
                 yield ClickstreamRow(rec["prev"], rec["curr"], int(rec["n"]))
+
+
+def select_completed_month(
+    root: str | Path, wiki: str, snapshot_ts: datetime
+) -> tuple[str, Path]:
+    """스냅샷 직전 월 이하에서 가장 최근의 검증 완료 적재본을 고른다.
+
+    직전 월이 아직 공개·적재되지 않았으면 전전월 등 더 오래된 완료본으로 폴백한다.
+    현재 월은 일부 기간만 포함하므로 사용하지 않는다. `_manifest.json`의 wiki/month가
+    디렉터리와 일치하고 선언된 shard가 모두 있을 때만 완료본으로 인정한다.
+    """
+    if snapshot_ts.tzinfo is None:
+        raise ValueError("snapshot_ts must be timezone-aware")
+
+    snapshot_utc = snapshot_ts.astimezone(timezone.utc)
+    year, month = snapshot_utc.year, snapshot_utc.month - 1
+    if month == 0:
+        year, month = year - 1, 12
+    preferred = f"{year:04d}-{month:02d}"
+    base = Path(root) / wiki
+    completed: list[tuple[str, Path]] = []
+
+    if base.is_dir():
+        for directory in base.iterdir():
+            candidate = directory.name
+            if (not directory.is_dir() or not MONTH_PATTERN.fullmatch(candidate)
+                    or candidate > preferred):
+                continue
+            manifest_path = directory / "_manifest.json"
+            try:
+                manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError):
+                continue
+            shards = manifest.get("shards")
+            if (manifest.get("wiki") != wiki or manifest.get("month") != candidate
+                    or not isinstance(shards, list)
+                    or not all(isinstance(name, str) and (directory / name).is_file()
+                               for name in shards)):
+                continue
+            completed.append((candidate, directory))
+
+    if not completed:
+        raise FileNotFoundError(
+            f"{wiki} {preferred} 이하의 검증 완료 Clickstream 적재본이 없다: {base}"
+        )
+    return max(completed, key=lambda item: item[0])
 
 
 def neighbors_for(
