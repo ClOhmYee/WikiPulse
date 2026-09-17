@@ -390,6 +390,46 @@ DB 없이 도는 계약 검사는 `tests/test_runtime.py`·`tests/test_baseline_
 옮긴다. `hour_of_day` 가 0 대신 15 가 되는데 **에러가 안 난다.** 타임스탬프는
 tz-aware 로 넘긴다.
 
+## 연속 구간 bulk 리플레이 (WP-109)
+
+`spike/bulk_replay.py`. **구간 안의 모든 문서·모든 윈도우**를 판정해 `spike(source='replay')`
+에 넣는다. 아래 `spike.replay`(회귀 검증)와 목적이 다르다 — 그쪽은 `--title` 로 준 문서만
+재생한다. 제목 목록으로 60일을 만들면 그건 연속 리플레이가 아니라 심어 둔 사건 재생이다.
+
+```bash
+# 1. 구간의 Historical Window (-58). 조회수 적재본이 없으면 빈 디렉터리를 준다
+python -m batch.historical_windows_ingest \
+    --edits out/enwiki/2024-09 --views data/pageview-empty \
+    --out data/baseline-input/enwiki/2024-09
+
+# 2. 그 구간을 통째로 판정·적재 (chunk 는 --since/--until, 완료 기록은 --state)
+python -m spike.bulk_replay --windows data/baseline-input/enwiki/2024-09 \
+    --dsn "$DATABASE_URL" --state data/bulk-state.json --progress-every 200000
+python -m spike.bulk_replay --windows ... --since 2024-09-01 --until 2024-09-07
+```
+
+LIVE 와 같은 경로를 쓴다 — `PageWindow` → `SpikeRuntime`(`page_baseline` 조회 → `detect()`)
+→ `SpikeSink`. 다른 것은 윈도우를 만드는 쪽과 `source` 라벨뿐이고, 집계 계약은
+`tests/test_stream_batch_parity.py` 가 이미 고정한다. 판정 로직은 이 모듈에 없다.
+
+🔴 **기준선을 읽기 전에 `detector.may_spike` 로 거른다.** `SpikeRuntime.evaluate` 는
+윈도우마다 기준선을 조회해(문서당 왕복 1회) 60일 전체를 그대로 넣으면 왕복이 문서 수만큼
+난다. `may_spike` 는 급증의 **필요조건**(절대 편집수·편집자·조회수 하한)이라 여기서 걸러도
+판정 결과가 안 바뀐다 — `tests/test_bulk_replay.py` 가 격자 전수로 그걸 고정한다. 걸러진
+수는 `사전필터 통과 전 탈락` 으로 그대로 보고한다.
+
+⚠️ **`spike` 적재 순서는 의미가 없다.** 시점 순서는 `cluster/driver.py` 가 `detected_at`
+오름차순으로 다시 잡으므로, chunk 를 어떤 순서로 돌려도 `first_detected_at` 이 안 흔들린다.
+같은 구간을 다시 돌리는 것도 안전하다 — 싱크가 `(source, page_id, window_start)` upsert 다.
+
+⚠️ **조회수 적재본 없이 돌리면 조회수 관문이 통째로 닫힌다.** `-58` 의 `join_windows` 는
+full outer join 이라 조회 적재본이 없으면 `views=0`(`None` 이 아니다) 을 낸다 — **기존
+develop 계약이고 WP-109 에서 바꾸지 않았다.** 그 0 으로 만든 기준선은 `view_ewma=0`
+이 되고, `detect._view_signal` 이 `view_ewma<=0` 에서 `(None, None)` 을 돌려 조회수 경로가
+아예 발동하지 않는다(안전한 쪽으로 닫힘). 즉 `bulk_replay` 는 조회수를 **합성하지도
+무효화하지도 않는다** — 소스가 준 값을 그대로 넘길 뿐이고, 결과적으로 편집 경로만으로
+판정된다. 산출물에 그렇게 적는다. 실제로 그 실행의 `spike.view_ratio` 는 전부 NULL 이다.
+
 ## 리플레이 회귀 검증 (WP-61)
 
 편집 적재본(WP-56)을 1시간 윈도우로 재생하고, 각 시점마다 **그 이전 28일**로
