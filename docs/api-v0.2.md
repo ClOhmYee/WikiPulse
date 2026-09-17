@@ -10,7 +10,7 @@
 
 ## 0. 이 문서가 정리한 것 — 계약이 두 벌이었다
 
-아래 표는 **2026-09-08 통합 결정 이전 상태**다. 2026-09-09 WP-76에서 BE의 Issue/Stock 경로는 `/api/v1`과 응답 봉투로 변경되었고, 이슈 상세에 `pageId/wiki/title/weight/isSeed/editCount/views`를 가진 `members`가 추가되었다. 펄스맵의 스냅샷 목록·일괄 그래프 조회는 별도 계약이며 WP-74에서 구현한다. [펄스맵 구현·계약](frontend/PULSE_MAP.md)을 참고한다.
+아래 표는 **2026-09-08 통합 결정 이전 상태**다. 2026-09-09 WP-76에서 BE의 Issue/Stock 경로는 `/api/v1`과 응답 봉투로 변경되었고, 이슈 상세에 `pageId/wiki/title/weight/isSeed/editCount/views`를 가진 `members`가 추가되었다. 펄스맵의 스냅샷 목록·일괄 그래프 조회도 WP-74에서 구현되었다. [펄스맵 구현·계약](frontend/PULSE_MAP.md)을 참고한다.
 
 | | FE 제안 (`frontend/docs/openapi.yaml`, `0.2.0-proposal`) | BE 구현 (`backend/`, WP-36) |
 | --- | --- | --- |
@@ -25,7 +25,7 @@
 - **봉투·페이지네이션·오류 규약은 FE 제안 쪽을 쓴다.** 이미 설계돼 있고 프론트 조회 계층이 그 형태를 기대한다. BE의 적용은 WP-76에 포함되었다.
 - base path는 `/api/v1`. ~~`/api`~~ → 버전 없는 경로는 계약이 바뀔 때 갈아탈 자리가 없다.
 
-⚠️ **`frontend/docs/openapi.yaml`은 이 결정 이후 낡았다.** 연동 착수 시 이 문서에 맞춰 갱신한다. 그때까지 FE의 mock 모드는 그대로 돌아간다 (fixture는 API 계약과 무관).
+~~`frontend/docs/openapi.yaml`은 이 결정 이후 낡았다~~ → **현재 OpenAPI는 Spring 컨트롤러의 8개 GET 경로와 DTO를 반영했다** (2026-09-15, WP-95·97). 구현되지 않은 미래 API는 OpenAPI에 넣지 않는다. FE mock과 실제 API의 통합 실행 여부는 별도 검증 기록으로 구분한다.
 
 ---
 
@@ -79,7 +79,7 @@
 
 - 모든 시각은 **ISO 8601 UTC (`2026-09-08T04:00:00Z`)**다. 표시용 시간대 변환은 FE가 한다.
   ⚠️ FE 제안 계약은 `+09:00` 오프셋이었다. DB가 `TIMESTAMPTZ`, JPA가 `time_zone: UTC`라 UTC로 맞춘다.
-- `pulseScore`는 **배수**이지 퍼센트·확률·정확도가 아니다 (명세 §9).
+- `pulseScore`는 **단위 없는 급등 점수**다. 배수·퍼센트·확률·정확도·수익률로 해석하지 않는다. 조회수 중심의 새 점수식은 WP-118 구현·회귀 검증 대상이다.
 - `similarity`는 코사인(0~1), `gdeltLift`는 배수. 둘 다 `null` 가능 — 그 경로로 안 들어온 후보다.
 - 결측을 `0`으로 치환하지 않는다. 차트 중간 날짜가 없으면 그 포인트를 생략하고 보간하지 않는다.
 
@@ -100,7 +100,7 @@ DB `CHECK` 제약과 **같은 값을 그대로** 쓴다. 번역하지 않는다.
 
 ## 2. 이슈 — 피드 · 버블맵 · 상세
 
-피드와 펄스맵은 이슈를 공유하지만 독립 페이지다. 피드 내부에서 카드/리스트를 전환한다. 펄스맵은 시점별 문서 그래프가 필요하므로 아래 목록 응답 외에 `GET /api/v1/issues/map` 계약을 추가했다(2026-09-09, WP-72·73). [필드·행동 명세](frontend/PULSE_MAP.md), [OpenAPI](../frontend/docs/pulse-openapi.json). 서버 구현은 WP-74의 후속 작업이다.
+피드와 펄스맵은 이슈를 공유하지만 독립 페이지다. 피드 내부에서 카드/리스트를 전환한다. 펄스맵은 시점별 문서 그래프가 필요하므로 아래 목록 응답 외에 `GET /api/v1/issues/map` 계약을 추가했고 서버 구현까지 완료했다(2026-09-15, WP-74·95). [필드·행동 명세](frontend/PULSE_MAP.md), [통합 OpenAPI](../frontend/docs/openapi.yaml)를 참고한다.
 
 ### `GET /api/v1/issues`
 
@@ -176,11 +176,13 @@ DB `CHECK` 제약과 **같은 값을 그대로** 쓴다. 번역하지 않는다.
 - **`verified=true`만 나간다.** 필터가 아니라 규칙이다.
 - 정렬: `tier` (`BOTH` → `GDELT_ONLY` → `EMBEDDING_ONLY`) → `gdeltLift` 내림차순 → `similarity` 내림차순. 명세 §6.3의 검증 우선순위와 같은 순서다.
 - `rationale`이 **연관 근거다.** 상관계수가 아니다 (명세 §9).
-- 노출 개수 상한은 아직 없다 (WP-22). `limit`으로만 자른다.
+- 제품 정책상 노출 개수 상한은 두지 않기로 확정했다(WP-22). `limit`은 전송 응답 크기만 제한한다.
 
 ---
 
-## 3. 문서 (wiki page)
+## 3. 문서 (wiki page) — MVP 제외·미구현
+
+단일 위키 문서 상세 화면은 MVP에서 제외했다. 아래 계약은 향후 기능 참고용이며 현재 Spring 컨트롤러와 통합 OpenAPI에는 없다. MVP 클라이언트가 호출해서는 안 된다.
 
 이슈의 근거 문서 화면용.
 
@@ -262,9 +264,9 @@ DB `CHECK` 제약과 **같은 값을 그대로** 쓴다. 번역하지 않는다.
 
 ---
 
-## 5. 회원 · 관심종목 · 알림 · 토론
+## 5. 회원 · 관심종목 · 알림 · 토론 — MVP 제외·미구현
 
-⚠️ **인증 방식이 아직 미정이다** (명세 §10, `member.password_hash`가 nullable인 이유). 아래는 자체 로그인 + Bearer 토큰을 가정한 형태이며, OAuth로 정하면 `/auth/*`만 갈린다. 나머지 endpoint는 그대로다.
+~~MVP 인증·관심종목·알림·토론 API~~ → **전부 MVP 범위에서 제외** (2026-09-17, WP-104). 아래는 v0.1 당시의 미래 기능 초안이며 현재 Spring 컨트롤러와 통합 OpenAPI에는 없다. 인증 방식·알림 수단·WebSocket 여부도 이번 MVP에서 결정하지 않는다.
 
 | endpoint | 하는 일 |
 | --- | --- |
@@ -296,12 +298,13 @@ DB `CHECK` 제약과 **같은 값을 그대로** 쓴다. 번역하지 않는다.
 
 `author`가 `null`이면 탈퇴한 사용자다 — FE는 "삭제된 사용자"로 표시한다.
 
-**WebSocket**: `/ws/issues/{id}` — 새 댓글 push. `/ws/me` — 알림 push.
-⚠️ 실시간이 필수인지 아직 미정이다 (명세 §10). 미정인 동안은 위 REST 폴링으로 화면이 성립한다. WebSocket은 폴링을 대체하는 최적화이지 전제가 아니다.
+**과거 초안의 WebSocket**: `/ws/issues/{id}` — 새 댓글 push. `/ws/me` — 알림 push. MVP에서는 구현하지 않는다.
 
 ---
 
-## 6. 통합 검색
+## 6. 통합 검색 — 미래 계약·미구현
+
+통합 검색은 현재 MVP 핵심 루프와 Spring 컨트롤러에 없다. 아래 계약은 향후 기능 참고용이며 통합 OpenAPI에는 포함하지 않는다.
 
 ### `GET /api/v1/search?q=`
 
@@ -318,22 +321,21 @@ FE 공통 헤더용. 이슈·문서·종목을 한 번에.
 
 ---
 
-## 7. 구현 현황 (2026-09-08)
+## 7. 구현 현황 (2026-09-17)
 
 | endpoint | 상태 |
 | --- | --- |
-| `GET /issues`, `GET /issues/{id}` | **구현됨** — 단 `/api` 경로에 봉투 없음. v0.1에 맞추는 작업 필요 |
-| `GET /stocks/{ticker}`, `GET /stocks/{ticker}/issues` | **구현됨** — 위와 같음 |
-| 그 외 전부 | 미구현 |
+| `GET /api/v1/issues`, `/issues/{id}`, `/issues/{id}/stocks` | **구현됨** — 응답 봉투 적용 |
+| `GET /api/v1/issues/snapshots`, `/issues/map` | **구현됨** — 완료 스냅샷 목록과 원자적 그래프 |
+| `GET /api/v1/stocks`, `/stocks/{ticker}`, `/stocks/{ticker}/issues` | **구현됨** — 응답 봉투 적용 |
+| `/pages/*`, `/stocks/{ticker}/prices`, `/search`, 5절 기능 | 미구현. 문서 상세·회원·관심종목·알림·토론은 MVP 제외 |
 
-FE는 현재 `VITE_DATA_SOURCE=mock`으로 fixture를 읽는다. api 모드 어댑터(`frontend/src/data/api/adapters.js`)가 이 문서 형태로 갱신되면 붙는다.
+기계 판독 정본은 `frontend/docs/openapi.yaml`이다. 8개 GET 경로를 Spring 컨트롤러·DTO와 대조했으며, 실제 Spring·PostgreSQL·파이프라인 통합 검증 여부는 `frontend/docs/VALIDATION.md`에 따로 기록한다. OpenAPI가 있다는 사실만으로 배포 또는 실데이터 연동이 끝났다고 보지 않는다.
 
 ---
 
-## 8. 미결
+## 8. 남은 MVP API 작업
 
-- **인증 방식** (자체 / OAuth) — 정해지면 5절 `/auth/*`만 확정된다
-- **노출 개수 상한 N** (WP-22) — 지금은 `limit`으로만 자른다
-- **WebSocket 필수 여부** (명세 §10)
-- **알림 전달 수단** (명세 §10) — 위 API는 저장·읽음만 다룬다
-- `frontend/docs/openapi.yaml` 갱신 — 이 문서 확정 후 기계 판독용 계약을 다시 만든다
+- `GET /api/v1/stocks/{ticker}/prices` — 종목 상세 주가 그래프용. 아직 컨트롤러·OpenAPI에 없다.
+- 운영 이슈 요약 writer와 상태 전이(WP-119), 종목 매칭 로컬 E2E(WP-120)가 실제 데이터를 채운 뒤 8개 GET의 실데이터 응답을 다시 검증한다.
+- 관련 종목의 **제품 노출 상한은 두지 않기로 확정**했다(WP-22). 다만 현재 `/issues/{id}/stocks`의 전송 `limit` 기본 50·최대 100은 API 응답 크기 보호용이며 제품 정책상 노출 상한과 다른 값이다.
