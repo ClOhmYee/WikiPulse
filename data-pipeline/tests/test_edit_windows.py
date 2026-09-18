@@ -142,7 +142,7 @@ def test_live_pipeline_does_not_crash_when_planning_second_micro_batch(spark):
     # the broken implementation contains two EventTimeWatermark nodes.
     assert count_watermarks(aggregated._jdf.logicalPlan()) == 1
     if os.name == "nt":
-        return
+        pytest.skip("Windows lacks the Hadoop native DLL required by writeStream")
 
     query = (
         aggregated.writeStream.format("memory")
