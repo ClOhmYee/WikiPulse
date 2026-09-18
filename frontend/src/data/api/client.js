@@ -5,6 +5,7 @@ import {
   issueDetail,
   stockCard,
   stockDetail,
+  stockPrice,
   relatedStock,
 } from "./adapters.js";
 import { validateMap, validateSnapshots } from "../pulse/contract.js";
@@ -46,6 +47,13 @@ export function createApiClient(baseURL, fetcher) {
         {},
         options,
         issueCard,
+      ),
+    getStockPrices: (ticker, params = {}, options) =>
+      list(
+        `/stocks/${pathId(String(ticker).toUpperCase())}/prices`,
+        params,
+        options,
+        stockPrice,
       ),
     listSnapshots: async (params = {}, options) =>
       validateSnapshots(await request("/issues/snapshots", params, options)),

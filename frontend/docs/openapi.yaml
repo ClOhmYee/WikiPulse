@@ -3,7 +3,7 @@ info:
   title: WikiPulse implemented read APIs
   version: 1.0.0-backend
   description: >-
-    Eight GET routes verified against Spring controllers and DTOs at f3c0160, 2026-09-15. WP-95/-97.
+    Nine GET routes verified against Spring controllers and DTOs (eight at f3c0160, 2026-09-15, WP-95/-97; /stocks/{ticker}/prices added 2026-09-18, WP-124).
     This replaces the 0.2.0 frontend proposal. Unimplemented APIs and contract decisions are documented in
     docs/frontend/API_DECISIONS.md. Mock uses these wire shapes; this document is not evidence of a live
     deployment.
@@ -277,6 +277,60 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/StockIssuesResponse"
+        "400":
+          description: Invalid supported query value.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: Resource not found.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "500":
+          description: Internal error.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /stocks/{ticker}/prices:
+    get:
+      operationId: getStockPrices
+      description: >-
+        Daily OHLC candles for the stock, trading days only, ascending by trade date.
+        Holidays have no point and are not interpolated. Query from/to are YYYY-MM-DD,
+        default is the most recent year. Unknown ticker is 404; an existing ticker with
+        no rows in the range is 200 with empty data. Issue markers are not merged in — the
+        client overlays them from /stocks/{ticker}/issues snapshotTs.
+      parameters:
+        - name: ticker
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: from
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date
+            pattern: ^\d{4}-\d{2}-\d{2}$
+        - name: to
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date
+            pattern: ^\d{4}-\d{2}-\d{2}$
+      responses:
+        "200":
+          description: Daily candles in the range, ascending by trade date; empty when none.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StockPricesResponse"
         "400":
           description: Invalid supported query value.
           content:
@@ -997,6 +1051,54 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/IssueCard"
+      required:
+        - data
+      additionalProperties: false
+    StockPrice:
+      type: object
+      description: >-
+        One daily candle. Trading days only. close is server NOT NULL; open/high/low/volume
+        may be null when yfinance omitted them. Raw (unadjusted) prices.
+      properties:
+        tradeDate:
+          type: string
+          format: date
+          pattern: ^\d{4}-\d{2}-\d{2}$
+        open:
+          type: number
+          minimum: 0
+          nullable: true
+        high:
+          type: number
+          minimum: 0
+          nullable: true
+        low:
+          type: number
+          minimum: 0
+          nullable: true
+        close:
+          type: number
+          minimum: 0
+        volume:
+          type: integer
+          format: int64
+          minimum: 0
+          nullable: true
+      required:
+        - tradeDate
+        - open
+        - high
+        - low
+        - close
+        - volume
+      additionalProperties: false
+    StockPricesResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/StockPrice"
       required:
         - data
       additionalProperties: false

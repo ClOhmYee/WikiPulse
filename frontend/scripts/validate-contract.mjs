@@ -16,6 +16,7 @@ assert.deepEqual(
     "listStocks",
     "getStock",
     "listStockIssues",
+    "getStockPrices",
     "listSnapshots",
     "getPulseMap",
   ].sort(),
@@ -76,7 +77,36 @@ const stocks = await collect("listStocks", "StockListResponse");
 for (const stock of stocks) {
   check("StockDetailResponse", await mockClient.getStock(stock.ticker));
   check("StockIssuesResponse", await mockClient.listStockIssues(stock.ticker));
+  // mock 은 가격을 지어내지 않는다 — 빈 배열이지만 봉투·항목 스키마는 지켜야 한다.
+  check("StockPricesResponse", await mockClient.getStockPrices(stock.ticker));
 }
+if (stocks.length) {
+  check(
+    "StockPricesResponse",
+    await mockClient.getStockPrices(stocks[0].ticker, {
+      from: "2026-01-01",
+      to: "2026-09-01",
+    }),
+  );
+}
+// mock 은 가격을 지어내지 않아 항목이 배열에 안 실린다. StockPrice 항목 스키마
+// (필드명·nullable·required 6개·additionalProperties)를 대표 샘플로 능동 검증한다.
+check("StockPrice", {
+  tradeDate: "2026-09-05",
+  open: 178.2,
+  high: 181.0,
+  low: 177.4,
+  close: 180.6,
+  volume: 41203300,
+});
+check("StockPrice", {
+  tradeDate: "2026-09-05",
+  open: null,
+  high: null,
+  low: null,
+  close: 180.6,
+  volume: null,
+});
 const snapshots = check("SnapshotResponse", await mockClient.listSnapshots());
 if (snapshots.data.length) {
   const { snapshotTs, source } = snapshots.data[0];

@@ -1,0 +1,64 @@
+name: wikipulse-spark
+
+x-spark-common: &spark-common
+  image: apache/spark:3.5.3-python3
+  network_mode: host
+  init: true
+
+  environment: &spark-environment
+    SPARK_LOCAL_IP: ${big_server_IP}
+    SPARK_CONF_DIR: /opt/spark/conf
+    HADOOP_CONF_DIR: /opt/hadoop-conf
+    SPARK_LOCAL_DIRS: /opt/spark/local
+    SPARK_DAEMON_MEMORY: 512m
+    PYSPARK_PYTHON: python3
+    PYSPARK_DRIVER_PYTHON: python3
+
+  volumes:
+    - ./conf:/opt/spark/conf:ro
+    - ./hadoop-conf:/opt/hadoop-conf:ro
+    - ./jobs:/opt/spark/jobs:ro
+    - ./work:/opt/spark/work
+    - ./local:/opt/spark/local
+
+  stop_grace_period: 60s
+
+  logging:
+    driver: json-file
+    options:
+      max-size: "10m"
+      max-file: "3"
+
+services:
+  worker:
+    <<: *spark-common
+    restart: unless-stopped
+    environment:
+      <<: *spark-environment
+      SPARK_WORKER_OPTS: "-Dspark.worker.cleanup.enabled=true -Dspark.worker.cleanup.appDataTtl=86400"
+    entrypoint: ["/opt/spark/bin/spark-class"]
+    command:
+      - org.apache.spark.deploy.worker.Worker
+      - --host
+      - ${big_server_IP}
+      - --port
+      - "7078"
+      - --webui-port
+      - "18081"
+      - --cores
+      - "2"
+      - --memory
+      - "4g"
+      - --work-dir
+      - /opt/spark/work
+      - spark://${sub_server_IP}:7077
+    healthcheck:
+      test:
+        - CMD
+        - python3
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://${big_server_IP}:18081/', timeout=3)"
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s

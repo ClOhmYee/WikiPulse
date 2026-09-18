@@ -243,6 +243,23 @@ const handlers = {
     const values = issuesForTicker(value.symbol).slice(0, 50);
     return envelope(values);
   },
+  getStockPrices(ticker, params = {}) {
+    stock(ticker); // 없는 티커는 404 (API 계약과 동일)
+    for (const key of Object.keys(params))
+      if (!["from", "to"].includes(key)) invalid();
+    // 형식(YYYY-MM-DD) + 달력 유효성. 백엔드 LocalDate.parse 와 같은 400 경로.
+    for (const key of ["from", "to"])
+      if (
+        params[key] !== undefined &&
+        (!/^\d{4}-\d{2}-\d{2}$/.test(params[key]) ||
+          !Number.isFinite(Date.parse(params[key])))
+      )
+        invalid();
+    // from > to 는 백엔드처럼 400.
+    if (params.from && params.to && params.from > params.to) invalid();
+    // mock 은 가격을 지어내지 않는다(UI_GUIDE) — 항상 빈 구간 → FE 는 empty 상태.
+    return envelope([]);
+  },
 };
 
 /** Mock and API clients expose the same eight raw Spring DTO response shapes. */
@@ -253,7 +270,9 @@ export const mockClient = {
     Object.entries(handlers).map(([method, handler]) => [
       method,
       async (...args) => {
-        const options = method === "listIssueStocks" ? args[2] : args[1];
+        const options = ["listIssueStocks", "getStockPrices"].includes(method)
+          ? args[2]
+          : args[1];
         options?.signal?.throwIfAborted();
         await Promise.resolve();
         options?.signal?.throwIfAborted();

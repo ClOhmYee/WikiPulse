@@ -12,6 +12,7 @@
  * @property {(params?: ListParams, options?: RequestOptions) => Promise<DataResponse<object[]>>} listStocks
  * @property {(ticker: string, options?: RequestOptions) => Promise<DataResponse<object>>} getStock
  * @property {(ticker: string, options?: RequestOptions) => Promise<DataResponse<object[]>>} listStockIssues
+ * @property {(ticker: string, params?: {from?: string, to?: string}, options?: RequestOptions) => Promise<DataResponse<object[]>>} getStockPrices
  * @property {(params?: {from?: string, to?: string, source?: string}, options?: RequestOptions) => Promise<object>} listSnapshots
  * @property {(params?: {snapshotTs?: string, source?: string}, options?: RequestOptions) => Promise<object>} getPulseMap
  */
