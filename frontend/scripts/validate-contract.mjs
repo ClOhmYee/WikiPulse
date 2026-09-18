@@ -89,6 +89,24 @@ if (stocks.length) {
     }),
   );
 }
+// mock 은 가격을 지어내지 않아 항목이 배열에 안 실린다. StockPrice 항목 스키마
+// (필드명·nullable·required 6개·additionalProperties)를 대표 샘플로 능동 검증한다.
+check("StockPrice", {
+  tradeDate: "2026-09-05",
+  open: 178.2,
+  high: 181.0,
+  low: 177.4,
+  close: 180.6,
+  volume: 41203300,
+});
+check("StockPrice", {
+  tradeDate: "2026-09-05",
+  open: null,
+  high: null,
+  low: null,
+  close: 180.6,
+  volume: null,
+});
 const snapshots = check("SnapshotResponse", await mockClient.listSnapshots());
 if (snapshots.data.length) {
   const { snapshotTs, source } = snapshots.data[0];

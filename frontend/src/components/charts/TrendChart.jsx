@@ -69,6 +69,23 @@ export function TrendChart({
   };
   const valueSegments = segments(values);
   const referenceSegments = segments(baselineValues);
+  // 실제로 그려질 마커만 미리 계산한다 — 범례 노출과 렌더를 같은 조건으로 묶어
+  // "이슈 발생 시점" 범례만 뜨고 마커는 없는 불일치를 막는다. 창보다 이른 이슈는
+  // 버리고, 최신 봉 이후(가격 미도착) 이슈는 30일 유예 안에서 오른쪽 끝에 붙인다.
+  const markerGraceMs = 1000 * 60 * 60 * 24 * 30;
+  const visibleMarkers = timeAxis
+    ? markers.flatMap((marker) => {
+        const ms = Date.parse(marker.date);
+        if (
+          !Number.isFinite(ms) ||
+          ms < times[0] ||
+          ms > times.at(-1) + markerGraceMs
+        )
+          return [];
+        const frac = Math.min(1, (ms - times[0]) / (times.at(-1) - times[0]));
+        return [{ marker, mx: left + frac * (width - left - right) }];
+      })
+    : [];
   const active =
     hover === null ? data.length - 1 : Math.min(hover, data.length - 1);
   const selected = data[active];
@@ -206,23 +223,7 @@ export function TrendChart({
                 strokeWidth="2"
               />
             )}
-            {timeAxis &&
-              markers.map((marker) => {
-                const ms = Date.parse(marker.date);
-                // 창보다 이른 이슈는 버린다. 최신 봉 이후(가격 미도착) 이슈는 30일
-                // 유예 안에서 오른쪽 끝에 붙여 표시한다 — tooltip 은 실제 날짜.
-                const graceMs = 1000 * 60 * 60 * 24 * 30;
-                if (
-                  !Number.isFinite(ms) ||
-                  ms < times[0] ||
-                  ms > times.at(-1) + graceMs
-                )
-                  return null;
-                const frac = Math.min(
-                  1,
-                  (ms - times[0]) / (times.at(-1) - times[0]),
-                );
-                const mx = left + frac * (width - left - right);
+            {visibleMarkers.map(({ marker, mx }) => {
                 const node = (
                   <>
                     <line
@@ -303,7 +304,7 @@ export function TrendChart({
             평소 편집량
           </span>
         )}
-        {markers.length > 0 && (
+        {visibleMarkers.length > 0 && (
           <span>
             <i style={{ background: "#dbb057" }} />
             이슈 발생 시점

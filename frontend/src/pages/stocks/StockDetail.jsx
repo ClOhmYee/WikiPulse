@@ -34,8 +34,9 @@ export default function StockDetail({ symbol, savedStocks, onToggleStock }) {
         })),
     [relatedEvents],
   );
-  // 기본은 서버 기본(최근 1년). 관련 이슈가 1년보다 오래됐으면 그 시점이 창에
-  // 들어오도록 from 을 당긴다 — 마커가 로딩된 가격 구간 밖으로 벗어나지 않게.
+  // 가격 창은 "최근 1년"과 "모든 연관 이슈 시점"을 모두 포함해야 한다. 마커가
+  // 있으면 from 을 명시해(둘 중 더 이른 시점 − 14일) 보낸다 — from 을 생략하면
+  // 서버가 자기 TZ 로 today−1년을 잡아 경계 근처 마커가 하루 차이로 조용히 잘린다.
   const from = useMemo(() => {
     const stamps = markers
       .map((marker) => Date.parse(marker.date))
@@ -43,11 +44,10 @@ export default function StockDetail({ symbol, savedStocks, onToggleStock }) {
     if (!stamps.length) return undefined;
     const oneYearAgo = new Date();
     oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
-    const earliest = Math.min(...stamps);
-    if (earliest >= oneYearAgo.getTime()) return undefined;
-    const start = new Date(earliest);
-    start.setDate(start.getDate() - 14);
-    return start.toISOString().slice(0, 10);
+    const earliest = new Date(Math.min(...stamps));
+    earliest.setDate(earliest.getDate() - 14); // 왼쪽 여유
+    const start = Math.min(oneYearAgo.getTime(), earliest.getTime());
+    return new Date(start).toISOString().slice(0, 10);
   }, [markers]);
   if (!stock)
     return (
@@ -204,10 +204,14 @@ export default function StockDetail({ symbol, savedStocks, onToggleStock }) {
  */
 function StockPriceSection({ symbol, from, markers, isExample }) {
   const params = useMemo(() => (from ? { from } : {}), [from]);
-  const key = JSON.stringify({ symbol, from: from ?? null });
+  const key = JSON.stringify({ symbol, from: from ?? null, isExample });
   const load = useCallback(
-    (signal) => dataClient.getStockPrices(symbol, params, { signal }),
-    [symbol, params],
+    // 데모 데이터에는 주가가 없다 — 불필요한 호출을 생략하고 바로 unavailable 로.
+    (signal) =>
+      isExample
+        ? Promise.resolve({ data: [] })
+        : dataClient.getStockPrices(symbol, params, { signal }),
+    [symbol, params, isExample],
   );
   const { data, error, loading, reload } = useAsyncResource(load, key);
   const points = useMemo(

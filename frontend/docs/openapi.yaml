@@ -1066,15 +1066,19 @@ components:
           pattern: ^\d{4}-\d{2}-\d{2}$
         open:
           type: number
+          minimum: 0
           nullable: true
         high:
           type: number
+          minimum: 0
           nullable: true
         low:
           type: number
+          minimum: 0
           nullable: true
         close:
           type: number
+          minimum: 0
         volume:
           type: integer
           format: int64
