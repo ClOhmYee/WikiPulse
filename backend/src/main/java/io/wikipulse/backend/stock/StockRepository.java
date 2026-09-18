@@ -1,12 +1,33 @@
 package io.wikipulse.backend.stock;
 
 import io.wikipulse.backend.stock.dto.StockCardResponse;
+import io.wikipulse.backend.stock.dto.StockPriceResponse;
+import java.time.LocalDate;
 import java.util.List;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 public interface StockRepository extends JpaRepository<Stock, String> {
+
+    /**
+     * 종목 일봉. API 명세 v0.3 §4 `GET /stocks/{ticker}/prices`.
+     * [from, to] 구간의 거래일만 오름차순으로. 휴장일은 행이 없다(보간 안 함).
+     * 티커 존재 검증은 서비스가 먼저 한다 — 여기서 0행은 "그 구간 데이터 없음"이다.
+     */
+    @Query(value = """
+            SELECT trade_date AS tradeDate, open AS open, high AS high,
+                   low AS low, close AS close, volume AS volume
+            FROM stock_price
+            WHERE ticker = :ticker
+              AND trade_date >= :from
+              AND trade_date <= :to
+            ORDER BY trade_date ASC
+            """, nativeQuery = true)
+    List<StockPriceResponse.Projection> findPrices(
+            @Param("ticker") String ticker,
+            @Param("from") LocalDate from,
+            @Param("to") LocalDate to);
 
     /**
      * 종목 목록. API 명세 v0.3 §4 `GET /stocks`.

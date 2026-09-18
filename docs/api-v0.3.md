@@ -336,7 +336,8 @@ FE 공통 헤더용. 이슈·문서·종목을 한 번에.
 | `GET /api/v1/issues`, `/issues/{id}`, `/issues/{id}/stocks` | **구현됨** — 상세 members는 WP-129부터 `cluster_member` 고정값과 `completeness`를 읽음. 로컬 회귀 테스트 완료, EC2·실데이터 API 재검증은 하지 않음 |
 | `GET /api/v1/issues/snapshots`, `/issues/map` | **구현됨** — 완료 스냅샷 목록과 원자적 그래프. map은 `cluster_member` 고정값을 읽음 |
 | `GET /api/v1/stocks`, `/stocks/{ticker}`, `/stocks/{ticker}/issues` | **구현됨 / as-of 재사용 미완료** — 응답 봉투 적용. 요약·검증 재사용 조회에 대상 스냅샷 상한이 없어 과거 backfill에 미래 결과가 섞일 수 있음 |
-| `/pages/*`, `/stocks/{ticker}/prices`, `/search`, 5절 기능 | 미구현. 문서 상세·회원·관심종목·알림·토론은 MVP 제외. 단 `/stocks/{ticker}/prices`는 종목 상세 MVP에 필요 |
+| `GET /api/v1/stocks/{ticker}/prices` | **구현됨** (WP-124). 거래일 일봉, 없는 티커 404·빈 구간 200 빈 data·잘못된 날짜 400. 로컬 실데이터·프론트 차트·마커 연결까지 검증(2026-09-18) |
+| `/pages/*`, `/search`, 5절 기능 | 미구현. 문서 상세·회원·관심종목·알림·토론은 MVP 제외 |
 
 기계 판독 정본은 `frontend/docs/openapi.yaml`이다. 8개 GET 경로를 Spring 컨트롤러·DTO와 대조했고, 2026-09-18 canary에서 실제 PostgreSQL → Spring API → Frontend dev proxy까지 200 응답과 동일 이슈·요약·BA 종목을 확인했다. canary 당시 GKG와 요약·상태 전이는 수동 bridge였고 과거 상세 수치·historical 대표 텍스트의 시점 정합성은 미통과였다. 이후 요약 writer·상태 전이(WP-119)와 historical 도입부·고정 멤버 수치·상세 조회(WP-129)를 구현했지만 동일 canary 재실행과 EC2 검증은 하지 않았다. [1일 E2E canary](validation/2026-09-18-one-day-e2e-canary.md)는 당시의 부분 통과 근거이며 OpenAPI나 코드 존재만으로 배포 완료로 보지 않는다.
 
@@ -344,7 +345,7 @@ FE 공통 헤더용. 이슈·문서·종목을 한 번에.
 
 ## 8. 남은 MVP API 작업
 
-- `GET /api/v1/stocks/{ticker}/prices` — 종목 상세 주가 그래프용. 아직 컨트롤러·OpenAPI에 없고, 로컬 `stock_price`도 0건이다. WP-64는 적재기 구현까지만 완료했으며 실데이터·API·FE 연결은 WP-124에서 추적한다.
+- ~~`GET /api/v1/stocks/{ticker}/prices` — 아직 컨트롤러·OpenAPI에 없고 로컬 `stock_price`도 0건~~ → **완료** (WP-124, 2026-09-18). 컨트롤러·서비스·리포지토리·OpenAPI 추가, 로컬 PostgreSQL에 시연 44종목(verified 3 + 정답셋) 일봉 적재(55,176행), 프론트 종목 상세 차트를 실 API에 연결하고 연관 이슈 시점 마커를 겹쳤다. 전 종목(5,100×5년) 적재는 시연 범위 밖.
 - ~~`/issues/{id}`의 members 쿼리를 `cluster_member.edit_count/views`로 전환하고, 과거 스냅샷 뒤에 들어온 원시 행이 응답을 바꾸지 않는 회귀 테스트를 추가한다(WP-120).~~ → **완료** (2026-09-18, WP-129). 회귀는 `db/tests/test_issue_detail_sql.py`가 실 PostgreSQL로 고정한다.
 - 운영 이슈 요약 worker를 활성화해 실제 GATEWAY로 요약·상태 전이를 실행하고, GKG·종목 매칭 자동 배선(WP-120)이 실제 데이터를 채운 뒤 8개 GET의 실데이터 응답을 다시 검증한다. 같은 `issue_key`의 요약·종목 재사용에는 대상 스냅샷 상한과 원 유효 시각 보존을 추가한다. 한 종목 canary 통과나 writer 코드 존재는 이 자동화·as-of·EC2 검증 완료를 뜻하지 않는다.
 - 2026-07-17~09-17 로컬 시드는 모든 스냅샷을 `CONFIRMED`로 고정하고 요약·종목을 이슈별 마지막 `cluster_id`에만 연결한다. 이 시드는 API 형태·시간 슬라이더 시연용이며 상태 전이, 과거 시점 보강 데이터, 실제 매칭 E2E 검증 근거가 아니다.

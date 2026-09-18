@@ -42,6 +42,7 @@ export function createDataClient(env = {}) {
         "listStocks",
         "getStock",
         "listStockIssues",
+        "getStockPrices",
         "listSnapshots",
         "getPulseMap",
       ].map((method) => [

@@ -2,6 +2,8 @@ package io.wikipulse.backend.stock;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -12,7 +14,10 @@ import io.wikipulse.backend.common.ApiResponse;
 import io.wikipulse.backend.common.PageMeta;
 import io.wikipulse.backend.issue.dto.IssueCardResponse;
 import io.wikipulse.backend.stock.dto.StockCardResponse;
+import io.wikipulse.backend.stock.dto.StockPriceResponse;
 import io.wikipulse.backend.stock.dto.StockResponse;
+import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -75,5 +80,58 @@ class StockControllerTest {
         mvc.perform(get("/api/v1/stocks/ZZZZ"))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.error.code").value("NOT_FOUND"));
+    }
+
+    @Test
+    void 주가는_거래일_오름차순_data봉투_필드() throws Exception {
+        when(service.prices("NVDA", "2026-01-01", "2026-01-05")).thenReturn(
+                ApiResponse.of(List.of(
+                        new StockPriceResponse(LocalDate.parse("2026-01-02"),
+                                new BigDecimal("178.20"), new BigDecimal("181.00"),
+                                new BigDecimal("177.40"), new BigDecimal("180.60"), 41203300L),
+                        new StockPriceResponse(LocalDate.parse("2026-01-05"),
+                                new BigDecimal("181.00"), new BigDecimal("183.50"),
+                                new BigDecimal("180.10"), new BigDecimal("182.90"), 38550100L))));
+
+        mvc.perform(get("/api/v1/stocks/NVDA/prices?from=2026-01-01&to=2026-01-05"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.length()").value(2))
+                .andExpect(jsonPath("$.data[0].tradeDate").value("2026-01-02"))
+                .andExpect(jsonPath("$.data[0].close").value(180.60))
+                .andExpect(jsonPath("$.data[0].volume").value(41203300))
+                .andExpect(jsonPath("$.data[1].tradeDate").value("2026-01-05"));
+
+        verify(service).prices("NVDA", "2026-01-01", "2026-01-05");
+    }
+
+    @Test
+    void 티커는_있으나_구간에_데이터_없으면_200_빈data() throws Exception {
+        // 🔴 없는 티커(404)와 구분 — 여기선 티커가 있고 그 구간만 비었다.
+        when(service.prices(eq("NVDA"), any(), any())).thenReturn(ApiResponse.of(List.of()));
+
+        mvc.perform(get("/api/v1/stocks/NVDA/prices?from=1990-01-01&to=1990-12-31"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data").isArray())
+                .andExpect(jsonPath("$.data.length()").value(0));
+    }
+
+    @Test
+    void 없는_종목_주가는_404() throws Exception {
+        when(service.prices(eq("ZZZZ"), any(), any()))
+                .thenThrow(ApiException.notFound("stock ZZZZ not found"));
+
+        mvc.perform(get("/api/v1/stocks/ZZZZ/prices"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.error.code").value("NOT_FOUND"));
+    }
+
+    @Test
+    void 잘못된_날짜_형식은_400() throws Exception {
+        when(service.prices(eq("NVDA"), eq("nope"), any()))
+                .thenThrow(ApiException.invalidQuery("from must be YYYY-MM-DD"));
+
+        mvc.perform(get("/api/v1/stocks/NVDA/prices?from=nope"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error.code").value("INVALID_QUERY"));
     }
 }

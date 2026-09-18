@@ -8,6 +8,7 @@ export function TrendChart({
   color = "#86c9c4",
   baseline = false,
   height = 180,
+  markers = [],
 }) {
   const id = useId().replace(/:/g, "");
   const [hover, setHover] = useState(null);
@@ -68,6 +69,23 @@ export function TrendChart({
   };
   const valueSegments = segments(values);
   const referenceSegments = segments(baselineValues);
+  // 실제로 그려질 마커만 미리 계산한다 — 범례 노출과 렌더를 같은 조건으로 묶어
+  // "이슈 발생 시점" 범례만 뜨고 마커는 없는 불일치를 막는다. 창보다 이른 이슈는
+  // 버리고, 최신 봉 이후(가격 미도착) 이슈는 30일 유예 안에서 오른쪽 끝에 붙인다.
+  const markerGraceMs = 1000 * 60 * 60 * 24 * 30;
+  const visibleMarkers = timeAxis
+    ? markers.flatMap((marker) => {
+        const ms = Date.parse(marker.date);
+        if (
+          !Number.isFinite(ms) ||
+          ms < times[0] ||
+          ms > times.at(-1) + markerGraceMs
+        )
+          return [];
+        const frac = Math.min(1, (ms - times[0]) / (times.at(-1) - times[0]));
+        return [{ marker, mx: left + frac * (width - left - right) }];
+      })
+    : [];
   const active =
     hover === null ? data.length - 1 : Math.min(hover, data.length - 1);
   const selected = data[active];
@@ -205,6 +223,41 @@ export function TrendChart({
                 strokeWidth="2"
               />
             )}
+            {visibleMarkers.map(({ marker, mx }) => {
+                const node = (
+                  <>
+                    <line
+                      x1={mx}
+                      x2={mx}
+                      y1={top}
+                      y2={y(min)}
+                      stroke="#dbb057"
+                      strokeWidth="1.5"
+                      strokeDasharray="2 3"
+                    />
+                    <circle
+                      cx={mx}
+                      cy={top}
+                      r="4"
+                      fill="#dbb057"
+                      stroke="#0b141b"
+                      strokeWidth="1.5"
+                    />
+                    <title>{`${marker.date} · ${marker.label}`}</title>
+                  </>
+                );
+                return marker.href ? (
+                  <a
+                    key={marker.key ?? marker.href}
+                    href={marker.href}
+                    aria-label={`이슈 ${marker.label} (${marker.date})`}
+                  >
+                    {node}
+                  </a>
+                ) : (
+                  <g key={marker.key ?? marker.date}>{node}</g>
+                );
+              })}
           </>
         )}
         {data.map((item, i) => (
@@ -249,6 +302,12 @@ export function TrendChart({
           <span>
             <i style={{ background: "#dbb057" }} />
             평소 편집량
+          </span>
+        )}
+        {visibleMarkers.length > 0 && (
+          <span>
+            <i style={{ background: "#dbb057" }} />
+            이슈 발생 시점
           </span>
         )}
         <span className="wp-muted">

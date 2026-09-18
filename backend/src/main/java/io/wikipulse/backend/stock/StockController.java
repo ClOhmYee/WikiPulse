@@ -3,6 +3,7 @@ package io.wikipulse.backend.stock;
 import io.wikipulse.backend.common.ApiResponse;
 import io.wikipulse.backend.issue.dto.IssueCardResponse;
 import io.wikipulse.backend.stock.dto.StockCardResponse;
+import io.wikipulse.backend.stock.dto.StockPriceResponse;
 import io.wikipulse.backend.stock.dto.StockResponse;
 import java.util.List;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -44,5 +45,14 @@ public class StockController {
     @GetMapping("/{ticker}/issues")
     public ApiResponse<List<IssueCardResponse>> issues(@PathVariable String ticker) {
         return service.issuesFor(ticker);
+    }
+
+    /** GET /api/v1/stocks/{ticker}/prices?from=YYYY-MM-DD&to=YYYY-MM-DD (기본 최근 1년) */
+    @GetMapping("/{ticker}/prices")
+    public ApiResponse<List<StockPriceResponse>> prices(
+            @PathVariable String ticker,
+            @RequestParam(required = false) String from,
+            @RequestParam(required = false) String to) {
+        return service.prices(ticker, from, to);
     }
 }

@@ -38,6 +38,17 @@ export const stockDetail = (v) =>
   optionalText(v.sector) &&
   optionalText(v.cik) &&
   optionalText(v.businessSummary);
+const dateOnly = (v) =>
+  text(v) && /^\d{4}-\d{2}-\d{2}$/.test(v) && Number.isFinite(Date.parse(v));
+// 일봉 한 점. 거래일만·보간 없음. close 는 서버 NOT NULL, 나머지는 결측 가능.
+export const stockPrice = (v) =>
+  object(v) &&
+  dateOnly(v.tradeDate) &&
+  number(v.close) &&
+  optionalNumber(v.open) &&
+  optionalNumber(v.high) &&
+  optionalNumber(v.low) &&
+  (v.volume == null || (Number.isSafeInteger(v.volume) && v.volume >= 0));
 export const relatedStock = (v) =>
   object(v) &&
   text(v.ticker) &&
