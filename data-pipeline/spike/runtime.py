@@ -243,9 +243,13 @@ class SpikeRuntime:
     그건 호출자가 명시적으로 고른 경우다.
     """
 
-    def __init__(self, baselines: BaselineRepository, sink: SpikeSink | None = None) -> None:
+    def __init__(self, baselines: BaselineRepository, sink: SpikeSink | None = None,
+                 candidates=None) -> None:
         self._baselines = baselines
         self._sink = sink
+        #: 후보 대기 보관소(`spike/candidate_store.CandidateStore`). 없으면 대기를 세기만
+        #: 하고 버린다 — 그게 WP-128 이전의 동작이고, LIVE 가 확정을 못 내던 이유다.
+        self._candidates = candidates
 
     def evaluate(self, window: PageWindow) -> DetectionOutcome:
         """판정만 한다. 저장하지 않는다."""
@@ -255,12 +259,18 @@ class SpikeRuntime:
                                 decision=decision, persisted=False)
 
     def process(self, window: PageWindow) -> DetectionOutcome:
-        """판정하고, **확정이면** 저장한다.
+        """판정하고, **확정이면** `spike` 에 저장한다.
 
-        미탐도 후보 대기도 저장하지 않는다 — `spike` 는 2단계까지 통과한 문서만 담는다
-        (WP-126). 후보 대기는 `RuntimeSummary.pending_views` 로만 센다.
+        미탐은 아무 데도 안 남긴다. **후보 대기는 보관소가 있으면 거기 담는다**
+        (WP-128) — `spike` 에는 못 넣는다. 2단계까지 통과한 문서만 담는 테이블이라
+        대기를 넣으면 조회수를 안 본 문서가 이슈로 노출된다.
+
+        🔴 대기가 아닌 판정이 나면 **보관소에서 지운다.** 재판정으로 확정·폐기된 윈도우가
+        남아 있으면 다음 실행이 같은 것을 또 판정하고, 폐기된 것이 영영 안 사라진다.
         """
         outcome = self.evaluate(window)
+        if self._candidates is not None:
+            self._record_candidate(outcome)
         if not (outcome.decision.is_spike and self._sink is not None):
             return outcome
         self._sink.save(
@@ -282,6 +292,24 @@ class SpikeRuntime:
         )
         return DetectionOutcome(window=outcome.window, baseline=outcome.baseline,
                                 decision=outcome.decision, persisted=True)
+
+    def _record_candidate(self, outcome: DetectionOutcome) -> None:
+        """후보 대기는 보관하고, 확정·폐기는 보관소에서 지운다.
+
+        page_id 는 싱크가 이미 캐시하고 있다 — 보관만 하는 실행(싱크 없음)에서는
+        보관소가 직접 해석한다.
+        """
+        window = outcome.window
+        page_id = self._page_id(window)
+        if outcome.decision.is_pending:
+            self._candidates.save(page_id, window)
+        else:
+            self._candidates.drop(page_id, window.window_start)
+
+    def _page_id(self, window: PageWindow) -> int:
+        if self._sink is not None:
+            return self._sink.page_id(window.wiki, window.title)
+        return self._candidates.page_id(window.wiki, window.title)
 
     def process_all(self, windows: Iterable[PageWindow]) -> RuntimeSummary:
         """여러 윈도우를 한 배치로. 커밋은 호출자가 한 번에 한다."""

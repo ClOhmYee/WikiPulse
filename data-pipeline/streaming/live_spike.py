@@ -28,11 +28,17 @@
     (`spike/detector.py` 112행). 0 을 넣으면 "진짜 조회수 0회" 와 구분되지 않는다.
     Pageviews API 연결은 별도 경로다(WP-127·-128).
 
-    🔴 **그래서 지금 LIVE 는 확정을 하나도 못 낸다** (2026-09-18, WP-126).
+    🔴 **이 경로의 판정은 대부분 후보 대기다** (WP-126·-128).
         2단계 관문이 조회수를 최종 관문으로 두면서, 조회수 없는 윈도우는 확정도 폐기도
-        아닌 **후보 대기**가 됐다. `spike` 는 확정만 담으므로 LIVE 적재가 0 이다.
-        버그가 아니라 계약이고, `other/pageviews` 를 붙이는 -128 까지의 상태다.
-        `to_runtime_frame` 은 `views` 컬럼이 붙은 프레임을 그때 그대로 받는다.
+        아닌 **후보 대기**가 됐다. `spike` 는 확정만 담으므로 이 배치의 적재는 0 이다.
+        ~~그래서 LIVE 는 확정을 못 낸다~~ → 대기를 `spike_candidate` 에 담고
+        (WP-128), 조회수가 도착하면 `python -m spike.recheck` 가 다시 판정해
+        확정을 낸다. 시간별 조회수 적재는 `batch/pageview_hourly_ingest.py`(-127)다.
+
+        ⚠️ **확정은 정각 윈도우에서만 난다.** 조회수가 시간 버킷이라 윈도우 시작이 정각이어야
+        1:1 로 붙는다(`spike/candidate_store.due` 🔴). 기본 슬라이드 5분으로 흘리면 한 시간에
+        12개 윈도우가 나오고 그중 정각 하나만 확정 후보가 된다 — 확정까지 돌리려면
+        `SLIDE_SIZE` 를 `WINDOW_SIZE` 와 같게 준다.
 
 ⚠️ **슬라이딩 윈도우라 한 문서가 한 시간에 여러 행을 낸다.**
     `DEFAULT_SLIDE_SIZE` 가 5분이라 1시간 윈도우가 5분마다 하나씩 겹쳐 나온다.
@@ -167,9 +173,14 @@ def process_batch(conn, batch_df: DataFrame, batch_id: int) -> RuntimeSummary:
     두 곳에 두지 않으려고 런타임 쪽 규칙에 맡긴다.
     """
     from spike.baseline_repository import BaselineRepository
+    from spike.candidate_store import CandidateStore
     from spike.spike_sink import SpikeSink
 
-    runtime = SpikeRuntime(BaselineRepository(conn), SpikeSink(conn, source=LIVE_SOURCE))
+    # 🔴 후보 대기를 보관한다 (WP-128). 편집 스트림에는 조회수가 없어서 이 경로의
+    #    판정은 대부분 대기다 — 안 담으면 나중에 조회수가 와도 재판정할 대상이 없다.
+    #    담긴 것은 `python -m spike.recheck` 가 조회수 도착 후 다시 판정한다.
+    runtime = SpikeRuntime(BaselineRepository(conn), SpikeSink(conn, source=LIVE_SOURCE),
+                           candidates=CandidateStore(conn, source=LIVE_SOURCE))
     rows = to_runtime_frame(batch_df).toLocalIterator()
     summary = RuntimeSummary.of(
         runtime.iter_process(page_window_from_row(row) for row in rows)
