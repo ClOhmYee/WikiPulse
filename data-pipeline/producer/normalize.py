@@ -119,6 +119,9 @@ def normalize(raw: dict[str, Any], *, wikis: frozenset[str] | None = None) -> di
         byte_delta = new_len - (old_len or 0)
 
     meta = raw["meta"]
+    meta_id = meta.get("id")
+    if not isinstance(meta_id, str) or not meta_id.strip():
+        raise ValueError("meta.id must be a non-empty string")
 
     return {
         # 식별
@@ -143,7 +146,7 @@ def normalize(raw: dict[str, Any], *, wikis: frozenset[str] | None = None) -> di
         # 출처 — 리플레이 경로가 붙으면 "dump" 가 들어온다
         "source": "eventstreams",
         # 추적용. 같은 이벤트가 두 번 들어왔는지 확인할 때 쓴다.
-        "meta_id": meta.get("id"),
+        "meta_id": meta_id,
     }
 
 

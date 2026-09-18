@@ -90,8 +90,11 @@ def test_live_preparation_removes_duplicate_meta_id(spark):
     assert prepare_live_events(raw, watermark="10 minutes").count() == 1
 
 
-def test_live_preparation_rejects_missing_meta_id(spark):
-    payload = event(meta={"id": None})
+@pytest.mark.parametrize("meta_id", [None, "", " \t"])
+def test_live_preparation_rejects_missing_or_blank_meta_id(spark, meta_id):
+    payload = json.loads(event())
+    payload["meta_id"] = meta_id
+    payload = json.dumps(payload)
     raw = spark.createDataFrame([(payload,)], "value string")
     assert prepare_live_events(raw, watermark="10 minutes").count() == 0
 

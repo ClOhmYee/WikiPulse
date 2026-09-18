@@ -323,7 +323,7 @@ git commit -m "feat: checkpoint SSE cursor after Kafka acknowledgement"
 **Interfaces:**
 - Produces: `prepare_live_events(raw: DataFrame, *, watermark: str) -> DataFrame`.
 - Consumes: Kafka DataFrame with a binary/string `value` column containing `EDIT_EVENT_SCHEMA` JSON.
-- Guarantee: null `meta_id` rows are excluded; repeated non-null `meta_id` values count once.
+- Guarantee: null 또는 공백뿐인 `meta_id` 행은 제외하며, 반복된 유효 `meta_id`는 한 번만 센다.
 
 - [ ] **Step 1: Add batch-testable contract tests**
 
@@ -337,8 +337,11 @@ def test_live_preparation_removes_duplicate_meta_id(spark):
     assert prepare_live_events(raw, watermark="10 minutes").count() == 1
 
 
-def test_live_preparation_rejects_missing_meta_id(spark):
-    payload = event(meta={"id": None})
+@pytest.mark.parametrize("meta_id", [None, "", " \\t"])
+def test_live_preparation_rejects_missing_or_blank_meta_id(spark, meta_id):
+    payload = json.loads(event())
+    payload["meta_id"] = meta_id
+    payload = json.dumps(payload)
     raw = spark.createDataFrame([(payload,)], "value string")
     assert prepare_live_events(raw, watermark="10 minutes").count() == 0
 ```
@@ -357,7 +360,7 @@ def prepare_live_events(raw: DataFrame, *, watermark: str) -> DataFrame:
         raw.select(F.from_json(F.col("value").cast("string"), EDIT_EVENT_SCHEMA).alias("e"))
         .select("e.*")
         .withColumn("event_ts", F.to_timestamp("event_ts"))
-        .filter(F.col("meta_id").isNotNull())
+        .filter(F.col("meta_id").isNotNull() & F.col("meta_id").rlike(r"\S"))
     )
     if events.isStreaming:
         return (
@@ -616,10 +619,13 @@ Check `docker ps`, container health, `free -h`, `df -h /`, and `sudo ufw status`
 Run locally with the exact commit from Task 5:
 
 ```bash
-git archive --format=tar.gz --output=.agents/local/wikipulse-live-phase1.tar.gz HEAD data-pipeline deploy/live-pipeline
+: "${VERIFIED_COMMIT:?Task 5에서 기록한 전체 40자리 SHA를 설정한다}"
+test "$(git rev-parse "${VERIFIED_COMMIT}^{commit}")" = "$VERIFIED_COMMIT"
+git archive --format=tar.gz --output=.agents/local/wikipulse-live-phase1.tar.gz \
+  "$VERIFIED_COMMIT" data-pipeline deploy/live-pipeline
 ```
 
-Record `git rev-parse HEAD` beside `Get-FileHash .agents/local/wikipulse-live-phase1.tar.gz -Algorithm SHA256`. The generated archive lives in the ignored `.agents/local` directory, is a deployment artifact rather than a source edit, and must not be committed.
+Record `$VERIFIED_COMMIT` beside `Get-FileHash .agents/local/wikipulse-live-phase1.tar.gz -Algorithm SHA256`. Do not replace the archive revision with a later `HEAD`. The generated archive lives in the ignored `.agents/local` directory, is a deployment artifact rather than a source edit, and must not be committed.
 
 - [ ] **Step 4: Upload into a new directory only**
 

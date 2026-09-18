@@ -3,7 +3,7 @@
 - 검증 ID: `VAL-2026-09-18-LIVE-01`
 - 실행일: 2026-09-18 KST
 - 배포 대상: 데이터 EC2 `data.example.com`
-- 서비스 EC2: 읽기 전용 기준선·최종 상태 확인만 수행
+- 서비스 EC2: 직접 SSH·설정·컨테이너 관리 작업은 읽기 전용; 기존 Spark Worker는 신규 executor 수행
 - 배포 커밋: `2d00cdb963c52f8aa69b0b12369b497a3f7506a1`
 - 판정: **PASS — EventStreams → Kafka → 2-node Spark → HDFS checkpoint 지속 실행과 재시작 복구 확인**
 
@@ -177,7 +177,9 @@ offsets/commits가 모두 batch 57까지 전진했다.
 같은 컨테이너로 running/healthy 상태를 유지했다. UFW도 계속 active였다. 기존 Kafka topic,
 HDFS daemon, Spark master/worker, UFW, 인프라 Compose는 변경하지 않았다.
 
-서비스 EC2는 읽기 전용으로만 조회했다. 최초 기준선 `08:03:07Z`의 백엔드 image는
+서비스 EC2에서는 직접 관리 작업을 수행하지 않고 읽기 전용으로만 조회했다. 다만 그 서버에
+이미 배치되어 있던 Spark Worker는 이번 신규 application의 executor 1 core·1024 MiB를
+실행했으므로 서비스 EC2 자원 사용까지 없었던 것은 아니다. 최초 기준선 `08:03:07Z`의 백엔드 image는
 `wikipulse-backend:7c97535f`였다. `08:29:25Z`에도 동일했지만, 최종 `08:32:08Z`에는
 외부 CI 배포로 보이는 `wikipulse-backend:d77ce0f8`로 바뀌어 있었다. 중간에 CI runner
 컨테이너가 나타났다가 사라진 점도 이 해석과 일치한다. 본 작업은 서비스 EC2에서 어떠한
