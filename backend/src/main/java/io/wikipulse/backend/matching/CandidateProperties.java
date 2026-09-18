@@ -26,6 +26,7 @@ public class CandidateProperties {
     private final Gateway gateway = new Gateway();
     private final Scheduler scheduler = new Scheduler();
     private final Verification verification = new Verification();
+    private final Summary summary = new Summary();
 
     public int getEmbeddingTopK() {
         return embeddingTopK;
@@ -65,6 +66,10 @@ public class CandidateProperties {
 
     public Verification getVerification() {
         return verification;
+    }
+
+    public Summary getSummary() {
+        return summary;
     }
 
     /** 대표 텍스트 도입부 출처. 명세 §6.2 — prop=extracts&exintro&explaintext, 리다이렉트 추적. */
@@ -127,6 +132,13 @@ public class CandidateProperties {
          * 400 에 맞던 응답엔 영향 없음).
          */
         private int verificationMaxTokens = 800;
+        /**
+         * 이슈 요약(WP-119) 응답 상한 토큰. 검증과 분리한다 — 요약은 사용자 노출용 한국어
+         * 1~3문장(대략 200토큰)이라 800이면 충분하지만, 검증 예산({@link #verificationMaxTokens})을
+         * 낮추면 요약이 조용히 절단돼 파싱 실패→미저장으로 흐르므로 노브를 나눈다(멀티렌즈 리뷰).
+         * 모델은 검증과 같은 Anthropic 모델을 공유한다({@link #verificationModel}).
+         */
+        private int summaryMaxTokens = 800;
         /** 🔴 환경변수 LLM_GATEWAY_KEY. 저장소에 넣지 않는다. */
         private String apiKey = "";
         /** 🔴 타임아웃 필수. read 는 게이트웨이 p99 지연을 덮게 잡는다(페이로드는 항상 작다). */
@@ -163,6 +175,14 @@ public class CandidateProperties {
 
         public void setVerificationMaxTokens(int verificationMaxTokens) {
             this.verificationMaxTokens = verificationMaxTokens;
+        }
+
+        public int getSummaryMaxTokens() {
+            return summaryMaxTokens;
+        }
+
+        public void setSummaryMaxTokens(int summaryMaxTokens) {
+            this.summaryMaxTokens = summaryMaxTokens;
         }
 
         public String getApiKey() {
@@ -293,6 +313,46 @@ public class CandidateProperties {
 
         public void setTier3Threshold(int tier3Threshold) {
             this.tier3Threshold = tier3Threshold;
+        }
+    }
+
+    /**
+     * 이슈 요약 writer·상태 전이 워커 (WP-119, 명세 §3.2 7번). 검증 워커와 같은 이유로
+     * 기본 꺼짐 — 서버에서 LLM_GATEWAY_KEY 를 넣고 {@code summary.enabled=true} 로 켠다. 요약은 검증과 같은
+     * gateway 신뢰성 계층·모델·max_tokens 를 재사용한다(새 GATEWAY 설정 없음).
+     */
+    public static class Summary {
+        private boolean enabled = false;
+        /**
+         * 폴 간격 (ISO-8601 Duration). {@link Scheduler#fixedDelay} 와 같은 SpEL 바인딩 관습 —
+         * {@code @Scheduled} 는 프로퍼티 키를 직접 읽는다. 이 필드는 문서·기본값 정의용.
+         */
+        private String fixedDelay = "PT5M";
+        /** 한 폴에서 처리할 클러스터 수 상한. */
+        private int batchSize = 20;
+
+        public boolean isEnabled() {
+            return enabled;
+        }
+
+        public void setEnabled(boolean enabled) {
+            this.enabled = enabled;
+        }
+
+        public String getFixedDelay() {
+            return fixedDelay;
+        }
+
+        public void setFixedDelay(String fixedDelay) {
+            this.fixedDelay = fixedDelay;
+        }
+
+        public int getBatchSize() {
+            return batchSize;
+        }
+
+        public void setBatchSize(int batchSize) {
+            this.batchSize = batchSize;
         }
     }
 }
