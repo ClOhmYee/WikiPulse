@@ -10,6 +10,7 @@ EC2 두 대의 `~/infra/*` 를 저장소로 옮긴 것이다. **서버가 날아
     infra/nginx    리버스 프록시 · certbot      (기본 EC2)
     infra/spark    Master + Worker             (추가 EC2 = Master·Driver, 기본 EC2 = Worker)
     infra/hdfs     NameNode · DataNode          (추가 EC2 = NameNode, 둘 다 DataNode)
+    infra/pipeline LIVE producer + edit-stream  (추가 EC2, 2026-09-18 배포)
 
 ## 🔴 비밀값은 안 들어온다
 
@@ -51,6 +52,9 @@ EC2 두 대의 `~/infra/*` 를 저장소로 옮긴 것이다. **서버가 날아
    `SINK=spike` 가 못 돈다. `docker/spark/Dockerfile`(파이썬 3.11)로 바꾼다.
    ⚠️ **Driver 와 Worker 를 동시에** 바꾼다 — 버전이 갈리면 파이썬 워커가 뜨는 순간
    executor 가 죽는다. 절차는 `docker/README.md`.
+   ⚠️ 바꿀 대상에 `infra/pipeline` 의 `edit-stream` 도 포함된다. 2026-09-18 에
+   배포한 그 driver 가 지금 Worker 와 같은 `apache/spark:3.5.3-python3` 을 쓰고 있어
+   현재는 짝이 맞지만, Worker 만 3.11 로 올리면 그 순간 갈린다.
 2. **`live-cycle` 서비스** — 시간별 조회수 적재·재판정 주기(WP-135)가 EC2
    compose 에 아직 없다. `docker-compose.yml` 의 같은 이름 서비스를 참고해 옮긴다.
 

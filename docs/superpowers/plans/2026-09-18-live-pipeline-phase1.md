@@ -10,6 +10,10 @@
 
 **Spec:** `docs/superpowers/specs/2026-09-18-live-pipeline-phase1-design.md`
 
+> **경로 변경 (2026-09-19):** 이 계획서가 `deploy/live-pipeline/`으로 적은 배포 파일은
+> develop 통합 후 `infra/pipeline/`으로 옮겼다. EC2 compose 정본을 `infra/*`에 둔다는
+> WP-133 규칙을 따른 것이며, 서버 경로 `/home/deploy/infra/pipeline`은 그대로다.
+
 ## Global Constraints
 
 - Deploy only to the data EC2 `data.example.com`; do not alter Spring Boot, PostgreSQL, Nginx, or frontend files on the service EC2.

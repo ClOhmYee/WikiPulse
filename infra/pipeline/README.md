@@ -4,6 +4,15 @@
 edit stream만 실행한다. 기존 EC2 인프라 Compose와 UFW 설정은 수정하거나 재시작하지
 않으며, 두 서비스 모두 호스트 포트를 게시하지 않는다.
 
+서버 경로는 `/home/deploy/infra/pipeline`이고 저장소 경로도 같은 이름으로 맞췄다
+(~~`deploy/live-pipeline`~~ → `infra/pipeline`, 2026-09-19). EC2 compose의 정본을
+`infra/*`에 둔다는 WP-133 규칙을 따른 것이다.
+
+🔴 **Spark driver 이미지는 Worker와 같은 파이썬이어야 한다.** 여기 `edit-stream`은
+Worker와 같은 `apache/spark:3.5.3-python3`(파이썬 3.8)을 쓴다. `infra/README.md`가
+예고한 대로 Worker를 `docker/spark/Dockerfile`(파이썬 3.11)로 바꾸는 순간 이 서비스도
+같이 바꿔야 한다 — 버전이 갈리면 파이썬 워커가 뜨는 순간 executor가 죽는다.
+
 ## 준비
 
 - 저장소의 `data-pipeline` 체크아웃 경로를 `PIPELINE_APP_DIR`로 지정한다.
@@ -11,7 +20,7 @@ edit stream만 실행한다. 기존 EC2 인프라 Compose와 UFW 설정은 수�
 - 기존 Kafka, Spark master, HDFS가 각 환경 변수의 주소에서 접근 가능해야 한다.
 
 ```bash
-cd deploy/live-pipeline
+cd infra/pipeline
 cp .env.example .env
 chmod 0600 .env
 unset RESTART_POLICY
