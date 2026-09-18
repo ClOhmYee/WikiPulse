@@ -3,23 +3,30 @@
     python -m cluster.driver --dsn "$DATABASE_URL" --source replay
     python -m cluster.driver --dsn "$DATABASE_URL" --source live
     python -m cluster.driver --dsn ... --source replay --snapshot-ts 2024-10-07T14:00:00Z
+    python -m cluster.driver --dsn ... --source replay \
+        --clickstream-root ./data/clickstream --clickstream-month-rule event \
+        --creation-index ./data/page-creation/enwiki/2024-09_2024-10
     python -m cluster.driver --dsn ... --source live --dry-run
 
 `spike` 테이블(WP-94 런타임 출력)을 읽어 씨드를 만들고, 순수 로직
 (`snapshot.build_snapshot`)으로 스냅샷을 생산해 `writer.persist_snapshot` 으로 저장한다.
 로직·점수·게이트는 여기서 정하지 않는다 — 전부 -75 자산을 그대로 부른다.
 
-배선된 것 / 아직 아닌 것 (WP-99)
+배선된 것 / 아직 아닌 것 (~~WP-99~~ → -115, 2026-09-17)
     ✅ 씨드: `spike` + `wiki_page` 조인 → `load_seeds_from_spike`
     ✅ 이전 first_detected_at: `issue_cluster` 의 issue_key 별 min → `load_prior_first_detected`
-    ⛔ Clickstream 이웃(비-씨드): 적재본이 아직 없다(-81 코드는 Done, 산출물 0건).
-       `load_clickstream_neighbors` 는 구현돼 있으니 덤프가 생기면 `--clickstream` 으로 잇는다.
-    ⛔ 문서 생성일: `load_creation_dates` 는 여전히 골격 — **비-씨드 경로 전용**이라
-       씨드만 있는 지금은 호출되지 않는다.
+    ✅ Clickstream 이웃(비-씨드): `MonthlyNeighborSource` → `--clickstream-root` (-115)
+    ✅ 문서 생성일: `batch/page_creation` 인덱스 → `--creation-index` (-115)
+    ✅ 이웃 제목 → page_id: `load_pages_by_title` (-115). 없는 문서는 등록한다
     ⛔ Wikidata 점선 간선: 선택 사항. 없으면 안 그린다.
 
-    → 지금은 **씨드 단독 스냅샷**이다. `_build_cluster` 는 이웃이 비어도 씨드 멤버 1개·
-      간선 0개로 정상 생산한다(계약상 유효). 비-씨드 규칙(WP-77)은 이 파일 밖이다.
+    🔴 **비-씨드 경로는 여전히 생성일 창(-51) 하나뿐이다.** "기존 문서가 사건으로
+      재조명되는" 비-씨드(WP-77: 재급증 비율 >= 5 AND 절대 편집 >= 20)는
+      명세에만 있고 **코드에 없다** (2026-09-17 확인). `Mojtaba_Khamenei` 류는 아직
+      멤버가 되지 않는다. 이 파일이 그 규칙을 대신 만들지 않는다.
+
+    이웃 인자를 안 주면 예전처럼 **씨드 단독 스냅샷**이다. `_build_cluster` 는 이웃이
+    비어도 씨드 멤버 1개·간선 0개로 정상 생산한다(계약상 유효).
 
 스냅샷 시점을 어떻게 고르나
     `spike.detected_at` 의 **고유값 하나가 스냅샷 하나**다. 새 문턱이나 lookback 창을
@@ -70,15 +77,47 @@ from __future__ import annotations
 import argparse
 import os
 import sys
-from collections.abc import Sequence
+from collections.abc import Iterable, Sequence
+from dataclasses import dataclass, field as dataclass_field
 from datetime import date, datetime, timezone
 from pathlib import Path
 
 from batch.clickstream import NeighborRef, neighbors_for, read_shards
+from batch.page_creation import creation_dates_for
 from spike.spike_sink import SPIKE_SOURCES
 
-from .snapshot import Neighbor, Seed, Snapshot, build_snapshot
+from .snapshot import (
+    DEFAULT_CREATION_WINDOW_DAYS,
+    Neighbor,
+    Seed,
+    Snapshot,
+    build_snapshot,
+    _within_creation_window,
+)
 from .writer import persist_snapshot
+
+#: Clickstream 근거 월을 고르는 규칙 (WP-115).
+#:
+#:    `event`    : 스냅샷이 속한 달. **historical replay 가 쓴다** (2026-09-17 확정).
+#:    `previous` : 스냅샷 직전 달. LIVE 가 실제로 구할 수 있는 최신 덤프다.
+#:
+#: 🔴 **전역 기본값을 두지 않는다.** `--source` 를 `required` 로 둔 것과 같은 이유다
+#:    (아래 `require_spike_source` 🔴) — 기본값이 있으면 빠뜨린 실행이 **에러 없이**
+#:    다른 근거로 산출물을 만든다. 리플레이를 전월로 돌리면 대표 사건에서 이웃이
+#:    0개가 되는데(아래 실측) 그건 "이웃이 없는 시점" 과 구분되지 않는다.
+#:
+#: 🔴 **`event` 는 replay 결정이지 production 전역 의미가 아니다.** LIVE 는 당월 덤프를
+#:    구할 수 없으므로 `event` 를 쓸 수 없고, LIVE 가 무엇을 쓸지는 **별도 후속 과제**다.
+#:    리플레이 산출물을 LIVE-equivalent 로 부르지 않는다. 근거는 `snapshot.py` 🔴.
+#:
+#: 실측 (61일 2024-09~10, -109 데이터, 2026-09-17):
+#:    event    씨드 덤프 적중 5,535/6,611(83.7%) · 2+ 멤버 클러스터 34.1% · edge 20,161
+#:    previous 씨드 덤프 적중 4,403/6,614(66.6%) · 2+ 멤버 클러스터 17.7% · edge  6,134
+#:    Milton·Helene·Yagi 는 previous 에서 이웃 0개 — 씨드 문서가 그 달에 없었다.
+#:
+#: 임계값이 아니라 **입력 선택**이라 여기 두는 것이고, 게이트(`snapshot.py`)는 이 값을
+#: 보지 않는다. 월을 고르는 함수는 `clickstream_month_for` 하나다.
+CLICKSTREAM_MONTH_RULES = ("previous", "event")
 
 #: 한 시점·한 출처의 씨드. `detected_at` 이 그 시점이다.
 #: 🔴 `s.source = %s` 가 이 스토리(-102)의 핵심이다. 빼면 LIVE 스냅샷에 리플레이 씨드가
@@ -106,6 +145,33 @@ SELECT DISTINCT s.detected_at
    AND (%s::timestamptz IS NULL OR s.detected_at >= %s::timestamptz)
    AND (%s::timestamptz IS NULL OR s.detected_at <= %s::timestamptz)
  ORDER BY s.detected_at
+"""
+
+#: 여러 시점의 씨드 제목을 한 번에. Clickstream 덤프를 월당 한 번만 훑으려면
+#: 그 월에 필요한 씨드 제목을 미리 다 알아야 한다(덤프가 수천만 행이라 시점마다
+#: 다시 훑을 수 없다). `s.source = %s` 는 위 🔴 와 같은 이유로 여기도 걸린다.
+SELECT_SEED_TITLES_SQL = """
+SELECT DISTINCT p.wiki, p.title
+  FROM spike s
+  JOIN wiki_page p ON p.id = s.page_id
+ WHERE s.source = %s
+   AND s.detected_at = ANY(%s)
+"""
+
+#: 이웃 제목 → page_id. `cluster_member.page_id` 가 `wiki_page` 를 참조하므로
+#: 멤버가 되려면 행이 있어야 한다. 🔴 N+1 금지 — 후보를 한 번에 넘긴다.
+SELECT_PAGES_BY_TITLE_SQL = """
+SELECT title, id FROM wiki_page WHERE wiki = %s AND title = ANY(%s)
+"""
+
+#: 없는 이웃 문서를 등록한다. `spike/baseline_sink.py` 의 `RESOLVE_PAGE_SQL` 과 같은
+#: UPSERT 다 — 자연키가 같으니 규칙도 같아야 한다.
+#: ⚠️ `DO NOTHING` 이라 RETURNING 이 충돌 행을 안 준다. 넣고 나서 다시 SELECT 한다
+#: (왕복 2회, 후보 수와 무관). `DO UPDATE last_seen` 으로 바꾸면 이웃 조회가
+#: 기존 문서의 last_seen 을 건드려 "최근 본 문서" 의미가 흐려진다.
+INSERT_PAGES_SQL = """
+INSERT INTO wiki_page (wiki, title) VALUES (%s, %s)
+ON CONFLICT (wiki, title) DO NOTHING
 """
 
 #: issue_key 별 최초 감지 시각. build_snapshot 의 prior_first_detected 입력.
@@ -230,6 +296,70 @@ def load_prior_first_detected(conn, source: str) -> dict[str, datetime]:
         return {key: ts for key, ts in cur.fetchall()}
 
 
+def clickstream_month_for(snapshot_ts: datetime, rule: str) -> str:
+    """이 스냅샷의 근거가 될 Clickstream 월 `YYYY-MM`.
+
+    `previous` = 스냅샷 직전 달, `event` = 스냅샷이 속한 달 (`CLICKSTREAM_MONTH_RULES`).
+
+    ⚠️ 시간대를 UTC 로 내린 뒤 월을 읽는다. naive 나 로컬 시각으로 읽으면 월초·월말
+    스냅샷이 옆 달 덤프를 집는다 — 그 달 덤프가 있으면 에러 없이 이웃만 달라진다.
+    """
+    ts = snapshot_ts.astimezone(timezone.utc)
+    if rule == "event":
+        return f"{ts.year:04d}-{ts.month:02d}"
+    if rule == "previous":
+        year, month = (ts.year, ts.month - 1) if ts.month > 1 else (ts.year - 1, 12)
+        return f"{year:04d}-{month:02d}"
+    raise ValueError(
+        f"clickstream 월 규칙은 {CLICKSTREAM_MONTH_RULES} 중 하나다 (받은 값: {rule!r})")
+
+
+def load_seed_titles(
+    conn, source: str, snapshot_times: Sequence[datetime]
+) -> dict[str, set[str]]:
+    """여러 시점의 씨드 제목을 wiki 별로 모은다. Clickstream 1회 순회용 입력."""
+    require_spike_source(source)
+    if not snapshot_times:
+        return {}
+    by_wiki: dict[str, set[str]] = {}
+    with conn.cursor() as cur:
+        cur.execute(SELECT_SEED_TITLES_SQL, (source, list(snapshot_times)))
+        for wiki, title in cur.fetchall():
+            by_wiki.setdefault(wiki, set()).add(title)
+    return by_wiki
+
+
+@dataclass
+class NeighborStats:
+    """이웃 배선이 각 단계에서 몇 개를 잃었는지. 조용히 0 이 되는 것을 막는다.
+
+    🔴 **`creation_missing` 과 `window_rejected` 를 합치지 않는다.** 앞은 인덱스에
+    근거가 없는 것이고 뒤는 근거를 보고 탈락시킨 것이다. 합치면 인덱스 구멍이
+    게이트 판정처럼 보여서, 커버리지가 무너져도 "규칙대로 걸렀다" 로 읽힌다.
+    """
+    seeds: int = 0
+    seeds_in_dump: int = 0        # Clickstream 덤프에 씨드 제목이 있던 수
+    candidates: int = 0           # 이웃 후보 (씨드-이웃 쌍)
+    creation_resolved: int = 0
+    creation_missing: int = 0
+    window_rejected: int = 0      # 생성일은 알지만 창 밖
+    gate_passed: int = 0
+    page_resolved: int = 0
+    months: dict[str, int] = dataclass_field(default_factory=dict)
+
+    def merge(self, other: "NeighborStats") -> None:
+        self.seeds += other.seeds
+        self.seeds_in_dump += other.seeds_in_dump
+        self.candidates += other.candidates
+        self.creation_resolved += other.creation_resolved
+        self.creation_missing += other.creation_missing
+        self.window_rejected += other.window_rejected
+        self.gate_passed += other.gate_passed
+        self.page_resolved += other.page_resolved
+        for month, count in other.months.items():
+            self.months[month] = self.months.get(month, 0) + count
+
+
 def load_clickstream_neighbors(
     shards_dir: str | Path, seeds: list[Seed]
 ) -> dict[str, list[NeighborRef]]:
@@ -273,14 +403,201 @@ def build_neighbor_inputs(
     return out
 
 
-def load_creation_dates(page_ids: list[int]) -> dict[int, object]:
-    """mediawiki_history page_creation_timestamp 로 생성일을 채운다. (미구현 — 골격)
+def neighbors_for_snapshot(
+    conn,
+    seeds: Sequence[Seed],
+    refs_by_title: dict[str, list[NeighborRef]],
+    created_of_title: dict[str, date],
+    month: str,
+    *,
+    creation_window_days: int,
+    stats: NeighborStats,
+) -> dict[int, list[Neighbor]]:
+    """한 시점의 씨드들에 이웃을 붙인다. `build_snapshot(neighbors=...)` 입력 형태.
 
-    🔴 **비-씨드(Clickstream 이웃) 경로 전용이다.** 씨드 단독 스냅샷(WP-99)에서는
-    호출되지 않는다 — 생성일 창은 이웃을 거르는 게이트라 이웃이 없으면 쓸 데가 없다.
-    Clickstream 적재본(-81 산출물)이 생길 때 `load_pages_by_title` 과 함께 채운다.
+    순서가 중요하다: **창 통과 → page_id 등록** 이다. 뒤집으면 멤버가 될 일 없는
+    이웃 수십만 건이 `wiki_page` 에 등록된다.
+
+    🔴 창 판정은 `snapshot._within_creation_window` 를 **그대로 부른다.** 여기에 같은
+    조건을 다시 쓰면 게이트가 두 벌이 되고, 한쪽만 바뀌어도 에러 없이 결과가 갈린다.
     """
-    raise NotImplementedError("mediawiki_history 생성일 어댑터는 소스 배선 시 구현한다")
+    kept: dict[int, list[NeighborRef]] = {}
+    wanted: dict[str, set[str]] = {}
+
+    for seed in seeds:
+        stats.seeds += 1
+        refs = refs_by_title.get(seed.title) or []
+        if refs:
+            stats.seeds_in_dump += 1
+        survivors: list[NeighborRef] = []
+        for ref in refs:
+            stats.candidates += 1
+            created = created_of_title.get(ref.title)
+            if created is None:
+                stats.creation_missing += 1
+                continue
+            stats.creation_resolved += 1
+            if not _within_creation_window(created, seed.event_date, creation_window_days):
+                stats.window_rejected += 1
+                continue
+            stats.gate_passed += 1
+            survivors.append(ref)
+        kept[seed.page_id] = survivors
+        if survivors:
+            wanted.setdefault(seed.wiki, set()).update(r.title for r in survivors)
+
+    # page_id 해석 — wiki 당 왕복 2회. 씨드마다 조회하지 않는다.
+    page_of_title: dict[str, tuple[int, str]] = {}
+    created_of_page: dict[int, date | None] = {}
+    for wiki, titles in wanted.items():
+        for title, page_id in load_pages_by_title(conn, wiki, titles).items():
+            page_of_title[title] = (page_id, wiki)
+            created_of_page[page_id] = created_of_title.get(title)
+    stats.page_resolved += len(page_of_title)
+    stats.months[month] = stats.months.get(month, 0) + 1
+
+    return {
+        page_id: build_neighbor_inputs(refs, month, page_of_title, created_of_page)
+        for page_id, refs in kept.items()
+    }
+
+
+class MonthlyNeighborSource:
+    """Clickstream 월 덤프를 **월당 한 번만** 훑어 시점별 이웃을 공급한다.
+
+    `build_snapshot_at(neighbor_source=...)` 로 넘긴다. 시점이 1,400개가 넘는데
+    덤프가 수천만 행이라 시점마다 다시 읽으면 끝나지 않는다 — `prepare()` 가 필요한
+    월을 미리 정해 한 번씩 읽고, 시점마다는 메모리의 결과만 쓴다.
+
+    ⚠️ 적재본이 없는 월은 **막는다.** 조용히 빈 이웃을 돌려주면 "이웃이 없는 시점" 과
+    "덤프를 안 받은 월" 이 구분되지 않아, 1-멤버 클러스터가 정상 산출물로 저장된다.
+    """
+
+    def __init__(
+        self,
+        shards_root: str | Path,
+        creation_index: str | Path,
+        month_rule: str,
+        *,
+        creation_window_days: int = DEFAULT_CREATION_WINDOW_DAYS,
+    ) -> None:
+        if month_rule not in CLICKSTREAM_MONTH_RULES:
+            raise ValueError(
+                f"clickstream 월 규칙은 {CLICKSTREAM_MONTH_RULES} 중 하나다 "
+                f"(받은 값: {month_rule!r})")
+        self.shards_root = Path(shards_root)
+        self.creation_index = Path(creation_index)
+        self.month_rule = month_rule
+        self.creation_window_days = creation_window_days
+        self.stats = NeighborStats()
+        self._refs: dict[str, dict[str, list[NeighborRef]]] = {}   # month -> seed -> refs
+        self._created: dict[str, date] = {}
+
+    def shards_dir(self, wiki: str, month: str) -> Path:
+        """`clickstream_ingest` 출력 규칙: `{out}/{wiki}/{month}`."""
+        return self.shards_root / wiki / month
+
+    def prepare(self, conn, source: str, snapshot_times: Sequence[datetime]) -> None:
+        """필요한 월을 한 번씩 읽고 생성일까지 붙인다."""
+        by_month: dict[str, list[datetime]] = {}
+        for ts in snapshot_times:
+            by_month.setdefault(clickstream_month_for(ts, self.month_rule), []).append(ts)
+
+        # 🔴 **훑기 전에 전부 확인한다.** 뒤에서 확인하면 앞 월을 수천만 행 다 읽고 나서
+        #    마지막 월에서 죽는다 — 실제로 61일 구간 끝의 경계 스냅샷 1개 때문에
+        #    2개월 스캔을 버렸다(2026-09-17). 실패는 빨라야 한다.
+        needed = {month: load_seed_titles(conn, source, times)
+                  for month, times in sorted(by_month.items())}
+        missing = [(wiki, month) for month, by_wiki in needed.items()
+                   for wiki in by_wiki if not self.shards_dir(wiki, month).is_dir()]
+        if missing:
+            lines = "\n".join(
+                f"  {self.shards_dir(wiki, month)}  "
+                f"(스냅샷 {len(by_month[month])}개가 이 월을 쓴다)  "
+                f"→ python -m batch.clickstream_ingest --wiki {wiki} --month {month}"
+                for wiki, month in missing)
+            raise FileNotFoundError(
+                f"Clickstream 적재본이 없다 (규칙 {self.month_rule}):\n{lines}\n"
+                "  구간 끝의 경계 스냅샷 때문일 수 있다 — 근거 월은 snapshot_ts 기준이라 "
+                "구간 마지막 시각이 다음 달로 넘어가면 그 달 덤프가 필요하다. "
+                "--until 로 구간을 줄이거나 그 월을 적재한다.")
+
+        all_titles: set[str] = set()
+        for month, seed_titles in needed.items():
+            month_refs: dict[str, list[NeighborRef]] = {}
+            for wiki, titles in sorted(seed_titles.items()):
+                found = neighbors_for(read_shards(self.shards_dir(wiki, month)), titles)
+                for seed_title, refs in found.items():
+                    if refs:
+                        month_refs[seed_title] = refs
+                        all_titles.update(r.title for r in refs)
+            self._refs[month] = month_refs
+            print(f"  clickstream {month}: 씨드 {sum(len(t) for t in seed_titles.values()):,}개 중 "
+                  f"이웃 보유 {len(month_refs):,}개")
+
+        self._created = load_creation_dates(self.creation_index, all_titles)
+        print(f"  생성일: 후보 제목 {len(all_titles):,}개 중 "
+              f"{len(self._created):,}개 resolve "
+              f"({100.0 * len(self._created) / len(all_titles):.1f}%)"
+              if all_titles else "  생성일: 후보 제목 0개")
+
+    def __call__(self, conn, snapshot_ts: datetime, seeds: Sequence[Seed]):
+        month = clickstream_month_for(snapshot_ts, self.month_rule)
+        return neighbors_for_snapshot(
+            conn, seeds, self._refs.get(month, {}), self._created, month,
+            creation_window_days=self.creation_window_days, stats=self.stats)
+
+
+def load_creation_dates(index_dir: str | Path, titles: Iterable[str]) -> dict[str, date]:
+    """`batch/page_creation` 인덱스에서 이웃 제목들의 생성일을 읽는다.
+
+    ~~`raise NotImplementedError` 골격~~ → 배선됨 (WP-115).
+    ~~`page_ids` 로 받는다~~ → **제목으로 받는다.** 소스(mediawiki_history)가 제목
+    기준이고, 이웃은 page_id 가 아직 없을 수 있다(창을 통과해야 등록한다).
+
+    ⚠️ **없는 제목은 키가 없다.** "창 밖" 과 "생성일 미상" 은 다른 사실이다 —
+    게이트는 둘 다 탈락시키지만(`_within_creation_window` 가 None 을 False 로 본다),
+    커버리지를 안 재면 인덱스 구멍이 게이트 판정으로 위장된다.
+    """
+    return creation_dates_for(index_dir, titles)
+
+
+def load_pages_by_title(
+    conn, wiki: str, titles: Iterable[str], *, register_missing: bool = True
+) -> dict[str, int]:
+    """이웃 제목 → `wiki_page.id`. 없으면 등록하고 다시 읽는다.
+
+    ~~docstring 속 의사코드, 실제 함수 없음~~ → 구현됨 (WP-115).
+
+    🔴 **등록이 필요하다.** `cluster_member.page_id` 가 FK 라 행이 없으면 멤버로
+    저장할 수 없는데, 사건 직후에 생긴 비-씨드 문서는 `wiki_page` 에 없다 — 그 테이블은
+    warm-up 기준선(2024-08)과 급증 문서로만 채워져 있기 때문이다. 등록을 안 하면
+    **진짜 멤버가 조용히 전부 사라진다**(FK 오류도 안 난다 — 그 전에 걸러지므로).
+
+    🔴 **호출자는 창을 통과한 후보만 넘긴다.** 이웃 전체를 넘기면 멤버가 될 일 없는
+    문서 수십만 건이 `wiki_page` 에 쌓인다. 거르는 기준은 이 모듈이 만들지 않고
+    `snapshot._within_creation_window` 를 그대로 부른다 — 규칙이 두 벌이 되면 안 된다.
+
+    🔴 **제목은 canonical(공백형)이어야 한다.** `(wiki, title)` 이 자연키라 표기가
+    흔들리면 한 문서가 두 행이 된다(명세 §5.1). Clickstream 적재본은 이미
+    `canonical_title` 을 통과한 값이라 여기서 다시 바꾸지 않는다 — 집계가 끝난 뒤
+    문자열만 바꾸면 이미 키가 갈라진 뒤다.
+    """
+    wanted = sorted(set(titles))
+    if not wanted:
+        return {}
+
+    with conn.cursor() as cur:
+        cur.execute(SELECT_PAGES_BY_TITLE_SQL, (wiki, wanted))
+        found = {title: page_id for title, page_id in cur.fetchall()}
+
+        missing = [t for t in wanted if t not in found]
+        if missing and register_missing:
+            cur.executemany(INSERT_PAGES_SQL, [(wiki, t) for t in missing])
+            cur.execute(SELECT_PAGES_BY_TITLE_SQL, (wiki, missing))
+            found.update({title: page_id for title, page_id in cur.fetchall()})
+
+    return found
 
 
 # --- 런타임 -----------------------------------------------------------------
@@ -291,6 +608,7 @@ def build_snapshot_at(
     source: str,
     *,
     neighbors: dict[int, Sequence[Neighbor]] | None = None,
+    neighbor_source=None,
 ) -> Snapshot:
     """한 시점의 스냅샷을 생산한다(저장 안 함). 로직은 전부 -75 자산이다.
 
@@ -298,12 +616,18 @@ def build_snapshot_at(
     이전 감지 이력(`issue_cluster.source`), 붙는 라벨(`Snapshot.source`) 이 같은 값에서
     나온다 — 따로 받으면 그 둘이 갈릴 수 있고, 갈린 결과가 -99 가 막던 거짓 라벨링이다.
 
-    `neighbors` 를 안 주면 씨드 단독이다. Clickstream 적재본이 생기면 호출자가
-    `load_clickstream_neighbors` → `build_neighbor_inputs` 결과를 넘기면 된다 —
-    `build_snapshot` 계약이 이미 그 형태다.
+    ~~`neighbors` 를 안 주면 씨드 단독이다~~ → `neighbor_source` 가 배선됐다
+    (WP-115). 둘 다 안 주면 여전히 씨드 단독이고, 그건 계약상 유효하다.
+
+    `neighbor_source(conn, snapshot_ts, seeds)` 는 씨드를 받아 이웃을 돌려주는
+    호출 가능 객체다(`MonthlyNeighborSource`). **씨드를 먼저 읽어야 이웃을 구할 수
+    있어서** 인자로 미리 받지 않고 여기서 부른다 — 호출자가 씨드를 따로 한 번 더
+    읽으면 같은 질의가 두 번 나가고, 두 결과가 갈릴 여지가 생긴다.
     """
     require_spike_source(source)
     seeds = load_seeds_from_spike(conn, snapshot_ts, source)
+    if neighbors is None and neighbor_source is not None:
+        neighbors = neighbor_source(conn, snapshot_ts, seeds)
     return build_snapshot(
         snapshot_ts, source, seeds, neighbors or {},
         prior_first_detected=load_prior_first_detected(conn, source),
@@ -316,6 +640,7 @@ def run(
     *,
     snapshot_times: Sequence[datetime],
     dry_run: bool = False,
+    neighbor_source=None,
 ) -> list[Snapshot]:
     """시점들을 순서대로 생산하고 저장한다. 커밋은 호출자 책임.
 
@@ -330,9 +655,13 @@ def run(
     유효한 산출물이라 에러가 안 난다. `load_snapshot_times(conn, source)` 를 쓴다.
     """
     require_spike_source(source)
+    if neighbor_source is not None:
+        # 월 덤프 순회는 여기서 한 번에 끝낸다 — 시점 루프 안에서 하면 월당 수천 번이다.
+        neighbor_source.prepare(conn, source, snapshot_times)
     produced: list[Snapshot] = []
     for snapshot_ts in snapshot_times:
-        snapshot = build_snapshot_at(conn, snapshot_ts, source)
+        snapshot = build_snapshot_at(
+            conn, snapshot_ts, source, neighbor_source=neighbor_source)
         if not dry_run:
             # 멱등은 writer 계약 그대로 — (source, snapshot_ts) 단위 지우고 다시 넣는다.
             persist_snapshot(conn, snapshot)
@@ -368,6 +697,23 @@ def build_arg_parser() -> argparse.ArgumentParser:
     p.add_argument("--since", type=_parse_ts, help="시점 범위 시작(포함)")
     p.add_argument("--until", type=_parse_ts, help="시점 범위 끝(포함)")
     p.add_argument("--dry-run", action="store_true", help="저장 없이 생산만")
+    # Clickstream 이웃(비-씨드) 배선 — WP-115.
+    # 🔴 **기본이 꺼짐이다.** 적재본 없이 돌던 기존 운영(-109)이 이 변경으로
+    #    갑자기 FileNotFoundError 를 내면 안 된다. 주면 켜고, 안 주면 씨드 단독이다.
+    p.add_argument("--clickstream-root", default=os.environ.get("CLICKSTREAM_OUT", ""),
+                   help="clickstream_ingest 출력 루트. 주면 비-씨드 이웃을 배선한다 "
+                        "(기본 $CLICKSTREAM_OUT, 없으면 씨드 단독)")
+    p.add_argument("--creation-index",
+                   default=os.environ.get("PAGE_CREATION_OUT", ""),
+                   help="batch.page_creation 인덱스 디렉터리. --clickstream-root 와 "
+                        "함께 필요하다. 생성일 없이는 창 게이트가 전부 탈락시킨다")
+    # 🔴 기본값 없음 — --source 와 같은 이유다. --clickstream-root 를 줬으면 반드시 고른다.
+    #    replay 는 event, LIVE 는 event 를 쓸 수 없다(당월 덤프가 없다). 자세한 근거는
+    #    CLICKSTREAM_MONTH_RULES 와 snapshot.py 의 🔴 항목.
+    p.add_argument("--clickstream-month-rule", choices=CLICKSTREAM_MONTH_RULES,
+                   help="근거 월 선택. replay 는 event(스냅샷이 속한 달)를 쓴다. "
+                        "previous(직전 달)는 LIVE 가 구할 수 있는 최신 덤프다. "
+                        "--clickstream-root 를 주면 필수")
     return p
 
 
@@ -378,6 +724,21 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     if args.snapshot_ts and (args.since or args.until):
         print("--snapshot-ts 와 --since/--until 은 같이 못 쓴다.", file=sys.stderr)
+        return 2
+    # 🔴 한쪽만 주면 막는다. Clickstream 만 주면 생성일이 전부 미상이 되어 창 게이트가
+    #    이웃을 **한 건도** 통과시키지 않는데, 그건 "이웃이 없다" 와 구분되지 않는다.
+    if bool(args.clickstream_root) != bool(args.creation_index):
+        print("--clickstream-root 와 --creation-index 는 같이 준다. "
+              "생성일 없이는 창 게이트가 이웃을 전부 탈락시켜 씨드 단독과 같아진다.",
+              file=sys.stderr)
+        return 2
+    # 🔴 근거 월을 암묵적으로 정해 주지 않는다. 틀린 달로 돌면 이웃이 0 에 수렴하는데
+    #    "이웃이 없는 시점" 과 구분되지 않아 에러 없이 1-멤버 클러스터가 저장된다.
+    if args.clickstream_root and not args.clickstream_month_rule:
+        print("--clickstream-month-rule 을 명시한다 "
+              f"({'/'.join(CLICKSTREAM_MONTH_RULES)}). historical replay 는 event 다 — "
+              "LIVE 는 당월 덤프를 구할 수 없어 같은 값을 쓸 수 없다(후속 과제).",
+              file=sys.stderr)
         return 2
 
     import psycopg     # 이 CLI 에서만 필요 — 순수 로직은 드라이버 없이도 돈다
@@ -392,9 +753,26 @@ def main(argv: list[str] | None = None) -> int:
 
         print(f"시점 {len(times)}개 ({times[0].isoformat()} ~ {times[-1].isoformat()}) "
               f"source={args.source}{' [dry-run]' if args.dry_run else ''}")
-        snapshots = run(conn, args.source, snapshot_times=times, dry_run=args.dry_run)
+
+        neighbor_source = None
+        if args.clickstream_root:
+            neighbor_source = MonthlyNeighborSource(
+                args.clickstream_root, args.creation_index, args.clickstream_month_rule)
+            print(f"이웃 배선: clickstream={args.clickstream_root} "
+                  f"월규칙={args.clickstream_month_rule}")
+
+        snapshots = run(conn, args.source, snapshot_times=times,
+                        dry_run=args.dry_run, neighbor_source=neighbor_source)
         if not args.dry_run:
             conn.commit()
+
+    if neighbor_source is not None:
+        s = neighbor_source.stats
+        # 🔴 단계별로 따로 적는다. 합치면 "인덱스에 없음" 이 "규칙대로 탈락" 으로 읽힌다.
+        print(f"이웃 배선 집계: 씨드 {s.seeds:,} (덤프에 있던 씨드 {s.seeds_in_dump:,}) / "
+              f"후보 {s.candidates:,} / 생성일 resolve {s.creation_resolved:,} "
+              f"미상 {s.creation_missing:,} / 창 탈락 {s.window_rejected:,} / "
+              f"게이트 통과 {s.gate_passed:,} / page_id 해석 {s.page_resolved:,}")
 
     clusters = sum(s.cluster_count for s in snapshots)
     members = sum(len(c.members) for s in snapshots for c in s.clusters)

@@ -10,6 +10,23 @@ Spark·DB 없이 테스트된다. 실 데이터 소스는 driver.py 가 배선�
     Clickstream 값에 별도 문턱을 두지 않는다 — 덤프 하한(n>=10)만. 절대 이동량으로는
         "같은 이슈"와 "배경 지식"이 안 갈린다(§11: Hormuz 배경 문서가 사건 문서보다
         30배 더 클릭됨). 포함 여부는 생성일 창이 정하고, n 은 weight 로만 쓴다.
+
+🔴 **근거 월(`Neighbor.clickstream_month`)의 의미는 출처마다 다르다** (2026-09-17, -115).
+    ~~"선택 스냅샷 이전 월이어야 한다"~~ — 그렇게만 적어 둬서 한 값인 줄 알았는데,
+    리플레이와 LIVE 가 실제로 쓸 수 있는 달이 다르다. 이 모듈은 월을 고르지 않는다
+    (`cluster/driver.clickstream_month_for` 가 고른다). 아래는 그 구분의 근거다.
+
+    replay → **사건월**(스냅샷이 속한 달). 과거 재생이라 그 달 덤프가 이미 나와 있다.
+        `-51` 이 실측에 쓴 것도 이 달이고(Milton 2024-10 사건에 2024-10 덤프),
+        -115 가 61일 전체로 재확인했다: 씨드 덤프 적중 83.7% vs 전월 66.6%,
+        2+ 멤버 클러스터 34.1% vs 17.7%. 대표 사건 3건(Milton·Helene·Yagi)은
+        **전월 규칙에서 이웃이 0개**다 — 씨드 문서가 그 달에 아직 없었다.
+
+    live → **전월**. 당월 덤프는 그 달이 끝나야 나오므로 실시간에는 존재하지 않는다.
+        🔴 **그래서 사건월은 LIVE-equivalent 가 아니다.** 리플레이가 사건월을 쓴다고
+        해서 LIVE 도 같은 근거를 갖는다는 뜻이 아니다 — LIVE 경로에서 무엇을 쓸지는
+        아직 정해지지 않았고 **별도 후속 과제**다. 두 경로의 산출물을 비교할 때
+        이 비대칭을 먼저 확인한다.
     Wikidata 관계는 게이트에서 빠졌다(§3.2 4번 — 속성 5종 전수 검사 실패). 화면 근거
         간선(점선)으로만 그린다.
     ⚠️ 기존 문서가 사건으로 재조명되는 비-씨드(예: Mojtaba_Khamenei, 2009 생성)는
@@ -78,7 +95,9 @@ class Neighbor:
     wiki: str
     title: str
     clickstream_n: int         # 이동량. weight 로 쓴다.
-    clickstream_month: str     # 근거 월 YYYY-MM. 선택 스냅샷 이전 월이어야 한다.
+    # 근거 월 YYYY-MM. **어느 달을 쓰는지는 출처마다 다르다** — 아래 🔴 참고.
+    # 이 모듈은 값을 받아 간선 근거 라벨로 실어 나를 뿐, 월을 고르지 않는다.
+    clickstream_month: str
     created_at: date | None     # 문서 생성일(mediawiki_history page_creation_timestamp).
     directed: bool = True       # Clickstream 은 방향(씨드 -> 이웃) 이동이다.
 

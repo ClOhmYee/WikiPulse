@@ -177,13 +177,56 @@ DB(이 README 의 Milton 6행)에서 `GET /api/v1/issues` 가 에러 없이 빈 
 위 확인은 `-Duser.timezone=GMT` 로 돌린 것이다. 실 PostgreSQL(docker compose)에는
 없는 문제다(CLAUDE.md). 팀 기본 경로는 `docker compose up -d postgres` 다.
 
+## 배선됨 (WP-115, 2026-09-17)
+
+~~Clickstream 이웃·문서 생성일·`load_pages_by_title` 셋 다 미배선~~ → 전부 이어졌다.
+
+```
+python -m cluster.driver --dsn "$DATABASE_URL" --source replay     --clickstream-root ./data/clickstream --clickstream-month-rule event     --creation-index ./data/page-creation/enwiki/2024-09_2024-10
+```
+
+- **Clickstream 이웃** — `MonthlyNeighborSource` 가 월 덤프를 **월당 한 번** 훑는다.
+  시점이 1,400개가 넘어 시점마다 읽으면 끝나지 않는다.
+- **문서 생성일** — `batch/page_creation` 이 mediawiki_history 의
+  `page_creation_timestamp` 로 `title → 생성일` 인덱스를 만든다. `wiki_page` 에도
+  `-56` edit_event 15필드에도 `-58` 윈도우 샤드에도 그 값이 없어서 덤프가 유일한 소스다.
+- **`load_pages_by_title`** — 이웃 제목 → `page_id`. 🔴 **없는 문서를 등록한다.**
+  사건 직후 생긴 비-씨드 문서는 `wiki_page` 에 없고(그 테이블은 warm-up 기준선과 급증
+  문서로만 채워진다), 등록을 안 하면 진짜 멤버가 조용히 전부 사라진다.
+- 🔴 **게이트는 한 곳에만 있다.** driver 는 `snapshot._within_creation_window` 를 그대로
+  부른다 — 같은 조건을 driver 에 다시 쓰면 규칙이 두 벌이 되고 한쪽만 바뀌어도
+  에러 없이 결과가 갈린다.
+### 근거 월은 출처마다 다르다 (2026-09-17 확정)
+
+`--clickstream-month-rule` 은 **필수**다. `--source` 를 `required` 로 둔 것과 같은
+이유 — 기본값이 있으면 빠뜨린 실행이 에러 없이 다른 근거로 산출물을 만든다.
+
+| 출처 | 규칙 | 왜 |
+| --- | --- | --- |
+| **historical replay** | `event` (스냅샷이 속한 달) | 과거 재생이라 그 달 덤프가 이미 나와 있다 |
+| **LIVE** | `event` 를 **쓸 수 없다** | 당월 덤프는 그 달이 끝나야 나온다 |
+
+🔴 **리플레이가 사건월을 쓴다고 해서 LIVE-equivalent 가 아니다.** 두 경로가 가진
+근거의 시간 범위가 구조적으로 다르다. **LIVE 가 무엇을 쓸지는 정해지지 않았고 별도
+후속 과제다** — `previous` 가 LIVE 가 구할 수 있는 최신 덤프지만, 그것으로 충분한지는
+측정된 바 없다. 두 출처의 산출물을 비교할 때 이 비대칭을 먼저 확인한다.
+
+replay 에서 `event` 를 고른 근거 (61일 2024-09~10, `-109` 데이터 전량 실측):
+
+| | `event` | `previous` |
+| --- | --- | --- |
+| 씨드 덤프 적중 | **83.7%** | 66.6% |
+| 2+ 멤버 클러스터 | **34.1%** | 17.7% |
+| edge | **20,161** | 6,134 |
+| Milton·Helene·Yagi | 멤버 10·18·11 | **전부 이웃 0개** |
+
+대표 사건이 `previous` 에서 0인 이유는 씨드 문서(생성일 2024-10-05·09-23·09-01)가
+직전 달 덤프에 **아직 존재하지 않아서**다. 신규 사건 문서일수록 이 문제가 커진다.
+
 ## 아직 안 한 것
 
-- **Clickstream 이웃(비-씨드)** — `load_clickstream_neighbors` 는 구현돼 있지만
-  적재본이 0건이다(-81 코드는 Done, 산출물 없음). 덤프가 생기면 `build_neighbor_inputs`
-  결과를 `build_snapshot_at(neighbors=...)` 으로 넘기면 된다 — 계약이 이미 그 형태다.
-- **문서 생성일** — `load_creation_dates` 는 골격. **비-씨드 게이트 전용**이라 씨드 단독
-  경로에서는 호출되지 않는다. 이웃 배선과 같이 채운다.
-- **`load_pages_by_title`** — 이웃 제목 → `page_id` 해석. 같은 이유로 아직 없다.
 - **Wikidata 점선 간선** — 선택. 없으면 안 그린다.
-- **비-씨드 판정 규칙(기존 문서 재조명)** — WP-77, 이 모듈 범위 밖.
+- 🔴 **비-씨드 판정 규칙(기존 문서 재조명)** — WP-77. 명세 §3.2·§10 에
+  확정 규칙(재급증 비율 ≥ 5 AND 절대 편집 ≥ 20)이 적혀 있지만 **코드에는 없다**
+  (2026-09-17 확인). 지금 비-씨드가 되는 경로는 생성일 창(-51) 하나뿐이라
+  `Mojtaba_Khamenei` 류는 멤버가 되지 않는다.
