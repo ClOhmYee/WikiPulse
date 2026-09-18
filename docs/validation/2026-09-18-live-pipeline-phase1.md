@@ -22,7 +22,7 @@ batch 1로 재개됐으며, 15분 canary와 Producer·Spark 명시적 재시작�
 | `wikipulse-edit-stream` | running, OOM 없음, `restart=unless-stopped` |
 | Spark application | `app-20260918083122-0014`, `wikipulse-edit-windows` |
 | worker 참여 | 데이터 EC2와 서비스 EC2 worker가 각각 1 core·1024 MiB executor 담당 |
-| HDFS checkpoint | `hdfs://192.0.2.10:8020/wikipulse/checkpoints/edit-windows-v1`, 정책 승격 시 batch 57·읽기 전용 후속 확인 시 batch 298 |
+| HDFS checkpoint | `hdfs://192.0.2.10:8020/wikipulse/checkpoints/edit-windows-v1`, 정책 승격 시 batch 57·최종 읽기 전용 확인 시 batch 309 |
 | 기존 인프라 | 데이터 EC2 Kafka·Spark master/worker·HDFS NameNode/DataNode 정상, UFW active |
 
 ## 2. 배포 무결성과 보호 대상
@@ -197,6 +197,11 @@ HDFS DataNode는 모두 running이며 건강 검사가 있는 컨테이너는 he
 승격 적용 시각은 Producer `08:30:59.979574922Z`, Spark driver
 `08:31:16.286529635Z`다. 적용 과정에서 checkpoint batch 51 → 52가 진행됐고 오류는
 0건이었다. 최종 두 서비스는 모두 running, OOM 없음, `restart=unless-stopped`다.
+
+`19:39:27 KST` 최종 읽기 전용 확인에서도 두 신규 서비스는 같은 상태를 유지했고
+checkpoint commit은 batch 309까지 전진했다. 데이터 EC2의 Kafka·Spark master/worker·HDFS
+NameNode/DataNode와 서비스 EC2의 백엔드·Nginx·PostgreSQL·Spark worker·HDFS DataNode도
+running이었으며 건강 검사가 있는 컨테이너는 healthy였다. 두 서버의 UFW는 모두 active였다.
 
 ## 9. 실패 이력, 남은 위험, 인프라 인계
 
