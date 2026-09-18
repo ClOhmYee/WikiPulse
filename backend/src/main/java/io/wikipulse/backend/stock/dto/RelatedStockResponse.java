@@ -3,7 +3,7 @@ package io.wikipulse.backend.stock.dto;
 import com.fasterxml.jackson.annotation.JsonInclude;
 
 /**
- * 이슈에 붙은 관련 종목. API 명세 v0.1 §2 `/issues/{id}/stocks`.
+ * 이슈에 붙은 관련 종목. API 명세 v0.3 §2 `/issues/{id}/stocks`.
  * 이슈 상세와 종목쪽이 공유한다.
  *
  * <p>verified=true 만 나간다(규칙). 정렬은 tier → gdeltLift → similarity.

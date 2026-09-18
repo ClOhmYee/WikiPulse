@@ -11,5 +11,5 @@ cluster_org_mention 에 적재한다. 종목 후보 생성(§6.3 b)과 LLM 검�
     writer.py  cluster_org_mention 멱등 저장
     driver.py  Spark 배치 배선 + CLI
 
-명세: docs/requirements-v0.1.md §6.2 (b)·§6.3·§11
+명세: docs/requirements-v0.3.md §6.2 (b)·§6.3·§11
 """

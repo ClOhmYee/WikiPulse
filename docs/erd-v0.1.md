@@ -1,9 +1,10 @@
 # ERD — WikiPulse (WikiPulse)
 
-- 버전: **v0.1 (2026-09-08)**. 데이터 모델 v1(WP-35) 기준
-- 🔴 **DDL이 정본이다**: `db/migrations/V1__initial_schema.sql`. 컬럼 타입·제약·이유는 그 파일 주석에 있다.
+- 버전: **v0.1 (2026-09-08)**. 데이터 모델 v1(WP-35)에서 시작해 **V9(2026-09-18)**까지 누적 갱신
+- 🔴 **DDL이 정본이다**: `db/migrations/V1__initial_schema.sql`부터 `V9__spike_revision_evidence.sql`까지를 순서대로 적용한 결과가 현재 저장소 스키마다. 컬럼 타입·제약·이유는 각 파일 주석에 있다. EC2는 V1~V6까지만 확인했으며 V7~V9 적용은 검증하지 않았다.
 - 이 문서는 **테이블 사이의 관계**만 다룬다 — 무엇이 무엇을 참조하고, 지웠을 때 무엇이 따라 죽는가. 컬럼 사전을 여기 옮겨 적지 않는다 (두 벌이 되면 한쪽만 갱신된다).
 - 설계 근거(왜 PostgreSQL 하나인가, 왜 `page_id`가 없는가, 왜 ENUM이 아닌가)는 [db/README.md](../db/README.md).
+- 회원·관심종목·알림·토론 테이블은 v0.1 스키마에 남아 있지만 **MVP 범위에서는 사용하지 않는다** (2026-09-17, WP-104). ERD에서 지우면 실제 DDL과 달라지므로 향후 기능용 구조로 표시만 유지한다.
 
 ---
 
@@ -14,7 +15,8 @@ erDiagram
     wiki_page          ||--o{ page_edit_window   : "윈도우 집계"
     wiki_page          ||--o{ page_view_hourly   : "조회수"
     wiki_page          ||--o{ page_baseline      : "시간대 기준선"
-    wiki_page          ||--o{ spike              : "급증 판정 통과"
+    wiki_page          ||--o{ page_intro         : "과거 revision 도입부"
+    wiki_page          ||--o{ spike              : "편집 후 조회수 관문 통과"
     wiki_page          ||--o{ cluster_member     : "클러스터 편입"
 
     issue_cluster      ||--o{ cluster_member     : "묶인 문서"
@@ -40,8 +42,9 @@ erDiagram
 읽는 방향은 명세 §3.2 흐름과 같다.
 
 ```
-wiki_page → page_edit_window → (page_baseline 대비) → spike
-                             ↘ page_view_hourly ↗
+wiki_page → page_edit_window(편집 1건 이상) → page_view_hourly
+                                             ↓ (28일 또는 생성 이후 기준선)
+                                           spike
 spike → issue_cluster ─┬─ cluster_member   (어떤 문서가 묶였나)
                        ├─ issue_report     (LLM 요약)
                        ├─ cluster_org_mention (GDELT 기관 — LLM 의 RAG 입력)
@@ -54,23 +57,24 @@ spike → issue_cluster ─┬─ cluster_member   (어떤 문서가 묶였나)
 
 | 테이블 | PK | 밖으로 나가는 FK | 비고 |
 | --- | --- | --- | --- |
-| `wiki_page` | `id` (대리키) | — | 자연키는 `UNIQUE (wiki, title)`. EventStreams에 `page_id`가 없다 |
+| `wiki_page` | `id` (대리키) | — | 자연키는 `UNIQUE (wiki, title)`. EventStreams에 `page_id`가 없다. `first_seen`은 시스템 최초 관측, nullable `page_created_at`은 확인 가능한 최초 revision 시각 |
 | `page_edit_window` | `(page_id, window_start)` | `page_id` | 슬라이딩이라 편집 1건이 여러 행에 걸린다 |
 | `page_view_hourly` | `(page_id, ts_hour)` | `page_id` | |
 | `page_baseline` | `(page_id, hour_of_day)` | `page_id` | `hour_of_day` 0~23 (UTC 시). ~~`hour_of_week` 0~167~~ → 2026-09-15 (WP-84, `V3__baseline_hour_of_day.sql`). `view_stddev` 추가 — 2026-09-15 (WP-90, `V4__baseline_view_stddev.sql`). 조회수 z 의 유일한 입력이고, NULL 이면 조회수 단독 발동을 안 한다 |
-| `spike` | `id` | `page_id` | `UNIQUE (source, page_id, window_start)` — 같은 출처가 같은 창을 두 번 못 넣는다. ~~`UNIQUE (page_id, window_start)`~~ → 2026-09-15 (WP-100, `V5__spike_source.sql`). `source` ∈ {`live`, `replay`} 가 키에 들어간 이유는, 안 들어가면 LIVE 판정이 리플레이 행을 `ON CONFLICT` 로 덮어쓰며 출처까지 바꾸기 때문이다. 두 출처가 같은 문서·창을 **다른 행으로** 갖는다 |
+| `page_intro` | `(page_id, rev_id)` | `page_id` | 리플레이 대표 텍스트의 유일한 출처(V8). `rev_ts <= snapshot_ts` 중 마지막 revision을 읽으며 현재 Wikipedia 도입부로 폴백하지 않는다 |
+| `spike` | `id` | `page_id` | 편집 1건 이상 발생 후 조회수 급등까지 통과한 문서만 저장한다(WP-118). `UNIQUE (source, page_id, window_start)` — 같은 출처가 같은 창을 두 번 못 넣는다. `source` ∈ {`live`, `replay`}. V7의 `views`·`view_baseline`과 V9의 `max_rev_id`·`last_edit_ts`가 판정값과 시점 감사를 고정한다 |
 | `issue_cluster` | `id` | — | `snapshot_ts` 가 시점을 가른다 |
-| `cluster_member` | `(cluster_id, page_id)` | `cluster_id`, `page_id` | 한 문서가 여러 클러스터에 들어갈 수 있다 |
-| `issue_report` | `cluster_id` | `cluster_id` | PK가 곧 FK = **1:1** |
+| `cluster_member` | `(cluster_id, page_id)` | `cluster_id`, `page_id` | 한 문서가 여러 클러스터에 들어갈 수 있다. `is_seed=true`는 루트 급증 문서 또는 생성일 동시성으로 편입된 새 사건 문서, `false`는 재급증 기준으로 편입된 기존 문서다. Wikidata는 멤버십을 만들지 않는다 |
+| `issue_report` | `cluster_id` | `cluster_id` | PK가 곧 FK = **1:1**. 운영 writer·상태 전이는 WP-119로 구현됐지만 worker 기본값은 꺼져 있고 EC2·실제 GATEWAY 실행은 하지 않았다 |
 | `stock` | `ticker` | — | 티커가 자연키. 대리키 없음 |
 | `stock_price` | `(ticker, trade_date)` | `ticker` | 약 640만 행, 파티셔닝 없음 |
 | `cluster_stock` | `(cluster_id, ticker)` | `cluster_id`, `ticker` | **매칭 결과의 정본** |
 | `cluster_org_mention` | `(cluster_id, org_name)` | `cluster_id`, `ticker`(nullable) | `ticker`가 NULL = 종목 마스터에 없는 기관 |
-| `member` | `id` | — | `email` UNIQUE |
-| `watchlist` | `(member_id, ticker)` | `member_id`, `ticker` | 복합 PK가 중복 담기를 막는다 |
-| `notification` | `id` | `member_id`, `cluster_id`(nullable), `ticker`(nullable) | |
-| `comment_thread` | `id` | `cluster_id` | `UNIQUE (cluster_id)` = **1:1** |
-| `thread_comment` | `id` | `thread_id`, `member_id`(nullable) | `deleted_at` soft delete |
+| `member` | `id` | — | 향후 기능용(MVP 미사용). `email` UNIQUE |
+| `watchlist` | `(member_id, ticker)` | `member_id`, `ticker` | 향후 기능용(MVP 미사용). 복합 PK가 중복 담기를 막는다 |
+| `notification` | `id` | `member_id`, `cluster_id`(nullable), `ticker`(nullable) | 향후 기능용(MVP 미사용) |
+| `comment_thread` | `id` | `cluster_id` | 향후 기능용(MVP 미사용). `UNIQUE (cluster_id)` = **1:1** |
+| `thread_comment` | `id` | `thread_id`, `member_id`(nullable) | 향후 기능용(MVP 미사용). `deleted_at` soft delete |
 
 **대리키 vs 자연키**: `wiki_page`는 대리키(문서 이동으로 title이 바뀐다), `stock`은 자연키 `ticker`(티커는 안정적이고 API 경로·화면에 그대로 쓴다). `issue_cluster`도 대리키다 — 같은 사건이 시점마다 다른 행이라 자연키가 성립하지 않는다.
 
@@ -82,7 +86,7 @@ spike → issue_cluster ─┬─ cluster_member   (어떤 문서가 묶였나)
 
 | 지우는 것 | CASCADE (따라 죽음) | SET NULL (남되 링크만 끊김) |
 | --- | --- | --- |
-| `wiki_page` | `page_edit_window`, `page_view_hourly`, `page_baseline`, `spike`, `cluster_member` | — |
+| `wiki_page` | `page_edit_window`, `page_view_hourly`, `page_baseline`, `page_intro`, `spike`, `cluster_member` | — |
 | `issue_cluster` | `cluster_member`, `issue_report`, `cluster_stock`, `cluster_org_mention`, `comment_thread` → `thread_comment` | `notification.cluster_id` |
 | `stock` | `stock_price`, `cluster_stock`, `watchlist` | `notification.ticker`, `cluster_org_mention.ticker` |
 | `member` | `watchlist`, `notification` | `thread_comment.member_id` |
@@ -107,17 +111,18 @@ ORDER BY s.embedding <=> :q     -- <=> 여야 HNSW 인덱스를 탄다
 LIMIT :k;
 ```
 
-⚠️ **이슈 쪽 임베딩을 담는 컬럼이 없다.** 지금은 매칭 시점에 계산해 쓰고 버리는 전제다. 같은 클러스터를 여러 번 조회할 때 매번 임베딩을 다시 만들면 GATEWAY 크레딧이 샌다 — WP-49(판정 재사용 규칙)에서 `issue_cluster.embedding` 컬럼을 둘지 정한다.
+**이슈 임베딩은 저장하지 않는다.** 후보 생성 시 계산해 쓰고 버린다. 같은 이슈의 LLM 판정을 반복하지 않도록 `cluster_stock`의 `(issue_key, ticker, prompt_version)` 기준으로 최근 완료 결과를 재사용한다(WP-49, `V6__cluster_stock_reuse.sql`). 재사용 판정이 존재해도 API는 시점별 `cluster_id`를 읽으므로 스냅샷과 결과를 연결해야 한다. 단 과거 조회에는 선택 시점까지 완료된 결과만 보여야 하며, 최신 결과를 모든 과거 `cluster_id`에 무조건 복사하면 미래 정보가 소급된다. 현재 요약·검증 재사용 조회는 원 결과의 스냅샷이 대상 `snapshot_ts` 이하인지 제한하지 않으므로 이 as-of 연결은 WP-120에서 보완한다.
 
 ---
 
 ## 5. v0.1에서 안 푼 것
 
-- **리플레이 스냅샷과 토론의 수명이 엮여 있다.** `comment_thread`가 `issue_cluster`에 CASCADE로 달려 있는데 클러스터는 재계산 대상이다. 토론을 "사건"에 붙이려면 스냅샷을 가로지르는 상위 개념(사건 id)이 필요하다. MVP에서는 LIVE 클러스터에만 토론이 붙는다고 보고 넘어간다.
-- **이슈 임베딩 저장 위치** (4절)
+- **리플레이 스냅샷과 토론의 수명이 엮여 있다.** `comment_thread`가 `issue_cluster`에 CASCADE로 달려 있는데 클러스터는 재계산 대상이다. 다만 토론은 MVP 제외 기능이므로 이번 구현에서는 사용하지 않는다.
+- ~~**실제 문서 생성 시각 저장 위치 미정**~~ → `wiki_page.page_created_at TIMESTAMPTZ NULL`로 추가했다(WP-118, 2026-09-17). ~~리플레이 `page_creation_timestamp`~~ → `page_first_edit_timestamp` 우선, 결측 시 미래가 아닌 lifecycle 생성 시각으로 교정했다(2026-09-18). LIVE는 MediaWiki 최초 리비전 API를 쓰며 운영 스케줄링은 아직 연결되지 않았다.
+- **`issue_key` 결과의 as-of 연결** — 요약 writer·판정 재사용 자체는 WP-119와 기존 V6 컬럼으로 구현됐지만, `findPriorSummary`·`findPriorVerdict`가 대상 스냅샷 상한 없이 최근 결과를 고른다. 과거 backfill에 미래 결과가 섞이지 않도록 원 클러스터 `snapshot_ts <=` 대상 `snapshot_ts` 조건과 원 `generated_at`·`verified_at` 보존을 WP-120에서 보완한다.
 - **`page_edit_window` 보존 기간** — 정해지면 파티션·삭제 잡이 붙는다
 - **마이그레이션 도구** — 파일명만 Flyway 규칙(`V1__`)을 따랐다. Flyway/Liquibase 확정은 백엔드 합의 사항
-- **인증 컬럼** — `member.password_hash`가 nullable인 건 OAuth 가능성 때문이다. 정해지면 NOT NULL이 되거나 `oauth_provider` 컬럼이 붙는다
+- **인증 컬럼** — 회원 기능이 MVP에서 제외되어 `member.password_hash`의 자체 로그인/OAuth 결정도 이번 범위에서 하지 않는다
 
 ## 6. V2 — 펄스맵 스냅샷·문서 그래프 (WP-75)
 
@@ -128,7 +133,7 @@ LIMIT :k;
 | 테이블 | 추가 컬럼 | 이유 |
 | --- | --- | --- |
 | `issue_cluster` | `issue_key`, `first_detected_at`, `hot`, `category` | 시점 간 추적(`id`는 스냅샷마다 새로 생김)·최초 감지·급증·뉴스형 카테고리 |
-| `cluster_member` | `edit_count`, `views`, `edit_baseline`, `view_baseline`, `spike_score`, `size_score`(0~1), `completeness`, `window_start/end` | 시점별 지표를 **고정** 저장 — 리플레이가 현재 `spike`를 다시 읽으면 과거·현재가 섞인다 |
+| `cluster_member` | `edit_count`, `views`, `edit_baseline`, `view_baseline`, `spike_score`, `size_score`(0~1), `completeness`, `window_start/end` | 판정에 사용한 시점별 지표를 **고정** 저장 — API가 최신 원시 테이블이나 현재 `spike`를 다시 읽으면 과거·현재가 섞인다. `complete`는 최종 조회수 판정 완료, `pending`은 입력 대기, `unavailable`은 원본 없음이며 `view_ratio IS NULL`만으로 정하지 않는다 (2026-09-18, 명세 v0.3 §5.2) |
 
 **테이블 추가**
 
@@ -140,3 +145,15 @@ LIMIT :k;
 - 삭제 전파: `issue_cluster` 삭제 시 `cluster_edge`도 CASCADE. `cluster_snapshot`은 `issue_cluster`와 FK로 엮지 않는다(0개 스냅샷이 있어야 해서 논리적 연결만).
 - `cluster_edge` 양 끝이 같은 클러스터 멤버여야 한다는 제약은 복합키라 DB로 직접 못 걸어 생산 파이프라인(`data-pipeline/cluster`)이 보장한다.
 - Wikidata 는 클러스터링 게이트에서 빠졌지만(§3.2 4번) 화면 근거 간선으로는 그린다 — `cluster_edge.kind='wikidata'`.
+
+---
+
+## 7. V3~V9 누적 변경
+
+| 버전 | 관계·키에 영향을 주는 변경 | 상태 |
+| --- | --- | --- |
+| V3~V5 | `page_baseline`을 UTC 시간대 기준으로 재구성하고 `view_stddev`를 추가. `spike`에 `source`와 출처별 유일키 추가 | 저장소 적용 대상 |
+| V6 | `cluster_stock`에 `issue_key`·`prompt_version`·`check_state`·재시도 필드를 추가하고 완료 판정 재사용 인덱스 추가 | 저장소·EC2 확인 |
+| V7 | `spike.views`·`view_baseline` 추가. `cluster_member` 고정 수치와 `completeness`의 원천 | 저장소 적용 대상, EC2 미확인 |
+| V8 | `page_intro` 추가. `(page_id, rev_id)`로 revision 도입부를 멱등 고정하고 `(page_id, rev_ts DESC)`로 as-of 조회 | 저장소 적용 대상, EC2 미확인 |
+| V9 | `spike.max_rev_id`·`last_edit_ts` 추가. `last_edit_ts <= window_end <= snapshot_ts` 감사 근거 | 저장소 적용 대상, EC2 미확인 |

@@ -23,9 +23,13 @@ Spark·DB 없이 테스트된다. 실 데이터 소스는 driver.py 가 배선�
         "같은 이슈"와 "배경 지식"이 안 갈린다(§11: Hormuz 배경 문서가 사건 문서보다
         30배 더 클릭됨). 포함 여부는 생성일 창이 정하고, n 은 weight 로만 쓴다.
 
+    시점 정합성 = 스냅샷 이후 생성된 문서와 스냅샷 당월·미래 Clickstream 은 제외한다.
+        따라서 과거 스냅샷을 재계산해도 나중에 생긴 근거가 소급 반영되지 않는다.
+
 🔴 **근거 월(`Neighbor.clickstream_month`)은 스냅샷 월보다 앞선 완료 월이다**
-    (2026-09-18 정정, -115). 이 모듈은 월을 고르지 않는다
-    (`cluster/driver.clickstream_month_for` 가 고른다). 아래는 그 계약의 근거다.
+    (2026-09-18 정정, -115 + develop 머지). 이 모듈은 월을 고르지 않는다 —
+    `batch.clickstream.select_completed_month` 가 고르고, 아래
+    `_is_completed_clickstream_month` 가 그 위의 이중 방어다.
 
     ~~"replay 는 사건월, LIVE 는 전월"~~ — 출처마다 다른 값인 줄 알았는데 아니다.
         명세 v0.3 §3.2 4번이 **리플레이에도 같은 event-time 계약**을 건다:
@@ -41,7 +45,7 @@ Spark·DB 없이 테스트된다. 실 데이터 소스는 driver.py 가 배선�
         몇 멤버를 붙일 수 있는지 재는 값이지 제품 성능이 아니다. 인용 금지 사항은
         `cluster/driver.CLICKSTREAM_MONTH_RULES` 에 수치와 함께 적어 두었다.
     Wikidata 관계는 게이트에서 빠졌다(§3.2 4번 — 속성 5종 전수 검사 실패). 화면 근거
-        간선(점선)으로만 그린다.
+        간선(점선)으로만 그리며, 스냅샷 이후 관측한 관계는 소급하지 않는다.
     ⚠️ 기존 문서가 사건으로 재조명되는 비-씨드(예: Mojtaba_Khamenei, 2009 생성)는
         생성일 창으로 못 잡는다 — WP-77 로 분리. 이 모듈은 다루지 않는다.
 
@@ -108,7 +112,7 @@ class Neighbor:
     wiki: str
     title: str
     clickstream_n: int         # 이동량. weight 로 쓴다.
-    # 근거 월 YYYY-MM. **어느 달을 쓰는지는 출처마다 다르다** — 아래 🔴 참고.
+    # 근거 월 YYYY-MM. **스냅샷 월보다 앞선 완료 월이어야 한다** (위 🔴).
     # 이 모듈은 값을 받아 간선 근거 라벨로 실어 나를 뿐, 월을 고르지 않는다.
     clickstream_month: str
     # 문서 생성 시각. **timezone-aware UTC** 여야 한다 (2026-09-18, -115).
@@ -219,6 +223,17 @@ def _within_creation_window(
     return abs((created_date - event_date).days) <= window_days
 
 
+def _is_completed_clickstream_month(clickstream_month: str, snapshot_date: date) -> bool:
+    """근거 월이 스냅샷 월보다 이전의 완료된 월인가."""
+    if len(clickstream_month) != 7 or clickstream_month[4] != "-":
+        return False
+    try:
+        evidence_month = date.fromisoformat(f"{clickstream_month}-01")
+    except ValueError:
+        return False
+    return evidence_month < snapshot_date.replace(day=1)
+
+
 def _build_cluster(
     source: str,
     snapshot_ts: datetime,
@@ -249,6 +264,7 @@ def _build_cluster(
     members: list[Member] = [seed_member]
     edges: list[Edge] = []
     included_page_ids: set[int] = {seed.page_id}
+    snapshot_date = snapshot_ts.date()
 
     for nb in neighbors:
         if nb.page_id == seed.page_id:
@@ -257,8 +273,14 @@ def _build_cluster(
             continue                         # 중복 이웃 제거
         if nb.clickstream_n < CLICKSTREAM_FLOOR:
             continue                         # 덤프 하한 미만(있을 수 없지만 방어적)
-        if not _within_creation_window(nb.created_at, seed.event_date, window_days):
+        created_at = (_as_utc(nb.created_at, "Neighbor.created_at")
+                      if nb.created_at is not None else None)
+        if created_at is not None and created_at > snapshot_ts:
+            continue                         # 스냅샷 이후 생성 — 과거 지도에 소급 금지
+        if not _within_creation_window(created_at, seed.event_date, window_days):
             continue                         # 생성일 창 밖 — 게이트 탈락
+        if not _is_completed_clickstream_month(nb.clickstream_month, snapshot_date):
+            continue                         # 당월·미래·잘못된 월 근거는 사용하지 않는다
 
         included_page_ids.add(nb.page_id)
         members.append(Member(
@@ -288,6 +310,9 @@ def _build_cluster(
             continue
         if rel.target_page_id == seed.page_id:
             continue
+        observed_at = _as_utc(rel.observed_at, "WikidataRelation.observed_at")
+        if observed_at > snapshot_ts:
+            continue
         edges.append(Edge(
             source_page_id=seed.page_id,
             target_page_id=rel.target_page_id,
@@ -295,7 +320,7 @@ def _build_cluster(
             directed=False,
             weight=1.0,
             evidence_label=rel.label,
-            evidence_observed_at=rel.observed_at,
+            evidence_observed_at=observed_at,
         ))
 
     return Cluster(
@@ -335,6 +360,8 @@ def build_snapshot(
     """
     if source not in ("live", "replay"):
         raise ValueError(f"source must be live/replay, got {source!r}")
+
+    snapshot_ts = _as_utc(snapshot_ts, "snapshot_ts")
 
     wikidata = wikidata or {}
     prior_first_detected = prior_first_detected or {}

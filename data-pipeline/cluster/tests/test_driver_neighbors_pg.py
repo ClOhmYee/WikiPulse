@@ -68,44 +68,30 @@ def _count(conn, table: str) -> int:
 
 @pytest.fixture
 def neighbor_source(tmp_path):
-    """실제 적재본 형태 그대로 — `clickstream_ingest` 출력과 같은 JSONL.gz shard."""
-    directory = tmp_path / "clickstream" / "enwiki" / "2024-10"
-    directory.mkdir(parents=True)
-    with gzip.open(directory / "part-00000.jsonl.gz", "wt", encoding="utf-8") as handle:
-        handle.write(json.dumps(
-            {"prev": SEED_TITLE, "curr": NEW_NEIGHBOR, "n": 5000}) + "\n")
-        handle.write(json.dumps(
-            {"prev": SEED_TITLE, "curr": OLD_NEIGHBOR, "n": 90000}) + "\n")
-    write_index({NEW_NEIGHBOR: datetime(2024, 10, 9, tzinfo=UTC),
-                 OLD_NEIGHBOR: datetime(2003, 4, 1, tzinfo=UTC)},
-                tmp_path / "creation", shard_records=100)
-    # 근거 월 = 사건월(`event`). ⚠️ **제품 규칙이 아니다** — 사후 QA 전용이고,
-    # 여기서는 "덤프 월과 스냅샷 월이 같을 때도 배선이 이어지는가" 만 본다.
-    # 제품 규칙(`previous`) 관통은 아래 `neighbor_source_previous` 가 본다.
-    return MonthlyNeighborSource(
-        tmp_path / "clickstream", tmp_path / "creation", "event")
+    """실제 적재본 형태 그대로 — `clickstream_ingest` 출력과 같은 JSONL.gz shard.
 
+    근거 월은 **직전 완료 월(2024-09)** 이다. 스냅샷 당월(2024-10) 덤프는 월이 끝나야
+    나오므로 운영 당시에는 없던 근거다 — `select_completed_month` 가 고르지 않고
+    `snapshot._is_completed_clickstream_month` 가 한 번 더 막는다(명세 v0.3 §3.2 4번).
 
-@pytest.fixture
-def neighbor_source_previous(tmp_path):
-    """제품 규칙(`previous`) 관통용 — 직전 월 덤프에 이미 있던 이웃.
-
-    사건 하루 전후에 생긴 문서만 이웃이 되는 것이 아니다. 사건일 ±창 안이면서
-    **직전 월 덤프에 이미 행이 있는** 문서가 제품 경로에서 실제로 붙는 모양이다
-    (Helene 이 10월 스냅샷에서 2024-09 덤프로 붙는 것과 같은 구조).
+    세 이웃이 각각 다른 관문을 본다:
+      SEPT_NEIGHBOR  생성 2024-09-20 — 스냅샷 이전 · 창 안  -> 추가 씨드로 들어온다
+      OLD_NEIGHBOR   생성 2003-04-01 — 창 밖               -> 이동량이 21배여도 탈락
+      NEW_NEIGHBOR   생성 2024-10-09 — **스냅샷 이후**      -> 시점 상한에 걸려 탈락
     """
     directory = tmp_path / "clickstream" / "enwiki" / "2024-09"
     directory.mkdir(parents=True)
     with gzip.open(directory / "part-00000.jsonl.gz", "wt", encoding="utf-8") as handle:
-        print(json.dumps(
-            {"prev": SEED_TITLE, "curr": SEPT_NEIGHBOR, "n": 4200}), file=handle)
-        print(json.dumps(
-            {"prev": SEED_TITLE, "curr": OLD_NEIGHBOR, "n": 90000}), file=handle)
+        for curr, n in ((SEPT_NEIGHBOR, 4200), (OLD_NEIGHBOR, 90000), (NEW_NEIGHBOR, 5000)):
+            print(json.dumps({"prev": SEED_TITLE, "curr": curr, "n": n}), file=handle)
+    (directory / "_manifest.json").write_text(
+        json.dumps({"wiki": "enwiki", "month": "2024-09",
+                    "shards": ["part-00000.jsonl.gz"]}), encoding="utf-8")
     write_index({SEPT_NEIGHBOR: datetime(2024, 9, 20, 7, 30, tzinfo=UTC),
-                 OLD_NEIGHBOR: datetime(2003, 4, 1, tzinfo=UTC)},
+                 OLD_NEIGHBOR: datetime(2003, 4, 1, tzinfo=UTC),
+                 NEW_NEIGHBOR: datetime(2024, 10, 9, tzinfo=UTC)},
                 tmp_path / "creation", shard_records=100)
-    return MonthlyNeighborSource(
-        tmp_path / "clickstream", tmp_path / "creation", "previous")
+    return MonthlyNeighborSource(tmp_path / "clickstream", tmp_path / "creation")
 
 
 @pytest.fixture
@@ -163,20 +149,30 @@ def test_추가_씨드_멤버와_간선이_저장된다(conn, milton, neighbor_s
                    "SELECT p.title, m.is_seed, m.weight, m.completeness "
                    "FROM cluster_member m JOIN wiki_page p ON p.id = m.page_id "
                    "ORDER BY p.title")
-    assert len(members) == 2
-    assert members[0] == (SEED_TITLE, True, 1.0, "pending")
     # 추가 씨드는 시점 지표를 안 재고 관계로만 딸려온다. weight 는 Clickstream 이동량.
     # `is_seed=true` 는 "사건 때문에 새로 생긴 문서" 라는 뜻이지 지표가 있다는 뜻이 아니다.
-    assert members[1] == (NEW_NEIGHBOR, True, 5000.0, "unavailable")
+    assert members == [
+        (SEPT_NEIGHBOR, True, 4200.0, "unavailable"),
+        (SEED_TITLE, True, 1.0, "pending"),
+    ]
 
     edges = _all(conn,
                  "SELECT kind, directed, weight, evidence_label, evidence_month "
                  "FROM cluster_edge")
-    assert edges == [("clickstream", True, 5000.0, "Clickstream 2024-10", "2024-10")]
+    assert edges == [("clickstream", True, 4200.0, "Clickstream 2024-09", "2024-09")]
+
+
+def test_스냅샷_이후_생성_문서는_안_들어온다(conn, milton, neighbor_source):
+    """시점 상한(WP-118). 창 안이어도 `생성 시각 > snapshot_ts` 면 제외한다 —
+    과거 지도에 나중에 생긴 문서를 소급하지 않는다."""
+    run(conn, "replay", snapshot_times=[SNAP1], neighbor_source=neighbor_source)
+    titles = {row[0] for row in _all(
+        conn, "SELECT p.title FROM cluster_member m JOIN wiki_page p ON p.id = m.page_id")}
+    assert NEW_NEIGHBOR not in titles
 
 
 def test_이동량이_커도_창_밖이면_안_들어온다(conn, milton, neighbor_source):
-    """n=90,000 짜리 배경 문서가 n=5,000 짜리 사건 문서보다 18배 크다 — §11 그대로."""
+    """n=90,000 짜리 배경 문서가 n=4,200 짜리 사건 문서보다 21배 크다 — §11 그대로."""
     run(conn, "replay", snapshot_times=[SNAP1], neighbor_source=neighbor_source)
     titles = {row[0] for row in _all(
         conn, "SELECT p.title FROM cluster_member m JOIN wiki_page p ON p.id = m.page_id")}
@@ -220,27 +216,3 @@ def test_이웃을_안_주면_씨드_단독이다(conn, milton):
     run(conn, "replay", snapshot_times=[SNAP1])
     assert _count(conn, "cluster_member") == 1
     assert _count(conn, "cluster_edge") == 0
-
-def test_previous_규칙도_추가_씨드까지_이어진다(conn, milton, neighbor_source_previous):
-    """제품 규칙 관통 — 직전 월 덤프 → 창 통과 → is_seed=true → cluster_edge.
-
-    `event` 경로와 같은 계약이 나와야 한다. 다른 것은 어느 달 덤프를 읽었는지뿐이다.
-    """
-    run(conn, "replay", snapshot_times=[SNAP1],
-        neighbor_source=neighbor_source_previous)
-
-    members = _all(conn,
-                   "SELECT p.title, m.is_seed, m.weight, m.completeness "
-                   "FROM cluster_member m JOIN wiki_page p ON p.id = m.page_id "
-                   "ORDER BY p.title")
-    assert members == [
-        (SEPT_NEIGHBOR, True, 4200.0, "unavailable"),
-        (SEED_TITLE, True, 1.0, "pending"),
-    ]
-    # 이동량 90,000 짜리 배경 문서(2003 생성)는 창 밖이라 안 들어온다.
-    assert OLD_NEIGHBOR not in {title for title, *_ in members}
-
-    edges = _all(conn,
-                 "SELECT kind, directed, weight, evidence_label, evidence_month "
-                 "FROM cluster_edge")
-    assert edges == [("clickstream", True, 4200.0, "Clickstream 2024-09", "2024-09")]

@@ -4,7 +4,7 @@
     python -m cluster.driver --dsn "$DATABASE_URL" --source live
     python -m cluster.driver --dsn ... --source replay --snapshot-ts 2024-10-07T14:00:00Z
     python -m cluster.driver --dsn ... --source replay \
-        --clickstream-root ./data/clickstream --clickstream-month-rule previous \
+        --clickstream-root ./data/clickstream \
         --creation-index ./data/page-creation/enwiki/2024-09_2024-10
     python -m cluster.driver --dsn ... --source live --dry-run
 
@@ -84,7 +84,12 @@ from dataclasses import dataclass, field as dataclass_field
 from datetime import datetime, timezone
 from pathlib import Path
 
-from batch.clickstream import NeighborRef, neighbors_for, read_shards
+from batch.clickstream import (
+    NeighborRef,
+    neighbors_for,
+    read_shards,
+    select_completed_month,
+)
 from batch.page_creation import creation_dates_for
 from spike.spike_sink import SPIKE_SOURCES
 
@@ -98,36 +103,24 @@ from .snapshot import (
 )
 from .writer import persist_snapshot
 
-#: Clickstream 근거 월을 고르는 규칙 (WP-115).
+#: Clickstream 근거 월은 **`batch.clickstream.select_completed_month` 하나가 고른다**
+#: (2026-09-18, -115 + develop 머지).
 #:
-#:    `previous` : 스냅샷 직전 달. **제품 동작 검증은 이것만 쓴다.**
-#:                 그 시점에 실제로 구할 수 있었던 완료 월을 흉내 내는 로컬 regression 이다.
-#:    `event`    : 스냅샷이 속한 달. **제품 경로가 아니다** — 월이 끝난 뒤에야 나오는
-#:                 덤프를 사후에 쓰는 것이라 운영 당시에는 존재하지 않던 근거다.
-#:                 배선이 이론상 최대 몇 멤버까지 붙일 수 있는지 재는
-#:                 **사후 QA / upper-bound 실험** 용도로만 남겨 둔다.
+#: ~~`CLICKSTREAM_MONTH_RULES = ("previous", "event")` 와 `clickstream_month_for`~~
+#:    -> 제거. -115 브랜치가 develop 머지 전까지 쓰던 로컬 스위치였다. 규칙이 두 벌이면
+#:    한쪽만 바뀌어도 에러 없이 결과가 갈린다 — 그래서 머지 시점에 한 벌로 합쳤다.
+#:    직전 월 우선 · 미공개·검증 실패 시 최신 완료본(통상 전전월) 폴백 · `_manifest.json`
+#:    검증이 전부 그쪽 계약이고, `snapshot._is_completed_clickstream_month` 가 그 위의
+#:    이중 방어다(명세 v0.3 §3.2 4번 event-time 상한).
 #:
-#: 🔴 **`event` 산출물을 제품 성능으로 인용하지 않는다** (2026-09-18 정정). 명세 v0.3
-#:    §3.2 4번은 `clickstream_month` 가 스냅샷 월보다 앞선 데이터 기간이어야 한다고
-#:    정했고, 그 판단은 "원본의 데이터 기간 기준이지 로컬 적재 시각 기준이 아니다" —
-#:    즉 과거 원본을 나중에 적재하는 리플레이에도 같은 계약이 걸린다. §11 도 사건
-#:    당월 dump 실측에 "운영 당시에는 사용할 수 없던 당월 덤프를 월 종료 후 분석한
-#:    품질 검증이며, 해당 월 스냅샷 입력으로 사용했다는 뜻이 아니다" 라고 달아 두었다.
+#: 🔴 **사건 당월 덤프는 쓰지 않는다.** 월이 끝나야 나오는 덤프라 운영 당시에는 없던
+#:    근거다. §11 이 `-51` 의 당월 dump 실측에 "운영 당시에는 사용할 수 없던 당월 덤프를
+#:    월 종료 후 분석한 품질 검증이며, 해당 월 스냅샷 입력으로 사용했다는 뜻이 아니다"
+#:    를 달아 두었다. 과거 원본을 나중에 적재하는 리플레이에도 같은 계약이 걸린다.
 #:
-#: 🔴 **전역 기본값을 두지 않는다.** `--source` 를 `required` 로 둔 것과 같은 이유다
-#:    (아래 `require_spike_source` 🔴) — 기본값이 있으면 빠뜨린 실행이 **에러 없이**
-#:    다른 근거로 산출물을 만든다. 두 규칙의 결과 차이는 "이웃이 없는 시점" 과
-#:    구분되지 않는 형태로 나타난다.
-#:
-#: ⚠️ **develop 의 `batch/clickstream.select_completed_month` 를 여기 복제하지 않았다.**
-#:    직전 월 미공개·검증 실패 시 최신 완료본으로 폴백하는 계약은 그쪽이 이미 갖고
-#:    있다. 규칙이 두 벌이 되면 한쪽만 바뀌어도 에러 없이 결과가 갈리므로, 통합은
-#:    develop 머지 때 한 번에 한다. 이 함수는 그때까지의 로컬 regression 스위치다.
-#:
-#: 배선 regression 실측 (2024-09-01~11-01, 스냅샷 1,426 · 클러스터 6,614):
-#:    previous  비-루트 멤버  6,134 · 2+ 멤버 클러스터 17.7%   <- 제품 규칙
-#:    event     비-루트 멤버 20,161 · 2+ 멤버 클러스터 34.1%   <- 사후 QA upper bound
-#:    previous 에서 Milton 1 멤버 · Yagi 1 멤버(둘 다 이웃 0) · Helene 최대 6 멤버.
+#: 배선 regression 실측 (2024-09-01~11-01, 스냅샷 1,426 · 클러스터 6,614, 완료 월 규칙):
+#:    비-루트 멤버 6,134 · 2+ 멤버 클러스터 1,172(17.7%) · 최대 120 멤버
+#:    Milton 1 멤버 · Yagi 1 멤버(둘 다 이웃 0) · Helene 최대 6 멤버.
 #:    ~~"셋 다 이웃 0"~~ 은 틀린 서술이었다 (2026-09-18 DB 재확인) — Helene 은
 #:    사건일이 09-23 이라 10월 스냅샷의 직전 월(2024-09) 덤프에 이미 들어 있다.
 #:
@@ -136,10 +129,6 @@ from .writer import persist_snapshot
 #:    WP-109 매니페스트에서 폐기됐다. 현행 2단계 관문(-126)의 산출물이
 #:    아니므로 MVP 탐지 성능으로 인용하면 안 되고, **이웃 배선(-115) 자체가
 #:    끝까지 이어지는지 보는 regression 데이터**로만 쓴다.
-#:
-#: 임계값이 아니라 **입력 선택**이라 여기 두는 것이고, 게이트(`snapshot.py`)는 이 값을
-#: 보지 않는다. 월을 고르는 함수는 `clickstream_month_for` 하나다.
-CLICKSTREAM_MONTH_RULES = ("previous", "event")
 
 #: 한 시점·한 출처의 씨드. `detected_at` 이 그 시점이다.
 #: 🔴 `s.source = %s` 가 이 스토리(-102)의 핵심이다. 빼면 LIVE 스냅샷에 리플레이 씨드가
@@ -148,7 +137,7 @@ CLICKSTREAM_MONTH_RULES = ("previous", "event")
 #: 정렬은 저장 순서일 뿐 — 노출 순위는 백엔드가 pulse_score 로 다시 매긴다.
 SELECT_SEEDS_SQL = """
 SELECT s.id, s.page_id, p.wiki, p.title, s.window_start, s.detected_at,
-       s.edit_count, s.view_ratio, s.spike_score
+       s.edit_count, s.views, s.view_baseline, s.view_ratio, s.spike_score
   FROM spike s
   JOIN wiki_page p ON p.id = s.page_id
  WHERE s.source = %s
@@ -205,17 +194,26 @@ SELECT issue_key, min(snapshot_ts)
 """
 
 
-def _completeness(view_ratio: float | None) -> str:
-    """`spike` 한 행의 지표 완성도. V1 의 view_ratio 주석 그대로 읽는다.
+def _completeness(views: int | None) -> str:
+    """`spike` 한 행의 지표 완성도. **조회수 원값이 있으면 2차 판정이 돌았다는 뜻이다.**
 
-    "Pageviews 가 1시간 늦어서 판정 시점에 NULL 일 수 있다. NULL = 아직 2차 판정 전."
-    → 값이 있으면 complete, 없으면 pending.
+    ~~view_ratio 가 있으면 complete~~ → **views 로 판단한다**
+    (2026-09-18, WP-129, V7).
 
-    ⚠️ `spike` 만으로는 pending(곧 온다)과 unavailable(그 구간 조회수 적재본이 아예 없다)을
-    **구분할 수 없다.** 2024-10 처럼 조회수 덤프가 없는 구간도 pending 으로 나온다.
-    구분하려면 적재 범위를 아는 쪽이 값을 넣어줘야 한다 — 후속 과제.
+    🔴 왜 바꿨나. `view_ratio` 는 두 뜻을 지고 있었다:
+        "배수를 낼 수 없음"(기준선 표본 없음)  vs  "아직 판정 안 됨"(조회수 미도착)
+    WP-126 의 2단계 계약에서 **표본 없는 문서는 배수가 정당하게 NULL** 이다 —
+    분모(view_ewma)가 없다. 신규 문서는 대부분 이 경로로 확정되는데(절대 하한 >= 100,
+    "0 에서의 급등"), 그게 전부 pending 으로 저장됐다. 판정은 끝났는데 화면은 대기로
+    보였다 — canary 실측(docs/validation/2026-09-18-one-day-e2e-canary.md §5).
+
+    `views` 는 뜻이 하나다: 있으면 조회수를 보고 판정했다.
+
+    ⚠️ 여전히 pending(곧 온다)과 unavailable(그 구간 조회수 적재본이 아예 없다)은
+    **구분할 수 없다.** 구분하려면 적재 범위를 아는 쪽이 값을 넣어줘야 한다 — 후속 과제.
+    ⚠️ V7 이전에 저장된 옛 행은 `views` 가 NULL 이라 pending 으로 나온다. 재적재하면 찬다.
     """
-    return "complete" if view_ratio is not None else "pending"
+    return "complete" if views is not None else "pending"
 
 
 def require_spike_source(source: str) -> str:
@@ -261,7 +259,7 @@ def load_seeds_from_spike(conn, snapshot_ts: datetime, source: str) -> list[Seed
 
     seeds: list[Seed] = []
     for (_id, page_id, wiki, title, window_start, detected_at,
-         edit_count, view_ratio, spike_score) in rows:
+         edit_count, views, view_baseline, view_ratio, spike_score) in rows:
         # spike 에 window_end 가 없어 detected_at 을 쓴다(모듈 독스트링 ⚠️).
         # Seed 계약은 "시작 < 종료" 다 — 어긋나면 조용히 이상한 구간이 저장되므로 막는다.
         if detected_at <= window_start:
@@ -280,12 +278,13 @@ def load_seeds_from_spike(conn, snapshot_ts: datetime, source: str) -> list[Seed
             window_start=window_start,
             window_end=detected_at,
             edit_count=edit_count,
-            # spike 는 조회수 원값·기준선을 저장하지 않는다(edit_z·view_ratio 만).
-            # 없는 값을 지어내지 않고 None 으로 둔다 — 화면이 '미제공'으로 그린다.
-            views=None,
+            # V7 부터 spike 가 조회수 원값·기준선을 들고 있다 (WP-129).
+            # ~~None 으로 두어 화면이 '미제공'으로 그린다~~ → 실제 판정값을 그대로 넘긴다.
+            views=views,
+            # 편집 기준선은 아직 spike 에 없다. 지어내지 않고 None 으로 둔다.
             edit_baseline=None,
-            view_baseline=None,
-            completeness=_completeness(view_ratio),
+            view_baseline=view_baseline,
+            completeness=_completeness(views),
         ))
     return seeds
 
@@ -316,25 +315,6 @@ def load_prior_first_detected(conn, source: str) -> dict[str, datetime]:
     with conn.cursor() as cur:
         cur.execute(SELECT_PRIOR_FIRST_DETECTED_SQL, (source,))
         return {key: ts for key, ts in cur.fetchall()}
-
-
-def clickstream_month_for(snapshot_ts: datetime, rule: str) -> str:
-    """이 스냅샷의 근거가 될 Clickstream 월 `YYYY-MM`.
-
-    `previous` = 스냅샷 직전 달(제품 규칙의 로컬 근사), `event` = 스냅샷이 속한 달
-    (사후 QA 전용). 각 규칙의 의미와 인용 금지 사항은 `CLICKSTREAM_MONTH_RULES` 참고.
-
-    ⚠️ 시간대를 UTC 로 내린 뒤 월을 읽는다. naive 나 로컬 시각으로 읽으면 월초·월말
-    스냅샷이 옆 달 덤프를 집는다 — 그 달 덤프가 있으면 에러 없이 이웃만 달라진다.
-    """
-    ts = snapshot_ts.astimezone(timezone.utc)
-    if rule == "event":
-        return f"{ts.year:04d}-{ts.month:02d}"
-    if rule == "previous":
-        year, month = (ts.year, ts.month - 1) if ts.month > 1 else (ts.year - 1, 12)
-        return f"{year:04d}-{month:02d}"
-    raise ValueError(
-        f"clickstream 월 규칙은 {CLICKSTREAM_MONTH_RULES} 중 하나다 (받은 값: {rule!r})")
 
 
 def load_seed_titles(
@@ -500,62 +480,62 @@ class MonthlyNeighborSource:
         self,
         shards_root: str | Path,
         creation_index: str | Path,
-        month_rule: str,
         *,
         creation_window_days: int = DEFAULT_CREATION_WINDOW_DAYS,
     ) -> None:
-        if month_rule not in CLICKSTREAM_MONTH_RULES:
-            raise ValueError(
-                f"clickstream 월 규칙은 {CLICKSTREAM_MONTH_RULES} 중 하나다 "
-                f"(받은 값: {month_rule!r})")
         self.shards_root = Path(shards_root)
         self.creation_index = Path(creation_index)
-        self.month_rule = month_rule
         self.creation_window_days = creation_window_days
         self.stats = NeighborStats()
-        self._refs: dict[str, dict[str, list[NeighborRef]]] = {}   # month -> seed -> refs
+        # (wiki, month) -> 씨드 제목 -> 이웃. 근거 월이 wiki 마다 다를 수 있어 키가 쌍이다.
+        self._refs: dict[tuple[str, str], dict[str, list[NeighborRef]]] = {}
         self._created: dict[str, datetime] = {}
+        self._month_of: dict[tuple[str, datetime], str] = {}
+
+    def month_for(self, wiki: str, snapshot_ts: datetime) -> str:
+        """이 스냅샷이 쓸 근거 월. `select_completed_month` 하나만 판단한다.
+
+        🔴 **월 선택 규칙을 이 모듈에 두지 않는다** (2026-09-18, -115 + develop 머지).
+        ~~`clickstream_month_for(previous/event)`~~ -> `batch.clickstream.select_completed_month`.
+        직전 월 우선 · 미공개·검증 실패 시 최신 완료본 폴백 · manifest 검증이 전부
+        그쪽 계약이다. 규칙이 두 벌이면 한쪽만 바뀌어도 에러 없이 결과가 갈린다.
+        `snapshot._is_completed_clickstream_month` 는 그 위의 이중 방어다.
+        """
+        key = (wiki, snapshot_ts)
+        if key not in self._month_of:
+            month, _path = select_completed_month(self.shards_root, wiki, snapshot_ts)
+            self._month_of[key] = month
+        return self._month_of[key]
 
     def shards_dir(self, wiki: str, month: str) -> Path:
         """`clickstream_ingest` 출력 규칙: `{out}/{wiki}/{month}`."""
         return self.shards_root / wiki / month
 
     def prepare(self, conn, source: str, snapshot_times: Sequence[datetime]) -> None:
-        """필요한 월을 한 번씩 읽고 생성일까지 붙인다."""
-        by_month: dict[str, list[datetime]] = {}
-        for ts in snapshot_times:
-            by_month.setdefault(clickstream_month_for(ts, self.month_rule), []).append(ts)
+        """필요한 (wiki, 월) 을 한 번씩 읽고 생성 시각까지 붙인다."""
+        # 어떤 wiki 가 있는지 먼저 안다 — 근거 월이 wiki 마다 다를 수 있다.
+        wikis = sorted(load_seed_titles(conn, source, list(snapshot_times)))
 
-        # 🔴 **훑기 전에 전부 확인한다.** 뒤에서 확인하면 앞 월을 수천만 행 다 읽고 나서
+        # 🔴 **훑기 전에 전부 고른다.** 뒤에서 고르면 앞 월을 수천만 행 다 읽고 나서
         #    마지막 월에서 죽는다 — 실제로 61일 구간 끝의 경계 스냅샷 1개 때문에
         #    2개월 스캔을 버렸다(2026-09-17). 실패는 빨라야 한다.
-        needed = {month: load_seed_titles(conn, source, times)
-                  for month, times in sorted(by_month.items())}
-        missing = [(wiki, month) for month, by_wiki in needed.items()
-                   for wiki in by_wiki if not self.shards_dir(wiki, month).is_dir()]
-        if missing:
-            lines = "\n".join(
-                f"  {self.shards_dir(wiki, month)}  "
-                f"(스냅샷 {len(by_month[month])}개가 이 월을 쓴다)  "
-                f"→ python -m batch.clickstream_ingest --wiki {wiki} --month {month}"
-                for wiki, month in missing)
-            raise FileNotFoundError(
-                f"Clickstream 적재본이 없다 (규칙 {self.month_rule}):\n{lines}\n"
-                "  구간 끝의 경계 스냅샷 때문일 수 있다 — 근거 월은 snapshot_ts 기준이라 "
-                "구간 마지막 시각이 다음 달로 넘어가면 그 달 덤프가 필요하다. "
-                "--until 로 구간을 줄이거나 그 월을 적재한다.")
+        #    완료본이 없으면 `select_completed_month` 가 여기서 FileNotFoundError 를 낸다.
+        groups: dict[tuple[str, str], list[datetime]] = {}
+        for wiki in wikis:
+            for ts in snapshot_times:
+                groups.setdefault((wiki, self.month_for(wiki, ts)), []).append(ts)
 
         all_titles: set[str] = set()
-        for month, seed_titles in needed.items():
+        for (wiki, month), times in sorted(groups.items()):
+            titles = load_seed_titles(conn, source, times).get(wiki, set())
+            found = neighbors_for(read_shards(self.shards_dir(wiki, month)), titles)
             month_refs: dict[str, list[NeighborRef]] = {}
-            for wiki, titles in sorted(seed_titles.items()):
-                found = neighbors_for(read_shards(self.shards_dir(wiki, month)), titles)
-                for seed_title, refs in found.items():
-                    if refs:
-                        month_refs[seed_title] = refs
-                        all_titles.update(r.title for r in refs)
-            self._refs[month] = month_refs
-            print(f"  clickstream {month}: 씨드 {sum(len(t) for t in seed_titles.values()):,}개 중 "
+            for seed_title, refs in found.items():
+                if refs:
+                    month_refs[seed_title] = refs
+                    all_titles.update(r.title for r in refs)
+            self._refs[(wiki, month)] = month_refs
+            print(f"  clickstream {wiki} {month}: 씨드 {len(titles):,}개 중 "
                   f"이웃 보유 {len(month_refs):,}개")
 
         self._created = load_creation_dates(self.creation_index, all_titles)
@@ -565,10 +545,18 @@ class MonthlyNeighborSource:
               if all_titles else "  생성일: 후보 제목 0개")
 
     def __call__(self, conn, snapshot_ts: datetime, seeds: Sequence[Seed]):
-        month = clickstream_month_for(snapshot_ts, self.month_rule)
-        return neighbors_for_snapshot(
-            conn, seeds, self._refs.get(month, {}), self._created, month,
-            creation_window_days=self.creation_window_days, stats=self.stats)
+        by_wiki: dict[str, list[Seed]] = {}
+        for seed in seeds:
+            by_wiki.setdefault(seed.wiki, []).append(seed)
+
+        out: dict[int, list[Neighbor]] = {}
+        for wiki, wiki_seeds in sorted(by_wiki.items()):
+            month = self.month_for(wiki, snapshot_ts)
+            out.update(neighbors_for_snapshot(
+                conn, wiki_seeds, self._refs.get((wiki, month), {}), self._created,
+                month, creation_window_days=self.creation_window_days,
+                stats=self.stats))
+        return out
 
 
 def load_creation_dates(
@@ -732,15 +720,6 @@ def build_arg_parser() -> argparse.ArgumentParser:
                    default=os.environ.get("PAGE_CREATION_OUT", ""),
                    help="batch.page_creation 인덱스 디렉터리. --clickstream-root 와 "
                         "함께 필요하다. 생성일 없이는 창 게이트가 전부 탈락시킨다")
-    # 🔴 기본값 없음 — --source 와 같은 이유다. --clickstream-root 를 줬으면 반드시 고른다.
-    #    replay 는 event, LIVE 는 event 를 쓸 수 없다(당월 덤프가 없다). 자세한 근거는
-    #    CLICKSTREAM_MONTH_RULES 와 snapshot.py 의 🔴 항목.
-    p.add_argument("--clickstream-month-rule", choices=CLICKSTREAM_MONTH_RULES,
-                   help="근거 월 선택. 제품 동작 검증은 previous(직전 달)만 쓴다 — "
-                        "그 시점에 구할 수 있었던 완료 월의 로컬 근사다. "
-                        "event(스냅샷이 속한 달)는 월 종료 후 사후 QA·upper-bound "
-                        "실험 전용이며 제품 성능으로 인용하지 않는다. "
-                        "--clickstream-root 를 주면 필수")
     return p
 
 
@@ -759,15 +738,6 @@ def main(argv: list[str] | None = None) -> int:
               "생성일 없이는 창 게이트가 이웃을 전부 탈락시켜 씨드 단독과 같아진다.",
               file=sys.stderr)
         return 2
-    # 🔴 근거 월을 암묵적으로 정해 주지 않는다. 틀린 달로 돌면 이웃이 0 에 수렴하는데
-    #    "이웃이 없는 시점" 과 구분되지 않아 에러 없이 1-멤버 클러스터가 저장된다.
-    if args.clickstream_root and not args.clickstream_month_rule:
-        print("--clickstream-month-rule 을 명시한다 "
-              f"({'/'.join(CLICKSTREAM_MONTH_RULES)}). 제품 동작 검증은 previous 다 — "
-              "event 는 월 종료 후에만 존재하는 덤프라 사후 QA 전용이다.",
-              file=sys.stderr)
-        return 2
-
     import psycopg     # 이 CLI 에서만 필요 — 순수 로직은 드라이버 없이도 돈다
 
     with psycopg.connect(args.dsn) as conn:
@@ -784,9 +754,9 @@ def main(argv: list[str] | None = None) -> int:
         neighbor_source = None
         if args.clickstream_root:
             neighbor_source = MonthlyNeighborSource(
-                args.clickstream_root, args.creation_index, args.clickstream_month_rule)
+                args.clickstream_root, args.creation_index)
             print(f"이웃 배선: clickstream={args.clickstream_root} "
-                  f"월규칙={args.clickstream_month_rule}")
+                  "(근거 월은 select_completed_month 가 고른다)")
 
         snapshots = run(conn, args.source, snapshot_times=times,
                         dry_run=args.dry_run, neighbor_source=neighbor_source)

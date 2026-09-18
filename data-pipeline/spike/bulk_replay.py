@@ -143,6 +143,11 @@ def candidate_windows(
             continue
 
         views = row.get("views")
+        # -58 의 0 은 "조회수 미적재" 다 — 미도착으로 읽는다. 근거는
+        # runtime.PageWindow.from_row 독스트링 (WP-126). 여기서 다르게 읽으면
+        # 프리필터와 실제 판정이 갈린다.
+        if views == 0:
+            views = None
         probe = Window(
             edit_count=int(row["edit_count"]),
             editor_count=int(row.get("editor_count") or 0),

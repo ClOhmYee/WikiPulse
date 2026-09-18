@@ -4,7 +4,11 @@ import com.fasterxml.jackson.databind.JsonNode;
 import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
 import io.github.resilience4j.ratelimiter.annotation.RateLimiter;
 import io.github.resilience4j.retry.annotation.Retry;
+import java.time.Instant;
+import java.time.OffsetDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.Iterator;
+import java.util.Optional;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
@@ -12,7 +16,17 @@ import org.springframework.web.client.RestClientException;
 
 /**
  * 문서 도입부 평문을 Wikipedia API 로 가져온다 (명세 §6.2).
- * {@code prop=extracts&exintro&explaintext&redirects=1} — 리다이렉트를 따라간다.
+ *
+ * <ul>
+ *   <li>LIVE: {@link #intro(String)} — {@code prop=extracts&exintro&explaintext&redirects=1},
+ *       리다이렉트를 따라간다
+ *   <li>리플레이: {@link #revisionAt(String, java.time.OffsetDateTime)} 로 {@code snapshot_ts}
+ *       이하 마지막 revision 을 찾고 {@link #introAt(long)} 로 그 시점 도입부를 뽑는다
+ *       (WP-129)
+ * </ul>
+ *
+ * <p>🔴 <b>두 경로를 섞지 않는다.</b> 리플레이에서 {@link #intro(String)} 를 부르면 과거 이슈에
+ * 현재 문서 내용이 섞인다 — 명세 §6.2 가 금지하는 폴백이다.
  *
  * <p>🔴 실패 시멘틱을 구분한다. "문서에 도입부가 없다"(정상 200, extract 비었거나 missing)는
  * 빈 문자열로 흡수한다 — 그 문서는 대표 텍스트에서 빠질 뿐이다. 그러나 <b>네트워크·타임아웃·
@@ -83,6 +97,107 @@ public class WikipediaExtractClient {
             return it.next().path("extract").asText("").strip();
         }
         return "";
+    }
+
+    /** 한 시점의 revision 좌표. 명세 §6.2 가 "page ID·revision ID·기준 시각을 함께 고정" 하라는 그것. */
+    public record Revision(long revId, OffsetDateTime revTs, Long wikiPageId) {
+    }
+
+    /**
+     * {@code asOf} 이하의 마지막 revision (명세 §6.2 리플레이 출처).
+     *
+     * <p>{@code rvdir=older&rvstart=asOf&rvlimit=1} = "그 시각에서 과거로 한 걸음" 이다.
+     * 그 시점에 아직 없던 문서는 revision 이 없어 {@link Optional#empty()} 다 — 실패가 아니라
+     * "그때는 이 문서가 없었다" 는 정상 답이다.
+     */
+    @RateLimiter(name = "wikipedia")
+    @CircuitBreaker(name = "wikipedia")
+    @Retry(name = "wikipedia", fallbackMethod = "revisionAtFallback")
+    public Optional<Revision> revisionAt(String title, OffsetDateTime asOf) {
+        String start = DateTimeFormatter.ISO_INSTANT.format(asOf.toInstant());
+        JsonNode root;
+        try {
+            root = client.get()
+                    .uri(uriBuilder -> uriBuilder
+                            .queryParam("action", "query")
+                            .queryParam("prop", "revisions")
+                            .queryParam("rvlimit", "1")
+                            .queryParam("rvdir", "older")
+                            .queryParam("rvstart", start)
+                            .queryParam("rvprop", "ids|timestamp")
+                            .queryParam("redirects", "1")
+                            .queryParam("format", "json")
+                            .queryParam("formatversion", "2")
+                            .queryParam("titles", title)
+                            .build())
+                    .retrieve()
+                    .body(JsonNode.class);
+        } catch (RestClientException e) {
+            throw UpstreamFailures.classify("Wikipedia", e, true);
+        }
+        if (root == null) {
+            return Optional.empty();
+        }
+        JsonNode page = root.path("query").path("pages").path(0);
+        JsonNode revision = page.path("revisions").path(0);
+        if (revision.path("revid").isMissingNode()) {
+            return Optional.empty();
+        }
+        Long wikiPageId = page.path("pageid").isMissingNode() ? null : page.path("pageid").asLong();
+        return Optional.of(new Revision(
+                revision.path("revid").asLong(),
+                OffsetDateTime.ofInstant(
+                        Instant.parse(revision.path("timestamp").asText()), java.time.ZoneOffset.UTC),
+                wikiPageId));
+    }
+
+    /**
+     * 그 revision 의 도입부 평문 (명세 §6.2 리플레이 출처).
+     *
+     * <p>🔴 <b>{@code prop=extracts} 로는 못 한다.</b> {@code revids} 를 줘도 현재 도입부가
+     * 돌아온다 (2026-09-18 실측, {@link LeadSectionText} 참고). 그래서 리드 섹션 HTML 을 받아
+     * 직접 평문으로 바꾼다.
+     *
+     * @return 도입부 평문. 리드 섹션에 문단이 없으면 빈 문자열
+     */
+    @RateLimiter(name = "wikipedia")
+    @CircuitBreaker(name = "wikipedia")
+    @Retry(name = "wikipedia", fallbackMethod = "introAtFallback")
+    public String introAt(long revId) {
+        JsonNode root;
+        try {
+            root = client.get()
+                    .uri(uriBuilder -> uriBuilder
+                            .queryParam("action", "parse")
+                            .queryParam("oldid", revId)
+                            .queryParam("prop", "text")
+                            .queryParam("section", "0")
+                            .queryParam("disabletoc", "1")
+                            .queryParam("disableeditsection", "1")
+                            .queryParam("format", "json")
+                            .queryParam("formatversion", "2")
+                            .build())
+                    .retrieve()
+                    .body(JsonNode.class);
+        } catch (RestClientException e) {
+            throw UpstreamFailures.classify("Wikipedia", e, true);
+        }
+        if (root == null) {
+            return "";
+        }
+        return LeadSectionText.fromHtml(root.path("parse").path("text").asText(""));
+    }
+
+    @SuppressWarnings("unused") // resilience4j 가 리플렉션으로 부른다.
+    private Optional<Revision> revisionAtFallback(String title, OffsetDateTime asOf, Throwable t) {
+        throw new UpstreamUnavailableException(
+                "Wikipedia revision 조회 불가 (" + t.getClass().getSimpleName() + "): " + title, t);
+    }
+
+    @SuppressWarnings("unused") // resilience4j 가 리플렉션으로 부른다.
+    private String introAtFallback(long revId, Throwable t) {
+        throw new UpstreamUnavailableException(
+                "Wikipedia 과거 도입부 호출 불가 (" + t.getClass().getSimpleName() + "): oldid=" + revId, t);
     }
 
     /**

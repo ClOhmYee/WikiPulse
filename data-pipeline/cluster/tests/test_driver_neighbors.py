@@ -8,17 +8,15 @@ from __future__ import annotations
 
 import gzip
 import json
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 
 import pytest
 
 from batch.clickstream import NeighborRef
 from batch.page_creation import write_index
 from cluster.driver import (
-    CLICKSTREAM_MONTH_RULES,
     MonthlyNeighborSource,
     NeighborStats,
-    clickstream_month_for,
     load_creation_dates,
     neighbors_for_snapshot,
 )
@@ -33,40 +31,66 @@ def _seed(title, page_id=1, event_date=date(2024, 10, 7)):
                 window_end=datetime(2024, 10, 7, 4, tzinfo=UTC))
 
 
-# --- 근거 월 선택 ------------------------------------------------------------
+# --- 근거 월 선택 (select_completed_month 위임) --------------------------------
+#
+# 🔴 월 선택 규칙은 `batch.clickstream.select_completed_month` 한 곳이다
+#    (2026-09-18, develop 머지). ~~`clickstream_month_for(previous|event)`~~ 는
+#    -115 가 머지 전까지 쓰던 로컬 스위치였고 규칙이 두 벌이 되므로 제거했다.
+#    여기서는 "driver 가 그 함수에 위임하는가" 만 본다 — 규칙 자체의 단위 테스트는
+#    `batch/tests/test_clickstream.py` 가 갖고 있다.
 
-def test_previous_는_직전_달을_고른다():
-    assert clickstream_month_for(datetime(2024, 10, 7, 14, tzinfo=UTC), "previous") == "2024-09"
+def _dump(root, wiki, month, rows=(("Seed", "Neighbor", 5000),)):
+    """`clickstream_ingest` 출력 모양 그대로 — manifest 까지 있어야 완료본이다."""
+    directory = root / wiki / month
+    directory.mkdir(parents=True)
+    with gzip.open(directory / "part-00000.jsonl.gz", "wt", encoding="utf-8") as handle:
+        for prev, curr, n in rows:
+            print(json.dumps({"prev": prev, "curr": curr, "n": n}), file=handle)
+    (directory / "_manifest.json").write_text(
+        json.dumps({"wiki": wiki, "month": month, "shards": ["part-00000.jsonl.gz"]}),
+        encoding="utf-8")
+    return directory
 
 
-def test_event_는_스냅샷이_속한_달을_고른다():
-    assert clickstream_month_for(datetime(2024, 10, 7, 14, tzinfo=UTC), "event") == "2024-10"
+def test_근거_월은_직전_완료_월이다(tmp_path):
+    root = tmp_path / "cs"
+    _dump(root, "enwiki", "2024-09")
+    source = MonthlyNeighborSource(root, tmp_path / "ci")
+    assert source.month_for("enwiki", datetime(2024, 10, 7, 14, tzinfo=UTC)) == "2024-09"
 
 
-def test_previous_는_연초에_전년_12월로_넘어간다():
-    assert clickstream_month_for(datetime(2024, 1, 3, tzinfo=UTC), "previous") == "2023-12"
+def test_직전_월이_없으면_더_오래된_완료본으로_폴백한다(tmp_path):
+    """직전 월 덤프가 아직 공개·적재되지 않은 경우. 당월로 넘어가지 않는다."""
+    root = tmp_path / "cs"
+    _dump(root, "enwiki", "2024-08")
+    source = MonthlyNeighborSource(root, tmp_path / "ci")
+    assert source.month_for("enwiki", datetime(2024, 10, 7, tzinfo=UTC)) == "2024-08"
 
 
-def test_월은_UTC_로_읽는다():
+def test_스냅샷_당월_덤프는_고르지_않는다(tmp_path):
+    """월이 끝나야 나오는 덤프다 — 운영 당시에는 존재하지 않던 근거다(명세 v0.3 §3.2 4번)."""
+    root = tmp_path / "cs"
+    _dump(root, "enwiki", "2024-10")
+    source = MonthlyNeighborSource(root, tmp_path / "ci")
+    with pytest.raises(FileNotFoundError):
+        source.month_for("enwiki", datetime(2024, 10, 7, tzinfo=UTC))
+
+
+def test_월은_UTC_로_읽는다(tmp_path):
     """로컬 시각으로 읽으면 월말 스냅샷이 옆 달 덤프를 집는다 — 에러 없이 이웃만 달라진다."""
-    kst = timezone(__import__("datetime").timedelta(hours=9))
-    # KST 2024-11-01 05:00 = UTC 2024-10-31 20:00 → 근거 월은 10월 기준이어야 한다.
-    ts = datetime(2024, 11, 1, 5, tzinfo=kst)
-    assert clickstream_month_for(ts, "event") == "2024-10"
-    assert clickstream_month_for(ts, "previous") == "2024-09"
+    kst = timezone(timedelta(hours=9))
+    root = tmp_path / "cs"
+    _dump(root, "enwiki", "2024-09")
+    source = MonthlyNeighborSource(root, tmp_path / "ci")
+    # KST 2024-11-01 05:00 = UTC 2024-10-31 20:00 -> 직전 완료 월은 2024-09 여야 한다.
+    assert source.month_for("enwiki", datetime(2024, 11, 1, 5, tzinfo=kst)) == "2024-09"
 
 
-def test_근거_월_규칙은_명시해야_한다():
-    """🔴 기본값을 두지 않는다 — --source 와 같은 이유. 빠뜨리면 에러 없이 다른
-    근거로 산출물이 만들어지고, 틀린 달은 이웃 0 이라 "이웃 없음" 과 구분되지 않는다."""
-    from cluster.driver import build_arg_parser, main
-
-    args = build_arg_parser().parse_args(
-        ["--source", "replay", "--dsn", "x",
-         "--clickstream-root", "./cs", "--creation-index", "./ci"])
-    assert args.clickstream_month_rule is None      # 조용한 기본값이 없다
-    assert main(["--source", "replay", "--dsn", "x",
-                 "--clickstream-root", "./cs", "--creation-index", "./ci"]) == 2
+def test_완료본이_하나도_없으면_막는다(tmp_path):
+    """조용히 빈 이웃을 돌려주면 "이웃이 없는 시점" 과 구분되지 않는다."""
+    source = MonthlyNeighborSource(tmp_path / "cs", tmp_path / "ci")
+    with pytest.raises(FileNotFoundError):
+        source.month_for("enwiki", datetime(2024, 10, 7, tzinfo=UTC))
 
 
 def test_이웃_인자는_짝으로_준다():
@@ -76,10 +100,13 @@ def test_이웃_인자는_짝으로_준다():
     assert main(["--source", "replay", "--dsn", "x", "--creation-index", "./ci"]) == 2
 
 
-def test_모르는_규칙은_막는다():
-    with pytest.raises(ValueError):
-        clickstream_month_for(datetime(2024, 10, 7, tzinfo=UTC), "same-day")
-    assert CLICKSTREAM_MONTH_RULES == ("previous", "event")
+def test_월_규칙_인자는_사라졌다():
+    """~~--clickstream-month-rule~~ -> select_completed_month 로 통합 (develop 머지)."""
+    from cluster.driver import build_arg_parser
+    args = build_arg_parser().parse_args(
+        ["--source", "replay", "--dsn", "x",
+         "--clickstream-root", "./cs", "--creation-index", "./ci"])
+    assert not hasattr(args, "clickstream_month_rule")
 
 
 # --- 게이트·집계 -------------------------------------------------------------
@@ -147,21 +174,35 @@ def test_게이트를_통과한_이웃만_page_id_를_받는다(fake_conn):
 # --- 적재본 연결 -------------------------------------------------------------
 
 def test_적재본이_없는_월은_막는다(tmp_path, fake_conn):
-    """조용히 빈 이웃을 내면 "이웃 없음" 과 "덤프 미적재" 가 구분되지 않는다."""
-    source = MonthlyNeighborSource(tmp_path / "clickstream", tmp_path / "creation", "event")
+    """조용히 빈 이웃을 내면 "이웃 없음" 과 "덤프 미적재" 가 구분되지 않는다.
+
+    🔴 스캔 **전에** 막아야 한다. 뒤에서 막으면 앞 월을 수천만 행 다 읽고 나서 죽는다.
+    """
+    source = MonthlyNeighborSource(tmp_path / "clickstream", tmp_path / "creation")
     fake_conn.seed_titles = {"enwiki": {"Hurricane Milton"}}
-    with pytest.raises(FileNotFoundError) as caught:
+    with pytest.raises(FileNotFoundError):
         source.prepare(fake_conn, "replay", [datetime(2024, 10, 7, tzinfo=UTC)])
-    assert "clickstream_ingest" in str(caught.value)
 
 
-def test_월_규칙에_따라_다른_적재본을_읽는다(tmp_path, fake_conn):
-    root = tmp_path / "clickstream" / "enwiki"
-    for month, neighbor in (("2024-09", "September Thing"), ("2024-10", "October Thing")):
-        directory = root / month
-        directory.mkdir(parents=True)
-        with gzip.open(directory / "part-00000.jsonl.gz", "wt", encoding="utf-8") as h:
-            h.write(json.dumps({"prev": "Hurricane Milton", "curr": neighbor, "n": 500}) + "\n")
+def test_manifest_없는_적재본은_완료본이_아니다(tmp_path, fake_conn):
+    """shard 파일만 있고 `_manifest.json` 이 없으면 검증을 통과하지 않은 적재본이다."""
+    directory = tmp_path / "clickstream" / "enwiki" / "2024-09"
+    directory.mkdir(parents=True)
+    with gzip.open(directory / "part-00000.jsonl.gz", "wt", encoding="utf-8") as h:
+        print(json.dumps({"prev": "Hurricane Milton", "curr": "X", "n": 500}), file=h)
+    source = MonthlyNeighborSource(tmp_path / "clickstream", tmp_path / "creation")
+    fake_conn.seed_titles = {"enwiki": {"Hurricane Milton"}}
+    with pytest.raises(FileNotFoundError):
+        source.prepare(fake_conn, "replay", [datetime(2024, 10, 7, tzinfo=UTC)])
+
+
+def test_완료_월_적재본을_읽어_간선_라벨까지_싣는다(tmp_path, fake_conn):
+    """스냅샷 당월(2024-10)이 아니라 직전 완료 월(2024-09) 이웃이 붙어야 한다."""
+    root = tmp_path / "clickstream"
+    _dump(root, "enwiki", "2024-09",
+          rows=(("Hurricane Milton", "September Thing", 500),))
+    _dump(root, "enwiki", "2024-10",
+          rows=(("Hurricane Milton", "October Thing", 500),))
     write_index({"September Thing": datetime(2024, 10, 1, tzinfo=UTC),
                  "October Thing": datetime(2024, 10, 9, tzinfo=UTC)},
                 tmp_path / "creation", shard_records=100)
@@ -169,14 +210,12 @@ def test_월_규칙에_따라_다른_적재본을_읽는다(tmp_path, fake_conn)
     fake_conn.seed_titles = {"enwiki": {"Hurricane Milton"}}
     ts = datetime(2024, 10, 7, tzinfo=UTC)
 
-    for rule, expected in (("previous", "September Thing"), ("event", "October Thing")):
-        source = MonthlyNeighborSource(
-            tmp_path / "clickstream", tmp_path / "creation", rule)
-        source.prepare(fake_conn, "replay", [ts])
-        neighbors = source(fake_conn, ts, [_seed("Hurricane Milton")])
-        assert [nb.title for nb in neighbors[1]] == [expected]
-        # 근거 월이 그대로 간선 라벨이 된다.
-        assert neighbors[1][0].clickstream_month == clickstream_month_for(ts, rule)
+    source = MonthlyNeighborSource(root, tmp_path / "creation")
+    source.prepare(fake_conn, "replay", [ts])
+    neighbors = source(fake_conn, ts, [_seed("Hurricane Milton")])
+    assert [nb.title for nb in neighbors[1]] == ["September Thing"]
+    # 근거 월이 그대로 간선 라벨이 된다.
+    assert neighbors[1][0].clickstream_month == "2024-09"
 
 
 def test_생성일은_인덱스에서_온다(tmp_path):

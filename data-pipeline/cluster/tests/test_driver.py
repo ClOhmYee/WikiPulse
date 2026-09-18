@@ -35,7 +35,7 @@ def test_NeighborRef를_Neighbor로_변환():
     refs = [NeighborRef(title="Iran", n=383, directed=True),
             NeighborRef(title="No Page", n=10, directed=True)]
     page_of_title = {"Iran": (902, "enwiki")}          # No Page 는 매핑 없음 → 건너뜀
-    created_of_page = {902: date(2025, 6, 20)}
+    created_of_page = {902: datetime(2025, 6, 20, tzinfo=UTC)}
     neighbors = build_neighbor_inputs(refs, "2025-05", page_of_title, created_of_page)
 
     assert len(neighbors) == 1
@@ -43,5 +43,5 @@ def test_NeighborRef를_Neighbor로_변환():
     assert nb.page_id == 902 and nb.wiki == "enwiki" and nb.title == "Iran"
     assert nb.clickstream_n == 383
     assert nb.clickstream_month == "2025-05"
-    assert nb.created_at == date(2025, 6, 20)
+    assert nb.created_at == datetime(2025, 6, 20, tzinfo=UTC)
     assert nb.directed is True

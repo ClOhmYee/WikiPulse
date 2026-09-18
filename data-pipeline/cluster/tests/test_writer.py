@@ -57,20 +57,20 @@ def hormuz(conn):
     neighbors = {seed_id: [
         Neighbor(page_id=event_id, wiki="enwiki",
                  title="2025 Iran threat of Strait of Hormuz closure",
-                 clickstream_n=383, clickstream_month="2025-05", created_at=datetime(2025, 6, 23, tzinfo=UTC)),
+                 clickstream_n=383, clickstream_month="2025-06", created_at=_dt(2025, 6, 23)),
         Neighbor(page_id=bg_id, wiki="enwiki", title="Choke point",
-                 clickstream_n=11778, clickstream_month="2025-05", created_at=datetime(2009, 1, 1, tzinfo=UTC)),
+                 clickstream_n=11778, clickstream_month="2025-06", created_at=_dt(2009, 1, 1)),
     ]}
     wikidata = {seed_id: [
         WikidataRelation(target_page_id=event_id, label="P361 부분",
-                         observed_at=_dt(2026, 9, 11)),
+                         observed_at=_dt(2025, 6, 30)),
     ]}
     return seed_id, event_id, bg_id, seed, neighbors, wikidata
 
 
 def test_스냅샷_저장_왕복(conn, hormuz):
     seed_id, event_id, bg_id, seed, neighbors, wikidata = hormuz
-    snap = build_snapshot(_dt(2025, 6, 12, 5), "live", [seed], neighbors, wikidata)
+    snap = build_snapshot(_dt(2025, 7, 1), "live", [seed], neighbors, wikidata)
     persist_snapshot(conn, snap)
 
     # 클러스터 한 개, 계약 필드
@@ -109,7 +109,7 @@ def test_스냅샷_저장_왕복(conn, hormuz):
     kinds = {e[0] for e in edges}
     assert kinds == {"clickstream", "wikidata"}
     cs = next(e for e in edges if e[0] == "clickstream")
-    assert cs[1] is True and cs[2] == "2025-05"
+    assert cs[1] is True and cs[2] == "2025-06"
     wd = next(e for e in edges if e[0] == "wikidata")
     assert wd[1] is False and wd[3] is not None
 
@@ -123,7 +123,7 @@ def test_스냅샷_저장_왕복(conn, hormuz):
 def test_재계산은_멱등이다(conn, hormuz):
     """같은 (source, snapshot_ts) 를 두 번 저장해도 중복이 안 쌓인다(리플레이 호환)."""
     _, _, _, seed, neighbors, wikidata = hormuz
-    snap = build_snapshot(_dt(2025, 6, 12, 5), "replay", [seed], neighbors, wikidata)
+    snap = build_snapshot(_dt(2025, 7, 1), "replay", [seed], neighbors, wikidata)
     persist_snapshot(conn, snap)
     persist_snapshot(conn, snap)                 # 재계산
 
@@ -148,10 +148,10 @@ def test_빈_스냅샷도_완료로_등록된다(conn):
 def test_재계산이_이전_클러스터를_지운다(conn, hormuz):
     """이웃이 줄어든 재계산이 예전 멤버를 남기지 않는다."""
     _, _, _, seed, neighbors, wikidata = hormuz
-    full = build_snapshot(_dt(2025, 6, 12, 5), "replay", [seed], neighbors, wikidata)
+    full = build_snapshot(_dt(2025, 7, 1), "replay", [seed], neighbors, wikidata)
     persist_snapshot(conn, full)
     # 이웃·관계 없이 재계산 — 씨드만 남아야 한다
-    shrunk = build_snapshot(_dt(2025, 6, 12, 5), "replay", [seed], {})
+    shrunk = build_snapshot(_dt(2025, 7, 1), "replay", [seed], {})
     persist_snapshot(conn, shrunk)
     assert _one(conn, "SELECT count(*) FROM cluster_member")[0] == 1
     assert _one(conn, "SELECT count(*) FROM cluster_edge")[0] == 0

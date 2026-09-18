@@ -14,21 +14,23 @@
 
 ### 1. 미구현 API와 화면 범위
 
-- **근거:** 위 두 Controller에는 통합 검색, 이슈 키워드 검색, 페이지 시계열, 주가, 뉴스, 인증, 회원 보관함, 토론 쓰기 API가 없다. `docs/api-v0.1.md`의 해당 항목은 제안이다.
+- **근거:** 위 두 Controller에는 통합 검색, 이슈 키워드 검색, 페이지 시계열, 주가, 뉴스, 인증, 회원 보관함, 토론 쓰기 API가 없다. `docs/api-v0.3.md`의 해당 항목은 제안이다.
 - **현재 FE 처리:** 상단 검색은 `/stocks?q=`를 쓰는 종목 검색이다. 이슈 화면은 지원되는 상태·출처·시점과 페이지네이션만 서버에 보낸다. 종목 가격·가상 수익률·뉴스·편집 전후 비교를 서버 결과처럼 보충하지 않는다. 보관함·토론은 브라우저의 로컬 기능이며 실제 계정 동기화가 아니다.
 - **협의 질문:** 통합 검색·주가·뉴스·문서 지표·인증 중 다음 제공 순서는 무엇인가? 과거 제안의 경로·필드·접근 권한을 그대로 채택하는가?
 - **후속 작업:** 확정한 API별로 BE 구현과 FE 연결을 따로 등록하고 실제 응답 검증을 추가한다. 이번 연동은 WP-95/-96/-97 범위.
 
 ### 2. 상태, 실패, 두 종류의 ‘확정’
 
-- **근거:** `IssueDetailResponse.status`와 지도 `Cluster.status`는 `DETECTED / VERIFYING / CONFIRMED`를 전달한다. [snapshot.py](../../data-pipeline/cluster/snapshot.py)는 항상 `DETECTED`로 생산한다. [detector.py](../../data-pipeline/spike/detector.py)의 “편집·조회수 모두 통과(확정)”는 LLM의 종목·이슈 검증 완료와 별개다.
+- **근거:** `IssueDetailResponse.status`와 지도 `Cluster.status`는 `DETECTED / VERIFYING / CONFIRMED`를 전달한다. 새 계약에서는 편집 1건→조회수 급등을 모두 통과한 뒤에만 이슈가 만들어지므로, 이 상태값은 조회수 판정 단계가 아니라 이후 종목 매칭·요약 검증 진행 상태다(WP-118).
 - **현재 FE 처리:** 서버 상태를 AI 검증 전·AI 검증 중·AI 검증 완료로 표시한다. API를 쓴다는 이유로 LIVE·확정으로 승격하지 않는다. 요약 부재를 오류나 검증 실패로 단정하지 않는다. 지도 결측은 `pending`이면 집계 중, `unavailable`이면 미제공, 실제 0이면 0으로 구분한다.
+- **로컬 시드 주의:** 2026-07-17~09-17 API 시드는 모든 스냅샷을 `CONFIRMED`로 고정하지만 요약·종목은 마지막 스냅샷에만 연결한다. 이 값은 상태 계약을 지키는 운영 산출물이 아니며 FE가 임의로 보정하지 않는다. ~~요약 writer·상태 전이 미구현~~ → WP-119로 백엔드 구현 완료(2026-09-18, worker 기본 꺼짐·실제 GATEWAY/EC2 미검증). 실제 2개월 seed 교체, GKG 자동 배선, 요약·종목 재사용의 as-of 상한은 WP-120에 남아 있다.
+- **확정 운영 계약:** 조회수 미도착은 이슈 후보 대기, GATEWAY·GDELT 실패는 재시도/`VERIFYING`, 모든 보강 작업이 끝난 0종목만 정상 `CONFIRMED`다. 과거 스냅샷에는 선택 시점까지 생성된 요약·종목만 표시하고 미래 결과를 소급하지 않는다. FE는 빈 배열만 보고 이 셋을 추정하지 않으며 API가 제공하는 상태를 따른다.
 - **협의 질문:** 검증 실패·재시도·장시간 검증 중을 사용자에게 구분할 필드는 무엇인가? `verification_failed` 같은 별도 상태 또는 `failureReason / retryAfter / updatedAt`이 필요한가? 확정 상태를 급증 점수보다 먼저 정렬할 것인가?
 - **후속 작업:** BE 워커 실패 계약·표시 문구·정렬 정책을 함께 정한다. **WP-94**의 detector 런타임 연결도 상태 생산의 선행 작업이다.
 
 ### 3. 급증 점수 단위, HOT, 점수 버전
 
-- **근거:** **WP-93**은 기존 문서의 편집·조회수 점수를 z-score 단위로 통일했다. 신규 문서는 `edit_count * sqrt(editor_count)`를 유지한다. [score.py](../../data-pipeline/cluster/score.py)는 `sizeScore=s/(s+5)`, `SCORE_VERSION=v1`, [snapshot.py](../../data-pipeline/cluster/snapshot.py)는 HOT 임계 5를 유지한다.
+- **근거:** 현재 코드는 WP-93의 편집·조회수 혼합 점수를 사용한다. 제품 계약 변경 후 조회수 중심 `pulse_score`로 바꾸는 작업과 UI 크기 회귀는 WP-118 범위다. API의 `sizeScore=s/(s+5)` 변환 자체는 서버 점수가 바뀌어도 유지한다.
 - **현재 FE 처리:** `pulseScore`를 단위 없는 급증 점수로 표시하며 배수·확률·정확도·수익률로 읽지 않는다. `sizeScore`, HOT, `scoreVersion`은 서버 값에 따른다. 화면마다 최댓값으로 다시 정규화하지 않는다.
 - **협의 질문:** detector 산식 변경도 `scoreVersion`에 포함하는가? 과거 스냅샷을 재계산할 것인가, 버전별 비교를 제한할 것인가? 신규/기존 문서 점수와 HOT 임계의 비교 기준은 무엇인가?
 - **후속 작업:** -93 후속으로 점수 버전·재집계·HOT 기준을 정하고 이전/새 버전 혼합 검증을 추가한다. 점수 변경이 현재 운영 데이터에 적용됐다는 증거는 이번 FE 검사에 포함하지 않는다.
@@ -44,8 +46,8 @@
 
 - **근거:** [IssueQueryRepository.findMembers](../../backend/src/main/java/io/wikipulse/backend/issue/IssueQueryRepository.java)는 문서별 최신 편집·조회 행을 읽는다. `IssueMemberResponse`는 지표의 `windowStart/windowEnd`를 제공하지 않는다. 반면 지도 `PulseMap.Node`는 시점에 저장된 값과 집계 구간을 제공한다.
 - **현재 FE 처리:** 지도에서는 서버가 준 구간과 값만 표시한다. 일반 이슈 상세의 지표를 선택한 과거 시점의 확정값이나 24시간 합계로 표기하지 않는다. 없는 시계열을 만들거나 0으로 채우지 않는다.
-- **협의 질문:** 상세도 스냅샷 당시 멤버 지표를 반환할 것인가? 지표별 집계 구간·수집 시각·완전성을 상세 DTO에 넣을 것인가?
-- **후속 작업:** 상세와 지도 사이 값의 기준시각을 일치시키고 과거→상세→종목 탐색에 실데이터 검증을 추가한다. 데이터 수집부터 지도 저장까지 완결되는지는 WP-94와 cluster driver 후속 범위다.
+- ~~**협의 질문:** 상세도 스냅샷 당시 멤버 지표를 반환할 것인가?~~ → **반환한다** (2026-09-18, API 명세 v0.3). `members[].editCount/views`는 해당 `cluster_id`의 `cluster_member` 고정값이며 최신 원시 행으로 보충하지 않는다. 지도는 `windowStart/windowEnd/completeness`까지 제공하고 상세는 현재 필드 범위를 유지한다.
+- **후속 작업:** `findMembers`를 고정값 조회로 바꾸고, 미래 원시 행을 추가해도 과거 상세가 바뀌지 않는 회귀와 과거→상세→종목 실데이터 검증을 추가한다(WP-120).
 
 ### 6. BIGINT 전송 정밀도
 
@@ -65,8 +67,8 @@
 
 - **근거:** `/stocks/{ticker}/issues`는 `IssueCardResponse` 배열이며 문서 제안의 `tier/matchPath/rationale`를 제공하지 않는다. `StockService.TICKER_ISSUE_LIMIT=50`이며 pagination meta가 없다. `/issues/{id}/stocks`는 limit 기본 50, 최대 100이고 offset·total·hasMore가 없다. 상세 `relatedStocks`는 상위 5개다.
 - **현재 FE 처리:** 역방향 목록에서는 제공되는 이슈 카드만 표시한다. 상세의 5개 preview를 전체 목록으로 간주하지 않는다. 관련 종목은 지원 한도 내에서 요청하며 응답 개수를 전체 개수라고 단정하지 않는다. 정상 페이지네이션은 `/issues`와 `/stocks`의 `meta.pagination`을 따른다.
-- **협의 질문:** 역방향에도 관계 메타를 제공할 것인가? 관련 목록 두 개도 offset/cursor와 total/hasMore를 제공할 것인가? 전체 상한 N은 무엇인가?
-- **후속 작업:** **WP-22**의 노출 상한과 함께 확정하고 preview/전체/더 보기 UI를 맞춘다.
+- **확정:** 제품 정책상 검증 통과 종목의 전체 노출 상한은 두지 않는다(WP-22). 현재 API의 50/100 제한은 전송 응답 크기 보호용이며 제품 노출 상한이 아니다.
+- **남은 질문:** 역방향에도 관계 메타를 제공할 것인가? 관련 목록 두 개에 offset/cursor와 total/hasMore를 제공할 것인가?
 
 ### 9. 실제 서비스 검증과 실패 응답
 

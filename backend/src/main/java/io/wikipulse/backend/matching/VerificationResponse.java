@@ -8,7 +8,7 @@ import java.util.Set;
  *
  * <p>{@code issueClass} 는 판정 전 강제 분류 게이트(SINGLE_COMPANY_EVENT 에서 이슈 텍스트에 없는
  * 경쟁사를 배경지식만으로 통과시키는 오탐 차단)라 항상 채우지만 <b>저장하지 않는다</b> —
- * cluster_stock 에 컬럼이 없다. {@code confidence} 는 V5 에 컬럼이 생겨 저장한다(-50).
+ * cluster_stock 에 컬럼이 없다. {@code confidence} 는 V6 에 컬럼이 생겨 저장한다(-50).
  * {@code rationaleEn} 은 감사·로그용, {@code rationaleKo} 만 화면(cluster_stock.rationale)에 넣는다.
  *
  * <p>{@code verified=false} 면 match_path·confidence·rationale 전부 null — 억지 연결 방지.

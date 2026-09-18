@@ -81,7 +81,12 @@ class FakeSink:
         return 1
 
 
-def window(edits=MIN_ABSOLUTE_EDITS, editors=2, hour=19, views=None,
+#: 확정이 나는 기본 조회수. 2단계 계약에서 **조회수가 없으면 아무것도 확정되지 않으므로**
+#: (WP-126) 기본값을 확정 쪽에 둔다. 미도착 경로를 보려면 `views=None` 을 준다.
+CONFIRMING_VIEWS = 5_000
+
+
+def window(edits=1, editors=2, hour=19, views=CONFIRMING_VIEWS,
            title="Hurricane Milton"):
     return PageWindow(
         wiki="enwiki", title=title,
@@ -90,9 +95,14 @@ def window(edits=MIN_ABSOLUTE_EDITS, editors=2, hour=19, views=None,
     )
 
 
-def thick(edit_ewma=2.0, edit_stddev=1.0, **kw):
-    """z 경로가 열리는 두꺼운 기준선."""
-    return Baseline(edit_ewma=edit_ewma, edit_stddev=edit_stddev, view_ewma=None,
+def thick(edit_ewma=2.0, edit_stddev=1.0, view_ewma=100.0, view_stddev=20.0, **kw):
+    """조회수 기준선이 선 두꺼운 기준선.
+
+    ~~`view_ewma=None`~~ → 2단계 계약에서 조회수 기준선이 없으면 절대 하한만 보게 되어
+    (`views >= 100`) 배수·z 경로를 아예 안 탄다. 기본값을 채워 두 경로 다 테스트된다.
+    """
+    return Baseline(edit_ewma=edit_ewma, edit_stddev=edit_stddev, view_ewma=view_ewma,
+                    view_stddev=view_stddev,
                     sample_days=MIN_BASELINE_SAMPLE_DAYS + 7, **kw)
 
 
@@ -107,19 +117,33 @@ def test_급증이면_spike에_저장한다():
 
 
 def test_미탐이면_저장하지_않는다():
-    """spike 는 '판정을 통과한 문서' 다 (V1 테이블 주석)."""
+    """spike 는 '2단계까지 통과한 문서' 다 (V1 테이블 주석 · 명세 §3.2 3번).
+
+    ~~편집 10건 미달이면 미탐~~ → 편집은 관문이 아니다 (WP-126).
+    미탐은 **조회수가 도착했는데 급등이 아닌 것**이다.
+    """
     sink = FakeSink()
-    outcome = SpikeRuntime(FakeBaselines(), sink).process(
-        window(edits=MIN_ABSOLUTE_EDITS - 1))
+    outcome = SpikeRuntime(FakeBaselines(), sink).process(window(views=50))
     assert outcome.decision.is_spike is False
     assert outcome.persisted is False
     assert sink.saved == []
 
 
-def test_편집자_하한_미달도_저장하지_않는다():
+def test_조회수_미도착은_후보_대기라_저장하지_않는다():
+    """🔴 미탐과 **다른 상태**다. 저장은 안 하지만 폐기도 아니다 — 재판정 대상이다."""
+    sink = FakeSink()
+    outcome = SpikeRuntime(FakeBaselines(), sink).process(window(views=None))
+    assert outcome.decision.is_pending
+    assert outcome.decision.is_spike is False
+    assert sink.saved == []
+
+
+def test_편집자가_1명이어도_조회수가_튀면_저장한다():
+    """~~편집자 하한 미달은 저장 안 함~~ → 편집자 하한이 관문에서 빠졌다
+    (WP-126). 1인 편집이어도 조회수가 튀면 진짜 이슈로 본다."""
     sink = FakeSink()
     SpikeRuntime(FakeBaselines(), sink).process(window(editors=1))
-    assert sink.saved == []
+    assert len(sink.saved) == 1
 
 
 def test_sink가_없으면_판정만_한다():
@@ -174,15 +198,21 @@ def test_기존_문서_z경로가_실제로_돈다():
     assert sink.saved[0]["decision"].edit_z is not None
 
 
-def test_z가_임계_아래면_미탐이고_저장도_안_한다():
+def test_조회수_z가_임계_아래면_미탐이고_저장도_안_한다():
+    """~~편집 z~~ → **조회수 z** 가 관문이다 (WP-126).
+
+    상시 편집 문서(`Deaths in 2025`)는 편집이 늘 튀지만, 조회수가 평소면 확정되지 않는다.
+    편집자 하한(WP-85)이 하던 일을 이 관문이 대신한다.
+    """
     sink = FakeSink()
     baselines = FakeBaselines({
-        ("enwiki", "Deaths in 2025", 19): thick(edit_ewma=18.0, edit_stddev=4.0),
+        ("enwiki", "Deaths in 2025", 19): thick(edit_ewma=18.0, edit_stddev=4.0,
+                                                view_ewma=1_000.0, view_stddev=100.0),
     })
     outcome = SpikeRuntime(baselines, sink).process(
-        window(edits=20, editors=5, title="Deaths in 2025"))
+        window(edits=20, editors=5, views=1_100, title="Deaths in 2025"))
 
-    assert outcome.decision.edit_z < EDIT_Z_THRESHOLD
+    assert outcome.decision.view_ratio < 2.0
     assert outcome.decision.is_spike is False
     assert sink.saved == []
 
@@ -274,7 +304,7 @@ def test_소스가_준_window_end를_쓴다():
         wiki="enwiki", title="Hurricane Milton",
         window_start=datetime(2024, 10, 6, 19, tzinfo=UTC),
         window_end=datetime(2024, 10, 7, 1, tzinfo=UTC),        # 6시간 창
-        edit_count=MIN_ABSOLUTE_EDITS, editor_count=2,
+        edit_count=1, editor_count=2, views=CONFIRMING_VIEWS,
     )
     # WINDOW_HOURS(1) 로 다시 계산했다면 20:00 이 됐을 자리다.
     assert w.window_end == datetime(2024, 10, 7, 1, tzinfo=UTC)
@@ -296,6 +326,54 @@ def test_행에_window_end가_있으면_읽는다():
     assert w.window_end == datetime(2024, 10, 6, 19, 30, tzinfo=UTC)
 
 
+# ------------------------------------------- 시점 증거 (WP-129 2번)
+
+def test_증거를_싱크까지_그대로_넘긴다():
+    """판정에는 안 들어가고 저장만 된다 — 무엇까지 보고 판정했는지의 기록이다."""
+    sink = FakeSink()
+    SpikeRuntime(FakeBaselines(), sink).process(PageWindow(
+        wiki="enwiki", title="Hurricane Milton",
+        window_start=datetime(2024, 10, 6, 19, tzinfo=UTC),
+        edit_count=1, editor_count=2, views=CONFIRMING_VIEWS,
+        max_rev_id=1_295_198_287,
+        last_edit_ts=datetime(2024, 10, 6, 19, 40, tzinfo=UTC),
+    ))
+    assert sink.saved[0]["max_rev_id"] == 1_295_198_287
+    assert sink.saved[0]["last_edit_ts"] == datetime(2024, 10, 6, 19, 40, tzinfo=UTC)
+
+
+def test_증거가_없으면_None으로_간다():
+    """⚠️ 0 이나 지금 시각으로 메우지 않는다 — 감사에서 "증거 없음" 과 구분돼야 한다."""
+    sink = FakeSink()
+    SpikeRuntime(FakeBaselines(), sink).process(window())
+    assert sink.saved[0]["max_rev_id"] is None
+    assert sink.saved[0]["last_edit_ts"] is None
+
+
+def test_윈도우_밖_편집이_섞이면_막는다():
+    """🔴 마지막 편집이 윈도우 끝보다 뒤면 그 집계에 미래 편집이 들어간 것이다.
+
+    통과시키면 "증거는 있는데 그 증거가 규칙 위반" 인 행이 저장되고 아무도 안 본다.
+    리플레이에서 덤프 구간을 잘못 자르면 실제로 이렇게 된다.
+    """
+    with pytest.raises(ValueError, match="last_edit_ts"):
+        PageWindow(wiki="enwiki", title="X",
+                   window_start=datetime(2024, 10, 6, 19, tzinfo=UTC),
+                   edit_count=10, editor_count=2,
+                   last_edit_ts=datetime(2024, 10, 6, 20, 1, tzinfo=UTC))
+
+
+def test_행에서_읽은_증거도_같은_검사를_받는다():
+    w = PageWindow.from_row({
+        "wiki": "enwiki", "title": "Hurricane Milton",
+        "window_start": "2024-10-06T19:00:00",
+        "edit_count": 10, "editor_count": 2,
+        "max_rev_id": 1_295_198_287, "last_edit_ts": "2024-10-06T19:40:00",
+    })
+    assert w.max_rev_id == 1_295_198_287
+    assert w.last_edit_ts == datetime(2024, 10, 6, 19, 40, tzinfo=UTC)
+
+
 def test_거꾸로_된_window_end는_막는다():
     with pytest.raises(ValueError, match="window_end"):
         PageWindow(wiki="enwiki", title="X",
@@ -313,7 +391,12 @@ def test_Historical_Window_행에서_만든다():
     assert w.title == "Hurricane Milton"          # canonical
     assert w.hour_of_day == 21
     assert w.window_start == datetime(2024, 10, 7, 21, tzinfo=UTC)
-    assert w.views == 0                           # -58 의 0 을 None 으로 바꾸지 않는다
+    # 🔴 ~~-58 의 0 을 None 으로 바꾸지 않는다~~ → **바꾼다** (2026-09-18, WP-126).
+    # -58 은 조회수 미적재를 0 으로 낸다. 2단계 계약에서 그 0 을 액면대로 받으면 판정이
+    # 폐기가 되고, 폐기는 다시 안 본다 — 조회수가 나중에 도착해도 재판정 대상에서 빠진다.
+    # 미도착으로 읽으면 후보 대기로 남는다. 확정 결과는 안 바뀐다(진짜 0 도 100 미만이라
+    # 어차피 확정 불가). 근거는 PageWindow.from_row 독스트링.
+    assert w.views is None
 
 
 def test_요약이_판정과_기준선_출처를_센다():
@@ -323,13 +406,16 @@ def test_요약이_판정과_기준선_출처를_센다():
     })
     runtime = SpikeRuntime(baselines, sink)
     summary = RuntimeSummary.of(runtime.iter_process([
-        window(edits=20, editors=5),                       # db · 급증
-        window(edits=MIN_ABSOLUTE_EDITS, hour=5),          # absent · 급증(신규 경로)
-        window(edits=1, hour=6),                           # absent · 미탐
+        window(edits=20, editors=5),                          # db · 확정
+        window(edits=1, hour=5),                              # absent · 확정(절대 하한)
+        window(edits=1, hour=6, views=50),                    # absent · 미탐(조회수 부족)
+        window(edits=1, hour=7, views=None),                  # absent · 후보 대기
     ]))
-    assert summary.evaluated == 3
+    assert summary.evaluated == 4
     assert summary.detected == 2
+    # 🔴 후보 대기를 따로 센다 — 미탐과 섞으면 재판정 대상을 못 고른다 (WP-126)
+    assert summary.pending_views == 1
     assert summary.persisted == 2
     assert summary.baseline_db == 1
-    assert summary.baseline_absent == 2
+    assert summary.baseline_absent == 3
     assert len(sink.saved) == 2

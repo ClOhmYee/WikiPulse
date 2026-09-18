@@ -9,7 +9,7 @@
     - ON CONFLICT upsert 가 LLM 검증 필드(verified·match_path·rationale·verified_at)를 보존
     - stale 삭제가 미확정(check_state<>DONE) 후보만 지우고 DONE 행은 남김
 
-V5(WP-49) 이후: cluster_id 는 스냅샷마다 새로 생기므로(cluster/snapshot.py) 후보
+V6(WP-49) 이후: cluster_id 는 스냅샷마다 새로 생기므로(cluster/snapshot.py) 후보
 재생성 INSERT 는 issue_key·ticker 로 과거 DONE 판정을 찾아 새 cluster_id 행에 그대로
 들고 온다 — 진행 중인 이슈가 재감지될 때마다 LLM 을 다시 안 부르기 위해서다.
 """

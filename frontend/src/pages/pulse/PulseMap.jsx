@@ -1,11 +1,36 @@
-import { useEffect, useId, useRef, useState } from "react";
-import { Maximize, Minimize, RotateCcw, Minus, Plus } from "lucide-react";
-import { getIssueCategory } from "../../data/categories.js";
+import {
+  useCallback,
+  useEffect,
+  useId,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
+import {
+  Maximize,
+  Minimize,
+  RotateCcw,
+  Minus,
+  Plus,
+  Radar,
+  Pause,
+} from "lucide-react";
 import { isNewIssue } from "../../data/pulse/time.js";
+import { NEON_COLORS } from "./neonTheme.js";
+import PulseCluster from "./PulseCluster.jsx";
+import useMapView from "./useMapView.js";
+import useNeonScan from "./useNeonScan.js";
+import useMapCamera, {
+  MAP_SCALE,
+  mapPoint,
+  MIN_ZOOM,
+  MAX_ZOOM,
+  DEFAULT_ZOOM,
+} from "./useMapCamera.js";
 
 export default function PulseMap({
   scene,
-  visibleKeys,
+  cameraState,
   selectedKey,
   nodeId,
   onSelect,
@@ -13,11 +38,28 @@ export default function PulseMap({
   meta,
   expanded,
   onToggleExpanded,
+  scanEnabled,
+  onToggleScan,
 }) {
   const svgRef = useRef(null),
     drag = useRef(null);
   const marker = useId().replaceAll(":", "");
-  const [camera, setCamera] = useState({ zoom: 1, x: 0, y: 0 });
+  const { camera, current, subscribe, move, stop, zoomBy } =
+    useMapCamera(svgRef);
+  const view = useMapView(svgRef, scene, current, subscribe);
+  const reducedMotion = useNeonScan(svgRef, scene, scanEnabled, view);
+  const [emphasized, setEmphasized] = useState(null);
+  const [pointerFocus, setPointerFocus] = useState(false);
+  const [viewport, setViewport] = useState({ width: 0, height: 0 });
+  useLayoutEffect(() => {
+    const svg = svgRef.current;
+    const measure = () =>
+      setViewport({ width: svg.clientWidth, height: svg.clientHeight });
+    const observer = new ResizeObserver(measure);
+    measure();
+    observer.observe(svg);
+    return () => observer.disconnect();
+  }, []);
   const [compact, setCompact] = useState(
     () => window.matchMedia("(max-width: 720px)").matches,
   );
@@ -27,66 +69,41 @@ export default function PulseMap({
     media.addEventListener("change", update);
     return () => media.removeEventListener("change", update);
   }, []);
-  const [viewport, setViewport] = useState({ width: 1000, height: 650 });
-  useEffect(() => {
-    const observer = new ResizeObserver(([entry]) => {
-      const { width, height } = entry.contentRect;
-      if (width && height)
-        setViewport({ width: width / 0.85, height: height / 0.85 });
-    });
-    observer.observe(svgRef.current);
-    return () => observer.disconnect();
-  }, []);
-  const { width, height } = viewport;
-  const selected = scene.clusters.find((v) => v.issueKey === selectedKey);
-  const selectedX = selected?.x ?? 0,
-    selectedY = selected?.y ?? 0;
-  const selectedRadius = selected?.radius;
-  useEffect(() => {
-    const zoom = selectedRadius
-      ? Math.min(
-          1.4,
-          width / (selectedRadius * 2 + 140),
-          height / (selectedRadius * 2 + 180),
-        )
-      : 1;
-    setCamera({
-      zoom,
-      x: width / 2 - selectedX * zoom,
-      y: height / 2 - selectedY * zoom,
-    });
-  }, [
-    selectedKey,
-    selectedX,
-    selectedY,
-    selectedRadius,
-    width,
-    height,
-    meta.snapshotTs,
-  ]);
-  function zoomTo(next) {
-    setCamera((old) => {
-      const zoom = Math.max(0.08, Math.min(4, next)),
-        factor = zoom / old.zoom;
-      return {
-        zoom,
-        x: width / 2 - (width / 2 - old.x) * factor,
-        y: height / 2 - (height / 2 - old.y) * factor,
+  useLayoutEffect(() => {
+    const saved = cameraState.current;
+    const canRestore =
+      saved && saved.scene === scene && saved.snapshotTs === meta.snapshotTs;
+    move(canRestore ? saved.camera : { zoom: DEFAULT_ZOOM, x: 0, y: 0 });
+    return () => {
+      // Keep the last rendered view across dialog remounts and viewport changes.
+      cameraState.current = {
+        camera: stop(),
+        scene,
+        snapshotTs: meta.snapshotTs,
       };
-    });
-  }
-  const activate = (action) => (e) => {
-    if (e.key === "Enter" || e.key === " ") {
-      e.preventDefault();
-      e.stopPropagation();
-      action();
-    }
-  };
-  const pointAt = (e) =>
-    new DOMPoint(e.clientX, e.clientY).matrixTransform(
-      svgRef.current.getScreenCTM().inverse(),
-    );
-  const clusters = scene.clusters.filter((v) => visibleKeys.has(v.issueKey));
+    };
+  }, [meta.snapshotTs, scene, cameraState, stop, move]);
+  const pointAt = (e) => mapPoint(svgRef.current, e.clientX, e.clientY);
+  const trackClusterOrbit = useCallback(
+    (e) => {
+      if (drag.current || e.pointerType === "touch" || reducedMotion) return;
+      const cluster = e.currentTarget;
+      const matrix = cluster.getScreenCTM();
+      if (!matrix) return;
+      const point = new DOMPoint(e.clientX, e.clientY).matrixTransform(
+        matrix.inverse(),
+      );
+      if (Math.hypot(point.x, point.y) < 1) return;
+      // Center the 38-degree arc on the pointer; the second arc is opposite it.
+      // Update only this SVG decoration, without rerendering every document.
+      cluster.style.setProperty(
+        "--orbit-angle",
+        `${(Math.atan2(point.y, point.x) * 180) / Math.PI - 19}deg`,
+      );
+    },
+    [reducedMotion],
+  );
+  const clusters = scene.clusters;
   const newCount = clusters.filter((v) =>
     isNewIssue(v.firstDetectedAt, meta.snapshotTs, meta.newWindowHours),
   ).length;
@@ -96,6 +113,8 @@ export default function PulseMap({
       role="region"
       aria-label="사건 관계 지도"
       data-snapshot={meta.snapshotTs}
+      data-zoom={camera.zoom}
+      data-theme="neon-pulse"
     >
       <div className="document-map__caption">
         <strong>
@@ -103,16 +122,20 @@ export default function PulseMap({
         </strong>
         <span>
           {clusters.reduce((n, v) => n + v.nodes.length, 0)}개 문서 · 문서를
-          선택해 연결 근거를 확인하세요 · 드래그로 주변 탐색
+          선택해 연결 근거를 확인하세요 · 휠로 확대·축소 · 드래그로 주변 탐색
         </span>
       </div>
       <svg
         ref={svgRef}
-        viewBox={`0 0 ${width} ${height}`}
         role="group"
         tabIndex="0"
+        data-pointer-focus={pointerFocus}
+        onBlur={(e) => {
+          if (e.target === e.currentTarget) setPointerFocus(false);
+        }}
         onKeyDown={(e) => {
           if (e.target !== e.currentTarget) return;
+          setPointerFocus(false);
           const delta = {
             ArrowLeft: [80, 0],
             ArrowRight: [-80, 0],
@@ -121,37 +144,83 @@ export default function PulseMap({
           }[e.key];
           if (delta) {
             e.preventDefault();
-            setCamera((old) => ({
+            const old = stop();
+            move({
               ...old,
               x: old.x + delta[0],
               y: old.y + delta[1],
-            }));
+            });
           }
         }}
         aria-label="이슈와 문서 관계 그래프"
         onPointerDown={(e) => {
           if (e.target.closest('[role="button"]')) return;
+          setPointerFocus(true);
           const point = pointAt(e);
-          drag.current = { x: point.x, y: point.y, camera };
+          drag.current = { x: point.x, y: point.y, camera: stop() };
           e.currentTarget.setPointerCapture(e.pointerId);
         }}
         onPointerMove={(e) => {
           if (!drag.current) return;
           const point = pointAt(e);
-          setCamera({
-            ...drag.current.camera,
-            x: drag.current.camera.x + point.x - drag.current.x,
-            y: drag.current.camera.y + point.y - drag.current.y,
-          });
+          move(
+            {
+              ...drag.current.camera,
+              x: drag.current.camera.x + point.x - drag.current.x,
+              y: drag.current.camera.y + point.y - drag.current.y,
+            },
+            false,
+          );
         }}
         onPointerUp={() => {
+          if (drag.current) move(stop());
           drag.current = null;
         }}
         onPointerCancel={() => {
+          if (drag.current) move(stop());
           drag.current = null;
         }}
       >
         <defs>
+          {Object.entries(NEON_COLORS).map(([category, color]) => (
+            <g key={category}>
+              <radialGradient
+                id={`${marker}-${category}-body`}
+                cx="42%"
+                cy="35%"
+                r="68%"
+              >
+                <stop offset="0" stopColor="#091322" />
+                <stop offset="0.72" stopColor="#07101f" />
+                <stop offset="1" stopColor={color} stopOpacity="0.38" />
+              </radialGradient>
+              <radialGradient id={`${marker}-${category}-halo`}>
+                <stop offset="0.63" stopColor={color} stopOpacity="0" />
+                <stop offset="0.77" stopColor={color} stopOpacity="0.04" />
+                <stop offset="0.86" stopColor={color} stopOpacity="0.35" />
+                <stop offset="1" stopColor={color} stopOpacity="0" />
+              </radialGradient>
+              <radialGradient id={`${marker}-${category}-field`}>
+                <stop offset="0" stopColor={color} stopOpacity="0.065" />
+                <stop offset="1" stopColor={color} stopOpacity="0" />
+              </radialGradient>
+              <radialGradient
+                id={`${marker}-${category}-title-light`}
+                cx="95%"
+                cy="100%"
+                r="95%"
+              >
+                <stop offset="0" stopColor={color} stopOpacity="0.8" />
+                <stop offset="0.45" stopColor={color} stopOpacity="0.22" />
+                <stop offset="1" stopColor={color} stopOpacity="0" />
+              </radialGradient>
+            </g>
+          ))}
+          <radialGradient id={`${marker}-scan-trail`}>
+            <stop offset="0.90" stopColor="#49dfff" stopOpacity="0" />
+            <stop offset="0.985" stopColor="#49dfff" stopOpacity="0.08" />
+            <stop offset="1" stopColor="#49dfff" stopOpacity="0.22" />
+          </radialGradient>
           <marker
             id={`${marker}-arrow`}
             viewBox="0 0 10 10"
@@ -161,184 +230,45 @@ export default function PulseMap({
             markerHeight="5"
             orient="auto-start-reverse"
           >
-            <path d="M 0 1 L 9 5 L 0 9 z" fill="#83a5b1" />
+            <path d="M 0 1 L 9 5 L 0 9 z" fill="context-stroke" />
           </marker>
         </defs>
         <g
-          transform={`translate(${camera.x} ${camera.y}) scale(${camera.zoom})`}
+          style={{
+            transformBox: "view-box",
+            transform: `translate(50%, 50%) translate(${camera.x * MAP_SCALE}px, ${camera.y * MAP_SCALE}px) scale(${camera.zoom * MAP_SCALE})`,
+          }}
         >
-          {clusters.map((cluster) => {
-            const active = cluster.issueKey === selectedKey,
-              color = getIssueCategory(cluster.category).color;
-            const nodes = new Map(
-              cluster.nodes.map((node) => [node.pageId, node]),
-            );
-            const connected = new Set(
-              cluster.edges
-                .filter(
-                  (edge) =>
-                    edge.sourcePageId === nodeId ||
-                    edge.targetPageId === nodeId,
-                )
-                .flatMap((edge) => [edge.sourcePageId, edge.targetPageId]),
-            );
-            const lineLimit = compact ? 14 : 20;
-            const titleLines = cluster.label
-              .split(/\s+/)
-              .flatMap(
-                (word) =>
-                  word.match(new RegExp(`.{1,${lineLimit}}`, "gu")) || [],
-              )
-              .reduce((lines, word) => {
-                if (
-                  !lines.length ||
-                  `${lines.at(-1)} ${word}`.length > lineLimit
-                )
-                  lines.push(word);
-                else lines[lines.length - 1] += ` ${word}`;
-                return lines;
-              }, []);
-            if (titleLines.length > 3) {
-              titleLines.splice(3);
-              titleLines[2] = `${titleLines[2].slice(0, lineLimit - 1)}…`;
-            }
-            const lineHeight = compact ? 27 : 22;
-            return (
-              <g
-                key={cluster.issueKey}
-                transform={`translate(${cluster.x} ${cluster.y})`}
-                className="document-cluster"
-                data-issue-key={cluster.issueKey}
-                data-rank={cluster.rank}
-                data-selected={active}
-                style={{ "--cluster-color": color }}
-              >
-                <g
-                  role="button"
-                  tabIndex="0"
-                  aria-label={`${cluster.label}, ${cluster.memberCount}개 문서`}
-                  aria-pressed={active}
-                  onClick={() => onSelect(cluster.issueKey)}
-                  onKeyDown={activate(() => onSelect(cluster.issueKey))}
-                >
-                  <circle
-                    className="document-cluster__boundary"
-                    r={cluster.radius}
-                  />
-                  <text
-                    className="document-cluster__title"
-                    textAnchor="middle"
-                    y={
-                      -cluster.radius -
-                      18 -
-                      (titleLines.length - 1) * lineHeight
-                    }
-                  >
-                    {titleLines.map((line, i) => (
-                      <tspan key={i} x="0" dy={i ? lineHeight : 0}>
-                        {line}
-                      </tspan>
-                    ))}
-                  </text>
-                  {isNewIssue(
-                    cluster.firstDetectedAt,
-                    meta.snapshotTs,
-                    meta.newWindowHours,
-                  ) && (
-                    <text
-                      className="document-cluster__badge"
-                      textAnchor="middle"
-                      y={cluster.radius + 24}
-                    >
-                      NEW
-                    </text>
-                  )}
-                </g>
-                <g className="document-edges" aria-hidden="true">
-                  {cluster.edges.map((edge) => {
-                    const a = nodes.get(edge.sourcePageId),
-                      b = nodes.get(edge.targetPageId);
-                    const distance = Math.hypot(b.x - a.x, b.y - a.y) || 1;
-                    const dx = (b.x - a.x) / distance,
-                      dy = (b.y - a.y) / distance;
-                    return (
-                      <line
-                        key={edge.id}
-                        data-edge-id={edge.id}
-                        data-kind={edge.kind}
-                        data-highlighted={
-                          active &&
-                          (edge.sourcePageId === nodeId ||
-                            edge.targetPageId === nodeId)
-                        }
-                        x1={a.x + dx * (a.radius + 2)}
-                        y1={a.y + dy * (a.radius + 2)}
-                        x2={b.x - dx * (b.radius + 4)}
-                        y2={b.y - dy * (b.radius + 4)}
-                        strokeWidth={
-                          edge.kind === "clickstream"
-                            ? 1 + Math.min(2, Math.log1p(edge.weight) / 6)
-                            : 1.6
-                        }
-                        strokeDasharray={
-                          edge.kind === "wikidata" ? "5 5" : undefined
-                        }
-                        markerEnd={
-                          edge.directed ? `url(#${marker}-arrow)` : undefined
-                        }
-                      />
-                    );
-                  })}
-                </g>
-                {cluster.nodes.map((node) => (
-                  <g
-                    key={node.pageId}
-                    className="document-node"
-                    data-page-id={node.pageId}
-                    data-selected={active && nodeId === node.pageId}
-                    data-related={active && connected.has(node.pageId)}
-                    data-label-visible={
-                      active || node.isSeed || camera.zoom >= 2.5
-                    }
-                    data-pending={node.sizeScore === null}
-                    role="button"
-                    tabIndex="0"
-                    aria-pressed={active && nodeId === node.pageId}
-                    aria-label={`${node.title}, ${node.isSeed ? "급증 감지 문서" : "연관 문서"}`}
-                    transform={`translate(${node.x} ${node.y})`}
-                    onClick={() => onNodeSelect(cluster.issueKey, node.pageId)}
-                    onKeyDown={activate(() =>
-                      onNodeSelect(cluster.issueKey, node.pageId),
-                    )}
-                  >
-                    <circle
-                      className="document-node__hit"
-                      r={Math.max(26, node.radius)}
-                    />
-                    <circle
-                      className="document-node__body"
-                      r={node.radius}
-                      data-size-score={node.sizeScore ?? "missing"}
-                    />
-                    {node.isSeed && (
-                      <circle className="document-node__seed" r={3} />
-                    )}
-                    <text textAnchor="middle" y={node.radius + 18}>
-                      {node.title.length > 25
-                        ? `${node.title.slice(0, 24)}…`
-                        : node.title}
-                    </text>
-                    <title>
-                      {node.title} ·{" "}
-                      {node.sizeScore === null
-                        ? "급증 지표 미제공"
-                        : `급증 점수 ${node.spikeScore ?? "미제공"}`}
-                    </title>
-                  </g>
-                ))}
-              </g>
-            );
-          })}
+          {clusters.map((cluster) => (
+            <PulseCluster
+              key={cluster.issueKey}
+              cluster={cluster}
+              active={cluster.issueKey === selectedKey}
+              nodeId={cluster.issueKey === selectedKey ? nodeId : null}
+              emphasized={
+                emphasized?.issueKey === cluster.issueKey
+                  ? emphasized.pageId
+                  : null
+              }
+              camera={camera}
+              compact={compact}
+              viewport={viewport}
+              marker={marker}
+              meta={meta}
+              onSelect={onSelect}
+              onNodeSelect={onNodeSelect}
+              onEmphasize={setEmphasized}
+              trackClusterOrbit={trackClusterOrbit}
+            />
+          ))}
+          <g className="pulse-scan" aria-hidden="true" pointerEvents="none">
+            <circle className="pulse-scan__echo" r="0" />
+            <circle
+              className="pulse-scan__wave"
+              r="0"
+              fill={`url(#${marker}-scan-trail)`}
+            />
+          </g>
         </g>
       </svg>
       <div className="document-map__footer">
@@ -358,25 +288,46 @@ export default function PulseMap({
         </div>
         <div className="document-map__controls">
           <button
+            className="wp-icon-button document-map__scan-control"
+            aria-label={
+              reducedMotion
+                ? "모션 감소 설정으로 스캔 효과 꺼짐"
+                : scanEnabled
+                  ? "스캔 효과 일시정지"
+                  : "스캔 효과 재생"
+            }
+            title={
+              reducedMotion ? "모션 감소 설정 적용 중" : "원형 스캔 시각 효과"
+            }
+            disabled={reducedMotion}
+            onClick={onToggleScan}
+          >
+            {scanEnabled && !reducedMotion ? (
+              <Pause size={16} />
+            ) : (
+              <Radar size={17} />
+            )}
+          </button>
+          <button
             className="wp-icon-button"
             aria-label="지도 축소"
-            disabled={camera.zoom <= 0.08}
-            onClick={() => zoomTo(camera.zoom / 1.4)}
+            disabled={camera.zoom <= MIN_ZOOM}
+            onClick={() => zoomBy(1 / 1.2, { x: 0, y: 0 })}
           >
             <Minus size={17} />
           </button>
           <button
             className="wp-icon-button"
             aria-label="지도 확대"
-            disabled={camera.zoom >= 4}
-            onClick={() => zoomTo(camera.zoom * 1.4)}
+            disabled={camera.zoom >= MAX_ZOOM}
+            onClick={() => zoomBy(1.2, { x: 0, y: 0 })}
           >
             <Plus size={17} />
           </button>
           <button
             className="wp-icon-button"
             aria-label="지도 위치 초기화"
-            onClick={() => setCamera({ zoom: 1, x: width / 2, y: height / 2 })}
+            onClick={() => move({ zoom: DEFAULT_ZOOM, x: 0, y: 0 })}
           >
             <RotateCcw size={16} />
           </button>

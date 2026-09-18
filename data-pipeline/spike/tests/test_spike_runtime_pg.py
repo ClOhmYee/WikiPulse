@@ -24,7 +24,12 @@ import pytest
 from spike.baseline_repository import BaselineRepository
 from spike.baseline_rows import build_rows
 from spike.baseline_sink import load
-from spike.detector import EDIT_Z_THRESHOLD, MIN_ABSOLUTE_EDITS, MIN_BASELINE_SAMPLE_DAYS
+from spike.detector import (
+    EDIT_Z_THRESHOLD,
+    MIN_ABSOLUTE_EDITS,
+    MIN_ABSOLUTE_VIEWS,
+    MIN_BASELINE_SAMPLE_DAYS,
+)
 from spike.runtime import PageWindow, SpikeRuntime
 from spike.spike_sink import SpikeSink
 
@@ -72,9 +77,17 @@ def runtime(conn, source: str = "replay") -> SpikeRuntime:
     return SpikeRuntime(BaselineRepository(conn), SpikeSink(conn, source=source))
 
 
-def window(title, edits=MIN_ABSOLUTE_EDITS, editors=2, start=WINDOW_START):
+#: 2단계 관문을 통과시키는 조회수 (WP-126). 아래 기준선은 조회수 표본이 없어
+#: 절대 하한(MIN_ABSOLUTE_VIEWS=100)만 보는 "0 에서의 급등" 경로로 확정된다.
+#: ⚠️ ~~views=None~~ 으로는 아무것도 저장되지 않는다 — 조회수가 없으면 확정이 아니라
+#: 후보 대기다. 이 파일은 **적재 경로**를 보려는 것이라 확정이 나게 값을 준다.
+CONFIRMING_VIEWS = 5_000
+
+
+def window(title, edits=MIN_ABSOLUTE_EDITS, editors=2, start=WINDOW_START,
+           views=CONFIRMING_VIEWS):
     return PageWindow(wiki="enwiki", title=title, window_start=start,
-                      edit_count=edits, editor_count=editors, views=None)
+                      edit_count=edits, editor_count=editors, views=views)
 
 
 def seed_baseline(conn, title, *, edit_ewma, edit_stddev, sample_days,
@@ -130,9 +143,23 @@ def test_급증이_spike에_적재된다(conn, title):
 
 
 def test_미탐은_적재되지_않는다(conn, title):
-    outcome = runtime(conn).process(window(title, edits=MIN_ABSOLUTE_EDITS - 1))
+    """🔴 ~~편집수 미달~~ 로는 더 이상 미탐을 만들 수 없다 (WP-126).
+
+    편집은 1건만 있으면 1단계를 통과한다. 폐기를 내는 건 **조회수**다 —
+    절대 하한 미만이면 확정도 대기도 아닌 REJECTED 이고 저장되지 않는다.
+    """
+    outcome = runtime(conn).process(window(title, views=MIN_ABSOLUTE_VIEWS - 1))
     conn.commit()
     assert outcome.decision.is_spike is False
+    assert outcome.decision.is_pending is False      # 다시 볼 이유가 없다
+    assert count_spikes(conn, title) == 0
+
+
+def test_조회수가_안_온_후보도_적재되지_않는다(conn, title):
+    """폐기와 달리 재판정 대상이다. spike 에는 확정만 담는다."""
+    outcome = runtime(conn).process(window(title, views=None))
+    conn.commit()
+    assert outcome.decision.is_pending is True
     assert count_spikes(conn, title) == 0
 
 

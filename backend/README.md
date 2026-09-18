@@ -2,7 +2,7 @@
 
 Spring Boot 백엔드 (`WP-36`). 데이터 모델 v1 위의 읽기 API 골격이다.
 
-명세: [docs/requirements-v0.1.md](../docs/requirements-v0.1.md) §2, §3.1
+명세: [docs/requirements-v0.3.md](../docs/requirements-v0.3.md) §2, §3.1
 
 ## 스택
 

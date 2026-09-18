@@ -1,6 +1,6 @@
 -- WikiPulse 펄스맵 스냅샷·문서 그래프 저장  (WP-75)
 -- 계약: docs/frontend/PULSE_MAP.md, frontend/docs/pulse-openapi.json
--- 기준: docs/requirements-v0.1.md §3.2 4번(클러스터링 게이트), §11(실측)
+-- 기준: docs/requirements-v0.3.md §3.2 4번(클러스터링 게이트), §11(실측)
 --
 -- 목적. 버블맵(WP-74 조회 API)이 한 스냅샷을 통째로 그리려면
 -- V1 이 갖지 못한 세 가지가 필요하다.

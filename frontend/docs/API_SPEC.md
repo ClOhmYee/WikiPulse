@@ -2,7 +2,7 @@
 
 2026-09-15 · WP-95/-97/-98 · Spring 기준 커밋 `f3c0160`
 
-이전 `0.2.0-proposal`의 `/events`, `/entities`, `/categories`, `/search` 및 쓰기 API는 현재 연결 계약에서 폐기했다. 원래 제안은 Git 이력에서 확인할 수 있다. [공통 서비스 명세](../../docs/api-v0.1.md)에는 미구현 제안과 이전 구현 상태도 있으므로 현재 연결은 아래 Controller·DTO를 기준으로 한다.
+이전 `0.2.0-proposal`의 `/events`, `/entities`, `/categories`, `/search` 및 쓰기 API는 현재 연결 계약에서 폐기했다. 원래 제안은 Git 이력에서 확인할 수 있다. [공통 서비스 명세](../../docs/api-v0.3.md)에는 미구현 제안과 이전 구현 상태도 있으므로 현재 연결은 아래 Controller·DTO를 기준으로 한다.
 
 ## 정본과 범위
 

@@ -1,7 +1,7 @@
 package io.wikipulse.backend.stock.dto;
 
 /**
- * 종목 목록 카드. API 명세 v0.1 §4 `GET /stocks`.
+ * 종목 목록 카드. API 명세 v0.3 §4 `GET /stocks`.
  *
  * <p>businessSummary 는 목록에 넣지 않는다 — 종목당 수천 자라 5,100건이면
  * 수 MB가 된다. issueCount 는 걸린 이슈 수(배지용).

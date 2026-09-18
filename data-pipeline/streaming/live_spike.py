@@ -26,7 +26,13 @@
     `wiki.edits` 는 recentchange 이벤트라 조회수 필드가 아예 없다. `PageWindow.views`
     계약상 `None` 이 "미수집" 이고, `detect()` 는 그때 편집만으로 1차 판정한다
     (`spike/detector.py` 112행). 0 을 넣으면 "진짜 조회수 0회" 와 구분되지 않는다.
-    Pageviews API 연결은 별도 경로다(§10 미결).
+    Pageviews API 연결은 별도 경로다(WP-127·-128).
+
+    🔴 **그래서 지금 LIVE 는 확정을 하나도 못 낸다** (2026-09-18, WP-126).
+        2단계 관문이 조회수를 최종 관문으로 두면서, 조회수 없는 윈도우는 확정도 폐기도
+        아닌 **후보 대기**가 됐다. `spike` 는 확정만 담으므로 LIVE 적재가 0 이다.
+        버그가 아니라 계약이고, `other/pageviews` 를 붙이는 -128 까지의 상태다.
+        `to_runtime_frame` 은 `views` 컬럼이 붙은 프레임을 그때 그대로 받는다.
 
 ⚠️ **슬라이딩 윈도우라 한 문서가 한 시간에 여러 행을 낸다.**
     `DEFAULT_SLIDE_SIZE` 가 5분이라 1시간 윈도우가 5분마다 하나씩 겹쳐 나온다.
@@ -68,19 +74,33 @@ def to_runtime_frame(windows: DataFrame) -> DataFrame:
     대조되는 계약이라(`tests/test_stream_batch_parity.py`) 건드리면 대조가 깨진다.
     변환은 싱크 쪽인 여기서만 한다.
 
-    판정에 안 쓰는 컬럼(`byte_delta_sum`·`last_edit_ts`)은 여기서 떨군다 —
-    드라이버로 내리는 양을 줄인다.
+    판정에 안 쓰는 `byte_delta_sum` 은 여기서 떨군다 — 드라이버로 내리는 양을 줄인다.
+    ~~`last_edit_ts` 도 떨군다~~ → 시점 감사 증거라 epoch 로 바꿔 싣는다
+    (V9, WP-129 2번). 판정에 안 쓰는 건 그대로다.
     """
     from pyspark.sql import functions as F     # Spark 를 실제로 쓰는 지점에서만
 
-    return windows.select(
+    columns = [
         F.col("wiki"),
         F.col("title"),
         F.unix_timestamp(F.col("window_start")).alias("window_start_epoch"),
         F.unix_timestamp(F.col("window_end")).alias("window_end_epoch"),
         F.col("edit_count"),
         F.col("editor_count"),
-    )
+    ]
+    # 시점 감사 증거 (V9, WP-129 2번). 타임스탬프는 여기서도 epoch 로 바꾼다 —
+    # datetime 을 그대로 내리면 드라이버 로컬 시간대로 밀린다(모듈 독스트링 🔴).
+    # 옛 산출물에는 두 컬럼이 없어서 있을 때만 싣는다.
+    if "max_rev_id" in windows.columns:
+        columns.append(F.col("max_rev_id"))
+    if "last_edit_ts" in windows.columns:
+        columns.append(F.unix_timestamp(F.col("last_edit_ts")).alias("last_edit_epoch"))
+    # 조회수는 **있으면** 싣는다. 편집 스트림에는 없다(모듈 독스트링 ⚠️) — 이 분기는
+    # 조회수를 붙인 프레임을 흘릴 때를 위한 이음매다(WP-128).
+    # 없는 걸 0 으로 꾸미지 않으려고 컬럼 자체를 안 만든다.
+    if "views" in windows.columns:
+        columns.append(F.col("views"))
+    return windows.select(*columns)
 
 
 def _utc(epoch_seconds: int) -> datetime:
@@ -94,8 +114,18 @@ def page_window_from_row(row) -> PageWindow:
       윈도우 길이는 `WINDOW_SIZE` 환경변수라 `WINDOW_HOURS` 상수와 갈릴 수 있고,
       갈리면 `detected_at` 이 에러 없이 어긋난다 (`spike/runtime.py` PageWindow 🔴).
     - 제목 canonical 변환은 `PageWindow.__post_init__` 이 한다(멱등). 여기서 또 하지 않는다.
-    - `views` 는 주지 않는다 = `None` = 미수집 (모듈 독스트링 ⚠️).
+    - `max_rev_id`·`last_edit_epoch` 은 시점 감사 증거다(V9). 프레임에 있을 때만 싣는다 —
+      옛 산출물에는 없다.
+    - `views` 는 프레임에 있을 때만 싣는다. 편집 스트림에는 없어서 보통 `None` =
+      미수집이다 (모듈 독스트링 ⚠️). 🔴 **없는 걸 0 으로 바꾸지 않는다** — 0 은
+      "진짜 0회 조회" 로 읽혀 폐기(REJECTED)가 되고, 폐기는 다시 판정하지 않는다.
     """
+    # Row 는 tuple 이라 `in` 이 값을 본다 — 키는 `__fields__` 로 확인한다.
+    # 이 함수는 dict 로도 불린다(`tests/test_live_spike.py`)라 둘 다 받는다.
+    fields = getattr(row, "__fields__", None) or row
+    views = row["views"] if "views" in fields else None
+    max_rev_id = row["max_rev_id"] if "max_rev_id" in fields else None
+    last_edit = row["last_edit_epoch"] if "last_edit_epoch" in fields else None
     return PageWindow(
         wiki=row["wiki"],
         title=row["title"],
@@ -103,6 +133,9 @@ def page_window_from_row(row) -> PageWindow:
         window_end=_utc(row["window_end_epoch"]),
         edit_count=int(row["edit_count"]),
         editor_count=int(row["editor_count"] or 0),
+        views=None if views is None else int(views),
+        max_rev_id=None if max_rev_id is None else int(max_rev_id),
+        last_edit_ts=None if last_edit is None else _utc(last_edit),
     )
 
 

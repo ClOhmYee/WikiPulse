@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Search, X } from "lucide-react";
 import { dataClient } from "../../data/index.js";
 import { useAsyncResource } from "../../data/hooks/useAsyncResource.js";
@@ -28,6 +28,9 @@ export default function PulsePage({ savedEvents, onToggleEvent, onSource }) {
   const [notice, setNotice] = useState("");
   const [query, setQuery] = useState("");
   const [expanded, setExpanded] = useState(false);
+  const [scanEnabled, setScanEnabled] = useState(true);
+  const returnScroll = useRef(null);
+  const cameraState = useRef(null);
   const [category, setCategory] = useState("all");
   const items = index.data?.data;
   const latest =
@@ -50,10 +53,6 @@ export default function PulsePage({ savedEvents, onToggleEvent, onSource }) {
   const map = useAsyncResource(loadMap, key);
   const clusters = map.data?.data.clusters;
   const [layoutEngine] = useState(() => createLayoutEngine());
-  const scene = useMemo(
-    () => layoutEngine(clusters || []),
-    [layoutEngine, clusters],
-  );
   const selected = (clusters || []).find((v) => v.issueKey === selectedKey);
   useEffect(() => {
     if (map.data) onSource?.(map.data.meta);
@@ -85,6 +84,7 @@ export default function PulsePage({ savedEvents, onToggleEvent, onSource }) {
     [clusters, category, query],
   );
   const visibleSelected = filtered.find((v) => v.issueKey === selectedKey);
+  const scene = useMemo(() => layoutEngine(filtered), [layoutEngine, filtered]);
   function selectCluster(issueKey) {
     setSelectedKey(issueKey);
     setNodeId(null);
@@ -94,8 +94,43 @@ export default function PulsePage({ savedEvents, onToggleEvent, onSource }) {
     setRequested(value);
     setNotice("");
   }
+  function toggleExpanded() {
+    if (!expanded) {
+      // Capture before replacing the inline map shrinks the document.
+      returnScroll.current = { left: window.scrollX, top: window.scrollY };
+    }
+    setExpanded((value) => !value);
+  }
   const sourceItems = items?.filter((v) => v.source === target?.source) || [];
   const days = calendarDays(sourceItems);
+  const categoryFilters = (
+    <div
+      className="wp-filter-chips pulse-filters"
+      role="group"
+      aria-label="사건 주제"
+    >
+      {[{ id: "all", label: "전체" }, ...issueCategories].map((v) => (
+        <button
+          key={v.id}
+          className="wp-chip"
+          data-active={category === v.id}
+          aria-pressed={category === v.id}
+          onClick={() => setCategory(v.id)}
+        >
+          {v.label}
+        </button>
+      ))}
+    </div>
+  );
+  const timeline = target && (
+    <PulseTimeline
+      compact
+      snapshots={sourceItems}
+      selected={target}
+      latest={latest}
+      onSelect={selectTime}
+    />
+  );
   return (
     <div className="wp-page pulse-page">
       <div className="wp-page-header">
@@ -190,19 +225,7 @@ export default function PulsePage({ savedEvents, onToggleEvent, onSource }) {
               </select>
             </label>
           </div>
-          <div className="wp-filter-chips pulse-filters" aria-label="사건 주제">
-            {[{ id: "all", label: "전체" }, ...issueCategories].map((v) => (
-              <button
-                key={v.id}
-                className="wp-chip"
-                data-active={category === v.id}
-                aria-pressed={category === v.id}
-                onClick={() => setCategory(v.id)}
-              >
-                {v.label}
-              </button>
-            ))}
-          </div>
+          {categoryFilters}
           <div className="pulse-reading-guide">
             <span>
               <b>NEW</b> {map.data?.meta.newWindowHours || 24}시간 내 최초 감지
@@ -216,48 +239,46 @@ export default function PulsePage({ savedEvents, onToggleEvent, onSource }) {
             {map.data?.meta.scoreVersion &&
               ` 점수 척도 ${map.data.meta.scoreVersion}`}
           </p>
-          <PulseTimeline
-            snapshots={sourceItems}
-            selected={target}
-            latest={latest}
-            onSelect={selectTime}
-          />
-          <p className="pulse-notice" role="status">
-            {notice ||
-              (map.loading
-                ? `${kstTimestamp(target.snapshotTs)} 지도를 불러오는 중입니다.`
-                : "")}
-          </p>
-          {map.error ? (
-            <div className="pulse-empty" role="alert">
-              <h2>이 시점의 지도를 불러오지 못했습니다</h2>
-              <p>{map.error.message}</p>
-              <button className="wp-button" onClick={map.reload}>
-                지도 다시 불러오기
-              </button>
-            </div>
-          ) : map.loading || !map.data ? (
-            <div className="pulse-loading" aria-busy="true">
-              클러스터와 문서 관계를 불러오는 중입니다.
-            </div>
-          ) : (
-            <>
-              {map.data.meta.dataMode === "mock" && (
-                <p className="pulse-demo-note">
-                  데모 데이터 · 이슈·문서 지표·연결 근거는 화면 체험을 위한 합성
-                  예시입니다.
-                </p>
-              )}
-              {map.data.meta.truncated && (
-                <p role="status">
-                  전체 {map.data.meta.clusterCount}개 이슈 중 {clusters.length}
-                  개를 표시합니다. 서버에서 일부 데이터만 제공했습니다.
-                </p>
-              )}
-              <PulseMapFrame
-                expanded={expanded}
-                onClose={() => setExpanded(false)}
-              >
+          {!expanded && timeline}
+          <PulseMapFrame
+            expanded={expanded}
+            onClose={() => setExpanded(false)}
+            timeline={
+              <>
+                {timeline}
+                {categoryFilters}
+              </>
+            }
+            hasMap={Boolean(map.data && filtered.length)}
+            returnScroll={returnScroll}
+          >
+            <p className="pulse-notice" role="status">
+              {notice ||
+                (map.loading
+                  ? `${kstTimestamp(target.snapshotTs)} 지도를 불러오는 중입니다.`
+                  : "")}
+            </p>
+            {map.error ? (
+              <div className="pulse-empty" role="alert">
+                <h2>이 시점의 지도를 불러오지 못했습니다</h2>
+                <p>{map.error.message}</p>
+                <button className="wp-button" onClick={map.reload}>
+                  지도 다시 불러오기
+                </button>
+              </div>
+            ) : map.loading || !map.data ? (
+              <div className="pulse-loading" aria-busy="true">
+                클러스터와 문서 관계를 불러오는 중입니다.
+              </div>
+            ) : (
+              <>
+                {map.data.meta.truncated && (
+                  <p role="status">
+                    전체 {map.data.meta.clusterCount}개 이슈 중{" "}
+                    {clusters.length}
+                    개를 표시합니다. 서버에서 일부 데이터만 제공했습니다.
+                  </p>
+                )}
                 <div
                   className="explore-map-layout pulse-layout"
                   data-snapshot={map.data.meta.snapshotTs}
@@ -266,9 +287,11 @@ export default function PulsePage({ savedEvents, onToggleEvent, onSource }) {
                   {filtered.length ? (
                     <PulseMap
                       scene={scene}
+                      cameraState={cameraState}
                       expanded={expanded}
-                      onToggleExpanded={() => setExpanded((value) => !value)}
-                      visibleKeys={new Set(filtered.map((v) => v.issueKey))}
+                      onToggleExpanded={toggleExpanded}
+                      scanEnabled={scanEnabled}
+                      onToggleScan={() => setScanEnabled((value) => !value)}
                       selectedKey={visibleSelected?.issueKey}
                       nodeId={nodeId}
                       meta={map.data.meta}
@@ -299,7 +322,7 @@ export default function PulsePage({ savedEvents, onToggleEvent, onSource }) {
                       )}
                     </div>
                   )}
-                  {(!expanded || visibleSelected) && (
+                  {visibleSelected && (
                     <PulsePreview
                       cluster={visibleSelected}
                       meta={map.data.meta}
@@ -307,33 +330,31 @@ export default function PulsePage({ savedEvents, onToggleEvent, onSource }) {
                       onNodeSelect={setNodeId}
                       savedEvents={savedEvents}
                       onToggleEvent={onToggleEvent}
-                      onClose={
-                        expanded
-                          ? () => {
-                              setSelectedKey(null);
-                              setNodeId(null);
-                            }
-                          : undefined
-                      }
+                      onClose={() => {
+                        setSelectedKey(null);
+                        setNodeId(null);
+                      }}
                     />
                   )}
                 </div>
-              </PulseMapFrame>
-              <div className="pulse-cluster-list" aria-label="이슈 선택">
-                {filtered.map((v) => (
-                  <button
-                    key={v.issueKey}
-                    aria-pressed={v.issueKey === selectedKey}
-                    onClick={() => selectCluster(v.issueKey)}
-                  >
-                    <span>{v.label}</span>
-                    <SignalBadges cluster={v} meta={map.data.meta} />
-                    <small>{v.memberCount}개 문서</small>
-                  </button>
-                ))}
-              </div>
-            </>
-          )}
+                {!expanded && (
+                  <div className="pulse-cluster-list" aria-label="이슈 선택">
+                    {filtered.map((v) => (
+                      <button
+                        key={v.issueKey}
+                        aria-pressed={v.issueKey === selectedKey}
+                        onClick={() => selectCluster(v.issueKey)}
+                      >
+                        <span>{v.label}</span>
+                        <SignalBadges cluster={v} meta={map.data.meta} />
+                        <small>{v.memberCount}개 문서</small>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </>
+            )}
+          </PulseMapFrame>
         </>
       )}
     </div>

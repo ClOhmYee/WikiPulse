@@ -3,7 +3,7 @@ package io.wikipulse.backend.common;
 import java.util.List;
 import java.util.Set;
 
-/** 쿼리 파라미터 검증·파싱. API 명세 v0.1 §1.2·§1.4. 범위 밖은 INVALID_QUERY. */
+/** 쿼리 파라미터 검증·파싱. API 명세 v0.3 §1.2·§1.4. 범위 밖은 INVALID_QUERY. */
 public final class QueryParams {
 
     private QueryParams() {

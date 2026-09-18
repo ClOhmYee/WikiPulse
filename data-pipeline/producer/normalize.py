@@ -7,7 +7,7 @@
     필드명·타입·봇 표시 방식이 서로 다르다. 둘을 같은 edit_event 형태로 맞춰
     두지 않으면 급증 탐지 로직을 두 벌 짜게 된다. 리플레이는 아직 구현 전이지만
     `source` 필드를 지금 넣어 자리를 잡아둔다.
-    근거: docs/requirements-v0.1.md §3.2, §10
+    근거: docs/requirements-v0.3.md §3.2, §10
 
 실측으로 확인한 스키마 (2026-09-08, stream.wikimedia.org/v2/stream/recentchange)
     - page_id 필드가 없다. 페이지 식별자는 (wiki, title) 뿐이다.

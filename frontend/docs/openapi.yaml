@@ -82,7 +82,7 @@ paths:
       operationId: getIssue
       description: >-
         Optional NON_NULL fields may be absent. relatedStocks is a preview of at most five. Member metrics
-        currently come from latest rows, not the issue snapshot.
+        are fixed values copied into cluster_member for this issue snapshot; never substitute later raw rows.
       parameters:
         - name: id
           in: path
@@ -422,6 +422,11 @@ components:
           minLength: 1
         isSeed:
           type: boolean
+          description: >-
+            true면 최종 급증 관문을 직접 통과한 루트 문서 또는 생성 시각
+            동시성으로 편입된 새 사건 문서다. false면 Clickstream 이웃 중
+            사건기간 편집 재급증 기준을 통과한 기존 문서다. Wikidata는
+            멤버 편입 사유가 아니다.
         editCount:
           type: number
           minimum: 0
@@ -568,6 +573,11 @@ components:
           minimum: 0
         status:
           type: string
+          description: >-
+            이슈 판정 후 AI 보강 상태. DETECTED는 처리 전, VERIFYING은 처리 중,
+            CONFIRMED는 요약 생성과 종목 검증 작업 종료를 뜻한다. 관련 종목이
+            0개인 CONFIRMED는 모든 작업이 끝났을 때만 가능하다. GATEWAY·GDELT 실패와
+            재시도는 VERIFYING으로 남긴다.
           enum:
             - DETECTED
             - VERIFYING
@@ -760,14 +770,30 @@ components:
           type: number
         isSeed:
           type: boolean
+          description: >-
+            true면 최종 급증 관문을 직접 통과한 루트 문서 또는 생성 시각
+            동시성으로 편입된 새 사건 문서다. false면 Clickstream 이웃 중
+            사건기간 편집 재급증 기준을 통과한 기존 문서다.
         editCount:
           type: integer
           minimum: 0
           nullable: true
+          description: Edit count used to evaluate this snapshot window.
         views:
           type: integer
           minimum: 0
           nullable: true
+          description: Pageviews used to evaluate this snapshot window.
+        completeness:
+          type: string
+          enum:
+            - complete
+            - pending
+            - unavailable
+          description: >-
+            editCount/views 가 null 일 때 그 이유. complete 는 판정 완료,
+            pending 은 입력 대기, unavailable 은 그 시점 원본을 확보할 수 없음.
+            Node 와 같은 어휘다 (WP-129).
       required:
         - pageId
         - wiki

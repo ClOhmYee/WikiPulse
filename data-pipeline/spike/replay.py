@@ -56,6 +56,11 @@ class Observation:
     window_start: str        # "YYYY-MM-DDTHH:00:00" (UTC)
     edit_count: int
     editor_count: int
+    #: 시점 감사 증거 (V9, WP-129 2번). 판정에는 안 쓴다.
+    #: 🔴 리플레이가 이 증거의 주 대상이다 — "snapshot_ts 이하 revision 만 썼다" 를
+    #: 나중에 보이려면 무엇까지 봤는지가 결과에 남아 있어야 한다.
+    max_rev_id: int | None = None
+    last_edit_ts: str | None = None
 
     @property
     def day(self) -> date:
@@ -100,6 +105,9 @@ def aggregate(events: Iterable[dict], titles: set[str]) -> dict[str, list[Observ
     # (wiki, title, hour) -> [편집 수, {편집자}]
     acc: dict[tuple[str, str, str], tuple[list[int], set[str]]] = defaultdict(
         lambda: ([0], set()))
+    # 시점 증거. 배치 집계(`batch/historical_windows.aggregate_edits`)와 같은 규칙이다.
+    max_rev: dict[tuple[str, str, str], int] = {}
+    last_ts: dict[tuple[str, str, str], str] = {}
     wanted = {canonical_title(t) for t in titles}
     for rec in events:
         raw_title = rec.get("title")
@@ -113,10 +121,19 @@ def aggregate(events: Iterable[dict], titles: set[str]) -> dict[str, list[Observ
         count[0] += 1
         if rec.get("user"):
             editors.add(rec["user"])
+        rev_id = rec.get("rev_id")
+        if rev_id is not None:
+            max_rev[key] = max(max_rev.get(key, 0), int(rev_id))
+        event_ts = rec.get("event_ts")
+        if event_ts is not None and event_ts > last_ts.get(key, ""):
+            last_ts[key] = event_ts
 
     by_title: dict[str, list[Observation]] = defaultdict(list)
     for (wiki, title, hour), (count, editors) in acc.items():
-        by_title[title].append(Observation(wiki, title, hour, count[0], len(editors)))
+        key = (wiki, title, hour)
+        by_title[title].append(Observation(
+            wiki, title, hour, count[0], len(editors),
+            max_rev_id=max_rev.get(key), last_edit_ts=last_ts.get(key)))
     for obs in by_title.values():
         obs.sort(key=lambda o: o.window_start)
     return by_title
@@ -183,9 +200,26 @@ def replay_title(
 
 
 def first_detection(results: Iterable[ReplayResult]) -> ReplayResult | None:
-    """가장 이른 급증 판정. '사건 시작 시점에 잡히는가'(미탐 없음)를 본다."""
+    """가장 이른 **확정**. '사건 시작 시점에 잡히는가'(미탐 없음)를 본다.
+
+    🔴 **조회수 없이 재생하면 항상 None 이다** (2026-09-18, WP-126).
+    2단계 계약에서 확정은 조회수 급등을 요구하는데 편집 덤프에는 조회수가 없다.
+    이 경로로 재현율을 재던 수치(WP-85: 10/12)는 더는 못 낸다 —
+    `first_candidate` 로 1단계 통과 시점만 볼 수 있다.
+    """
     for result in results:
         if result.decision.is_spike:
+            return result
+    return None
+
+
+def first_candidate(results: Iterable[ReplayResult]) -> ReplayResult | None:
+    """가장 이른 **후보**(1단계 통과, 조회수 대기). 편집 신호가 언제 섰는지 본다.
+
+    확정이 아니다. 조회수를 붙이기 전까지 리플레이로 볼 수 있는 건 여기까지다.
+    """
+    for result in results:
+        if result.decision.is_spike or result.decision.is_pending:
             return result
     return None
 
@@ -249,6 +283,10 @@ def run_db_mode(by_title: dict[str, list[Observation]], targets: list[str],
                     edit_count=o.edit_count, editor_count=o.editor_count,
                     # 편집 덤프에는 조회수가 없다 — 메모리 모드와 같은 조건이다.
                     views=None,
+                    # 무엇까지 보고 판정했는지 (V9, WP-129 2번).
+                    max_rev_id=o.max_rev_id,
+                    last_edit_ts=(None if o.last_edit_ts is None
+                                  else parse_window_start(o.last_edit_ts)),
                 )
                 for o in observations
             ]

@@ -9,7 +9,7 @@ import org.springframework.data.repository.query.Param;
 public interface StockRepository extends JpaRepository<Stock, String> {
 
     /**
-     * 종목 목록. API 명세 v0.1 §4 `GET /stocks`.
+     * 종목 목록. API 명세 v0.3 §4 `GET /stocks`.
      * q(회사명·티커 부분 일치, 대소문자 무시)·sector·exchange·hasIssues 필터.
      * businessSummary 는 목록에서 뺀다(수천 자 × 5,100건).
      * issueCount 는 verified·비DISCARDED 이슈만 센다.

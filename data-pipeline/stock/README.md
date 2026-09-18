@@ -4,7 +4,7 @@
 - `WP-34` 사업 설명 수집 + 임베딩 (yfinance → text-embedding-3-small → pgvector)
 - `WP-64` 주가 일봉 적재 + 일별 증분 갱신 (yfinance → stock_price)
 
-명세: [docs/requirements-v0.1.md](../../docs/requirements-v0.1.md) §3.2 9번, §4, §5, §6
+명세: [docs/requirements-v0.3.md](../../docs/requirements-v0.3.md) §3.2 9번, §4, §5, §6
 
 ```
 종목 마스터 ──▶ 사업 설명 ──▶ 임베딩

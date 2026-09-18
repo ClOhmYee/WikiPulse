@@ -17,16 +17,23 @@ import org.springframework.data.repository.query.Param;
 public interface IssueQueryRepository extends JpaRepository<IssueCluster, Long> {
 
     /**
-     * 이슈 상세의 멤버 문서. weight 내림차순. editCount·views 는 최근 윈도우/조회수
-     * 에서 끌어온다 — 아직 없으면 null. API 명세 §2.
+     * 이슈 상세의 멤버 문서. weight 내림차순. API 명세 §2.
+     *
+     * <p>🔴 <b>수치는 `cluster_member` 에 복사된 판정 당시 값이다</b> (WP-129 5번).
+     * ~~최신 `page_edit_window`·`page_view_hourly` 한 행을 끌어온다~~ → 그러면 과거 스냅샷을
+     * 열었을 때 <b>그 뒤에 들어온 수치</b>가 표시된다. 2025-06-12 09시 이슈에 오늘 조회수가
+     * 붙는 식이다 — 값이 그럴듯해서 화면만 봐서는 틀린 줄 모른다.
+     * 펄스맵({@link PulseMapRepository})은 이미 고정값을 읽고 있었다. 상세만 남아 있었다.
+     *
+     * <p>아직 안 채워졌으면 {@code null} 이다. ⚠️ 최신 원시 행으로 메우지 않는다 —
+     * {@code completeness} 가 "판정 완료(complete) / 입력 대기(pending) / 원본 없음
+     * (unavailable)" 를 구분한다(명세 §5.2).
      */
     @Query(value = """
             SELECT p.id AS pageId, p.wiki AS wiki, p.title AS title,
                    cm.weight AS weight, cm.is_seed AS isSeed,
-                   (SELECT ew.edit_count FROM page_edit_window ew
-                     WHERE ew.page_id = p.id ORDER BY ew.window_start DESC LIMIT 1) AS editCount,
-                   (SELECT pv.views FROM page_view_hourly pv
-                     WHERE pv.page_id = p.id ORDER BY pv.ts_hour DESC LIMIT 1) AS views
+                   cm.edit_count AS editCount, cm.views AS views,
+                   cm.completeness AS completeness
             FROM cluster_member cm
             JOIN wiki_page p ON p.id = cm.page_id
             WHERE cm.cluster_id = :clusterId

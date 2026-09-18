@@ -39,6 +39,8 @@ class ExternalCallBeforeCharacterizationTest {
 
     @Mock
     CandidateRepository repository;
+    @Mock
+    ClusterIntroRepository introRepository;
 
     private FakeUpstream gateway;
     private FakeUpstream wiki;
@@ -62,13 +64,18 @@ class ExternalCallBeforeCharacterizationTest {
 
         GatewayEmbeddingClient gatewayClient = new GatewayEmbeddingClient(props);
         WikipediaExtractClient wikiClient = new WikipediaExtractClient(props);
-        WikipediaGatewayEmbeddingSource source = new WikipediaGatewayEmbeddingSource(wikiClient, gatewayClient, props);
+        ClusterMemberIntros intros = new ClusterMemberIntros(introRepository, wikiClient);
+        WikipediaGatewayEmbeddingSource source = new WikipediaGatewayEmbeddingSource(intros, gatewayClient, props);
         StockCandidateService service = new StockCandidateService(repository, source, props);
         worker = new StockCandidateWorker(service, repository, props);
 
         // 클러스터마다 멤버 1개 → GATEWAY 호출 1회/클러스터(호출 수 = 크레딧-소진 프록시).
+        // LIVE 출처라 현재 도입부 경로(prop=extracts)를 탄다 — 이 파일이 재는 건 전송 실패
+        // 거동이지 시점 계약이 아니다(WP-129 는 그걸 ClusterMemberIntrosTest 로 본다).
         when(repository.pendingClusterIds(anyInt())).thenReturn(CLUSTERS);
-        when(repository.memberTitlesByPulse(anyLong())).thenReturn(List.of("Doc"));
+        when(introRepository.context(anyLong())).thenReturn(java.util.Optional.of(
+                new ClusterIntroRepository.ClusterContext("live", java.time.OffsetDateTime.now(),
+                        List.of(new ClusterIntroRepository.ClusterContext.Member(1L, "Doc")))));
     }
 
     @AfterEach

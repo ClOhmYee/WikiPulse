@@ -17,16 +17,19 @@ PostgreSQL 에 저장한다. 버블맵 조회 API(WP-74)가 이 산출물을 읽
 | `driver.py` | 실 데이터 소스 배선 + CLI — **씨드 경로 배선됨**(아래) | `tests/test_driver_seeds.py` · `tests/test_driver_pg.py` · `tests/test_driver.py` |
 
 ```
-pytest cluster/tests        # 42개. Docker 불필요(pgserver 번들 PostgreSQL)
+pytest cluster/tests        # Docker 불필요(pgserver 번들 PostgreSQL)
 ```
 
-## 클러스터링 게이트 (WP-51 확정, 명세 §3.2 4번·§11)
+## 클러스터링 게이트 (제품 계약: WP-51·77, 명세 §3.2 4번·§11)
 
-- **씨드**(`is_seed=true`) = 급증 판정(`spike/detector.py`)을 직접 통과한 문서. 각 씨드가 한 클러스터를 연다.
-- **비-씨드** = 씨드의 Clickstream 이웃(월별 덤프, `n>=10`) 중 **문서 생성일이 씨드 사건일 ±창(기본 30일) 안**인 문서. 생성일 근접이 곧 시간 동시성.
-- Clickstream 값에 별도 문턱 없음 — 절대 이동량으로는 사건/배경이 안 갈린다(§11: Hormuz 배경 문서가 사건 문서보다 30배 더 클릭). 포함은 생성일 창이 정하고 `n` 은 `weight` 로만.
-- Wikidata 는 게이트에서 빠짐(속성 5종 전수 검사 실패). 화면 근거 점선 간선으로만 그린다.
-- ⚠️ 기존 문서가 사건으로 재조명되는 비-씨드(예: `Mojtaba_Khamenei`)는 생성일 창으로 못 잡는다 — **WP-77 로 분리.** 이 모듈 범위 밖.
+- **루트 씨드**(`is_seed=true`) = 조회수 최종 관문을 직접 통과한 문서. 각 루트 씨드가 클러스터를 연다.
+- **추가 씨드**(`is_seed=true`) = 루트 씨드의 Clickstream 이웃(월별 덤프, `n>=10`) 중 문서 생성일이 사건일 ±창(기본 30일) 안인 새 사건 문서.
+- **비-씨드**(`is_seed=false`) = 오래전에 생성된 Clickstream 이웃 중 사건기간 편집 재급증 비율 ≥5 **AND** 사건기간 편집 수 ≥20인 문서(WP-77).
+- **시점 정합성 상한** = UTC 기준 실제 생성 시각이 `snapshot_ts` 이후인 문서는 생성일 창 안이어도 제외한다. `clickstream_month`도 스냅샷 월보다 앞선 데이터 기간만 허용하고, Wikidata는 `observed_at <= snapshot_ts`인 보조 간선만 허용한다. 당월에 새로 생긴 LIVE 이슈는 완료 월에 관계가 없으면 씨드 단독일 수 있다. 이 상한은 원본 데이터 기간 기준이므로 과거 원본을 나중에 적재하는 리플레이도 계산할 수 있지만, 사건 당월이나 이후 기간의 근거를 더 이전 지도에 소급하지는 않는다.
+- Clickstream 값에 별도 문턱 없음 — 절대 이동량으로는 사건/배경이 안 갈린다(§11: Hormuz 배경 문서가 사건 문서보다 30배 더 클릭). 관계 `weight`는 `n` 100%이며 다른 실시간 신호를 섞지 않는다. 직전 월 검증 완료본을 우선하고, 미공개·검증 실패 시 최신 완료본(통상 전전월)을 유지하며 월간 합산은 하지 않는다.
+- Wikidata는 멤버 편입에 쓰지 않는다. 이미 포함된 멤버 사이 화면 보조 점선 간선만 계약에 남아 있으며 실제 소스 배선은 없다.
+
+⚠️ **현재 구현 차이:** `snapshot.py`는 루트 씨드만 `is_seed=true`로 두고 생성일 근접 이웃을 `false`로 저장한다. 재급증 비율·절대 편집 수 입력도 없어 WP-77 규칙을 실행하지 않는다. `driver.py:load_creation_dates`도 미구현이라 실제 E2E는 씨드 단독이다. 아래 테스트는 현재 코드의 회귀 테스트이지 제품 계약 구현 완료 증거가 아니다.
 
 ## 점수
 
@@ -47,6 +50,9 @@ pytest cluster/tests        # 42개. Docker 불필요(pgserver 번들 PostgreSQL
 과거 시점을 `snapshot_ts` 로 넣어 같은 로직을 과거 덤프에 돌린다. `persist_snapshot` 은
 `(source, snapshot_ts)` 단위로 멱등이라 재계산이 중복을 쌓지 않는다. 클러스터 0개
 스냅샷도 `cluster_snapshot` 에 등록해 "완료된 빈 스냅샷"을 미저장 시점과 구분한다.
+재계산 시에도 해당 `snapshot_ts`까지 존재한 문서·관계와 그보다 앞선 Clickstream 데이터
+기간만 사용하므로 미래 기간의 근거가 과거 지도에 소급 반영되지 않는다. 로컬 적재 시각은
+이 event-time 상한에 포함하지 않는다.
 
 ## 실행 — spike → issue_cluster (WP-99 · -102)
 
@@ -182,7 +188,9 @@ DB(이 README 의 Milton 6행)에서 `GET /api/v1/issues` 가 에러 없이 빈 
 ~~Clickstream 이웃·문서 생성일·`load_pages_by_title` 셋 다 미배선~~ → 전부 이어졌다.
 
 ```
-python -m cluster.driver --dsn "$DATABASE_URL" --source replay \n    --clickstream-root ./data/clickstream --clickstream-month-rule previous \n    --creation-index ./data/page-creation/enwiki/2024-09_2024-10
+python -m cluster.driver --dsn "$DATABASE_URL" --source replay \
+    --clickstream-root ./data/clickstream \
+    --creation-index ./data/page-creation/enwiki/2024-09_2024-10
 ```
 
 - **Clickstream 이웃** — `MonthlyNeighborSource` 가 월 덤프를 **월당 한 번** 훑는다.
@@ -207,33 +215,30 @@ python -m cluster.driver --dsn "$DATABASE_URL" --source replay \n    --clickstre
   문서라는 뜻이라 배경이 아니라 사건의 일부다. 한 값에 섞어 두면 화면도 API 도
   "이 문서가 사건 자체인가, 사건이 끌어온 배경인가" 를 구분할 수 없다.
 
-### 근거 월 — `previous` 가 제품 규칙, `event` 는 사후 QA (2026-09-18 정정)
+### 근거 월 — `select_completed_month` 한 벌 (2026-09-18, develop 머지)
 
-`--clickstream-month-rule` 은 **필수**다. `--source` 를 `required` 로 둔 것과 같은
-이유 — 기본값이 있으면 빠뜨린 실행이 에러 없이 다른 근거로 산출물을 만든다.
+**월 선택 규칙은 `batch.clickstream.select_completed_month` 하나다.** 직전 월 우선,
+미공개·검증 실패 시 최신 완료본(통상 전전월) 폴백, `_manifest.json` 검증까지 그쪽
+계약이다. `MonthlyNeighborSource.month_for(wiki, snapshot_ts)` 가 그 함수만 부른다.
 
-| 규칙 | 뜻 | 쓰임 |
-| --- | --- | --- |
-| **`previous`** | 스냅샷 직전 달 | **제품 동작 검증.** 그 시점에 실제로 구할 수 있었던 완료 월을 흉내 내는 로컬 regression |
-| `event` | 스냅샷이 속한 달 | **월 종료 후 사후 QA / upper-bound 실험.** 운영 당시에는 존재하지 않던 덤프다 |
+~~`--clickstream-month-rule previous|event`~~ → **제거됨.** -115 브랜치가 develop
+머지 전까지 쓰던 로컬 스위치였다. 규칙이 두 벌이면 한쪽만 바뀌어도 에러 없이 결과가
+갈린다 — 그래서 예고한 대로 머지 시점에 한 벌로 합쳤다. CLI 인자도 같이 없앴다.
 
-🔴 ~~"replay 는 `event`, LIVE 는 못 씀"~~ → **리플레이도 완료 월 계약이다.**
-명세 v0.3 §3.2 4번: "`clickstream_month` 는 스냅샷 월보다 앞선 데이터 기간이어야 한다 …
-이 판단은 원본의 데이터 기간 기준이고 로컬 적재 시각 기준은 아니다. **따라서 과거
-원본을 나중에 적재하는 리플레이도 같은 event-time 계약으로 계산할 수 있다.**"
-§11 도 사건 당월 dump 실측에 "운영 당시에는 사용할 수 없던 당월 덤프를 월 종료 후
-분석한 품질 검증이며, 해당 월 스냅샷 입력으로 사용했다는 뜻이 아니다" 를 달아 두었다.
-"덤프가 이미 나와 있다" 는 **적재 시각 논거**라 이 계약이 명시적으로 배제한다.
+🔴 **리플레이도 완료 월 계약이다.** 명세 v0.3 §3.2 4번: "`clickstream_month` 는
+스냅샷 월보다 앞선 데이터 기간이어야 한다 … 이 판단은 원본의 데이터 기간 기준이고
+로컬 적재 시각 기준은 아니다. **따라서 과거 원본을 나중에 적재하는 리플레이도 같은
+event-time 계약으로 계산할 수 있다.**" §11 도 사건 당월 dump 실측에 "운영 당시에는
+사용할 수 없던 당월 덤프를 월 종료 후 분석한 품질 검증이며, 해당 월 스냅샷 입력으로
+사용했다는 뜻이 아니다" 를 달아 두었다. "덤프가 이미 나와 있다" 는 **적재 시각
+논거**라 이 계약이 명시적으로 배제한다.
 
-⚠️ **develop 의 `batch/clickstream.select_completed_month` 를 여기 복제하지 않았다.**
-직전 월 미공개·검증 실패 시 최신 완료본(통상 전전월)으로 폴백하는 계약과 매니페스트
-검증은 그쪽이 이미 갖고 있다. 규칙이 두 벌이 되면 한쪽만 바뀌어도 에러 없이 결과가
-갈리므로 통합은 develop 머지 때 한 번에 한다. `--clickstream-month-rule previous` 는
-그때까지의 로컬 regression 스위치다.
+이중 방어: 월을 잘못 골라도 `snapshot._is_completed_clickstream_month` 가
+스냅샷 당월·미래·형식 오류 근거를 멤버 편입에서 다시 막는다.
 
 #### 배선 regression 실측 (2024-09-01~11-01, 스냅샷 1,426 · 클러스터 6,614)
 
-| | `previous` (제품 규칙) | `event` (사후 QA upper bound) |
+| | 완료 월 (제품 규칙, 현재 코드) | 사건 당월 (사후 QA upper bound, 옛 로컬 스위치) |
 | --- | --- | --- |
 | 비-루트 멤버 = edge | **6,134** | 20,161 |
 | 2+ 멤버 클러스터 | **17.7%** | 34.1% |
@@ -264,7 +269,8 @@ regression 데이터**로만 쓴다. 최종 MVP 리플레이 구간은 2026-07-1
   (2026-09-18 재확인). 지금 이웃이 멤버가 되는 경로는 생성일 창(-51) 하나뿐이고 그건
   **추가 씨드**(`is_seed=true`)다. `Mojtaba_Khamenei` 류(2009 생성, 재조명)는
   `is_seed=false` 로 들어와야 하는데 그 경로 자체가 없다 — 재급증 입력도 안 받는다.
-- 🔴 **시점 상한(`생성 시각 <= snapshot_ts`)** — 명세 v0.3 §3.2 4번이 요구하지만 이
-  브랜치에는 없다. `page_creation` 이 시각을 보존하게 됐으니 입력은 준비됐다.
-  develop 은 `snapshot.py` 에 이미 갖고 있어 머지 때 통합한다.
-- 🔴 **완료 월 폴백** — `select_completed_month`(develop) 통합. 위 근거 월 절 참고.
+- ~~시점 상한(`생성 시각 <= snapshot_ts`)~~ → **통합됨** (develop 머지, 2026-09-18).
+  `snapshot._build_cluster` 가 `created_at > snapshot_ts` · 완료 월 · Wikidata
+  `observed_at <= snapshot_ts` 를 모두 건다.
+- ~~완료 월 폴백~~ → **통합됨.** `batch.clickstream.select_completed_month` 하나가
+  근거 월을 고른다. 아래 근거 월 절 참고.

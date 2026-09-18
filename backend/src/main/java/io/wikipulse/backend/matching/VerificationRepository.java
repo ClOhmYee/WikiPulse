@@ -1,13 +1,14 @@
 package io.wikipulse.backend.matching;
 
 import java.util.List;
+import java.util.Optional;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Repository;
 
 /**
  * LLM 검증 워커의 DB 접근 (WP-68). 후보 생성(-67, {@link CandidateRepository})과 분리해
- * 검증 단계의 읽기/쓰기만 담는다. 네이티브 SQL — cluster_stock(V5)·cluster_org_mention·
+ * 검증 단계의 읽기/쓰기만 담는다. 네이티브 SQL — cluster_stock(V6)·cluster_org_mention·
  * issue_cluster·stock 을 그대로 읽고 쓴다.
  *
  * <p>백엔드는 스키마를 소유하지 않는다. 이 SQL 의 실 DB 검증은 db/ pgserver 테스트 몫이다
@@ -31,6 +32,13 @@ public class VerificationRepository {
     }
 
     /**
+     * 재사용할 이전 판정 (WP-69). cluster_stock 에 저장된 판정 컬럼만 담는다 —
+     * rationale 은 화면용 rationale_ko 다(rationale_en·issue_class 는 저장 안 돼 재사용 불가·불필요).
+     */
+    public record Verdict(boolean verified, String matchPath, String confidence, String rationale) {
+    }
+
+    /**
      * 아직 검증 안 된(check_state='PENDING') 후보. tier 우선순위(BOTH→GDELT_ONLY→EMBEDDING_ONLY)
      * → tier 안 강한 신호순. FAILED·DONE 은 뺀다 — 다시 시도하지 않는다.
      */
@@ -46,16 +54,8 @@ public class VerificationRepository {
                         rs.getString("ticker"), CandidateTier.valueOf(rs.getString("tier"))));
     }
 
-    /** 클러스터의 멤버 문서 제목. 급등도 내림차순 (명세 §6.2 순서, {@link CandidateRepository} 와 동일 조회). */
-    public List<String> memberTitlesByPulse(long clusterId) {
-        return jdbc.queryForList("""
-                SELECT wp.title
-                  FROM cluster_member cm
-                  JOIN wiki_page wp ON wp.id = cm.page_id
-                 WHERE cm.cluster_id = :cid
-                 ORDER BY cm.spike_score DESC NULLS LAST, cm.weight DESC
-                """, new MapSqlParameterSource("cid", clusterId), String.class);
-    }
+    // 멤버 제목 조회는 ClusterIntroRepository.context 로 옮겼다 (WP-129) — 이유는
+    // CandidateRepository 의 같은 자리 주석 참고.
 
     /**
      * GDELT 동시 출현 상위 기관명 (lift 내림차순). LLM 검증 컨텍스트로 넘긴다 (명세 §11).
@@ -132,6 +132,80 @@ public class VerificationRepository {
                 .addValue("matchPath", resp.matchPath())
                 .addValue("confidence", resp.confidence())
                 .addValue("rationaleKo", resp.rationaleKo())
+                .addValue("issueKey", issueKey)
+                .addValue("promptVersion", promptVersion));
+    }
+
+    /**
+     * 이전 판정 재사용 조회 (WP-69). 같은 (issue_key, ticker, prompt_version) 로 이미 DONE 인
+     * 판정이 있으면 그걸 돌려준다 — LLM 을 다시 부르지 않고 복사해 쓴다(크레딧·지연 절약).
+     *
+     * <p>🔴 재사용 키는 cluster_id 가 아니다 — 진행 중인 이슈가 재감지될 때마다 새 cluster_id 가
+     * 생겨 매번 캐시 미스한다(V6 마이그레이션 주석). issue_key 로 스냅샷을 가로질러 찾는다.
+     * V6 부분 인덱스 {@code (issue_key, ticker, prompt_version) WHERE check_state='DONE'} 를 탄다.
+     *
+     * <p>여러 스냅샷에 DONE 이 걸쳐 있으면 verified_at 최신 1행. 🔴 현재 처리 중인 cluster_id 행
+     * 자신은 세지 않는다({@code cluster_id <> :cid}) — PK 가 (cluster_id, ticker) 라 자기 행은
+     * 하나뿐이고 지금 PENDING 이라 check_state='DONE' 필터로 이미 빠지지만, 의도를 명시한다.
+     *
+     * <p>⚠️ issue_cluster.status 로 재사용원을 거르지 않는다 — DISCARDED 스냅샷의 판정도 재사용한다.
+     * 판정은 (issue_key, ticker) 관계에 대한 것이고 스냅샷 폐기는 그 관계를 부정하는 게 아니라
+     * 스냅샷 하나를 버리는 것이라, 같은 이슈의 다른 스냅샷이 그 판정을 이어쓰는 게 맞다(status
+     * 조인을 넣으면 index-only 조회가 깨지고 유효한 캐시 히트가 줄기만 한다).
+     *
+     * @return 재사용할 판정, 없으면 {@link java.util.Optional#empty()}
+     */
+    public Optional<Verdict> findPriorVerdict(
+            long clusterId, String issueKey, String ticker, String promptVersion) {
+        List<Verdict> rows = jdbc.query("""
+                SELECT verified, match_path, confidence, rationale
+                  FROM cluster_stock
+                 WHERE issue_key = :issueKey AND ticker = :ticker
+                   AND prompt_version = :promptVersion
+                   AND check_state = 'DONE'
+                   AND cluster_id <> :cid
+                 ORDER BY verified_at DESC NULLS LAST
+                 LIMIT 1
+                """, new MapSqlParameterSource()
+                .addValue("cid", clusterId)
+                .addValue("issueKey", issueKey)
+                .addValue("ticker", ticker)
+                .addValue("promptVersion", promptVersion),
+                (rs, n) -> new Verdict(
+                        rs.getBoolean("verified"),
+                        rs.getString("match_path"),
+                        rs.getString("confidence"),
+                        rs.getString("rationale")));
+        return rows.isEmpty() ? Optional.empty() : Optional.of(rows.get(0));
+    }
+
+    /**
+     * 재사용 판정 기록 (WP-69). {@link #recordDone} 과 같은 컬럼을 이전 판정({@link Verdict})
+     * 값으로 채운다 — LLM 응답 없이. 이 (cluster_id, ticker) 행이 DONE+verified 로 남아
+     * {@link #verifiedPassCountTier12} 에도 자연히 잡힌다.
+     * rationale 컬럼엔 저장돼 있던 rationale_ko 를 그대로 넣는다.
+     */
+    public void recordReused(
+            long clusterId, String ticker, Verdict verdict,
+            String issueKey, String promptVersion) {
+        jdbc.update("""
+                UPDATE cluster_stock
+                   SET check_state    = 'DONE',
+                       verified       = :verified,
+                       match_path     = :matchPath,
+                       confidence     = :confidence,
+                       rationale      = :rationale,
+                       verified_at    = now(),
+                       issue_key      = :issueKey,
+                       prompt_version = :promptVersion
+                 WHERE cluster_id = :cid AND ticker = :ticker
+                """, new MapSqlParameterSource()
+                .addValue("cid", clusterId)
+                .addValue("ticker", ticker)
+                .addValue("verified", verdict.verified())
+                .addValue("matchPath", verdict.matchPath())
+                .addValue("confidence", verdict.confidence())
+                .addValue("rationale", verdict.rationale())
                 .addValue("issueKey", issueKey)
                 .addValue("promptVersion", promptVersion));
     }
