@@ -1,13 +1,26 @@
 # db — PostgreSQL 스키마
 
-데이터 모델 v1 (`WP-35`). 명세: [docs/requirements-v0.3.md](../docs/requirements-v0.3.md) §3.2, §5
+데이터 모델은 V1(`WP-35`)에서 시작해 **V9(2026-09-18)**까지 누적됐다. 명세: [docs/requirements-v0.3.md](../docs/requirements-v0.3.md) §3.2, §5
 
 ```
 db/
-  migrations/V1__initial_schema.sql   Flyway 규칙 이름. 17개 테이블
-  tests/test_schema.py                진짜 PostgreSQL 을 띄워서 검증
+  migrations/
+    V1__initial_schema.sql            초기 17개 테이블
+    V2__pulse_snapshot_graph.sql      시점별 지도 스냅샷·간선
+    V3__baseline_hour_of_day.sql      UTC 시간대 기준선
+    V4__baseline_view_stddev.sql      조회수 표준편차
+    V5__spike_source.sql              LIVE/replay 출처·유일키
+    V6__cluster_stock_reuse.sql       종목 판정 재사용·재시도 상태
+    V7__spike_view_metrics.sql        판정 조회수·기준선 고정
+    V8__page_intro.sql                historical revision 도입부
+    V9__spike_revision_evidence.sql   revision 시점 감사 필드
+  tests/
+    test_schema*.py                   V1~V9 마이그레이션·제약 검증
+    test_*_sql.py                     writer·상세 조회 SQL 회귀 검증
   requirements-test.txt
 ```
+
+🔴 저장소 스키마의 정본은 V1 하나가 아니라 **V1부터 V9까지 순서대로 적용한 결과**다. EC2는 V1~V6까지만 확인했으며 V7~V9 적용 여부는 [기술 명세](../docs/tech-spec-v0.3.md)에서 별도로 추적한다.
 
 ## 왜 PostgreSQL 하나인가
 
@@ -67,7 +80,8 @@ LIVE 화면은 가장 최근 값을, 리플레이는 사용자가 고른 시점�
 | `page_edit_window` | Spark 윈도우 집계 출력. **단기 보존** — 슬라이딩이라 편집 1건이 12행에 걸친다 |
 | `page_view_hourly` | Pageviews 조회수. 편집 발생 후 2차·최종 판정용 |
 | `page_baseline` | 조회수 기준선. 생성 28일 이상은 직전 28일, 미만은 생성 이후 자료 |
-| `spike` | 사람 편집 1건 이상 **AND** 조회수 급등 통과분(WP-118) |
+| `page_intro` | 리플레이 대표 텍스트의 시점별 도입부. `(page_id, rev_id)`로 고정하고 `rev_ts <= snapshot_ts` 중 마지막 revision을 읽음(V8) |
+| `spike` | 사람 편집 1건 이상 **AND** 조회수 급등 통과분(WP-118). V7의 `views`·`view_baseline`과 V9의 `max_rev_id`·`last_edit_ts`가 판정값과 시점 감사 근거를 보존 |
 
 ### 이슈
 
@@ -75,7 +89,7 @@ LIVE 화면은 가장 최근 값을, 리플레이는 사용자가 고른 시점�
 | --- | --- |
 | `issue_cluster` | 한 시점의 클러스터 = 버블 하나. `status` 로 3단계 노출 |
 | `cluster_member` | 묶인 문서. `weight`는 Clickstream 이동량. `is_seed=true`는 루트 급증 문서 또는 생성일 동시성으로 편입된 새 사건 문서, `false`는 재급증 기준으로 편입된 기존 문서. Wikidata는 멤버십을 만들지 않음 |
-| `issue_report` | LLM 요약 |
+| `issue_report` | LLM 요약. 운영 writer·상태 전이는 WP-119로 구현됐지만 worker 기본값은 꺼져 있고 실제 GATEWAY·EC2 실행은 미검증 |
 
 ### 종목
 
@@ -101,7 +115,9 @@ LIVE 화면은 가장 최근 값을, 리플레이는 사용자가 고른 시점�
 `text-embedding-3-small` 기준이다. 차원이 다르면 INSERT 가 거부된다 —
 테스트가 이걸 확인한다.
 
-~~`spike.view_ratio` 가 NULL이면 조회수 도착 전 감지 상태~~ → 새 계약에서는 조회수 관문을 통과한 뒤에만 LIVE `spike`를 저장한다(WP-118). NULL은 과거·리플레이 호환 값으로만 남긴다. 조회수 데이터가 늦으면 이슈 확정도 그만큼 늦어진다.
+~~`spike.view_ratio`가 NULL이면 조회수 도착 전 감지 상태~~ → **아니다.** V7부터 조회수 도착 여부는 `spike.views`로 판단한다(WP-129). `view_ratio`는 기준선 표본이 없는 신규 문서가 절대 하한으로 확정될 때도 정상적으로 NULL이며, V7 이전 행도 NULL일 수 있다. `cluster_member.completeness`를 `view_ratio`만으로 결정하지 않는다. 조회수 원본이 늦으면 `spike`를 만들지 않고 후보 대기에 남긴다.
+
+**V6 재사용 인덱스가 as-of를 보장하지는 않는다.** 같은 `issue_key`의 최근 완료 요약·종목 판정을 찾는 경로는 구현됐지만, 현재 조회에는 원 결과 스냅샷이 대상 `snapshot_ts` 이하인지 확인하는 상한이 없다. 과거 backfill에 미래 결과가 섞이지 않도록 WP-120에서 조회 조건과 원 `generated_at`·`verified_at` 보존을 보완한다.
 
 **회원·관심종목·알림·토론 테이블은 향후 기능용으로만 남아 있다.** MVP에서는 관련
 API·UI·운영 적재를 구현하지 않는다(WP-104). 스키마 자체의 삭제 전파 규칙은
