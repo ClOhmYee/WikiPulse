@@ -48,8 +48,17 @@ sudo docker compose --env-file .env up -d edit-stream
 sudo docker compose --env-file .env logs --since 5m edit-stream
 ```
 
-두 로그 검증이 통과한 뒤에만 운영 재시작 정책을 활성화한다. 변경된 정책을 producer,
-edit-stream 순서로 적용한다.
+초기 로그 확인 뒤에도 `RESTART_POLICY=no`를 유지한다. 15분 canary와 producer/Spark
+복구 검증에서는 정책을 바꾸지 않고 아래처럼 대상 서비스만 명시적으로 재시작한다.
+
+```bash
+sudo docker compose --env-file .env restart producer
+sudo docker compose --env-file .env restart edit-stream
+```
+
+15분 canary, 두 재시작 복구 검증, 기존 서비스 상태 재확인까지 모든 Task 7 gate가
+통과한 뒤에만 운영 재시작 정책을 활성화한다. 변경된 정책은 producer, edit-stream
+순서로 적용한다.
 
 ```bash
 sed -i 's/^RESTART_POLICY=no$/RESTART_POLICY=unless-stopped/' .env
