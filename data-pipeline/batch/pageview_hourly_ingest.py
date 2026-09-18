@@ -20,8 +20,9 @@
     PostgreSQL     : `--dsn` 을 주면 `page_view_hourly` 로 upsert (재실행 안전)
 
 ⚠️ 아직 없는 시간은 404 다 — 결손이 아니라 **아직 안 나온 것**이다. 2026-09-18 실측에서
-   04:00Z 파일이 06:06Z 에 올라왔고(윈도우 끝 기준 1시간 6분) 05:00Z 는 아직 404 였다.
-   그래서 404 를 실패로 세지 않고 "대기" 로 따로 센다 — LIVE 스케줄러가 재시도할 자리다.
+   [03:00~04:00) 구간 파일이 06:06Z 에 올라왔다 — 윈도우 **끝 기준 약 2시간**이다
+   (125~134분, 4개 구간). 그래서 404 를 실패로 세지 않고 "대기" 로 따로 센다 —
+   LIVE 스케줄러가 재시도할 자리다.
 """
 
 from __future__ import annotations
@@ -38,7 +39,7 @@ from pathlib import Path
 
 from .ingest import MANIFEST_NAME, Counts, ShardWriter, download, env
 from .pageview import SchemaMismatch
-from .pageview_hourly import aggregate, ts_hour_from_filename
+from .pageview_hourly import aggregate, filename_hour, ts_hour_from_filename
 
 PAGEVIEW_HOURLY_BASE = "https://dumps.wikimedia.org/other/pageviews"
 
@@ -54,12 +55,16 @@ ON CONFLICT (page_id, ts_hour) DO UPDATE SET views = EXCLUDED.views
 
 
 def dump_url(ts_hour: str) -> str:
-    """`2025-06-12T09:00:00` → /{YYYY}/{YYYY}-{MM}/pageviews-{YYYYMMDD}-{HH}0000.gz"""
-    date, _, time_part = ts_hour.partition("T")
-    year, month, day = date.split("-")
-    hour = time_part[:2]
-    return (f"{PAGEVIEW_HOURLY_BASE}/{year}/{year}-{month}/"
-            f"pageviews-{year}{month}{day}-{hour}0000.gz")
+    """윈도우 **시작** → 그 구간을 담은 파일 URL.
+
+    🔴 파일명 시각은 윈도우 **끝**이다 (`batch/pageview_hourly` 모듈 독스트링).
+       `2025-06-12T08:00:00` 구간은 `pageviews-20250612-090000.gz` 에 들어 있다.
+       ~~시작 시각을 그대로 파일명에 넣었다~~ → 한 시간 뒤 파일을 받아 조회수가 통째로
+       밀렸다 (2026-09-18 실측으로 발견).
+    """
+    date, hour = filename_hour(ts_hour)
+    return (f"{PAGEVIEW_HOURLY_BASE}/{date[:4]}/{date[:4]}-{date[4:6]}/"
+            f"pageviews-{date}-{hour}0000.gz")
 
 
 def read_lines(path: Path):
@@ -123,6 +128,7 @@ def ingest_hour(
         raise
 
     # 🔴 시각은 파일명에서 다시 읽는다. 캐시 파일이 엉뚱해도 여기서 드러난다.
+    #    파일명은 윈도우 끝이라 ts_hour_from_filename 이 한 시간을 빼서 돌려준다.
     if ts_hour_from_filename(dump.name) != ts_hour:
         raise SchemaMismatch(
             f"파일명 시각({ts_hour_from_filename(dump.name)})이 요청({ts_hour})과 다르다")
