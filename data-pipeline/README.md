@@ -98,7 +98,7 @@ producer는 Kafka가 이벤트 전달을 확인한 뒤에만 `SSE_CURSOR_FILE`�
 보낸다. 로컬에서 `SSE_CURSOR_FILE`을 비워 두면 cursor를 디스크에 저장하지 않는다.
 
 Spark의 로컬 기본 checkpoint는 `/tmp/wikipulse-checkpoint`지만 운영 Compose는
-`CHECKPOINT_DIR=hdfs:///wikipulse/checkpoints/edit-windows-v1`을 사용한다. 이 HDFS 경로에는
+`CHECKPOINT_DIR=hdfs://192.0.2.10:8020/wikipulse/checkpoints/edit-windows-v1`을 사용한다. 이 HDFS 경로에는
 streaming offset과 상태가 있으므로 재시작·복구 때 삭제하거나 다른 실행과 공유하지 않는다.
 
 ### LIVE 적재 경로 (`SINK=spike`, WP-100)
