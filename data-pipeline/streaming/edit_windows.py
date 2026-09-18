@@ -125,6 +125,21 @@ def ensure_project_root_on_path() -> None:
         sys.path.insert(0, root)
 
 
+def prepare_live_events(raw: DataFrame, *, watermark: str) -> DataFrame:
+    events = (
+        raw.select(F.from_json(F.col("value").cast("string"), EDIT_EVENT_SCHEMA).alias("e"))
+        .select("e.*")
+        .withColumn("event_ts", F.to_timestamp("event_ts"))
+        .filter(F.col("meta_id").isNotNull())
+    )
+    if events.isStreaming:
+        return (
+            events.withWatermark("event_ts", watermark)
+            .dropDuplicatesWithinWatermark(["meta_id"])
+        )
+    return events.dropDuplicates(["meta_id"])
+
+
 def aggregate_edit_windows(
     events: DataFrame,
     *,
@@ -193,11 +208,7 @@ def build_stream(spark: SparkSession):
         .load()
     )
 
-    events = (
-        raw.select(F.from_json(F.col("value").cast("string"), EDIT_EVENT_SCHEMA).alias("e"))
-        .select("e.*")
-        .withColumn("event_ts", F.to_timestamp("event_ts"))
-    )
+    events = prepare_live_events(raw, watermark=env("WATERMARK", DEFAULT_WATERMARK))
 
     return aggregate_edit_windows(
         events,

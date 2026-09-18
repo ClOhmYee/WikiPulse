@@ -23,7 +23,7 @@ pyspark = pytest.importorskip("pyspark", reason="pyspark 미설치 — 이 파�
 from pyspark.sql import SparkSession  # noqa: E402
 from pyspark.sql import functions as F  # noqa: E402
 
-from streaming.edit_windows import EDIT_EVENT_SCHEMA  # noqa: E402
+from streaming.edit_windows import EDIT_EVENT_SCHEMA, prepare_live_events  # noqa: E402
 
 BASE = {
     "$schema": "/mediawiki/recentchange/1.0.0",
@@ -76,6 +76,18 @@ def parse(spark, payloads):
         .select("e.*")
         .withColumn("event_ts", F.to_timestamp("event_ts"))
     )
+
+
+def test_live_preparation_removes_duplicate_meta_id(spark):
+    duplicate = event(meta={"id": "same-id"})
+    raw = spark.createDataFrame([(duplicate,), (duplicate,)], "value string")
+    assert prepare_live_events(raw, watermark="10 minutes").count() == 1
+
+
+def test_live_preparation_rejects_missing_meta_id(spark):
+    payload = event(meta={"id": None})
+    raw = spark.createDataFrame([(payload,)], "value string")
+    assert prepare_live_events(raw, watermark="10 minutes").count() == 0
 
 
 def test_스키마가_프로듀서_출력과_맞는다(spark):
