@@ -63,10 +63,15 @@ class PageWindow:
     내도록 집계 계약이 이미 맞춰져 있다(`batch/historical_windows.py` §AC: 1시간 창,
     봇 제외, 키 `(wiki, title)`).
 
-    `views` 가 `None` 이면 조회수 미도착이다 — `detect()` 가 편집만으로 '감지됨' 을 낸다.
+    `views` 가 `None` 이면 조회수 미도착이다 — `detect()` 가 **후보 대기**(PENDING_VIEWS)를
+    낸다. ~~편집만으로 '감지됨'~~ → 2단계 계약에서 바뀌었다 (WP-126): 조회수 없이는
+    확정하지 않는다.
     ⚠️ -58 산출물은 조회수 적재본이 없을 때 **0** 을 낸다(`None` 이 아니다). 그 0 은
     "진짜 0회" 와 구분되지 않는데, 그건 -58 의 성질이고 여기서 뒤집지 않는다 —
-    `detect()` 는 `view_ewma` 가 0/None 이면 조회수 관문을 닫으므로 안전한 쪽으로 간다.
+    ⚠️ 2단계 계약에서 `view_ewma` 가 0/None 이면 관문이 **닫히는 게 아니라** 절대 하한
+    (`views >= 100`)만으로 판정한다 — 명세 §3.2 3번 "0에서의 급등". 그래서 -58 의 0 이
+    진짜 0회로 들어오면 100회 이상일 때 확정될 수 있다. 조회수 투입 경로(별건)에서
+    -58 의 0 과 진짜 0 을 가르는 게 맞다.
 
     🔴 **`window_end` 는 소스가 주면 그 값을 쓴다.** 두 경로가 다르다:
         배치(-58) 행에는 `window_end` 가 없다 — 정각 tumbling 이라 길이가 `WINDOW_HOURS`
@@ -102,8 +107,23 @@ class PageWindow:
 
         `window_end` 는 있으면 쓰고 없으면 `WINDOW_HOURS` 로 채운다 — -58 은 안 내고
         `streaming/edit_windows.py` 는 낸다.
+
+        🔴 **`views == 0` 을 미도착(None)으로 읽는다** (2026-09-18, WP-126).
+            -58 은 조회수 적재본이 없으면 `None` 이 아니라 **0** 을 낸다. 2단계 계약에서
+            그 0 을 액면대로 받으면 판정이 `REJECTED` 가 되고, 폐기는 다시 안 본다 —
+            조회수 원본이 나중에 도착해도 재판정 대상에서 빠진다. 반대로 미도착으로
+            읽으면 후보 대기로 남아 도착 시 다시 판정된다.
+
+            ⚠️ 진짜 "그 시간에 0회 조회" 와 구분이 안 되는 건 그대로다. 다만 진짜 0 이어도
+            확정 조건(`views >= 100`)을 못 넘으므로 **확정 결과는 안 바뀐다.** 바뀌는 건
+            "폐기냐 대기냐" 뿐이고, 둘 중에는 대기가 안전한 쪽이다.
+
+            이 애매함의 진짜 해결은 -58 이 미적재를 `None` 으로 내는 것이다 — 조회수
+            투입 경로(별건)에서 정리한다.
         """
         views = row.get("views")
+        if views == 0:
+            views = None
         end = row.get("window_end")
         return cls(
             wiki=row["wiki"],
@@ -156,6 +176,10 @@ class RuntimeSummary:
     """한 배치의 집계. 실행 로그·AC 확인용."""
     evaluated: int = 0
     detected: int = 0
+    #: 1단계(편집)는 통과했는데 조회수가 아직 안 온 윈도우. 저장하지 않는다.
+    #: 🔴 미탐과 섞어 세면 "조회수만 오면 잡힐 것" 과 "봤는데 아니었다" 가 구분되지
+    #: 않는다 (WP-126). 조회수 투입 경로가 설 때 이 수가 곧 재판정 대상이다.
+    pending_views: int = 0
     persisted: int = 0
     baseline_db: int = 0        # 두꺼운 기준선으로 z 경로를 탄 윈도우
     baseline_thin: int = 0      # 기준선은 있으나 sample_days < 7
@@ -172,14 +196,16 @@ class RuntimeSummary:
         self.evaluated += 1
         if outcome.decision.is_spike:
             self.detected += 1
+        elif outcome.decision.is_pending:
+            self.pending_views += 1
         if outcome.persisted:
             self.persisted += 1
         setattr(self, f"baseline_{outcome.baseline_source}",
                 getattr(self, f"baseline_{outcome.baseline_source}") + 1)
 
     def format(self) -> str:
-        return (f"윈도우 {self.evaluated:,} / 급증 {self.detected:,} / "
-                f"spike 적재 {self.persisted:,}  "
+        return (f"윈도우 {self.evaluated:,} / 확정 {self.detected:,} / "
+                f"조회수 대기 {self.pending_views:,} / spike 적재 {self.persisted:,}  "
                 f"[기준선 db {self.baseline_db:,} · 얇음 {self.baseline_thin:,} · "
                 f"없음 {self.baseline_absent:,}]")
 
@@ -207,7 +233,11 @@ class SpikeRuntime:
                                 decision=decision, persisted=False)
 
     def process(self, window: PageWindow) -> DetectionOutcome:
-        """판정하고, 급증이면 저장한다. 미탐은 저장하지 않는다."""
+        """판정하고, **확정이면** 저장한다.
+
+        미탐도 후보 대기도 저장하지 않는다 — `spike` 는 2단계까지 통과한 문서만 담는다
+        (WP-126). 후보 대기는 `RuntimeSummary.pending_views` 로만 센다.
+        """
         outcome = self.evaluate(window)
         if not (outcome.decision.is_spike and self._sink is not None):
             return outcome

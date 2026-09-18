@@ -269,21 +269,30 @@ def test_read_windows_reads_all_shards(tmp_path):
 
 
 def test_candidate_windows_counts_every_outcome(tmp_path):
+    """2단계 계약의 프리필터 (WP-126).
+
+    ~~편집 10건·편집자 2명 미달은 사전필터 탈락~~ → **1단계는 편집 1건이면 통과**다.
+    거르는 건 둘뿐이다: 편집 0건, 그리고 조회수가 도착했는데 절대 하한 미달.
+    """
     _write_shard(tmp_path, [
         _row("Loud", "2024-09-02T05:00:00", 40, editor_count=9),    # 통과
-        _row("Quiet", "2024-09-02T06:00:00", 2, editor_count=1),    # 사전필터 탈락
-        _row("Solo", "2024-09-02T07:00:00", 40, editor_count=1),    # 편집자 하한 탈락
+        _row("Quiet", "2024-09-02T06:00:00", 2, editor_count=1),    # 통과 — 편집 1건 이상
+        _row("Solo", "2024-09-02T07:00:00", 40, editor_count=1),    # 통과 — 편집자 하한 없음
+        _row("NoEdit", "2024-09-02T08:00:00", 0, editor_count=0),   # 1단계 탈락
+        _row("TinyViews", "2024-09-02T09:00:00", 5, views=30),      # 조회수 절대 하한 미달
         _row("Early", "2024-08-30T05:00:00", 40, editor_count=9),   # 구간 밖
     ])
     counts = BulkCounts()
     windows = list(candidate_windows(read_windows(tmp_path), counts,
                                      since=date(2024, 9, 1), until=date(2024, 9, 30)))
 
-    assert [w.title for w in windows] == ["Loud"]
-    assert counts.read == 4
+    assert [w.title for w in windows] == ["Loud", "Quiet", "Solo"]
+    assert counts.read == 6
     assert counts.out_of_range == 1
     assert counts.skipped_prefilter == 2
-    assert counts.earliest_window == counts.latest_window == "2024-09-02T05:00:00"
+    # 구간 표시는 **프리필터 통과분**만 갱신한다 — 탈락한 TinyViews(09:00)는 안 든다
+    assert counts.earliest_window == "2024-09-02T05:00:00"
+    assert counts.latest_window == "2024-09-02T07:00:00"
 
 
 def test_candidate_windows_takes_every_title(tmp_path):

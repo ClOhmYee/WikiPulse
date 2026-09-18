@@ -45,7 +45,16 @@ LIVE_WINDOW = datetime(2026, 9, 16, 4, tzinfo=UTC)
 SHARED_WINDOW = datetime(2026, 9, 16, 6, tzinfo=UTC)
 
 
-def save_spike(conn, *, source, title, window_start, edit_count, editor_count=4):
+#: 2단계 관문을 통과시키는 조회수 (WP-126). 기준선이 없는 문서라
+#: 절대 하한(`MIN_ABSOLUTE_VIEWS = 100`)만 넘으면 "0에서의 급등" 으로 확정된다.
+#: ⚠️ ~~`views=None`~~ 으로는 이제 아무것도 저장되지 않는다 — 조회수가 없으면
+#: 확정이 아니라 **후보 대기**다(명세 §3.2 3번). 이 픽스처는 클러스터 격리를
+#: 보려는 것이지 감지 계약을 보려는 게 아니라, 확정이 나게 값을 준다.
+CONFIRMING_VIEWS = 5_000
+
+
+def save_spike(conn, *, source, title, window_start, edit_count, editor_count=4,
+               views=CONFIRMING_VIEWS):
     """공식 런타임으로 spike 한 건. 판정을 통과하지 못하면 그 자리에서 실패시킨다.
 
     조용히 0건이 저장되면 뒤 단언이 "격리가 잘 됐다" 로 잘못 통과한다 — 입력이
@@ -54,7 +63,7 @@ def save_spike(conn, *, source, title, window_start, edit_count, editor_count=4)
     runtime = SpikeRuntime(BaselineRepository(conn), SpikeSink(conn, source=source))
     outcome = runtime.process(PageWindow(
         wiki="enwiki", title=title, window_start=window_start,
-        edit_count=edit_count, editor_count=editor_count, views=None,
+        edit_count=edit_count, editor_count=editor_count, views=views,
     ))
     assert outcome.persisted, (
         f"{source} spike 가 저장되지 않았다 — 판정: {outcome.decision.reason}")

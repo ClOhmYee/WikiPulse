@@ -183,9 +183,26 @@ def replay_title(
 
 
 def first_detection(results: Iterable[ReplayResult]) -> ReplayResult | None:
-    """가장 이른 급증 판정. '사건 시작 시점에 잡히는가'(미탐 없음)를 본다."""
+    """가장 이른 **확정**. '사건 시작 시점에 잡히는가'(미탐 없음)를 본다.
+
+    🔴 **조회수 없이 재생하면 항상 None 이다** (2026-09-18, WP-126).
+    2단계 계약에서 확정은 조회수 급등을 요구하는데 편집 덤프에는 조회수가 없다.
+    이 경로로 재현율을 재던 수치(WP-85: 10/12)는 더는 못 낸다 —
+    `first_candidate` 로 1단계 통과 시점만 볼 수 있다.
+    """
     for result in results:
         if result.decision.is_spike:
+            return result
+    return None
+
+
+def first_candidate(results: Iterable[ReplayResult]) -> ReplayResult | None:
+    """가장 이른 **후보**(1단계 통과, 조회수 대기). 편집 신호가 언제 섰는지 본다.
+
+    확정이 아니다. 조회수를 붙이기 전까지 리플레이로 볼 수 있는 건 여기까지다.
+    """
+    for result in results:
+        if result.decision.is_spike or result.decision.is_pending:
             return result
     return None
 
