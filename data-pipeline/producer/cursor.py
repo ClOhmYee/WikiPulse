@@ -18,7 +18,8 @@ class CursorStore:
             raise ValueError(f"cursor 파일을 읽을 수 없다: {self.path}") from exc
         if (
             not isinstance(payload, dict)
-            or payload.get("version") != 1
+            or type(payload.get("version")) is not int
+            or payload["version"] != 1
             or not isinstance(payload.get("event_id"), str)
             or not payload["event_id"]
         ):
