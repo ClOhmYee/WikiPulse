@@ -52,3 +52,6 @@ data-pipeline/data/
 artifacts/*.dump
 artifacts/*.sql
 artifacts/*.tar.gz
+
+#개인 문서
+docs/Yoon/
