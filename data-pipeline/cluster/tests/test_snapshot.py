@@ -44,10 +44,10 @@ def test_생성일_창_안의_이웃만_묶인다():
         # 진짜 사건 문서 — 사건일 +11일 생성, 창(±30) 안
         Neighbor(page_id=2, wiki="enwiki",
                  title="2025 Iran threat of Strait of Hormuz closure",
-                 clickstream_n=383, clickstream_month="2025-05", created_at=date(2025, 6, 23)),
+                 clickstream_n=383, clickstream_month="2025-05", created_at=datetime(2025, 6, 23, tzinfo=UTC)),
         # 배경 지리 문서 — 이동량은 30배 크지만(11,778) 2009년 생성, 창 밖
         Neighbor(page_id=3, wiki="enwiki", title="Choke point",
-                 clickstream_n=11778, clickstream_month="2025-05", created_at=date(2009, 1, 1)),
+                 clickstream_n=11778, clickstream_month="2025-05", created_at=datetime(2009, 1, 1, tzinfo=UTC)),
     ]}
     snap = build_snapshot(_dt(2025, 6, 12, 5), "live", [seed], neighbors)
 
@@ -62,12 +62,14 @@ def test_이동량은_문턱이_아니라_weight로만_쓴다():
     seed = _seed()
     neighbors = {1: [
         Neighbor(page_id=2, wiki="enwiki", title="Low traffic sibling",
-                 clickstream_n=10, clickstream_month="2025-05", created_at=date(2025, 6, 15)),
+                 clickstream_n=10, clickstream_month="2025-05", created_at=datetime(2025, 6, 15, tzinfo=UTC)),
     ]}
     cluster = build_snapshot(_dt(2025, 6, 16), "live", [seed], neighbors).clusters[0]
     nb = next(m for m in cluster.members if m.page_id == 2)
     assert nb.weight == 10.0
-    assert nb.is_seed is False
+    # 🔴 생성일 창을 통과한 이웃은 **추가 씨드**다 (명세 v0.3 §3.2 4번, -115).
+    #    `is_seed=false` 자리는 -77 재급증 문서 몫이고 이 모듈은 그 경로를 안 만든다.
+    assert nb.is_seed is True
 
 
 def test_생성일_미상_이웃은_포함하지_않는다():
@@ -93,12 +95,16 @@ def test_씨드는_지표와_sizeScore를_고정한다():
     assert 0 < m.size_score < 1
 
 
-def test_비씨드_멤버는_sizeScore가_None이다():
-    """원시 급증 점수가 없으니 None. 화면은 작은 점선 노드로 그린다(0과 구분)."""
+def test_추가_씨드_멤버는_sizeScore가_None이다():
+    """원시 급증 점수가 없으니 None. 화면은 작은 점선 노드로 그린다(0과 구분).
+
+    추가 씨드는 detector 를 직접 통과한 문서가 아니라 급증 수치 자체가 없다 —
+    `is_seed=true` 라고 해서 루트 씨드와 같은 지표를 갖는 것이 아니다.
+    """
     seed = _seed()
     neighbors = {1: [Neighbor(page_id=2, wiki="enwiki", title="Sibling",
                               clickstream_n=200, clickstream_month="2025-05",
-                              created_at=date(2025, 6, 20))]}
+                              created_at=datetime(2025, 6, 20, tzinfo=UTC))]}
     cluster = build_snapshot(_dt(2025, 6, 21), "live", [seed], neighbors).clusters[0]
     nb = next(m for m in cluster.members if m.page_id == 2)
     assert nb.size_score is None
@@ -155,7 +161,7 @@ def test_clickstream_간선은_방향과_월근거를_갖는다():
     seed = _seed()
     neighbors = {1: [Neighbor(page_id=2, wiki="enwiki", title="Sibling",
                               clickstream_n=383, clickstream_month="2025-05",
-                              created_at=date(2025, 6, 20), directed=True)]}
+                              created_at=datetime(2025, 6, 20, tzinfo=UTC), directed=True)]}
     cluster = build_snapshot(_dt(2025, 6, 21), "live", [seed], neighbors).clusters[0]
     e = next(e for e in cluster.edges if e.kind == "clickstream")
     assert (e.source_page_id, e.target_page_id) == (1, 2)
@@ -169,7 +175,7 @@ def test_wikidata_간선은_멤버_사이에만_점선으로():
     seed = _seed()
     neighbors = {1: [Neighbor(page_id=2, wiki="enwiki", title="Member",
                               clickstream_n=383, clickstream_month="2025-05",
-                              created_at=date(2025, 6, 20))]}
+                              created_at=datetime(2025, 6, 20, tzinfo=UTC))]}
     wikidata = {1: [
         WikidataRelation(target_page_id=2, label="P361 부분", observed_at=_dt(2026, 9, 11)),
         # page 9 는 멤버가 아니다 — 간선을 만들면 안 된다
@@ -191,7 +197,7 @@ def test_같은_문서가_두_클러스터에_한_번씩():
     s1 = _seed(page_id=1, title="Seed A", event=date(2025, 6, 12))
     s2 = _seed(page_id=5, title="Seed B", event=date(2025, 6, 12))
     shared = Neighbor(page_id=2, wiki="enwiki", title="Shared", clickstream_n=100,
-                      clickstream_month="2025-05", created_at=date(2025, 6, 15))
+                      clickstream_month="2025-05", created_at=datetime(2025, 6, 15, tzinfo=UTC))
     snap = build_snapshot(_dt(2025, 6, 16), "live", [s1, s2],
                           {1: [shared], 5: [shared]})
     assert snap.cluster_count == 2

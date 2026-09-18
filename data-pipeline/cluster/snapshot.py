@@ -2,31 +2,44 @@
 
 Spark·DB 없이 테스트된다. 실 데이터 소스는 driver.py 가 배선한다.
 
-클러스터링 게이트 (명세 §3.2 4번, §11 실측 — WP-51 확정)
-    씨드 멤버 = 급증 판정(detector.py)을 직접 통과한 문서. 각 씨드가 한 클러스터를 연다.
-    비-씨드 멤버 = 씨드의 Clickstream 이웃(월별 덤프, n>=10) 중 **문서 생성일이
-        씨드 사건일 ±창(기본 30일) 안**인 문서. 생성일 근접이 곧 시간 동시성이다
-        (신규 사건 문서는 baseline 이 없어 절대 편집수로 이미 급증 판정을 통과한다).
+클러스터링 게이트 (명세 v0.3 §3.2 4번, §11 실측 — WP-51·77)
+    루트 씨드(`is_seed=true`) = 급증 판정(detector.py)을 직접 통과한 문서.
+        각 루트 씨드가 한 클러스터를 연다.
+    추가 씨드(`is_seed=true`) = 루트 씨드의 Clickstream 이웃(월별 덤프, n>=10) 중
+        **문서 생성 시각이 씨드 사건일 ±창(기본 30일) 안**인 **새 사건 문서**.
+        생성일 근접이 곧 시간 동시성이다 — 신규 사건 문서는 baseline 이 없어
+        절대 편집수만으로 이미 급증 판정을 통과할 문서이고, 그래서 배경이 아니라
+        사건 자체다. 이 모듈이 배선하는 경로는 여기까지다.
+    ⚠️ 비-씨드(`is_seed=false`) = 오래전 생성된 이웃 중 사건기간 편집 재급증
+        비율 >= 5 AND 절대 편집 >= 20 인 문서(WP-77). **이 모듈에 없다.**
+        재급증 입력 자체를 안 받는다 — 규칙을 여기서 흉내 내지 않는다.
+
+    🔴 ~~생성일 창을 통과한 이웃을 `is_seed=false` 로 저장~~ → **`true`**
+        (2026-09-18, -115). 한 칸에 성격이 정반대인 둘이 섞여 있었다. 생성일 창을
+        통과한 문서는 사건 **때문에 새로 생긴** 문서고, -77 문서는 사건 **이전부터
+        있던 배경** 문서다. 같은 값으로 저장하면 화면도 API 도 "이 문서가 사건
+        자체인가, 사건이 끌어온 배경인가"를 구분할 수 없다.
     Clickstream 값에 별도 문턱을 두지 않는다 — 덤프 하한(n>=10)만. 절대 이동량으로는
         "같은 이슈"와 "배경 지식"이 안 갈린다(§11: Hormuz 배경 문서가 사건 문서보다
         30배 더 클릭됨). 포함 여부는 생성일 창이 정하고, n 은 weight 로만 쓴다.
 
-🔴 **근거 월(`Neighbor.clickstream_month`)의 의미는 출처마다 다르다** (2026-09-17, -115).
-    ~~"선택 스냅샷 이전 월이어야 한다"~~ — 그렇게만 적어 둬서 한 값인 줄 알았는데,
-    리플레이와 LIVE 가 실제로 쓸 수 있는 달이 다르다. 이 모듈은 월을 고르지 않는다
-    (`cluster/driver.clickstream_month_for` 가 고른다). 아래는 그 구분의 근거다.
+🔴 **근거 월(`Neighbor.clickstream_month`)은 스냅샷 월보다 앞선 완료 월이다**
+    (2026-09-18 정정, -115). 이 모듈은 월을 고르지 않는다
+    (`cluster/driver.clickstream_month_for` 가 고른다). 아래는 그 계약의 근거다.
 
-    replay → **사건월**(스냅샷이 속한 달). 과거 재생이라 그 달 덤프가 이미 나와 있다.
-        `-51` 이 실측에 쓴 것도 이 달이고(Milton 2024-10 사건에 2024-10 덤프),
-        -115 가 61일 전체로 재확인했다: 씨드 덤프 적중 83.7% vs 전월 66.6%,
-        2+ 멤버 클러스터 34.1% vs 17.7%. 대표 사건 3건(Milton·Helene·Yagi)은
-        **전월 규칙에서 이웃이 0개**다 — 씨드 문서가 그 달에 아직 없었다.
+    ~~"replay 는 사건월, LIVE 는 전월"~~ — 출처마다 다른 값인 줄 알았는데 아니다.
+        명세 v0.3 §3.2 4번이 **리플레이에도 같은 event-time 계약**을 건다:
+        "`clickstream_month` 는 스냅샷 월보다 앞선 데이터 기간이어야 한다 … 이 판단은
+        원본의 데이터 기간 기준이고 로컬 적재 시각 기준은 아니다. 따라서 과거 원본을
+        나중에 적재하는 리플레이도 같은 event-time 계약으로 계산할 수 있다."
+        "과거 재생이라 그 달 덤프가 이미 나와 있다" 는 **적재 시각 논거**라 배제된다.
+        §11 도 `-51` 의 사건 당월 dump 실측에 "운영 당시에는 사용할 수 없던 당월
+        덤프를 월 종료 후 분석한 품질 검증이며, 해당 월 스냅샷 입력으로 사용했다는
+        뜻이 아니다" 를 달아 두었다.
 
-    live → **전월**. 당월 덤프는 그 달이 끝나야 나오므로 실시간에는 존재하지 않는다.
-        🔴 **그래서 사건월은 LIVE-equivalent 가 아니다.** 리플레이가 사건월을 쓴다고
-        해서 LIVE 도 같은 근거를 갖는다는 뜻이 아니다 — LIVE 경로에서 무엇을 쓸지는
-        아직 정해지지 않았고 **별도 후속 과제**다. 두 경로의 산출물을 비교할 때
-        이 비대칭을 먼저 확인한다.
+    사건월(`event`) 산출물은 **사후 QA / upper-bound 실험**이다. 배선이 이론상 최대
+        몇 멤버를 붙일 수 있는지 재는 값이지 제품 성능이 아니다. 인용 금지 사항은
+        `cluster/driver.CLICKSTREAM_MONTH_RULES` 에 수치와 함께 적어 두었다.
     Wikidata 관계는 게이트에서 빠졌다(§3.2 4번 — 속성 5종 전수 검사 실패). 화면 근거
         간선(점선)으로만 그린다.
     ⚠️ 기존 문서가 사건으로 재조명되는 비-씨드(예: Mojtaba_Khamenei, 2009 생성)는
@@ -42,7 +55,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 
 from .score import SCORE_VERSION, pulse_score, size_score
 
@@ -90,7 +103,7 @@ class Seed:
 
 @dataclass(frozen=True)
 class Neighbor:
-    """씨드의 Clickstream 이웃. 생성일 창을 통과하면 비-씨드 멤버가 된다."""
+    """루트 씨드의 Clickstream 이웃. 생성일 창을 통과하면 **추가 씨드** 멤버가 된다."""
     page_id: int
     wiki: str
     title: str
@@ -98,7 +111,9 @@ class Neighbor:
     # 근거 월 YYYY-MM. **어느 달을 쓰는지는 출처마다 다르다** — 아래 🔴 참고.
     # 이 모듈은 값을 받아 간선 근거 라벨로 실어 나를 뿐, 월을 고르지 않는다.
     clickstream_month: str
-    created_at: date | None     # 문서 생성일(mediawiki_history page_creation_timestamp).
+    # 문서 생성 시각. **timezone-aware UTC** 여야 한다 (2026-09-18, -115).
+    # 소스는 mediawiki_history page_creation_timestamp (`batch/page_creation`).
+    created_at: datetime | None
     directed: bool = True       # Clickstream 은 방향(씨드 -> 이웃) 이동이다.
 
 
@@ -174,15 +189,34 @@ def issue_key_of(source: str, seed: Seed) -> str:
     return f"{source}:{seed.wiki}:{seed.title}"
 
 
-def _within_creation_window(created_at: date | None, event_date: date, window_days: int) -> bool:
-    """문서 생성일이 사건일 ±창 안인가. 생성일 미상은 포함하지 않는다.
+def _as_utc(moment: datetime, field_name: str) -> datetime:
+    """timezone-aware 만 통과시키고 UTC 로 맞춘다 (2026-09-18, -115).
 
-    생성일을 못 구한 이웃은 게이트를 통과시키지 않는다 — 근거 없이 넣으면
+    🔴 naive 를 `.replace(tzinfo=utc)` 로 "고쳐" 주지 않는다. 그 순간 로컬 시각이
+    UTC 로 둔갑해 조용히 어긋난 값이 쌓인다 — KST 장비에서 9시간이다
+    (`streaming/live_spike.py` 가 경계에서 epoch 초로 건네는 것과 같은 이유).
+    """
+    if moment.tzinfo is None or moment.utcoffset() is None:
+        raise ValueError(f"{field_name} 은 timezone-aware 여야 한다: {moment!r}")
+    return moment.astimezone(timezone.utc)
+
+
+def _within_creation_window(
+    created_at: datetime | None, event_date: date, window_days: int
+) -> bool:
+    """문서 생성 시각이 사건일 ±창 안인가. 생성 시각 미상은 포함하지 않는다.
+
+    생성 시각을 못 구한 이웃은 게이트를 통과시키지 않는다 — 근거 없이 넣으면
     §11 에서 실측한 "넓어서 못 쓰는" 배경 문서 오염이 재발한다.
+
+    ⚠️ **판정 기준은 안 바뀌었다** (2026-09-18, -115). 입력 타입만 `date` 에서
+    tz-aware `datetime` 이 됐고, 비교는 여전히 UTC 날짜끼리 `±window_days` 다.
+    창 폭도 `DEFAULT_CREATION_WINDOW_DAYS` 그대로다.
     """
     if created_at is None:
         return False
-    return abs((created_at - event_date).days) <= window_days
+    created_date = _as_utc(created_at, "Neighbor.created_at").date()
+    return abs((created_date - event_date).days) <= window_days
 
 
 def _build_cluster(
@@ -229,9 +263,14 @@ def _build_cluster(
         included_page_ids.add(nb.page_id)
         members.append(Member(
             page_id=nb.page_id,
-            is_seed=False,
+            # 🔴 **추가 씨드다** (명세 v0.3 §3.2 4번). 생성일 창을 통과했다는 것은
+            #    사건 때문에 새로 생긴 문서라는 뜻이고, 그건 배경이 아니라 사건의
+            #    일부다. `false` 자리는 -77 재급증 문서 몫으로 비워 둔다.
+            is_seed=True,
             weight=float(nb.clickstream_n),
-            completeness="unavailable",       # 비-씨드는 시점 지표를 안 재고 관계로만 딸려온다
+            # 시점 지표(편집·조회수)는 이 경로에서 재지 않는다 — 관계로만 딸려온다.
+            # 루트 씨드와 달리 detector 를 직접 통과한 문서가 아니라서 급증 수치가 없다.
+            completeness="unavailable",
         ))
         edges.append(Edge(
             source_page_id=seed.page_id,

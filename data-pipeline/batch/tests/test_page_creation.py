@@ -1,4 +1,4 @@
-"""mediawiki_history → 생성일 인덱스 (WP-115).
+"""mediawiki_history → 생성 시각(UTC) 인덱스 (WP-115).
 
 덤프 행은 78컬럼이라 전부 적지 않고 `COLUMN_INDEX` 로 필요한 자리만 채운다 —
 컬럼이 하나 늘어도 이 테스트가 깨지지 않게 하려는 것이다(`test_normalize_dump.py` 와
@@ -7,9 +7,13 @@
 
 from __future__ import annotations
 
-from datetime import date
+import gzip
+import json
+from datetime import date, datetime, timedelta, timezone
 
 import pytest
+
+UTC = timezone.utc
 
 from batch.page_creation import (
     creation_dates_for,
@@ -40,13 +44,23 @@ def _line(**values) -> str:
 
 # --- 추출 -------------------------------------------------------------------
 
-def test_제목과_생성일을_뽑는다():
+def test_제목과_생성_시각을_뽑는다():
     row = _row(page_title_historical="Hurricane_Milton",
                page_creation_timestamp="2024-10-05 14:55:15.0")
     title, created, _event_at = creation_entry(row)
     # 덤프는 밑줄형, wiki_page·Clickstream 은 공백형이다 (WP-79).
     assert title == "Hurricane Milton"
-    assert created == date(2024, 10, 5)
+    # 🔴 날짜로 뭉개지 않는다 — 덤프 정밀도를 그대로 남긴다 (-115, 2026-09-18).
+    assert created == datetime(2024, 10, 5, 14, 55, 15, tzinfo=UTC)
+
+
+def test_생성_시각은_timezone_aware_UTC_다():
+    """naive 로 두면 소비하는 쪽이 로컬 시간대로 읽어 날짜가 하루 밀린다."""
+    row = _row(page_title_historical="Hurricane_Milton",
+               page_creation_timestamp="2024-10-05 14:55:15.0")
+    _title, created, event_at = creation_entry(row)
+    assert created.tzinfo is not None and created.utcoffset().total_seconds() == 0
+    assert event_at.tzinfo is not None and event_at.utcoffset().total_seconds() == 0
 
 
 def test_ns0_이_아니면_건너뛴다():
@@ -106,7 +120,7 @@ def test_revision_행에서도_생성일을_얻는다(tmp_path):
                          page_creation_timestamp="2005-07-07 15:31:37.0"))
     index, counts = {}, Counts()
     scan(source, index, counts)
-    assert index["Old Article"][0] == date(2005, 7, 7)
+    assert index["Old Article"][0] == datetime(2005, 7, 7, 15, 31, 37, tzinfo=UTC)
 
 
 def test_제목_충돌은_마지막_주인을_남기고_센다(tmp_path):
@@ -124,7 +138,7 @@ def test_제목_충돌은_마지막_주인을_남기고_센다(tmp_path):
                          event_timestamp="2024-09-28 00:00:00.0"))
     index, counts = {}, Counts()
     conflicts = scan(source, index, counts)
-    assert index["Hurricane Helene"][0] == date(2024, 9, 23)
+    assert index["Hurricane Helene"][0] == datetime(2024, 9, 23, 15, 15, 38, tzinfo=UTC)
     assert conflicts == 1
 
 
@@ -139,7 +153,7 @@ def test_충돌_판정은_행_순서와_무관하다(tmp_path):
     for order in ((late, early), (early, late)):
         index, counts = {}, Counts()
         scan(_dump(tmp_path, *order), index, counts)
-        assert index["Reused"][0] == date(2024, 9, 23)
+        assert index["Reused"][0] == datetime(2024, 9, 23, tzinfo=UTC)
 
 
 def test_같은_값이_반복되면_충돌이_아니다(tmp_path):
@@ -150,6 +164,7 @@ def test_같은_값이_반복되면_충돌이_아니다(tmp_path):
                          page_creation_timestamp="2024-09-01 12:00:00.0"))
     index, counts = {}, Counts()
     # 같은 날짜면 충돌이 아니다 — 시각이 달라도 날짜로 내려 비교한다.
+    # 저장은 시각까지 하지만(-115) 이 카운터는 "제목 주인이 바뀌었나" 만 센다.
     assert scan(source, index, counts) == 0
     assert counts.written == 1
 
@@ -157,21 +172,54 @@ def test_같은_값이_반복되면_충돌이_아니다(tmp_path):
 # --- 적재본 왕복 -------------------------------------------------------------
 
 def test_인덱스를_쓰고_되읽는다(tmp_path):
-    index = {"Hurricane Milton": date(2024, 10, 5), "Iran": date(2001, 10, 1)}
+    index = {"Hurricane Milton": datetime(2024, 10, 5, 14, 55, 15, tzinfo=UTC),
+             "Iran": datetime(2001, 10, 1, 3, 4, 5, tzinfo=UTC)}
     write_index(index, tmp_path / "out", shard_records=1)
     assert dict(read_index(tmp_path / "out")) == index
 
 
 def test_찾는_제목만_돌려준다(tmp_path):
     """인덱스가 수백만 행이라 통째로 올리지 않는다."""
-    write_index({"A": date(2024, 9, 1), "B": date(2024, 9, 2), "C": date(2024, 9, 3)},
+    write_index({"A": datetime(2024, 9, 1, tzinfo=UTC),
+                 "B": datetime(2024, 9, 2, tzinfo=UTC),
+                 "C": datetime(2024, 9, 3, tzinfo=UTC)},
                 tmp_path / "out", shard_records=500)
     assert creation_dates_for(tmp_path / "out", ["A", "C", "Missing"]) == {
-        "A": date(2024, 9, 1), "C": date(2024, 9, 3)}
+        "A": datetime(2024, 9, 1, tzinfo=UTC), "C": datetime(2024, 9, 3, tzinfo=UTC)}
 
 
 def test_없는_제목은_키_자체가_없다(tmp_path):
     """🔴 None 을 넣으면 "미상" 과 "창 밖" 이 구분되지 않는다 — 모듈 docstring ⚠️."""
-    write_index({"A": date(2024, 9, 1)}, tmp_path / "out", shard_records=500)
+    write_index({"A": datetime(2024, 9, 1, tzinfo=UTC)}, tmp_path / "out", shard_records=500)
     found = creation_dates_for(tmp_path / "out", ["A", "Missing"])
     assert "Missing" not in found
+
+
+# --- 타입 계약 (WP-115, 2026-09-18) ---------------------------------
+
+def test_naive_생성_시각은_적재를_거부한다(tmp_path):
+    """🔴 naive 를 UTC 로 "고쳐" 주면 로컬 시각이 UTC 로 둔갑해 조용히 어긋난다."""
+    with pytest.raises(ValueError, match="timezone-aware"):
+        write_index({"A": datetime(2024, 9, 1)}, tmp_path / "out", shard_records=500)
+
+
+def test_시간대_없는_옛_적재본은_읽기를_거부한다(tmp_path):
+    """자정으로 보정하면 실제보다 이른 시각이 되어 시점 상한을 잘못 통과시킨다.
+
+    ⚠️ 조용히 넘기면 안 되는 자리라 예외로 세운다 — 옛 적재본은 다시 만든다.
+    """
+    out = tmp_path / "out"
+    out.mkdir()
+    with gzip.open(out / "part-00000.jsonl.gz", "wt", encoding="utf-8") as handle:
+        print(json.dumps({"title": "A", "created": "2024-09-01"}), file=handle)
+    with pytest.raises(ValueError, match="옛 적재본"):
+        list(read_index(out))
+
+
+def test_다른_시간대로_줘도_UTC_로_저장된다(tmp_path):
+    kst = timezone(timedelta(hours=9))
+    # KST 2024-10-06 08:00 = UTC 2024-10-05 23:00
+    write_index({"A": datetime(2024, 10, 6, 8, tzinfo=kst)}, tmp_path / "out",
+                shard_records=500)
+    assert dict(read_index(tmp_path / "out")) == {
+        "A": datetime(2024, 10, 5, 23, tzinfo=UTC)}

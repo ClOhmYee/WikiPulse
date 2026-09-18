@@ -57,9 +57,9 @@ def hormuz(conn):
     neighbors = {seed_id: [
         Neighbor(page_id=event_id, wiki="enwiki",
                  title="2025 Iran threat of Strait of Hormuz closure",
-                 clickstream_n=383, clickstream_month="2025-05", created_at=date(2025, 6, 23)),
+                 clickstream_n=383, clickstream_month="2025-05", created_at=datetime(2025, 6, 23, tzinfo=UTC)),
         Neighbor(page_id=bg_id, wiki="enwiki", title="Choke point",
-                 clickstream_n=11778, clickstream_month="2025-05", created_at=date(2009, 1, 1)),
+                 clickstream_n=11778, clickstream_month="2025-05", created_at=datetime(2009, 1, 1, tzinfo=UTC)),
     ]}
     wikidata = {seed_id: [
         WikidataRelation(target_page_id=event_id, label="P361 부분",
@@ -85,18 +85,21 @@ def test_스냅샷_저장_왕복(conn, hormuz):
 
     cid = _one(conn, "SELECT id FROM issue_cluster WHERE source = 'live'")[0]
 
-    # 멤버: 씨드 + 사건 이웃만(배경 문서는 창 밖이라 빠짐)
+    # 멤버: 루트 씨드 + 사건 이웃(추가 씨드)만. 배경 문서는 창 밖이라 빠진다.
     members = _all(conn,
                    "SELECT page_id, is_seed, weight, size_score, completeness "
-                   "FROM cluster_member WHERE cluster_id = %s ORDER BY is_seed DESC", cid)
+                   "FROM cluster_member WHERE cluster_id = %s ORDER BY page_id", cid)
     ids = {m[0] for m in members}
     assert ids == {seed_id, event_id}
     assert bg_id not in ids
-    seed_row = next(m for m in members if m[1] is True)
+    # 🔴 둘 다 `is_seed=true` 다 (명세 v0.3 §3.2 4번, -115). 루트 씨드와 추가 씨드는
+    #    `is_seed` 로 갈리지 않고 지표 유무로 갈린다 — `is_seed=false` 자리는 -77 몫이다.
+    assert all(m[1] is True for m in members)
+    seed_row = next(m for m in members if m[0] == seed_id)
     assert seed_row[3] is not None and 0 < seed_row[3] < 1      # size_score 0~1
-    nb_row = next(m for m in members if m[1] is False)
+    nb_row = next(m for m in members if m[0] == event_id)
     assert nb_row[2] == 383.0                    # weight = clickstream n
-    assert nb_row[3] is None                     # 비-씨드 size_score None
+    assert nb_row[3] is None                     # 추가 씨드는 급증 점수가 없다
     assert nb_row[4] == "unavailable"
 
     # 간선: clickstream(방향·월) + wikidata(점선·관측시각)

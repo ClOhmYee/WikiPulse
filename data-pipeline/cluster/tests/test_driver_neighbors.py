@@ -89,8 +89,8 @@ def test_생성일_창을_통과한_이웃만_남는다(fake_conn):
         NeighborRef(title="Hurricane Milton tornado outbreak", n=5000, directed=True),
         NeighborRef(title="Choke point", n=11778, directed=True),      # 오래된 배경 문서
     ]}
-    created = {"Hurricane Milton tornado outbreak": date(2024, 10, 9),
-               "Choke point": date(2009, 1, 1)}
+    created = {"Hurricane Milton tornado outbreak": datetime(2024, 10, 9, tzinfo=UTC),
+               "Choke point": datetime(2009, 1, 1, tzinfo=UTC)}
     stats = NeighborStats()
 
     result = neighbors_for_snapshot(
@@ -112,7 +112,7 @@ def test_생성일_미상과_창_밖을_따로_센다(fake_conn):
     ]}
     stats = NeighborStats()
     neighbors_for_snapshot(
-        fake_conn, [_seed("Hurricane Milton")], refs, {"Old Page": date(2009, 1, 1)},
+        fake_conn, [_seed("Hurricane Milton")], refs, {"Old Page": datetime(2009, 1, 1, tzinfo=UTC)},
         "2024-10", creation_window_days=DEFAULT_CREATION_WINDOW_DAYS, stats=stats)
 
     assert stats.creation_missing == 1
@@ -136,7 +136,8 @@ def test_게이트를_통과한_이웃만_page_id_를_받는다(fake_conn):
         NeighborRef(title="New", n=10, directed=True),
         NeighborRef(title="Old", n=99999, directed=True),
     ]}
-    created = {"New": date(2024, 10, 9), "Old": date(2001, 1, 1)}
+    created = {"New": datetime(2024, 10, 9, tzinfo=UTC),
+               "Old": datetime(2001, 1, 1, tzinfo=UTC)}
     neighbors_for_snapshot(
         fake_conn, [_seed("Hurricane Milton")], refs, created, "2024-10",
         creation_window_days=DEFAULT_CREATION_WINDOW_DAYS, stats=NeighborStats())
@@ -161,7 +162,8 @@ def test_월_규칙에_따라_다른_적재본을_읽는다(tmp_path, fake_conn)
         directory.mkdir(parents=True)
         with gzip.open(directory / "part-00000.jsonl.gz", "wt", encoding="utf-8") as h:
             h.write(json.dumps({"prev": "Hurricane Milton", "curr": neighbor, "n": 500}) + "\n")
-    write_index({"September Thing": date(2024, 10, 1), "October Thing": date(2024, 10, 9)},
+    write_index({"September Thing": datetime(2024, 10, 1, tzinfo=UTC),
+                 "October Thing": datetime(2024, 10, 9, tzinfo=UTC)},
                 tmp_path / "creation", shard_records=100)
 
     fake_conn.seed_titles = {"enwiki": {"Hurricane Milton"}}
@@ -178,9 +180,10 @@ def test_월_규칙에_따라_다른_적재본을_읽는다(tmp_path, fake_conn)
 
 
 def test_생성일은_인덱스에서_온다(tmp_path):
-    write_index({"Iran": date(2001, 10, 1)}, tmp_path / "creation", shard_records=100)
+    write_index({"Iran": datetime(2001, 10, 1, tzinfo=UTC)}, tmp_path / "creation",
+                shard_records=100)
     assert load_creation_dates(tmp_path / "creation", ["Iran", "Nope"]) == {
-        "Iran": date(2001, 10, 1)}
+        "Iran": datetime(2001, 10, 1, tzinfo=UTC)}
 
 
 # --- 대역 ------------------------------------------------------------------

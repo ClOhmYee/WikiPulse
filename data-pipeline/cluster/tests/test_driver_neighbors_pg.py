@@ -1,7 +1,7 @@
-"""Clickstream 이웃 → 비-씨드 멤버 → cluster_edge 관통 (WP-115).
+"""Clickstream 이웃 → 추가 씨드 멤버 → cluster_edge 관통 (WP-115).
 
 진짜 PostgreSQL(pgserver)에 쓴다. `test_driver_neighbors.py` 는 게이트·월 선택까지만
-보고, "실제로 `is_seed=false` 행과 `cluster_edge` 행이 저장된다"·"두 번 돌려도 안
+보고, "실제로 `is_seed=true` 추가 씨드 행과 `cluster_edge` 행이 저장된다"·"두 번 돌려도 안
 늘어난다"·"replay 가 live 를 안 건드린다" 는 실 DB 가 있어야 확인된다.
 
 conftest.py 가 db/migrations 전체를 올린 커넥션을 준다. 테스트마다 롤백한다.
@@ -31,6 +31,8 @@ SEED_TITLE = "Hurricane Milton"
 NEW_NEIGHBOR = "Hurricane Milton tornado outbreak"
 #: 이동량은 훨씬 큰데 오래된 배경 문서. 창 밖이라 탈락해야 한다 (§11).
 OLD_NEIGHBOR = "Tropical cyclone"
+#: 사건 전(직전 월)에 이미 생긴 같은 사건 문서. `previous` 규칙에서 붙는 모양이다.
+SEPT_NEIGHBOR = "Hurricane Helene"
 
 
 def _page(conn, title: str, wiki: str = "enwiki") -> int:
@@ -74,11 +76,36 @@ def neighbor_source(tmp_path):
             {"prev": SEED_TITLE, "curr": NEW_NEIGHBOR, "n": 5000}) + "\n")
         handle.write(json.dumps(
             {"prev": SEED_TITLE, "curr": OLD_NEIGHBOR, "n": 90000}) + "\n")
-    write_index({NEW_NEIGHBOR: date(2024, 10, 9), OLD_NEIGHBOR: date(2003, 4, 1)},
+    write_index({NEW_NEIGHBOR: datetime(2024, 10, 9, tzinfo=UTC),
+                 OLD_NEIGHBOR: datetime(2003, 4, 1, tzinfo=UTC)},
                 tmp_path / "creation", shard_records=100)
-    # 근거 월 = 사건월. 이 픽스처는 배선을 보는 것이라 규칙 자체는 인자로 고정한다.
+    # 근거 월 = 사건월(`event`). ⚠️ **제품 규칙이 아니다** — 사후 QA 전용이고,
+    # 여기서는 "덤프 월과 스냅샷 월이 같을 때도 배선이 이어지는가" 만 본다.
+    # 제품 규칙(`previous`) 관통은 아래 `neighbor_source_previous` 가 본다.
     return MonthlyNeighborSource(
         tmp_path / "clickstream", tmp_path / "creation", "event")
+
+
+@pytest.fixture
+def neighbor_source_previous(tmp_path):
+    """제품 규칙(`previous`) 관통용 — 직전 월 덤프에 이미 있던 이웃.
+
+    사건 하루 전후에 생긴 문서만 이웃이 되는 것이 아니다. 사건일 ±창 안이면서
+    **직전 월 덤프에 이미 행이 있는** 문서가 제품 경로에서 실제로 붙는 모양이다
+    (Helene 이 10월 스냅샷에서 2024-09 덤프로 붙는 것과 같은 구조).
+    """
+    directory = tmp_path / "clickstream" / "enwiki" / "2024-09"
+    directory.mkdir(parents=True)
+    with gzip.open(directory / "part-00000.jsonl.gz", "wt", encoding="utf-8") as handle:
+        print(json.dumps(
+            {"prev": SEED_TITLE, "curr": SEPT_NEIGHBOR, "n": 4200}), file=handle)
+        print(json.dumps(
+            {"prev": SEED_TITLE, "curr": OLD_NEIGHBOR, "n": 90000}), file=handle)
+    write_index({SEPT_NEIGHBOR: datetime(2024, 9, 20, 7, 30, tzinfo=UTC),
+                 OLD_NEIGHBOR: datetime(2003, 4, 1, tzinfo=UTC)},
+                tmp_path / "creation", shard_records=100)
+    return MonthlyNeighborSource(
+        tmp_path / "clickstream", tmp_path / "creation", "previous")
 
 
 @pytest.fixture
@@ -128,17 +155,19 @@ def test_빈_입력은_DB_를_안_친다(conn):
 
 # --- 관통 --------------------------------------------------------------------
 
-def test_비씨드_멤버와_간선이_저장된다(conn, milton, neighbor_source):
+def test_추가_씨드_멤버와_간선이_저장된다(conn, milton, neighbor_source):
     run(conn, "replay", snapshot_times=[SNAP1], neighbor_source=neighbor_source)
 
+    # 🔴 `is_seed DESC` 로는 못 가른다 — 루트 씨드와 추가 씨드가 둘 다 true 다.
     members = _all(conn,
                    "SELECT p.title, m.is_seed, m.weight, m.completeness "
                    "FROM cluster_member m JOIN wiki_page p ON p.id = m.page_id "
-                   "ORDER BY m.is_seed DESC")
+                   "ORDER BY p.title")
     assert len(members) == 2
     assert members[0] == (SEED_TITLE, True, 1.0, "pending")
-    # 비-씨드는 시점 지표를 안 재고 관계로만 딸려온다. weight 는 Clickstream 이동량.
-    assert members[1] == (NEW_NEIGHBOR, False, 5000.0, "unavailable")
+    # 추가 씨드는 시점 지표를 안 재고 관계로만 딸려온다. weight 는 Clickstream 이동량.
+    # `is_seed=true` 는 "사건 때문에 새로 생긴 문서" 라는 뜻이지 지표가 있다는 뜻이 아니다.
+    assert members[1] == (NEW_NEIGHBOR, True, 5000.0, "unavailable")
 
     edges = _all(conn,
                  "SELECT kind, directed, weight, evidence_label, evidence_month "
@@ -191,3 +220,27 @@ def test_이웃을_안_주면_씨드_단독이다(conn, milton):
     run(conn, "replay", snapshot_times=[SNAP1])
     assert _count(conn, "cluster_member") == 1
     assert _count(conn, "cluster_edge") == 0
+
+def test_previous_규칙도_추가_씨드까지_이어진다(conn, milton, neighbor_source_previous):
+    """제품 규칙 관통 — 직전 월 덤프 → 창 통과 → is_seed=true → cluster_edge.
+
+    `event` 경로와 같은 계약이 나와야 한다. 다른 것은 어느 달 덤프를 읽었는지뿐이다.
+    """
+    run(conn, "replay", snapshot_times=[SNAP1],
+        neighbor_source=neighbor_source_previous)
+
+    members = _all(conn,
+                   "SELECT p.title, m.is_seed, m.weight, m.completeness "
+                   "FROM cluster_member m JOIN wiki_page p ON p.id = m.page_id "
+                   "ORDER BY p.title")
+    assert members == [
+        (SEPT_NEIGHBOR, True, 4200.0, "unavailable"),
+        (SEED_TITLE, True, 1.0, "pending"),
+    ]
+    # 이동량 90,000 짜리 배경 문서(2003 생성)는 창 밖이라 안 들어온다.
+    assert OLD_NEIGHBOR not in {title for title, *_ in members}
+
+    edges = _all(conn,
+                 "SELECT kind, directed, weight, evidence_label, evidence_month "
+                 "FROM cluster_edge")
+    assert edges == [("clickstream", True, 4200.0, "Clickstream 2024-09", "2024-09")]

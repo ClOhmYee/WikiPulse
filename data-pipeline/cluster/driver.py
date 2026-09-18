@@ -4,7 +4,7 @@
     python -m cluster.driver --dsn "$DATABASE_URL" --source live
     python -m cluster.driver --dsn ... --source replay --snapshot-ts 2024-10-07T14:00:00Z
     python -m cluster.driver --dsn ... --source replay \
-        --clickstream-root ./data/clickstream --clickstream-month-rule event \
+        --clickstream-root ./data/clickstream --clickstream-month-rule previous \
         --creation-index ./data/page-creation/enwiki/2024-09_2024-10
     python -m cluster.driver --dsn ... --source live --dry-run
 
@@ -15,13 +15,15 @@
 배선된 것 / 아직 아닌 것 (~~WP-99~~ → -115, 2026-09-17)
     ✅ 씨드: `spike` + `wiki_page` 조인 → `load_seeds_from_spike`
     ✅ 이전 first_detected_at: `issue_cluster` 의 issue_key 별 min → `load_prior_first_detected`
-    ✅ Clickstream 이웃(비-씨드): `MonthlyNeighborSource` → `--clickstream-root` (-115)
-    ✅ 문서 생성일: `batch/page_creation` 인덱스 → `--creation-index` (-115)
+    ✅ Clickstream 이웃(추가 씨드): `MonthlyNeighborSource` → `--clickstream-root` (-115)
+    ✅ 문서 생성 시각(UTC): `batch/page_creation` 인덱스 → `--creation-index` (-115)
     ✅ 이웃 제목 → page_id: `load_pages_by_title` (-115). 없는 문서는 등록한다
     ⛔ Wikidata 점선 간선: 선택 사항. 없으면 안 그린다.
 
-    🔴 **비-씨드 경로는 여전히 생성일 창(-51) 하나뿐이다.** "기존 문서가 사건으로
-      재조명되는" 비-씨드(WP-77: 재급증 비율 >= 5 AND 절대 편집 >= 20)는
+    🔴 **이웃 경로는 여전히 생성일 창(-51) 하나뿐이다.** 그 창을 통과한 이웃은
+      명세 v0.3 §3.2 4번의 **추가 씨드(`is_seed=true`)** 로 저장한다(2026-09-18 정정).
+      "기존 문서가 사건으로 재조명되는" 비-씨드
+      `is_seed=false`(WP-77: 재급증 비율 >= 5 AND 절대 편집 >= 20)는
       명세에만 있고 **코드에 없다** (2026-09-17 확인). `Mojtaba_Khamenei` 류는 아직
       멤버가 되지 않는다. 이 파일이 그 규칙을 대신 만들지 않는다.
 
@@ -79,7 +81,7 @@ import os
 import sys
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field as dataclass_field
-from datetime import date, datetime, timezone
+from datetime import datetime, timezone
 from pathlib import Path
 
 from batch.clickstream import NeighborRef, neighbors_for, read_shards
@@ -98,22 +100,42 @@ from .writer import persist_snapshot
 
 #: Clickstream 근거 월을 고르는 규칙 (WP-115).
 #:
-#:    `event`    : 스냅샷이 속한 달. **historical replay 가 쓴다** (2026-09-17 확정).
-#:    `previous` : 스냅샷 직전 달. LIVE 가 실제로 구할 수 있는 최신 덤프다.
+#:    `previous` : 스냅샷 직전 달. **제품 동작 검증은 이것만 쓴다.**
+#:                 그 시점에 실제로 구할 수 있었던 완료 월을 흉내 내는 로컬 regression 이다.
+#:    `event`    : 스냅샷이 속한 달. **제품 경로가 아니다** — 월이 끝난 뒤에야 나오는
+#:                 덤프를 사후에 쓰는 것이라 운영 당시에는 존재하지 않던 근거다.
+#:                 배선이 이론상 최대 몇 멤버까지 붙일 수 있는지 재는
+#:                 **사후 QA / upper-bound 실험** 용도로만 남겨 둔다.
+#:
+#: 🔴 **`event` 산출물을 제품 성능으로 인용하지 않는다** (2026-09-18 정정). 명세 v0.3
+#:    §3.2 4번은 `clickstream_month` 가 스냅샷 월보다 앞선 데이터 기간이어야 한다고
+#:    정했고, 그 판단은 "원본의 데이터 기간 기준이지 로컬 적재 시각 기준이 아니다" —
+#:    즉 과거 원본을 나중에 적재하는 리플레이에도 같은 계약이 걸린다. §11 도 사건
+#:    당월 dump 실측에 "운영 당시에는 사용할 수 없던 당월 덤프를 월 종료 후 분석한
+#:    품질 검증이며, 해당 월 스냅샷 입력으로 사용했다는 뜻이 아니다" 라고 달아 두었다.
 #:
 #: 🔴 **전역 기본값을 두지 않는다.** `--source` 를 `required` 로 둔 것과 같은 이유다
 #:    (아래 `require_spike_source` 🔴) — 기본값이 있으면 빠뜨린 실행이 **에러 없이**
-#:    다른 근거로 산출물을 만든다. 리플레이를 전월로 돌리면 대표 사건에서 이웃이
-#:    0개가 되는데(아래 실측) 그건 "이웃이 없는 시점" 과 구분되지 않는다.
+#:    다른 근거로 산출물을 만든다. 두 규칙의 결과 차이는 "이웃이 없는 시점" 과
+#:    구분되지 않는 형태로 나타난다.
 #:
-#: 🔴 **`event` 는 replay 결정이지 production 전역 의미가 아니다.** LIVE 는 당월 덤프를
-#:    구할 수 없으므로 `event` 를 쓸 수 없고, LIVE 가 무엇을 쓸지는 **별도 후속 과제**다.
-#:    리플레이 산출물을 LIVE-equivalent 로 부르지 않는다. 근거는 `snapshot.py` 🔴.
+#: ⚠️ **develop 의 `batch/clickstream.select_completed_month` 를 여기 복제하지 않았다.**
+#:    직전 월 미공개·검증 실패 시 최신 완료본으로 폴백하는 계약은 그쪽이 이미 갖고
+#:    있다. 규칙이 두 벌이 되면 한쪽만 바뀌어도 에러 없이 결과가 갈리므로, 통합은
+#:    develop 머지 때 한 번에 한다. 이 함수는 그때까지의 로컬 regression 스위치다.
 #:
-#: 실측 (61일 2024-09~10, -109 데이터, 2026-09-17):
-#:    event    씨드 덤프 적중 5,535/6,611(83.7%) · 2+ 멤버 클러스터 34.1% · edge 20,161
-#:    previous 씨드 덤프 적중 4,403/6,614(66.6%) · 2+ 멤버 클러스터 17.7% · edge  6,134
-#:    Milton·Helene·Yagi 는 previous 에서 이웃 0개 — 씨드 문서가 그 달에 없었다.
+#: 배선 regression 실측 (2024-09-01~11-01, 스냅샷 1,426 · 클러스터 6,614):
+#:    previous  비-루트 멤버  6,134 · 2+ 멤버 클러스터 17.7%   <- 제품 규칙
+#:    event     비-루트 멤버 20,161 · 2+ 멤버 클러스터 34.1%   <- 사후 QA upper bound
+#:    previous 에서 Milton 1 멤버 · Yagi 1 멤버(둘 다 이웃 0) · Helene 최대 6 멤버.
+#:    ~~"셋 다 이웃 0"~~ 은 틀린 서술이었다 (2026-09-18 DB 재확인) — Helene 은
+#:    사건일이 09-23 이라 10월 스냅샷의 직전 월(2024-09) 덤프에 이미 들어 있다.
+#:
+#: ⚠️ **이 수치는 탐지 성능 근거가 아니다.** 기반인 2024-09~10 replay seed 는
+#:    조회수를 적재하지 않고 옛 `편집 급증 OR 조회수` detector 로 만든 것이라
+#:    WP-109 매니페스트에서 폐기됐다. 현행 2단계 관문(-126)의 산출물이
+#:    아니므로 MVP 탐지 성능으로 인용하면 안 되고, **이웃 배선(-115) 자체가
+#:    끝까지 이어지는지 보는 regression 데이터**로만 쓴다.
 #:
 #: 임계값이 아니라 **입력 선택**이라 여기 두는 것이고, 게이트(`snapshot.py`)는 이 값을
 #: 보지 않는다. 월을 고르는 함수는 `clickstream_month_for` 하나다.
@@ -299,7 +321,8 @@ def load_prior_first_detected(conn, source: str) -> dict[str, datetime]:
 def clickstream_month_for(snapshot_ts: datetime, rule: str) -> str:
     """이 스냅샷의 근거가 될 Clickstream 월 `YYYY-MM`.
 
-    `previous` = 스냅샷 직전 달, `event` = 스냅샷이 속한 달 (`CLICKSTREAM_MONTH_RULES`).
+    `previous` = 스냅샷 직전 달(제품 규칙의 로컬 근사), `event` = 스냅샷이 속한 달
+    (사후 QA 전용). 각 규칙의 의미와 인용 금지 사항은 `CLICKSTREAM_MONTH_RULES` 참고.
 
     ⚠️ 시간대를 UTC 로 내린 뒤 월을 읽는다. naive 나 로컬 시각으로 읽으면 월초·월말
     스냅샷이 옆 달 덤프를 집는다 — 그 달 덤프가 있으면 에러 없이 이웃만 달라진다.
@@ -377,13 +400,13 @@ def build_neighbor_inputs(
     refs: list[NeighborRef],
     month: str,
     page_of_title: dict[str, tuple[int, str]],
-    created_of_page: dict[int, date | None],
+    created_of_page: dict[int, datetime | None],
 ) -> list[Neighbor]:
     """NeighborRef 를 cluster.snapshot.Neighbor 로 변환한다.
 
     page_of_title: 이웃 제목 → (page_id, wiki)   — wiki_page 조회(미배선)
-    created_of_page: page_id → 생성일             — mediawiki_history(WP-56, 미배선)
-    두 소스가 아직 없으면 그 이웃은 건너뛴다(생성일 미상은 게이트가 어차피 탈락시킨다).
+    created_of_page: page_id → 생성 시각(UTC)      — `batch/page_creation` (-115)
+    두 소스가 아직 없으면 그 이웃은 건너뛴다(생성 시각 미상은 게이트가 어차피 탈락시킨다).
     """
     out: list[Neighbor] = []
     for ref in refs:
@@ -407,7 +430,7 @@ def neighbors_for_snapshot(
     conn,
     seeds: Sequence[Seed],
     refs_by_title: dict[str, list[NeighborRef]],
-    created_of_title: dict[str, date],
+    created_of_title: dict[str, datetime],
     month: str,
     *,
     creation_window_days: int,
@@ -448,7 +471,7 @@ def neighbors_for_snapshot(
 
     # page_id 해석 — wiki 당 왕복 2회. 씨드마다 조회하지 않는다.
     page_of_title: dict[str, tuple[int, str]] = {}
-    created_of_page: dict[int, date | None] = {}
+    created_of_page: dict[int, datetime | None] = {}
     for wiki, titles in wanted.items():
         for title, page_id in load_pages_by_title(conn, wiki, titles).items():
             page_of_title[title] = (page_id, wiki)
@@ -491,7 +514,7 @@ class MonthlyNeighborSource:
         self.creation_window_days = creation_window_days
         self.stats = NeighborStats()
         self._refs: dict[str, dict[str, list[NeighborRef]]] = {}   # month -> seed -> refs
-        self._created: dict[str, date] = {}
+        self._created: dict[str, datetime] = {}
 
     def shards_dir(self, wiki: str, month: str) -> Path:
         """`clickstream_ingest` 출력 규칙: `{out}/{wiki}/{month}`."""
@@ -548,8 +571,10 @@ class MonthlyNeighborSource:
             creation_window_days=self.creation_window_days, stats=self.stats)
 
 
-def load_creation_dates(index_dir: str | Path, titles: Iterable[str]) -> dict[str, date]:
-    """`batch/page_creation` 인덱스에서 이웃 제목들의 생성일을 읽는다.
+def load_creation_dates(
+    index_dir: str | Path, titles: Iterable[str]
+) -> dict[str, datetime]:
+    """`batch/page_creation` 인덱스에서 이웃 제목들의 생성 시각(UTC)을 읽는다.
 
     ~~`raise NotImplementedError` 골격~~ → 배선됨 (WP-115).
     ~~`page_ids` 로 받는다~~ → **제목으로 받는다.** 소스(mediawiki_history)가 제목
@@ -570,7 +595,7 @@ def load_pages_by_title(
     ~~docstring 속 의사코드, 실제 함수 없음~~ → 구현됨 (WP-115).
 
     🔴 **등록이 필요하다.** `cluster_member.page_id` 가 FK 라 행이 없으면 멤버로
-    저장할 수 없는데, 사건 직후에 생긴 비-씨드 문서는 `wiki_page` 에 없다 — 그 테이블은
+    저장할 수 없는데, 사건 직후에 생긴 추가 씨드 문서는 `wiki_page` 에 없다 — 그 테이블은
     warm-up 기준선(2024-08)과 급증 문서로만 채워져 있기 때문이다. 등록을 안 하면
     **진짜 멤버가 조용히 전부 사라진다**(FK 오류도 안 난다 — 그 전에 걸러지므로).
 
@@ -697,11 +722,11 @@ def build_arg_parser() -> argparse.ArgumentParser:
     p.add_argument("--since", type=_parse_ts, help="시점 범위 시작(포함)")
     p.add_argument("--until", type=_parse_ts, help="시점 범위 끝(포함)")
     p.add_argument("--dry-run", action="store_true", help="저장 없이 생산만")
-    # Clickstream 이웃(비-씨드) 배선 — WP-115.
+    # Clickstream 이웃(추가 씨드) 배선 — WP-115.
     # 🔴 **기본이 꺼짐이다.** 적재본 없이 돌던 기존 운영(-109)이 이 변경으로
     #    갑자기 FileNotFoundError 를 내면 안 된다. 주면 켜고, 안 주면 씨드 단독이다.
     p.add_argument("--clickstream-root", default=os.environ.get("CLICKSTREAM_OUT", ""),
-                   help="clickstream_ingest 출력 루트. 주면 비-씨드 이웃을 배선한다 "
+                   help="clickstream_ingest 출력 루트. 주면 추가 씨드 이웃을 배선한다 "
                         "(기본 $CLICKSTREAM_OUT, 없으면 씨드 단독)")
     p.add_argument("--creation-index",
                    default=os.environ.get("PAGE_CREATION_OUT", ""),
@@ -711,8 +736,10 @@ def build_arg_parser() -> argparse.ArgumentParser:
     #    replay 는 event, LIVE 는 event 를 쓸 수 없다(당월 덤프가 없다). 자세한 근거는
     #    CLICKSTREAM_MONTH_RULES 와 snapshot.py 의 🔴 항목.
     p.add_argument("--clickstream-month-rule", choices=CLICKSTREAM_MONTH_RULES,
-                   help="근거 월 선택. replay 는 event(스냅샷이 속한 달)를 쓴다. "
-                        "previous(직전 달)는 LIVE 가 구할 수 있는 최신 덤프다. "
+                   help="근거 월 선택. 제품 동작 검증은 previous(직전 달)만 쓴다 — "
+                        "그 시점에 구할 수 있었던 완료 월의 로컬 근사다. "
+                        "event(스냅샷이 속한 달)는 월 종료 후 사후 QA·upper-bound "
+                        "실험 전용이며 제품 성능으로 인용하지 않는다. "
                         "--clickstream-root 를 주면 필수")
     return p
 
@@ -736,8 +763,8 @@ def main(argv: list[str] | None = None) -> int:
     #    "이웃이 없는 시점" 과 구분되지 않아 에러 없이 1-멤버 클러스터가 저장된다.
     if args.clickstream_root and not args.clickstream_month_rule:
         print("--clickstream-month-rule 을 명시한다 "
-              f"({'/'.join(CLICKSTREAM_MONTH_RULES)}). historical replay 는 event 다 — "
-              "LIVE 는 당월 덤프를 구할 수 없어 같은 값을 쓸 수 없다(후속 과제).",
+              f"({'/'.join(CLICKSTREAM_MONTH_RULES)}). 제품 동작 검증은 previous 다 — "
+              "event 는 월 종료 후에만 존재하는 덤프라 사후 QA 전용이다.",
               file=sys.stderr)
         return 2
 

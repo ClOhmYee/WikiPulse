@@ -1,4 +1,4 @@
-"""mediawiki_history 에서 `title -> 문서 생성일` 인덱스를 뽑는다. WP-115.
+"""mediawiki_history 에서 `title -> 문서 생성 시각(UTC)` 인덱스를 뽑는다. WP-115.
 
     python -m batch.page_creation --wiki enwiki --range 2024-09 --range 2024-10
     python -m batch.page_creation --wiki enwiki --range 2024-09 --dry-run   # 세기만
@@ -44,6 +44,14 @@
     문서를 가리킨다. 그러니 "이 제목이 지금 가리키는 문서" 가 맞는 해석이다.
     충돌 수는 매니페스트에 `title_conflicts` 로 남긴다.
 
+타입 계약 (2026-09-18 변경, WP-115)
+    적재본의 `created` 는 **timezone-aware UTC ISO-8601 문자열**이다
+    (`2024-10-05T12:34:56.000000+00:00`). ~~날짜(`2024-10-05`)~~ 에서 바꿨다 —
+    덤프가 마이크로초까지 주는데 자정으로 뭉개면 되돌릴 수 없고, 명세 v0.3 §3.2 4번의
+    시점 상한(`실제 생성 시각 <= snapshot_ts`)을 시 단위로 못 따진다.
+    🔴 `read_index` 는 시간대 없는 옛 적재본을 **거부한다.** 자정으로 보정하면
+    실제보다 이른 시각이 되어 상한을 통과하면 안 되는 문서가 통과한다.
+
 제목 정규화는 `producer/normalize.canonical_title` 하나를 쓴다 (WP-79·-91).
 덤프는 밑줄형이고 `wiki_page`·Clickstream 적재본은 공백형이다 — 여기서 맞춰야
 `(wiki, title)` 자연키가 갈라지지 않는다.
@@ -59,7 +67,7 @@ import shutil
 import sys
 import time
 from collections.abc import Iterable, Iterator
-from datetime import date, datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 from producer.normalize import ARTICLE_NAMESPACE, SkipEvent, canonical_title
@@ -75,8 +83,22 @@ DEFAULT_SNAPSHOT = "2026-08"
 DEFAULT_SHARD_RECORDS = 500_000
 
 
-def creation_entry(row) -> tuple[str, date, datetime]:
-    """덤프 행 하나에서 `(canonical 제목, 생성일, 이벤트 시각)` 을 꺼낸다.
+def _utc(raw: str) -> datetime:
+    """덤프 타임스탬프 -> timezone-aware UTC. 형식이 다르면 ValueError."""
+    return datetime.strptime(raw, DUMP_TIMESTAMP_FORMAT).replace(tzinfo=timezone.utc)
+
+
+def creation_entry(row) -> tuple[str, datetime, datetime]:
+    """덤프 행 하나에서 `(canonical 제목, 생성 시각, 이벤트 시각)` 을 꺼낸다.
+
+    🔴 **둘 다 timezone-aware UTC 다** (WP-115, 2026-09-18). 덤프 문자열에
+    시간대 표기가 없지만 mediawiki_history 는 UTC 로 적는다 — 같은 컬럼에
+    `batch/normalize_dump._parse_timestamp` 가 이미 같은 규칙을 쓴다. naive 로 두면
+    소비하는 쪽이 로컬 시간대로 해석해 날짜가 하루 밀리는데 예외가 안 난다.
+
+    ~~`moment.date()` 로 날짜만 남긴다~~ -> **덤프 정밀도를 그대로 보존한다.**
+    `DUMP_TIMESTAMP_FORMAT` 이 마이크로초까지라 자정으로 뭉개면 되돌릴 수 없고,
+    시점 정합성(생성 시각 <= snapshot_ts)을 시(hour) 단위로 못 따진다.
 
     이벤트 시각은 제목 충돌을 가를 때만 쓴다 — 어느 페이지가 그 제목을 **마지막으로**
     가졌는지 (모듈 docstring 🔴).
@@ -102,7 +124,7 @@ def creation_entry(row) -> tuple[str, date, datetime]:
     if not raw:
         raise SkipEvent("page_creation_timestamp 결측")
     try:
-        moment = datetime.strptime(raw, DUMP_TIMESTAMP_FORMAT)
+        moment = _utc(raw)
     except ValueError:
         # 덤프에 드물게 깨진 타임스탬프가 있다. 지어내지 않고 버린다.
         raise SkipEvent("page_creation_timestamp 형식")
@@ -111,15 +133,15 @@ def creation_entry(row) -> tuple[str, date, datetime]:
     if not raw_event:
         raise SkipEvent("event_timestamp 결측")
     try:
-        event_at = datetime.strptime(raw_event, DUMP_TIMESTAMP_FORMAT)
+        event_at = _utc(raw_event)
     except ValueError:
         raise SkipEvent("event_timestamp 형식")
 
-    return title, moment.date(), event_at
+    return title, moment, event_at
 
 
-def scan(source: Path, index: dict[str, tuple[date, datetime]], counts: Counts) -> int:
-    """덤프 하나를 훑어 `index` 에 `(생성일, 근거 이벤트 시각)` 을 채운다.
+def scan(source: Path, index: dict[str, tuple[datetime, datetime]], counts: Counts) -> int:
+    """덤프 하나를 훑어 `index` 에 `(생성 시각, 근거 이벤트 시각)` 을 채운다.
 
     반환: 제목 충돌 수. 500 MB 를 통째로 올리지 않으려고 줄 단위로 흘린다
     (`batch/ingest.convert` 와 같다).
@@ -144,8 +166,11 @@ def scan(source: Path, index: dict[str, tuple[date, datetime]], counts: Counts) 
                 counts.written += 1
                 continue
             seen_created, seen_at = seen
-            if seen_created != created:
-                # 이동·재생성으로 제목 주인이 바뀐 경우. 늦은 쪽이 현재 주인이다.
+            # ⚠️ 충돌 판정은 **날짜로 내려서** 한다. 저장은 시각까지 하지만(-115),
+            #    같은 문서의 두 revision 행은 같은 생성 시각을 줘야 정상인데 덤프에
+            #    초 단위 흔들림이 있으면 "주인이 바뀌었다" 로 오인된다. 이 카운터가
+            #    잡으려는 것은 이동·재생성으로 제목 주인이 바뀐 경우다.
+            if seen_created.date() != created.date():
                 conflicts += 1
             if event_at > seen_at:
                 index[title] = (created, event_at)
@@ -153,7 +178,8 @@ def scan(source: Path, index: dict[str, tuple[date, datetime]], counts: Counts) 
 
 
 def write_index(
-    index: dict[str, tuple[date, datetime] | date], out_dir: Path, shard_records: int
+    index: dict[str, tuple[datetime, datetime] | datetime], out_dir: Path,
+    shard_records: int,
 ) -> list[str]:
     """제목순으로 정렬해 JSONL.gz shard 로 쓴다.
 
@@ -163,15 +189,35 @@ def write_index(
     with ShardWriter(out_dir, shard_records) as writer:
         for title in sorted(index):
             entry = index[title]
-            # `scan` 은 (생성일, 근거 시각) 을 담지만 적재본에는 생성일만 남긴다 —
-            # 소비 쪽(창 게이트)이 쓰는 값이 그것뿐이라 근거 시각은 버린다.
+            # `scan` 은 (생성 시각, 충돌 판정용 근거 시각) 을 담지만 적재본에는
+            # 생성 시각만 남긴다 — 근거 시각은 제목 주인을 가릴 때만 쓴다.
             created = entry[0] if isinstance(entry, tuple) else entry
-            writer.write({"title": title, "created": created.isoformat()})
+            # 🔴 offset 을 붙여서 쓴다 — 읽는 쪽이 naive 를 거부하므로 여기서
+            #    빠뜨리면 적재본이 통째로 못 읽히는 쪽으로 터진다(조용하지 않다).
+            writer.write({"title": title, "created": _require_utc(created).isoformat()})
         return writer.shards
 
 
-def read_index(directory: str | Path) -> Iterator[tuple[str, date]]:
-    """적재본을 `(제목, 생성일)` 로 되읽는다. 소비는 `cluster/driver.py`."""
+def _require_utc(moment: datetime) -> datetime:
+    """timezone-aware 만 통과시키고 UTC 로 맞춘다.
+
+    🔴 naive 를 `.replace(tzinfo=utc)` 로 "고쳐" 주지 않는다. 그 순간 로컬 시각이
+    UTC 로 둔갑해 조용히 9시간(KST) 어긋난 값이 쌓인다 —
+    `streaming/live_spike.py` 가 epoch 초로 건네는 것과 같은 이유다.
+    """
+    if moment.tzinfo is None or moment.utcoffset() is None:
+        raise ValueError(f"생성 시각은 timezone-aware 여야 한다: {moment!r}")
+    return moment.astimezone(timezone.utc)
+
+
+def read_index(directory: str | Path) -> Iterator[tuple[str, datetime]]:
+    """적재본을 `(제목, 생성 시각 UTC)` 로 되읽는다. 소비는 `cluster/driver.py`.
+
+    ⚠️ **날짜만 있는 옛 적재본(`"2024-10-05"`)은 거부한다.** 자정으로 보정하면
+    실제 생성 시각보다 이르게 잡혀 시점 상한(`생성 시각 <= snapshot_ts`)이
+    통과하면 안 되는 문서를 통과시킨다 — 에러 없이 멤버가 늘어난다.
+    옛 적재본을 만났으면 `python -m batch.page_creation` 으로 다시 만든다.
+    """
     directory = Path(directory)
     for shard in sorted(directory.glob("part-*.jsonl.gz")):
         with gzip.open(shard, "rt", encoding="utf-8") as handle:
@@ -179,20 +225,31 @@ def read_index(directory: str | Path) -> Iterator[tuple[str, date]]:
                 if not line.strip():
                     continue
                 rec = json.loads(line)
-                yield rec["title"], date.fromisoformat(rec["created"])
+                raw = rec["created"]
+                try:
+                    moment = datetime.fromisoformat(raw)
+                except ValueError as bad:
+                    raise ValueError(
+                        f"{shard}: 생성 시각을 못 읽었다 ({raw!r})") from bad
+                if moment.tzinfo is None:
+                    raise ValueError(
+                        f"{shard}: 시간대 없는 옛 적재본이다 ({raw!r}). "
+                        "WP-115 에서 타입이 UTC datetime 으로 바뀌었다 — "
+                        "python -m batch.page_creation 으로 다시 만든다.")
+                yield rec["title"], moment.astimezone(timezone.utc)
 
 
 def creation_dates_for(
     directory: str | Path, titles: Iterable[str]
-) -> dict[str, date]:
-    """찾는 제목들의 생성일만 골라 돌려준다. 인덱스를 한 번만 순회한다.
+) -> dict[str, datetime]:
+    """찾는 제목들의 생성 시각(UTC)만 골라 돌려준다. 인덱스를 한 번만 순회한다.
 
     인덱스가 수백만 행이라 통째로 dict 에 올리지 않는다 — 후보 집합으로 거른다.
     없는 제목은 **키 자체가 없다**(None 을 넣지 않는다). 호출자가
     "미상" 과 "창 밖" 을 구분해 셀 수 있어야 하기 때문이다(모듈 docstring ⚠️).
     """
     wanted = set(titles)
-    found: dict[str, date] = {}
+    found: dict[str, datetime] = {}
     for title, created in read_index(directory):
         if title in wanted:
             found[title] = created
@@ -201,7 +258,7 @@ def creation_dates_for(
 
 def build_arg_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
-        description="mediawiki_history → title 별 문서 생성일 인덱스 (WP-115)")
+        description="mediawiki_history → title 별 문서 생성 시각(UTC) 인덱스 (WP-115)")
     p.add_argument("--wiki", default="enwiki")
     p.add_argument("--range", dest="ranges", action="append", required=True,
                    help="덤프 구간 YYYY-MM. 여러 번 줄 수 있다 (합쳐 한 인덱스가 된다)")
@@ -223,7 +280,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"이미 적재됨: {manifest} (건너뛴다)")
         return 0
 
-    index: dict[str, tuple[date, datetime]] = {}
+    index: dict[str, tuple[datetime, datetime]] = {}
     counts = Counts()
     conflicts = 0
     started = time.monotonic()
