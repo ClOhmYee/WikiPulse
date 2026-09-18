@@ -109,3 +109,27 @@ docker compose up -d postgres
 
 ⚠️ Docker Desktop(또는 Engine)이 필요하다. 작성 PC 에 Docker 를 설치해
 (4.90.0) 이 스택을 실제로 띄워 검증했다.
+
+## Spark 이미지 (WP-136)
+
+`docker/spark/Dockerfile` 이 Spark 잡 실행 이미지를 만든다 — `python:3.11-slim-bookworm`
++ JRE 17 + `pyspark==3.5.3` + `psycopg[binary]==3.3.5`.
+
+공식 `apache/spark:3.5.3-python3` 을 안 쓰는 이유는 그 이미지의 파이썬이 **3.8.10**
+(Ubuntu 20.04 focal)이라 `psycopg 3.3.5` 가 안 깔리고, 그래서 LIVE 의 `SINK=spike`
+경로가 아예 못 돌기 때문이다. focal 저장소에 3.11 이 없어 외부 PPA 를 붙이느니
+파이썬을 바닥으로 깔고 Spark 를 pip 로 올렸다 — 버전이 Dockerfile 한 곳에 모인다.
+
+    docker compose --profile pipeline build spark
+    SPARK_SINK=spike docker compose --profile pipeline up -d spark
+
+⚠️ **EC2 적용은 Driver 와 Worker 를 동시에 바꾼다.** 드라이버와 워커의 파이썬이 갈리면
+파이썬 워커가 뜨는 순간 executor 가 죽는다(CLAUDE.md 인프라 절). 순서:
+
+1. 두 EC2 에서 이 이미지를 빌드하거나 레지스트리로 옮긴다 (`~/infra/spark`)
+2. Worker → Master → Driver 순으로 교체하고 `spark-submit --version` 으로 파이썬을 확인한다
+3. `SINK=spike` 로 한 배치를 흘려 `spike_candidate` 에 행이 생기는지 본다
+
+🔴 `SINK=spike` 로 돌릴 때는 `SPARK_SLIDE_SIZE` 를 `SPARK_WINDOW_SIZE` 와 같게 둔다
+(compose 기본값이 그렇다). 조회수가 시간 버킷이라 정각 윈도우만 확정으로 간다 —
+5분 슬라이드면 대기가 12배로 쌓이고 11/12 는 만료될 때까지 자리만 차지한다.
