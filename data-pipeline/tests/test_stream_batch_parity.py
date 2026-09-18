@@ -41,7 +41,8 @@ from streaming.edit_windows import (  # noqa: E402
 )
 
 
-def edit(title, ts, user="alice", *, wiki="enwiki", is_bot=False, byte_delta=10):
+def edit(title, ts, user="alice", *, wiki="enwiki", is_bot=False, byte_delta=10,
+         rev_id=1):
     """producer/normalize.py · batch/normalize_dump.py 가 내보내는 형태.
 
     두 소스 모두 `event_ts` 를 Z 접미 UTC 로 낸다 (2026-09-15 실측: 덤프
@@ -54,7 +55,7 @@ def edit(title, ts, user="alice", *, wiki="enwiki", is_bot=False, byte_delta=10)
     """
     record = {
         "wiki": wiki, "domain": "en.wikipedia.org", "title": title,
-        "event_type": "edit", "rev_id": 1, "rev_parent_id": None,
+        "event_type": "edit", "rev_id": rev_id, "rev_parent_id": None,
         "byte_delta": byte_delta, "new_length": 100, "user": user,
         "is_minor": False, "event_ts": ts, "event_ts_ms": 0,
         "source": "test", "meta_id": f"test:{title}:{ts}:{user}",
@@ -116,14 +117,85 @@ def stream_windows(spark, events, **kwargs):
 
 
 def batch_windows(events):
-    """배치 경로 결과를 같은 모양으로."""
+    """배치 경로 결과를 같은 모양으로.
+
+    편집 수·편집자 수만 본다(`agg[:2]`). 시점 증거는 `batch_evidence` 가 따로 대조한다 —
+    한 헬퍼에 섞으면 값이 갈렸을 때 어느 축이 어긋났는지 안 보인다.
+    """
     return {
-        (wiki, title, hour): counts
-        for (wiki, title, hour), counts in aggregate_edits(events).items()
+        (wiki, title, hour): tuple(agg[:2])
+        for (wiki, title, hour), agg in aggregate_edits(events).items()
+    }
+
+
+def stream_evidence(spark, events, **kwargs):
+    """스트리밍 경로의 시점 증거 (V9, WP-129 2번).
+
+    타임스탬프는 Spark SQL 에서 문자열로 만든다 — collect() 로 datetime 을 꺼내면
+    드라이버 로컬 시간대로 밀린다(위 stream_windows 🔴와 같은 함정).
+    """
+    raw = spark.createDataFrame(
+        [(json.dumps(e, ensure_ascii=False),) for e in events], "value string")
+    parsed = (
+        raw.select(F.from_json(F.col("value"), EDIT_EVENT_SCHEMA).alias("e"))
+        .select("e.*")
+        .withColumn("event_ts", F.to_timestamp("event_ts"))
+    )
+    aggregated = (
+        aggregate_edit_windows(parsed, **kwargs)
+        .filter((F.minute("window_start") == 0) & (F.second("window_start") == 0))
+        .select(
+            "wiki",
+            "title",
+            F.date_format("window_start", "yyyy-MM-dd'T'HH:00:00").alias("hour"),
+            "max_rev_id",
+            F.date_format("last_edit_ts", "yyyy-MM-dd'T'HH:mm:ss").alias("last_edit"),
+        )
+    )
+    return {
+        (r["wiki"], r["title"], r["hour"]): (r["max_rev_id"], r["last_edit"])
+        for r in aggregated.collect()
+    }
+
+
+def batch_evidence(events):
+    """배치 경로의 같은 증거. 배치는 event_ts 문자열을 그대로 들고 있어 초까지 자른다."""
+    return {
+        key: (agg.max_rev_id, agg.last_edit_ts.replace("Z", "")[:19])
+        for key, agg in aggregate_edits(events).items()
     }
 
 
 # ---------------------------------------------------------------- 기본 대조
+
+def test_시점_증거도_양쪽이_같다(spark):
+    """🔴 증거가 두 경로에서 갈리면 감사 자체를 못 믿는다 (WP-129 2번).
+
+    같은 덤프를 배치로 재생한 값과 LIVE 로 흘린 값이 다르면, 어느 쪽 증거가 맞는지
+    판정할 수 없어 "무엇까지 보고 판정했나" 에 답이 둘 생긴다.
+    """
+    events = [
+        edit("Hurricane Milton", "2024-10-06T19:05:00.000Z", "alice", rev_id=1_000),
+        edit("Hurricane Milton", "2024-10-06T19:40:00.000Z", "bob", rev_id=1_250),
+        edit("Hurricane Milton", "2024-10-06T19:20:00.000Z", "carol", rev_id=1_100),
+    ]
+    assert stream_evidence(spark, events) == batch_evidence(events)
+
+    key = ("enwiki", "Hurricane Milton", "2024-10-06T19:00:00")
+    # 최대값이지 마지막에 들어온 값이 아니다 — 입력 순서와 무관해야 한다.
+    assert batch_evidence(events)[key] == (1_250, "2024-10-06T19:40:00")
+
+
+def test_봇_편집의_증거는_양쪽_다_빠진다(spark):
+    """봇은 집계에서 빠지므로 증거에서도 빠져야 한다. 한쪽만 빼면 편집 수는 같은데
+    증거만 갈린다 — 조용히 틀리는 쪽이다."""
+    events = [
+        edit("Cat", "2025-06-01T10:10:00.000Z", "human", rev_id=500),
+        edit("Cat", "2025-06-01T10:50:00.000Z", "bot", is_bot=True, rev_id=9_999),
+    ]
+    assert stream_evidence(spark, events) == batch_evidence(events)
+    assert batch_evidence(events)[("enwiki", "Cat", "2025-06-01T10:00:00")][0] == 500
+
 
 def test_같은_표본에_같은_편집수가_나온다(spark):
     events = [

@@ -149,7 +149,7 @@ class _RecordingSink:
         self.saved = []
 
     def save(self, *, wiki, title, window_start, detected_at, edit_count, decision,
-             views=None, view_baseline=None):
+             views=None, view_baseline=None, max_rev_id=None, last_edit_ts=None):
         self.saved.append((wiki, title, window_start, detected_at, edit_count,
                            astuple(decision)))
         return len(self.saved)

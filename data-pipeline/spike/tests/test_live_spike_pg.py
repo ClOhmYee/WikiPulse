@@ -98,6 +98,11 @@ def title(conn):
     conn.commit()
 
 
+#: 이벤트 revision id 의 시작값. 실제 enwiki 값 대역(12억대)을 쓴다 — INTEGER 로 잡으면
+#: 넘치는 크기라는 걸 눈에 보이게 하려는 것이다(spike.max_rev_id 는 BIGINT).
+FIRST_REV_ID = 1_295_198_200
+
+
 def edit_events(spark, title, *, count, editors, start=WINDOW_START):
     """편집 이벤트 DataFrame. `aggregate_edit_windows` 입력과 같은 형태다."""
     rows = [
@@ -109,11 +114,13 @@ def edit_events(spark, title, *, count, editors, start=WINDOW_START):
             "byte_delta": 100,
             # 윈도우 안에 고르게 흩는다.
             "event_ts": start + timedelta(minutes=(i % 55)),
+            # 시점 감사 증거의 입력 (V9, WP-129 2번). 실제 스트림에도 있는 필드다.
+            "rev_id": FIRST_REV_ID + i,
         }
         for i in range(count)
     ]
     return spark.createDataFrame(rows).select(
-        "wiki", "title", "user", "is_bot", "byte_delta",
+        "wiki", "title", "user", "is_bot", "byte_delta", "rev_id",
         F.col("event_ts").cast("timestamp").alias("event_ts"),
     )
 
@@ -189,8 +196,9 @@ def save_replay_spike(conn, title, *, edits):
 
 def test_집계_결과가_런타임_입력_컬럼을_낸다(spark):
     """`to_runtime_frame` 이 기대하는 컬럼이 실제 집계 출력에 다 있다."""
+    # last_edit_epoch·max_rev_id 는 시점 감사 증거다 (V9, WP-129 2번).
     required = {"wiki", "title", "window_start_epoch", "window_end_epoch",
-                "edit_count", "editor_count"}
+                "edit_count", "editor_count", "last_edit_epoch", "max_rev_id"}
 
     # 편집 스트림 그대로 — 조회수 컬럼이 없다. 없는 걸 만들어 내지 않는다.
     bare = to_runtime_frame(aggregated_batch(spark, "X", count=5, editors=2, views=None))
@@ -229,6 +237,27 @@ def test_마이크로배치가_source_live로_적재한다(spark, conn, title):
     # detected_at = 윈도우 끝. now() 가 아니다 — 재실행에도 안 흔들린다.
     assert detected_at == WINDOW_START + timedelta(hours=1)
     assert edit_count == MIN_ABSOLUTE_EDITS + 5
+
+
+def test_시점_증거가_spike에_같이_적재된다(spark, conn, title):
+    """무엇까지 보고 판정했는지 (V9, WP-129 2번).
+
+    🔴 이게 없으면 "이 구간 판정에 미래 편집이 안 섞였다" 를 나중에 보일 수가 없다.
+    덤프를 잘못 자르거나 구간이 겹쳐도 spike 행은 똑같이 생긴다.
+    """
+    count = MIN_ABSOLUTE_EDITS + 5
+    process_batch(conn, aggregated_batch(spark, title, count=count, editors=4), batch_id=0)
+
+    with conn.cursor() as cur:
+        cur.execute("SELECT s.max_rev_id, s.last_edit_ts, s.window_start, s.detected_at "
+                    "FROM spike s JOIN wiki_page p ON p.id = s.page_id "
+                    "WHERE p.wiki=%s AND p.title=%s", ("enwiki", title))
+        max_rev_id, last_edit_ts, window_start, detected_at = cur.fetchone()
+
+    # 이벤트는 rev_id 를 FIRST_REV_ID 부터 하나씩 올려 만든다 — 최대값이 마지막 것이다.
+    assert max_rev_id == FIRST_REV_ID + count - 1
+    # 자체 검증식: 마지막 편집은 윈도우 안에 있다 (detected_at = 윈도우 끝).
+    assert window_start <= last_edit_ts < detected_at
 
 
 def test_미탐은_저장하지_않는다(spark, conn, title):
