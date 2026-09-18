@@ -154,7 +154,8 @@ DB `CHECK` 제약과 **같은 값을 그대로** 쓴다. 번역하지 않는다.
     "summary": "…", "summaryModel": "claude-…",
     "members": [
       { "pageId": 901, "wiki": "enwiki", "title": "Strait of Hormuz",
-        "weight": 1.0, "isSeed": true, "editCount": 87, "views": 12043 }
+        "weight": 1.0, "isSeed": true, "editCount": 87, "views": 12043,
+        "completeness": "complete" }
     ],
     "relatedStocks": [ ]
   }
@@ -163,7 +164,8 @@ DB `CHECK` 제약과 **같은 값을 그대로** 쓴다. 번역하지 않는다.
 
 - `summary`는 `issue_report`. 아직 없으면 `null`. 운영 파이프라인의 생성·적재는 WP-119에서 구현한다. 현재 로컬 데모 값은 시드에서 생성한 요약이다.
 - `members`는 `weight` 내림차순. `isSeed=true`는 최종 급증 관문을 직접 통과한 루트 문서 또는 생성 시각 동시성으로 편입된 새 사건 문서다. `isSeed=false`는 Clickstream 이웃 중 사건기간 편집 재급증 기준을 통과한 기존 문서다. Wikidata 관계는 멤버 편입 사유가 아니다.
-- `members[].editCount/views`는 이 `cluster_id`가 가리키는 스냅샷에서 판정에 사용한 고정값이다. 아직 판정 입력이 없거나 원본이 없어서 `null`일 수 있지만, 최신 원시 테이블 값으로 대체하지 않는다. 지도 노드의 `completeness`가 수치의 상태를 구분한다.
+- `members[].editCount/views`는 이 `cluster_id`가 가리키는 스냅샷에서 판정에 사용한 고정값(`cluster_member`)이다. 아직 판정 입력이 없거나 원본이 없어서 `null`일 수 있지만, 최신 원시 테이블 값으로 대체하지 않는다. ~~최신 `page_edit_window`·`page_view_hourly` 한 행을 끌어왔다~~ → 고정값으로 전환 (2026-09-18, WP-129). 과거 스냅샷에 그 뒤의 수치가 붙던 결함이다.
+- `members[].completeness`는 그 `null`이 무슨 뜻인지 말한다 — `complete`(판정 끝) / `pending`(입력 대기) / `unavailable`(원본 없음). 지도 노드와 같은 어휘다. 둘 다 빈칸으로 보이면 사용자는 서비스가 고장 난 줄 안다.
 - `relatedStocks`는 아래 endpoint와 **같은 객체**이며, 상세 진입 시 왕복을 줄이려고 상위 5개만 미리 담는다. 전체는 아래로 부른다.
 
 ### `GET /api/v1/issues/{id}/stocks`
@@ -343,7 +345,7 @@ FE 공통 헤더용. 이슈·문서·종목을 한 번에.
 ## 8. 남은 MVP API 작업
 
 - `GET /api/v1/stocks/{ticker}/prices` — 종목 상세 주가 그래프용. 아직 컨트롤러·OpenAPI에 없고, 로컬 `stock_price`도 0건이다. WP-64는 적재기 구현까지만 완료했으며 실데이터·API·FE 연결은 WP-124에서 추적한다.
-- `/issues/{id}`의 members 쿼리를 `cluster_member.edit_count/views`로 전환하고, 과거 스냅샷 뒤에 들어온 원시 행이 응답을 바꾸지 않는 회귀 테스트를 추가한다(WP-120).
+- ~~`/issues/{id}`의 members 쿼리를 `cluster_member.edit_count/views`로 전환하고, 과거 스냅샷 뒤에 들어온 원시 행이 응답을 바꾸지 않는 회귀 테스트를 추가한다(WP-120).~~ → **완료** (2026-09-18, WP-129). 회귀는 `db/tests/test_issue_detail_sql.py`가 실 PostgreSQL로 고정한다.
 - 운영 이슈 요약 writer와 상태 전이(WP-119), GKG·종목 매칭 자동 배선(WP-120)이 실제 데이터를 채운 뒤 8개 GET의 실데이터 응답을 다시 검증한다. 한 종목 canary 통과는 이 자동화 완료를 뜻하지 않는다.
 - 2026-07-17~09-17 로컬 시드는 모든 스냅샷을 `CONFIRMED`로 고정하고 요약·종목을 이슈별 마지막 `cluster_id`에만 연결한다. 이 시드는 API 형태·시간 슬라이더 시연용이며 상태 전이, 과거 시점 보강 데이터, 실제 매칭 E2E 검증 근거가 아니다.
 - 관련 종목의 **제품 노출 상한은 두지 않기로 확정**했다(WP-22). 다만 현재 `/issues/{id}/stocks`의 전송 `limit` 기본 50·최대 100은 API 응답 크기 보호용이며 제품 정책상 노출 상한과 다른 값이다.
