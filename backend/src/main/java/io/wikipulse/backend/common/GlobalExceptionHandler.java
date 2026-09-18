@@ -8,7 +8,7 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
 /**
- * 예외를 API 명세 v0.2 §1.1 오류 봉투로 바꾼다.
+ * 예외를 API 명세 v0.3 §1.1 오류 봉투로 바꾼다.
  *
  * <pre>{ "error": { "code": "NOT_FOUND", "message": "…" } }</pre>
  */

@@ -1,6 +1,6 @@
 # db — PostgreSQL 스키마
 
-데이터 모델 v1 (`WP-35`). 명세: [docs/requirements-v0.2.md](../docs/requirements-v0.2.md) §3.2, §5
+데이터 모델 v1 (`WP-35`). 명세: [docs/requirements-v0.3.md](../docs/requirements-v0.3.md) §3.2, §5
 
 ```
 db/

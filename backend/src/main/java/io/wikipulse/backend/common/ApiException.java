@@ -3,7 +3,7 @@ package io.wikipulse.backend.common;
 import org.springframework.http.HttpStatus;
 
 /**
- * API 명세 v0.2 §1.1 의 오류 코드로 매핑되는 예외.
+ * API 명세 v0.3 §1.1 의 오류 코드로 매핑되는 예외.
  *
  * <p>{@code {error: {code, message}}} 로 나간다. message 는 개발자용 영문 —
  * 사용자 한국어 문구는 FE 가 code 로 고른다.

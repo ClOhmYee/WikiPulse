@@ -3,7 +3,7 @@
 `WP-56`. `mediawiki_history` 월 덤프를 실시간과 **같은 `edit_event` 형태**로
 바꿔 적재한다. baseline 산출(`-60`)과 리플레이 검증(`-61`)의 원천이다.
 
-명세: [docs/requirements-v0.2.md](../../docs/requirements-v0.2.md) §3.2 8번, §4, §5, §11
+명세: [docs/requirements-v0.3.md](../../docs/requirements-v0.3.md) §3.2 8번, §4, §5, §11
 
 ```
 mediawiki_history TSV.bz2  ──▶  edit_event JSONL.gz (shard)

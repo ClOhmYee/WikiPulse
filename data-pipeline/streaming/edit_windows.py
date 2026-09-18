@@ -15,7 +15,7 @@
     가 `spike.source='live'` 만 읽어 `issue_cluster(source='live')` 를 만든다.
     ⚠️ 클러스터 생산은 이 스트리밍 잡 안에서 돌지 않는다 — `spike` 를 사이에 둔
     **별도 실행**이다. 이 잡은 여전히 `spike` 까지만 쓴다.
-    근거: docs/requirements-v0.2.md §3.2 2~4번
+    근거: docs/requirements-v0.3.md §3.2 2~4번
 
 윈도우 길이는 아직 확정 전이라 환경 변수로 뺐다. 명세 §10 Open Issue —
 "급증 판정 수식 확정" 이 끝나면 기본값을 고정한다.

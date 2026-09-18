@@ -3,7 +3,7 @@ package io.wikipulse.backend.issue.dto;
 import com.fasterxml.jackson.annotation.JsonInclude;
 
 /**
- * 이슈 상세의 멤버 문서. API 명세 v0.2 §2 `GET /issues/{id}`.
+ * 이슈 상세의 멤버 문서. API 명세 v0.3 §2 `GET /issues/{id}`.
  *
  * <p>weight 내림차순. isSeed=false 는 급증을 직접 통과하지 않고 Clickstream·
  * Wikidata 관계로 딸려온 문서다 — 화면에서 구분해 보여주게 내보낸다.

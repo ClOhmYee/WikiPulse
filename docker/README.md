@@ -3,7 +3,7 @@
 `WP-63`. 팀원마다 파이썬·JDK·PostgreSQL 설치가 달라 생기는 의존성
 문제를 컨테이너로 없앤다. `docker compose up` 하나로 전원이 같은 환경.
 
-명세: [docs/requirements-v0.2.md](../docs/requirements-v0.2.md) §7
+명세: [docs/requirements-v0.3.md](../docs/requirements-v0.3.md) §7
 
 ```
 docker compose up -d postgres kafka        # 인프라만 (백엔드·파이썬 로컬 개발)

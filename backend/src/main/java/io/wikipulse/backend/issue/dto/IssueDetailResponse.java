@@ -6,7 +6,7 @@ import io.wikipulse.backend.stock.dto.RelatedStockResponse;
 import java.util.List;
 
 /**
- * 이슈 상세. API 명세 v0.2 §2 `GET /issues/{id}`.
+ * 이슈 상세. API 명세 v0.3 §2 `GET /issues/{id}`.
  *
  * <p>relatedStocks 는 `/issues/{id}/stocks` 와 같은 객체이며 상세 진입 시 왕복을
  * 줄이려고 상위 5개만 미리 담는다. 전체는 그 endpoint 로 부른다.
