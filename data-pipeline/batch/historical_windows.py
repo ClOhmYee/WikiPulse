@@ -67,7 +67,16 @@ class WindowRow:
     hour_of_day: int      # 0..23 (UTC 시)
     edit_count: int
     editor_count: int
-    views: int
+    #: 🔴 **조회수 원본이 없으면 None 이다. 0 이 아니다** (2026-09-18, WP-127).
+    #: ~~없으면 0~~ 은 두 곳에서 조용히 틀렸다:
+    #:   1. `build_rows` 가 0 을 **관측값으로** 세어 view_ewma 를 끌어내린다. 조회수를
+    #:      아직 안 받은 시간이 "그 시간엔 아무도 안 봤다" 가 되어 기준선이 낮아지고,
+    #:      그만큼 없는 급증이 생긴다.
+    #:   2. 2단계 계약에서 0 은 REJECTED(다시 안 봄)이고 None 은 후보 대기(재판정)다.
+    #:      `PageWindow.from_row` 가 경계에서 0 을 None 으로 되돌리고 있었는데
+    #:      (WP-126), 그 임시 보정의 근본 해결이 여기다.
+    #: ⚠️ "진짜 그 시간에 0회 조회" 와 "원본 미도착" 은 여전히 다른 값이다 — 전자는 0.
+    views: int | None
     #: 시점 감사 증거 (V9, WP-129 2번). 판정에는 안 쓴다.
     #: 조회수만 있고 편집이 없는 윈도우는 revision 이 없어 None 이다.
     max_rev_id: int | None = None
@@ -176,7 +185,11 @@ def join_windows(
     """편집·조회 집계를 (wiki, title, hour) 기준 full outer join 한다.
 
     baseline 은 edit_z(편집)와 view_ewma(조회수)를 둘 다 잡으므로, 한쪽만 있는 윈도우도
-    남긴다(없는 쪽은 0). 편집만 있는 시간·조회만 있는 시간이 모두 baseline 슬롯에 든다.
+    남긴다. 편집만 있는 시간·조회만 있는 시간이 모두 baseline 슬롯에 든다.
+
+    🔴 **없는 쪽의 값이 다르다.** 편집이 없으면 0 건이 맞다 — 편집 덤프는 그 시간 전체를
+    담고 있어서 "안 나옴 = 0건" 이다. 조회수는 아니다: 그 시간 파일을 아직 못 받았을 수도,
+    이 문서가 후보 필터 밖일 수도 있다. 그래서 조회수만 None 으로 둔다 (WP-127).
     """
     empty = EditAggregate(0, 0, None, None)
     for key in edit_counts.keys() | view_totals.keys():
@@ -189,7 +202,7 @@ def join_windows(
             hour_of_day=hour_of_day(window_start),
             edit_count=agg.edit_count,
             editor_count=agg.editor_count,
-            views=view_totals.get(key, 0),
+            views=view_totals.get(key),
             max_rev_id=agg.max_rev_id,
             last_edit_ts=agg.last_edit_ts,
         )

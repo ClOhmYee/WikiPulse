@@ -145,14 +145,29 @@ def test_agent_가로질러_합산_선택():
 
 # ---------------------------------------------------------------- join
 
-def test_full_outer_한쪽만_있으면_0():
+def test_full_outer_없는_쪽은_편집0_조회None():
+    """🔴 두 축의 "없음" 이 다른 값이다 (WP-127).
+
+    편집 덤프는 그 시간 전체를 담으므로 "안 나옴 = 0건" 이 맞다. 조회수는 파일을 아직
+    못 받았을 수도, 후보 필터 밖일 수도 있어서 0 이라고 말할 수 없다.
+    ~~없으면 둘 다 0~~ 이면 build_rows 가 그 0 을 관측값으로 세어 view_ewma 를 끌어내리고,
+    2단계 판정에서도 REJECTED(다시 안 봄)가 되어 조회수가 늦게 와도 재판정되지 않는다.
+    """
     edits = {("enwiki", "A", "2025-06-09T00:00:00"): EditAggregate(3, 2, None, None)}
     views = {("enwiki", "B", "2025-06-09T01:00:00"): 50}
     out = {(r.title, r.window_start): r for r in join_windows(edits, views)}
     assert out[("A", "2025-06-09T00:00:00")].edit_count == 3
-    assert out[("A", "2025-06-09T00:00:00")].views == 0        # 조회 없음 → 0
-    assert out[("B", "2025-06-09T01:00:00")].edit_count == 0   # 편집 없음 → 0
+    assert out[("A", "2025-06-09T00:00:00")].views is None      # 조회수 원본 없음
+    assert out[("B", "2025-06-09T01:00:00")].edit_count == 0    # 편집 없음 → 0건이 맞다
     assert out[("B", "2025-06-09T01:00:00")].views == 50
+
+
+def test_진짜_0회_조회는_0으로_남는다():
+    """⚠️ "원본 미도착(None)" 과 "그 시간에 0회(0)" 는 다른 사실이다."""
+    edits = {("enwiki", "A", "2025-06-09T00:00:00"): EditAggregate(1, 1, None, None)}
+    views = {("enwiki", "A", "2025-06-09T00:00:00"): 0}
+    row = next(iter(join_windows(edits, views)))
+    assert row.views == 0
 
 
 def test_build_windows_정렬_결합():

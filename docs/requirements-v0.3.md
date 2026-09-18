@@ -95,7 +95,7 @@
 | 구분 | 소스 | 용도 | 실측 (11번) |
 | --- | --- | --- | --- |
 | 편집 이벤트 | Wikipedia EventStreams `recentchange` | 조회수 검사를 시작하는 1차 관문 | 전체 31/s, enwiki 2/s, 1.5 KB/건 |
-| 조회수 | `other/pageviews` 시간별 덤프 · `pageview_complete` 일별 `agent=user` 덤프 | 시간별=운영 28일 기준선·급증 최종 관문, 일별 user=품질 검증. AQS 일별 API는 조사·PoC용이며 LIVE 최종 관문에는 미사용 | 시간별 약 1시간 지연·gz 49.6 MB · 일별 user 677 MB bz2 |
+| 조회수 | `other/pageviews` 시간별 덤프 · `pageview_complete` 일별 `agent=user` 덤프 | 시간별=운영 28일 기준선·급증 최종 관문, 일별 user=품질 검증. AQS 일별 API는 조사·PoC용이며 LIVE 최종 관문에는 미사용 | 시간별 gz 45.7~47.7 MB·윈도우 끝 기준 1시간 5~19분 지연(2026-09-18 실측) · 일별 user 677 MB bz2 |
 | 문서 간 이동 | **Wikipedia Clickstream** 월별 덤프 | 클러스터링 관계 가중치의 유일한 수치 원천. 직전 월 우선, 미공개·검증 실패 시 최신 검증 완료 월로 폴백 | enwiki 월 471 MB gz |
 | 항목 관계 | ~~**Wikidata API** (`wbgetentities`, SPARQL)~~ | 후보 관계 5종을 실측했으나 클러스터 멤버 편입·종목 후보·LLM RAG에는 채택하지 않음(WP-51). 이미 포함된 멤버 사이 화면 보조 간선 계약만 남아 있으나 소스 배선은 없음. 과거 검증 재현용 | — |
 | 리플레이 원본 | `mediawiki_history`, `other/pageviews`, `pageview_complete`, GDELT GKG, Clickstream | 2026-07-17~09-17을 LIVE와 같은 계약으로 재생 | 원본별 실측은 §11 |
@@ -345,6 +345,7 @@ RAM 16 GB에서 Kafka + Spark + HDFS 데몬을 올리면 Spark executor 몫은 8
 | 항목 | 값 | 날짜 |
 | --- | --- | --- |
 | EventStreams 처리량 | 전체 31 events/s, enwiki 2/s, 1.5 KB/건 (15초 표본) | 2026-09-04 |
+| `other/pageviews` 시간별 덤프 | 04:00Z 파일이 06:06Z 공개 — 윈도우 끝 기준 **1시간 6분**(00~04시 구간 1시간 5~19분, 아직 안 나온 시간은 404). 한 파일 45.7 MB gz · 5,144,442행 · 압축 해제 1.0s. `en`+`en.m` 2,025,414행 8,140,767회, 그중 ns0 1,915,570행 7,923,840회, 합산 후 **문서 1,489,800개**. 전부 적재하면 하루 3,575만 행·고정 2개월 약 22억 행이라 후보 제목으로 거르는 것이 정상 경로다. `en` 계열 project 16종 중 `en`·`en.m` 만 받는다(`en.d` 92,769행 등 자매 프로젝트). 제목의 `%` 는 percent-encoding 이 아니라 문자 그대로가 대부분이라(85행·조회수 264·0.00%) 디코드하지 않는다 | 2026-09-18 |
 | GDELT GKG 하루 | 2026-03-01 66,338건 276 MB zip / 862 MB · 2024-10-10 160,838건 627 MB / 1.9 GB | 2026-09-07 |
 | GDELT 결손 | ~~2025-06-13 ~ 07-04 전부 404~~ → **2025-06-14 18:00 ~ 07-02 02:00 UTC 전부 404**(15분 단위 이분 탐색으로 경계 재확인 — 구간 시작·끝 정각이 2026-09-07 당시 이미 404였다가 그 뒤 GDELT가 가장자리를 백필했을 가능성. 내부는 여전히 결손). 근거: `ai/spec-evidence/gdelt_day_size_gaps.py` | 2026-09-07, 경계 재확인 2026-09-16 |
 | GDELT lift, Milton | I=`HURRICANE ∧ florida` 10,707건. FPL 10.5 · Generac 9.3 · Duke 8.4 · Publix 7.0 · United 6.3 · Disney 4.7 · Nvidia 0.4 · MSFT 0.3 | 2026-09-07 |
