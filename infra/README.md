@@ -21,6 +21,42 @@ EC2 두 대의 `~/infra/*` 를 저장소로 옮긴 것이다. **서버가 날아
 ⚠️ `infra/spark/hadoop-conf/*.xml` 에는 사설 IP 가 들어 있다. private 저장소라 그대로
 두지만, 공개 저장소로 옮기면 지운다.
 
+## 🔴 배포 러너 권한
+
+`deploy:backend` 는 `ubuntu` 가 아니라 **`gitlab-runner` 계정으로** 돈다 (ec2-shell
+러너, 서비스 EC2). 그래서 그 계정이 다음 두 파일을 **읽을 수 있어야 한다.**
+
+    /home/deploy/infra/db/.env        # MIGRATION_USER · POSTGRES_PASSWORD
+    /home/deploy/infra/service/.env   # POSTGRES_* · APP_DB_ROLE
+
+⚠️ 이 전제가 적혀 있지 않아서 실제로 두 번 터졌다 — 파이프라인 #207183(2026-09-18,
+`-133` 머지)과 #207748(2026-09-19). 둘 다 `infra/apply-migrations.sh` 의 첫 검사에서
+1초 만에 죽었고, 배포는 한 줄도 실행되지 않았다.
+
+`.env` 는 비밀값이라 `0600 ubuntu:ubuntu` 다. 파일을 세계 공개로 열지 말고 배포
+계정만 읽게 한다. ACL 보다 그룹이 낫다 — `ls -l` 에 보이므로 나중에 왜 이런지 안다.
+
+```bash
+sudo groupadd -f wikipulse-deploy
+sudo usermod -aG wikipulse-deploy gitlab-runner
+sudo chgrp wikipulse-deploy /home/deploy/infra/db/.env /home/deploy/infra/service/.env
+sudo chmod 0640 /home/deploy/infra/db/.env /home/deploy/infra/service/.env
+sudo systemctl restart gitlab-runner     # 🔴 그룹은 프로세스를 다시 띄워야 붙는다
+
+# 확인 — 이 세 줄이 다 통과해야 배포 잡이 넘어간다
+sudo -u gitlab-runner test -r /home/deploy/infra/db/.env && echo "db env OK"
+sudo -u gitlab-runner test -r /home/deploy/infra/service/.env && echo "service env OK"
+sudo -u gitlab-runner docker ps >/dev/null && echo "docker OK"
+```
+
+⚠️ 이건 **CI 가 DB 소유자 비밀번호를 읽을 수 있게 된다**는 뜻이다. 그 러너는 이미
+develop 의 코드를 그대로 실행하고 `docker compose up` 으로 같은 `.env` 를 쓰므로 새
+경계가 무너지는 건 아니지만, 팀에 알리고 넘어간다.
+
+⚠️ 권한을 고친 뒤에는 **실패한 잡을 Retry 해서 초록불을 확인한다.** 이 관문 다음에
+`docker build` → `docker compose up -d backend` → health check 가 남아 있고, 그 구간은
+아직 한 번도 끝까지 성공한 적이 없다.
+
 ## 배포와 스키마
 
     # 남은 마이그레이션 적용 + 애플리케이션 롤 권한 (재실행 안전)
