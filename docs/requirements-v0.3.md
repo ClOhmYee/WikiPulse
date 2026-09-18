@@ -86,7 +86,7 @@
 >
 > **1일 canary:** 2025-06-12 `Air India Flight 171` 한 건을 실제 편집 덤프와 24시간 `other/pageviews`로 재생해 16개 결합 윈도우, 15개 spike, 15개 seed-only 스냅샷을 저장했다. 별도 canary DB에서 BA 종목 임베딩·후보 합집합·실제 GATEWAY LLM 검증과 PostgreSQL → Spring API → Frontend dev proxy를 관통했다. 다만 클러스터 → GKG 검색 술어와 lift는 통제값으로, 한국어 요약·`DETECTED → CONFIRMED`는 canary 스크립트 직접 적재로 이었다. 따라서 후보·검증·서빙 경계는 실제 E2E **부분 통과**지만 자동화 완료 증거는 아니다. LIVE scheduler·고정 2개월 replay·Clickstream 이웃·요약 writer·상태 전이·GKG 자동 배선은 남아 있다. 상세 근거는 [1일 E2E canary](validation/2026-09-18-one-day-e2e-canary.md)다.
 >
-> **발견된 시점 결함:** historical 후보 워커가 현재 Wikipedia 도입부를 읽었고, `cluster_member.views`는 실제 판정 조회수 25,426이 있는데도 `null`, 신규 문서는 최종 판정이 끝났는데도 `completeness=pending`으로 저장됐다. 일반 이슈 상세 API도 고정 멤버 수치 대신 최신 편집·조회수 행을 읽는다. 세 경로 모두 v0.3의 시점 계약과 다르며 EC2 배포 전에 수정한다.
+> **발견된 시점 결함 (전부 해소, 2026-09-18 · WP-129):** historical 후보 워커가 현재 Wikipedia 도입부를 읽었고, `cluster_member.views`는 실제 판정 조회수 25,426이 있는데도 `null`, 신규 문서는 최종 판정이 끝났는데도 `completeness=pending`으로 저장됐다. 일반 이슈 상세 API도 고정 멤버 수치 대신 최신 편집·조회수 행을 읽었다. → 도입부는 `page_intro`에 `snapshot_ts` 이하 revision으로 고정하고 현재 API 폴백을 없앴다(V8). `spike`가 판정에 쓴 조회수·기준선을 저장해 `cluster_member.views`와 `completeness`가 채워진다(V7). 상세 API는 `cluster_member`의 고정값을 읽는다. 감지 결과에는 `max_rev_id`·`last_edit_ts`를 남겨 시점 계약이 지켜졌는지 확인할 수 있게 했다(V9).
 >
 > **로컬 시드 주의:** 2026-07-17~09-17 시드는 1,112개 `issue_cluster`를 전부 `CONFIRMED`로 고정하지만 `issue_report`는 이슈별 마지막 스냅샷 18건에만, `cluster_stock`은 마지막 이란 이슈 스냅샷 1건에 3종목만 붙인다. API·화면 시연용 수작업 데이터이며 실제 공통 파이프라인 결과가 아니다. 최종 MVP 완료 조건은 고정 구간의 실제 원본을 위 공통 계약으로 재생한 결과로 시드를 교체하고, 과거 스냅샷과 이후 LIVE 누적을 함께 검증하는 것이다.
 

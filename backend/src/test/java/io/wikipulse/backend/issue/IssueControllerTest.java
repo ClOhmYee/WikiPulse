@@ -69,7 +69,7 @@ class IssueControllerTest {
     @Test
     void 상세는_members와_relatedStocks를_담는다() throws Exception {
         var member = new IssueMemberResponse(901, "enwiki", "Strait of Hormuz",
-                1.0, true, 87, 12043);
+                1.0, true, 87, 12043, "complete");
         var stock = new RelatedStockResponse("FANG", "Diamondback Energy", "NASDAQ",
                 "Energy", "BOTH", "SUPPLY_CHAIN", 0.28, 6.1, "호르무즈 …");
         when(service.detail(42L)).thenReturn(ApiResponse.of(new IssueDetailResponse(
@@ -82,6 +82,9 @@ class IssueControllerTest {
                 .andExpect(jsonPath("$.data.members[0].pageId").value(901))
                 .andExpect(jsonPath("$.data.members[0].isSeed").value(true))
                 .andExpect(jsonPath("$.data.members[0].editCount").value(87))
+                // 판정 시점 고정값의 상태 — null 이 "대기" 인지 "원본 없음" 인지 구분한다
+                // (WP-129 5번).
+                .andExpect(jsonPath("$.data.members[0].completeness").value("complete"))
                 .andExpect(jsonPath("$.data.relatedStocks[0].ticker").value("FANG"))
                 .andExpect(jsonPath("$.data.relatedStocks[0].tier").value("BOTH"))
                 .andExpect(jsonPath("$.data.summaryModel").value("claude-x"));
