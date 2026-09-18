@@ -62,6 +62,12 @@ wikipulse:
       org-context-limit: 15
       # 3등급(EMBEDDING_ONLY) 발동 문턱 — 1·2등급 확정 통과가 이 값 미만일 때만(WP-22).
       tier3-threshold: 2
+    # 이슈 요약 writer·상태 전이 워커 (WP-119, 명세 §3.2 7번). 검증 워커와 별개로 켠다 —
+    # 검증과 같은 gateway 계층·모델을 재사용한다(새 GATEWAY 설정 없음).
+    summary:
+      enabled: ${WIKIPULSE_MATCHING_SUMMARY_ENABLED:false}
+      fixed-delay: PT5M
+      batch-size: 20
 
 # 외부 호출 신뢰성 계층 (WP-66). named instance gateway / wikipedia.
 # 전송 계층 실패만 다룬다(타임아웃·5xx·429·연결오류·회로개방). 스키마 검증·attempt_count·

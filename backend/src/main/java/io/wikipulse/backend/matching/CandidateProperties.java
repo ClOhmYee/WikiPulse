@@ -26,6 +26,7 @@ public class CandidateProperties {
     private final Gateway gateway = new Gateway();
     private final Scheduler scheduler = new Scheduler();
     private final Verification verification = new Verification();
+    private final Summary summary = new Summary();
 
     public int getEmbeddingTopK() {
         return embeddingTopK;
@@ -65,6 +66,10 @@ public class CandidateProperties {
 
     public Verification getVerification() {
         return verification;
+    }
+
+    public Summary getSummary() {
+        return summary;
     }
 
     /** 대표 텍스트 도입부 출처. 명세 §6.2 — prop=extracts&exintro&explaintext, 리다이렉트 추적. */
@@ -293,6 +298,46 @@ public class CandidateProperties {
 
         public void setTier3Threshold(int tier3Threshold) {
             this.tier3Threshold = tier3Threshold;
+        }
+    }
+
+    /**
+     * 이슈 요약 writer·상태 전이 워커 (WP-119, 명세 §3.2 7번). 검증 워커와 같은 이유로
+     * 기본 꺼짐 — 서버에서 LLM_GATEWAY_KEY 를 넣고 {@code summary.enabled=true} 로 켠다. 요약은 검증과 같은
+     * gateway 신뢰성 계층·모델·max_tokens 를 재사용한다(새 GATEWAY 설정 없음).
+     */
+    public static class Summary {
+        private boolean enabled = false;
+        /**
+         * 폴 간격 (ISO-8601 Duration). {@link Scheduler#fixedDelay} 와 같은 SpEL 바인딩 관습 —
+         * {@code @Scheduled} 는 프로퍼티 키를 직접 읽는다. 이 필드는 문서·기본값 정의용.
+         */
+        private String fixedDelay = "PT5M";
+        /** 한 폴에서 처리할 클러스터 수 상한. */
+        private int batchSize = 20;
+
+        public boolean isEnabled() {
+            return enabled;
+        }
+
+        public void setEnabled(boolean enabled) {
+            this.enabled = enabled;
+        }
+
+        public String getFixedDelay() {
+            return fixedDelay;
+        }
+
+        public void setFixedDelay(String fixedDelay) {
+            this.fixedDelay = fixedDelay;
+        }
+
+        public int getBatchSize() {
+            return batchSize;
+        }
+
+        public void setBatchSize(int batchSize) {
+            this.batchSize = batchSize;
         }
     }
 }

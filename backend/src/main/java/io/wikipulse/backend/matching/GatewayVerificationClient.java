@@ -13,9 +13,14 @@ import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
 
 /**
- * LLM 검증 호출 (WP-68) — LLM 게이트웨이 경유 Anthropic Messages API.
+ * LLM 게이트웨이 경유 Anthropic Messages API 의 범용 전송 (WP-68·-119).
  * {@code {baseUrl}/api.anthropic.com/v1/messages}, 인증은 {@code x-api-key: {키}}.
  * 모델은 POC(ai/llm-verify-poc)에서 검증한 {@code claude-sonnet-4-5-20250929}(-45).
+ *
+ * <p>{@link #complete}(system + messages → assistant 텍스트)는 도메인 중립이라
+ * <b>LLM 검증({@link LlmVerifier}, -68)과 이슈 요약({@link IssueSummarizer}, -119)이 공유</b>한다.
+ * 두 용도 모두 같은 gateway 신뢰성 계층·모델·max_tokens 를 탄다 — 요약이 새 신뢰성 계층·새 클라이언트를
+ * 만들지 않는다는 -119 계약을 이 공유로 지킨다.
  *
  * <p>🔴 <b>-66 위에 얹는다 — 새 신뢰성 계층을 만들지 않는다.</b> named instance {@code gateway} 를
  * {@link GatewayEmbeddingClient} 와 <b>공유</b>한다(임베딩·LLM 공용 게이트웨이). 같은 RateLimiter(공유
