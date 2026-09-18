@@ -1,0 +1,181 @@
+"""LIVE 시간 주기 계약 (WP-135). DB·네트워크는 대역이다.
+
+여기서 고정하는 것은 **무엇을 받을지 고르는 규칙**이다 — 그게 이 모듈의 존재 이유다.
+전수 적재(시간당 149만 행)를 피하려고 대기 목록에서 시간·문서를 뽑는다.
+"""
+
+from __future__ import annotations
+
+from datetime import datetime, timedelta, timezone
+
+import pytest
+
+from spike import live_cycle
+from spike.live_cycle import AVAILABLE_AFTER_HOURS, CycleSummary, missing_views, run_once
+from spike.recheck import RecheckSummary
+
+UTC = timezone.utc
+NOW = datetime(2026, 9, 18, 8, 30, tzinfo=UTC)
+
+
+class FakeCursor:
+    def __init__(self, rows):
+        self.rows = rows
+        self.params = None
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return False
+
+    def execute(self, sql, params=None):
+        self.params = params
+
+    def fetchall(self):
+        return self.rows
+
+    def fetchone(self):
+        return (True,)
+
+
+class FakeConn:
+    def __init__(self, rows=()):
+        self.cursor_obj = FakeCursor(list(rows))
+        self.rolled_back = 0
+
+    def cursor(self):
+        return self.cursor_obj
+
+    def rollback(self):
+        self.rolled_back += 1
+
+    def commit(self):
+        pass
+
+
+def row(hour: datetime, title: str):
+    return (hour, title)
+
+
+# ---------------------------------------------------------------- 대상 고르기
+
+def test_시간별로_문서를_묶는다():
+    """한 시간 파일을 한 번만 받고, 그 안에서 필요한 문서만 거른다."""
+    nine = datetime(2026, 9, 18, 5, tzinfo=UTC)
+    ten = datetime(2026, 9, 18, 6, tzinfo=UTC)
+    conn = FakeConn([row(nine, "Air India Flight 171"), row(nine, "Boeing 787"),
+                     row(ten, "Air India Flight 171")])
+
+    due = missing_views(conn, "live", now=NOW)
+
+    assert [h for h, _ in due] == ["2026-09-18T05:00:00", "2026-09-18T06:00:00"]
+    assert due[0][1] == frozenset({"Air India Flight 171", "Boeing 787"})
+
+
+def test_아직_안_나온_시간은_안_받는다():
+    """🔴 덤프는 윈도우 끝 기준 약 1시간 뒤에 나온다 (2026-09-18 실측).
+
+    그 전에 받으면 404 라 헛다운로드다. 질의 자체에서 잘라 낸다.
+    """
+    conn = FakeConn([])
+    missing_views(conn, "live", now=NOW)
+
+    cutoff = conn.cursor_obj.params[1]
+    assert cutoff == NOW - timedelta(hours=AVAILABLE_AFTER_HOURS)
+
+
+def test_한_주기_시간_수를_제한한다():
+    """밀린 구간을 따라잡되 한 주기가 무한정 길어지지 않게. 오래된 시간부터 받는다."""
+    hours = [datetime(2026, 9, 18, h, tzinfo=UTC) for h in range(0, 6)]
+    conn = FakeConn([row(h, "Doc") for h in hours])
+
+    due = missing_views(conn, "live", now=NOW, max_hours=2)
+
+    assert [h for h, _ in due] == ["2026-09-18T00:00:00", "2026-09-18T01:00:00"]
+
+
+def test_출처를_질의에_넘긴다():
+    conn = FakeConn([])
+    missing_views(conn, "replay", now=NOW)
+    assert conn.cursor_obj.params[0] == "replay"
+
+
+# ---------------------------------------------------------------- 한 주기
+
+@pytest.fixture()
+def stub_cycle(monkeypatch):
+    """적재·재판정을 대역으로 바꾼다. 무엇을 어떤 인자로 불렀는지만 본다."""
+    calls = {"ingest": [], "recheck": 0}
+
+    def fake_ingest(ts_hour, wiki, cache_dir, out_root, *, titles, shard_records,
+                    dry_run, conn):
+        calls["ingest"].append((ts_hour, titles))
+        return "pending" if ts_hour.endswith("T07:00:00") else "ok"
+
+    def fake_recheck(conn, *, source="live", dry_run=False, **kwargs):
+        calls["recheck"] += 1
+        return RecheckSummary(rechecked=2, confirmed=1, rejected=1)
+
+    monkeypatch.setattr(live_cycle, "ingest_hour", fake_ingest)
+    monkeypatch.setattr(live_cycle, "recheck", fake_recheck)
+    return calls
+
+
+def test_대기_목록의_문서만_받는다(stub_cycle, tmp_path):
+    """🔴 이 모듈의 존재 이유. 전수는 시간당 149만 행이라 못 받는다 (WP-127 실측)."""
+    five = datetime(2026, 9, 18, 5, tzinfo=UTC)
+    conn = FakeConn([row(five, "Air India Flight 171"), row(five, "Boeing 787")])
+
+    summary = run_once(conn, cache_dir=tmp_path, out_root=tmp_path, now=NOW)
+
+    assert stub_cycle["ingest"] == [
+        ("2026-09-18T05:00:00", frozenset({"Air India Flight 171", "Boeing 787"}))]
+    assert (summary.hours_due, summary.hours_ingested, summary.titles) == (1, 1, 2)
+
+
+def test_아직_안_나온_파일은_대기로_센다(stub_cycle, tmp_path):
+    """404 는 실패가 아니다 — 다음 주기가 다시 본다."""
+    conn = FakeConn([row(datetime(2026, 9, 18, 7, tzinfo=UTC), "Doc")])
+
+    summary = run_once(conn, cache_dir=tmp_path, out_root=tmp_path,
+                       now=NOW + timedelta(hours=3))
+
+    assert (summary.hours_ingested, summary.hours_pending) == (0, 1)
+
+
+def test_받을_게_없어도_재판정은_돈다(stub_cycle, tmp_path):
+    """조회수가 이미 들어와 있는 대기가 있을 수 있다 — 적재와 재판정은 별개 단계다."""
+    summary = run_once(FakeConn([]), cache_dir=tmp_path, out_root=tmp_path, now=NOW)
+
+    assert stub_cycle["ingest"] == [] and stub_cycle["recheck"] == 1
+    assert summary.recheck.confirmed == 1
+
+
+def test_dry_run은_받지_않는다(stub_cycle, tmp_path):
+    conn = FakeConn([row(datetime(2026, 9, 18, 5, tzinfo=UTC), "Doc")])
+
+    summary = run_once(conn, cache_dir=tmp_path, out_root=tmp_path, now=NOW, dry_run=True)
+
+    assert stub_cycle["ingest"] == []       # 다운로드 없음
+    assert summary.hours_due == 1           # 무엇을 받을지는 보여준다
+
+
+# ---------------------------------------------------------------- 요약·락
+
+def test_요약에_경과_시간이_들어간다(stub_cycle, tmp_path):
+    """명세 §3.2 3번 "원본 도착 후 내부 처리 15분 이내" 를 재려면 주기 시간이 필요하다."""
+    summary = run_once(FakeConn([]), cache_dir=tmp_path, out_root=tmp_path, now=NOW)
+    assert summary.seconds >= 0
+    assert "s" in summary.format()
+
+
+def test_advisory_lock을_잡는다():
+    """⚠️ 두 주기가 겹치면 같은 45 MB 파일을 두 번 받는다. 세션 락이라 프로세스가 죽어도 풀린다."""
+    conn = FakeConn([])
+    assert live_cycle.try_lock(conn) is True
+    assert conn.cursor_obj.params == (live_cycle.LOCK_KEY,)
+
+
+def test_빈_요약도_읽힌다():
+    assert "시간 0/0" in CycleSummary().format()
