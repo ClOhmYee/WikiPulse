@@ -72,7 +72,7 @@ public class VerificationService {
         }
 
         // 클러스터 단위 입력은 한 번만 만든다 — 후보마다 같은 이슈 텍스트·GDELT 컨텍스트를 공유한다.
-        String text = issueText.build(repository.memberTitlesByPulse(clusterId));
+        String text = issueText.build(clusterId);
         String gdelt = String.join(", ",
                 repository.topOrgMentions(clusterId, props.getVerification().getOrgContextLimit()));
         String issueKey = repository.issueKeyOf(clusterId);

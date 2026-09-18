@@ -167,6 +167,21 @@ def aggregate_edit_windows(
         # 늦게 온 이벤트를 언제까지 받아줄지. 이걸 안 걸면 상태가 무한히 쌓인다.
         filtered = filtered.withWatermark("event_ts", watermark)
 
+    aggregations = [
+        F.count("*").alias("edit_count"),
+        F.approx_count_distinct("user", EDITOR_COUNT_RSD).alias("editor_count"),
+        F.sum("byte_delta").alias("byte_delta_sum"),
+        F.max("event_ts").alias("last_edit_ts"),
+    ]
+    outputs = ["edit_count", "editor_count", "byte_delta_sum", "last_edit_ts"]
+    # 시점 감사 증거 (V9, WP-129 2번). 판정에는 안 쓴다.
+    # revision id 는 위키 전체에서 단조 증가하므로 최대값 하나면 "여기까지 봤다" 가 된다.
+    # ⚠️ rev_id 가 없는 입력도 있다(옛 샤드·일부 테스트 대역). 없는 걸 만들지 않는다 —
+    #    0 을 넣으면 "증거 없음" 과 "증거가 0" 이 구분되지 않는다.
+    if "rev_id" in filtered.columns:
+        aggregations.append(F.max("rev_id").alias("max_rev_id"))
+        outputs.append("max_rev_id")
+
     return (
         filtered
         .groupBy(
@@ -174,21 +189,13 @@ def aggregate_edit_windows(
             F.col("wiki"),
             F.col("title"),
         )
-        .agg(
-            F.count("*").alias("edit_count"),
-            F.approx_count_distinct("user", EDITOR_COUNT_RSD).alias("editor_count"),
-            F.sum("byte_delta").alias("byte_delta_sum"),
-            F.max("event_ts").alias("last_edit_ts"),
-        )
+        .agg(*aggregations)
         .select(
             F.col("window.start").alias("window_start"),
             F.col("window.end").alias("window_end"),
             "wiki",
             "title",
-            "edit_count",
-            "editor_count",
-            "byte_delta_sum",
-            "last_edit_ts",
+            *outputs,
         )
     )
 

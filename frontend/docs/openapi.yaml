@@ -784,6 +784,16 @@ components:
           minimum: 0
           nullable: true
           description: Pageviews used to evaluate this snapshot window.
+        completeness:
+          type: string
+          enum:
+            - complete
+            - pending
+            - unavailable
+          description: >-
+            editCount/views 가 null 일 때 그 이유. complete 는 판정 완료,
+            pending 은 입력 대기, unavailable 은 그 시점 원본을 확보할 수 없음.
+            Node 와 같은 어휘다 (WP-129).
       required:
         - pageId
         - wiki

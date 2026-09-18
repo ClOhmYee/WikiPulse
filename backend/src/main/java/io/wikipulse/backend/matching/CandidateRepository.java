@@ -42,19 +42,9 @@ public class CandidateRepository {
                 """, new MapSqlParameterSource("limit", limit), Long.class);
     }
 
-    /**
-     * 대표 텍스트용 멤버 제목. 급등도(cluster_member.spike_score) 내림차순 (명세 §6.2).
-     * NULL 급등도는 뒤로, 동률은 엣지 가중치로 가른다.
-     */
-    public List<String> memberTitlesByPulse(long clusterId) {
-        return jdbc.queryForList("""
-                SELECT wp.title
-                  FROM cluster_member cm
-                  JOIN wiki_page wp ON wp.id = cm.page_id
-                 WHERE cm.cluster_id = :cid
-                 ORDER BY cm.spike_score DESC NULLS LAST, cm.weight DESC
-                """, new MapSqlParameterSource("cid", clusterId), String.class);
-    }
+    // 멤버 제목 조회(memberTitlesByPulse)는 ClusterIntroRepository.context 로 옮겼다
+    // (WP-129). 대표 텍스트를 만들려면 제목만으로는 부족하다 — 어느 시점의 도입부를
+    // 쓸지가 클러스터의 source·snapshot_ts 에 달렸고, page_id 도 있어야 고정본을 찾는다.
 
     /**
      * 이슈 임베딩 ↔ 종목 임베딩 코사인 Top-K (명세 §6.3 a). 티커 → 코사인 유사도(1 - 거리).

@@ -32,4 +32,17 @@ public class MatchingConfig {
     @ConditionalOnProperty(prefix = "wikipulse.matching.verification", name = "enabled", havingValue = "true")
     static class VerificationSchedulingConfig {
     }
+
+    /**
+     * 이슈 요약 writer 폴러(-119)가 켜질 때도 스케줄링을 켠다 — 위 둘과 독립으로 켤 수 있어야
+     * 한다. 🔴 이 설정이 없으면 {@code summary.enabled=true} 만 켠 서버에서
+     * {@link IssueSummaryWorker} 빈은 뜨지만 @Scheduled 후처리기가 등록되지 않아 폴이 조용히
+     * 안 돈다(verification·scheduler 를 함께 켤 때만 우연히 동작). @EnableScheduling 싱글턴 등록이라
+     * 셋이 동시에 켜져도 중복 없이 한 번만 활성화된다.
+     */
+    @Configuration
+    @EnableScheduling
+    @ConditionalOnProperty(prefix = "wikipulse.matching.summary", name = "enabled", havingValue = "true")
+    static class SummarySchedulingConfig {
+    }
 }
