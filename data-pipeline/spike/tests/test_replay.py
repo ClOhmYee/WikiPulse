@@ -10,6 +10,7 @@ from datetime import date
 
 from spike.detector import MIN_ABSOLUTE_EDITS, MIN_BASELINE_SAMPLE_DAYS
 from spike.replay import (
+    first_candidate,
     Observation,
     aggregate,
     baseline_at,
@@ -117,33 +118,49 @@ def test_과거_관측이_없으면_기준선_없음():
 
 # ---------------------------------------------------------------- 판정 경로
 
-def test_기준선_없는_문서는_절대_편집수로_잡힌다():
-    """Hurricane Milton 경로 — 사건 당일 생긴 문서라 기준선이 없다."""
+def test_기준선_없는_문서도_조회수_없이는_확정_안_된다():
+    """Hurricane Milton 경로 — 사건 당일 생긴 문서라 기준선이 없다.
+
+    ~~40 >= MIN_ABSOLUTE_EDITS 라 급증~~ → **후보 대기**다 (2026-09-18, WP-126).
+    편집 덤프에는 조회수가 없어서 2단계를 못 넘는다. 리플레이가 확정을 못 내는 건
+    버그가 아니라 계약이다 — 명세 §3.2 9번이 리플레이도 시간별 조회수를 쓰라고 했다.
+    """
     results = replay_title([obs("Milton", "2024-10-09T12:00:00", 40, editors=8)])
     decision = results[0].decision
     assert decision.is_new_page is True
-    assert decision.is_spike is True                # 40 >= MIN_ABSOLUTE_EDITS
+    assert decision.is_pending                      # 확정도 폐기도 아니다
+    assert decision.is_spike is False
     assert decision.edit_z is None                  # 기준선이 없어 z 를 못 낸다
-    assert decision.spike_score > 0
+    assert decision.spike_score == 0.0              # 점수는 확정된 뒤에만 의미가 있다
 
 
-def test_절대_편집수_미달이면_안_잡힌다():
-    results = replay_title([obs("Cat", "2025-06-09T00:00:00", MIN_ABSOLUTE_EDITS - 1)])
-    assert results[0].decision.is_spike is False
+def test_편집이_0이면_후보도_아니다():
+    """~~절대 편집수(10) 미달이면 안 잡힌다~~ → 1단계 관문은 **1건**이다
+    (WP-126). 9건도 후보가 된다 — 0건만 탈락한다.
+    """
+    few = replay_title([obs("Cat", "2025-06-09T00:00:00", MIN_ABSOLUTE_EDITS - 1)])
+    assert few[0].decision.is_pending                # 9건도 1단계는 통과
+
+    none = replay_title([obs("Cat", "2025-06-09T00:00:00", 0, editors=0)])
+    assert none[0].decision.is_pending is False
+    assert none[0].decision.is_spike is False
 
 
-def test_1인_연속편집은_급증이_아니다():
-    """편집 수는 넘어도 편집자가 한 명이면 거른다 (WP-85).
+def test_1인_연속편집도_1단계는_통과한다():
+    """~~편집자가 한 명이면 거른다 (WP-85)~~ → **관문에서 빠졌다**
+    (2026-09-18, WP-126, 명세 §3.2 2번).
 
-    문서 정리·목록 갱신처럼 한 사람이 몰아서 고치는 경우다. 실덤프에서 이 게이트
-    하나가 대조군 오탐을 395 -> 101 건으로 줄였다(74%), 재현율 손실 없이.
+    그 게이트는 실덤프에서 대조군 오탐을 395 -> 101 건으로 줄였었다. 새 계약은 그 일을
+    **조회수 최종 관문**이 대신한다 — 혼자 문서를 정리해도 조회수는 안 튀기 때문이다.
+    ⚠️ 아직 실측으로 확인 안 됐다. 조회수를 실제로 넣는 후속에서 재확인한다.
     """
     solo = replay_title([obs("Cat", "2025-06-09T00:00:00", 40, editors=1)])
-    assert solo[0].decision.is_spike is False
-    assert "편집자" in solo[0].decision.reason
+    assert solo[0].decision.is_pending              # 1단계 통과, 조회수 대기
+    assert solo[0].decision.is_spike is False       # 확정은 아니다
 
+    # 편집자가 둘이어도 결과는 같다 — 편집자 수는 이제 판정에 안 들어간다
     team = replay_title([obs("Cat", "2025-06-09T00:00:00", 40, editors=2)])
-    assert team[0].decision.is_spike is True
+    assert team[0].decision.status is solo[0].decision.status
 
 
 def test_대조군은_평소_편집에서_오탐이_없다():
@@ -154,11 +171,22 @@ def test_대조군은_평소_편집에서_오탐이_없다():
     assert first_detection(results) is None
 
 
-def test_first_detection은_가장_이른_급증():
+def test_조회수_없는_재생은_확정이_하나도_없다():
+    """🔴 이 경로로 재현율을 재던 수치(WP-85: 10/12)는 더는 못 낸다."""
     observations = [obs("Iran", "2025-06-09T00:00:00", 2),
                     obs("Iran", "2025-06-09T01:00:00", 40),
                     obs("Iran", "2025-06-09T02:00:00", 50)]
-    first = first_detection(replay_title(observations))
+    results = replay_title(observations)
+    assert first_detection(results) is None
+    assert all(r.decision.is_pending for r in results)
+
+
+def test_first_candidate는_1단계_통과_시점을_준다():
+    """확정을 못 내는 동안 편집 신호가 언제 섰는지는 볼 수 있어야 한다."""
+    observations = [obs("Iran", "2025-06-09T00:00:00", 0, editors=0),
+                    obs("Iran", "2025-06-09T01:00:00", 40),
+                    obs("Iran", "2025-06-09T02:00:00", 50)]
+    first = first_candidate(replay_title(observations))
     assert first is not None and first.window_start == "2025-06-09T01:00:00"
 
 

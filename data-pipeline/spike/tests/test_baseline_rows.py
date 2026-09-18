@@ -104,25 +104,33 @@ def test_두꺼운_baseline은_z경로로_간다():
     assert detect(Window(edit_count=20, editor_count=3, views=None), baseline).is_spike is False
 
 
-def test_변동있는_baseline에서_급증이_잡힌다():
-    """산출한 행을 detector 에 그대로 먹였을 때 실제 급증이 통과하는지.
+def test_산출한_행이_detector_에_그대로_먹는다():
+    """build_rows 산출물을 Baseline 으로 바로 넣었을 때 2단계 판정이 도는지.
 
-    평상시 1~3 편집(7일) -> 40 편집이면 z 가 임계를 넘고 절대 하한도 넘는다.
+    ~~평상시 1~3 편집 -> 40 편집이면 급증~~ → **편집은 더 이상 관문이 아니다**
+    (2026-09-18, WP-126). 조회수가 없으면 편집이 아무리 튀어도 후보 대기다.
+    여기서 보는 건 산출한 기준선이 판정 입력으로 성립하는지까지다.
     """
     counts = [1, 3, 2, 1, 3, 2, 1]
     days = [f"2025-06-{d:02d}" for d in range(3, 10)]
-    rows = build_rows([win(d, 0, c) for d, c in zip(days, counts)],
+    rows = build_rows([win(d, 0, c, views=200) for d, c in zip(days, counts)],
                       as_of=date(2025, 6, 9), halflife_days=1e9)
     row = rows[0]
     assert row.sample_days == 7 and row.edit_stddev > 0
+    assert row.view_ewma == 200                       # 조회수 기준선도 같이 산출된다
 
-    baseline = Baseline(row.edit_ewma, row.edit_stddev, row.view_ewma, row.sample_days)
-    decision = detect(Window(edit_count=40, editor_count=5, views=None), baseline)
-    assert decision.is_spike is True
-    assert decision.is_new_page is False
-    assert decision.edit_z > 3.0                      # EDIT_Z_THRESHOLD
-    # 조회수가 아직 없으면 확정이 아니라 '감지됨' 상태 (detector 계약)
-    assert "조회수" in decision.reason
+    baseline = Baseline(row.edit_ewma, row.edit_stddev, row.view_ewma,
+                        row.sample_days, row.view_stddev)
+
+    # 조회수 미도착 — 편집 z 가 임계를 훌쩍 넘어도 확정이 아니다
+    pending = detect(Window(edit_count=40, editor_count=5, views=None), baseline)
+    assert pending.is_pending
+    assert pending.edit_z > 3.0                       # 진단값으로는 여전히 실린다
+
+    # 조회수가 도착하고 급등하면 확정. 기준선 200 -> 5,000 (25배)
+    confirmed = detect(Window(edit_count=1, editor_count=1, views=5_000), baseline)
+    assert confirmed.is_spike
+    assert confirmed.is_new_page is False
 
 
 # ---------------------------------------------------------------- 적재 SQL

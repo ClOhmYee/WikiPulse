@@ -146,9 +146,16 @@ class SpikeSink:
     ) -> int:
         """급증 한 건을 적재하고 `spike.page_id` 를 돌려준다.
 
-        🔴 미탐(`is_spike=False`)은 부르지 않는다 — `spike` 는 "판정을 통과한 문서" 다
-        (V1 테이블 주석). 호출자(`runtime.py`)가 거른다.
+        🔴 **확정(`CONFIRMED`)만 넣는다** — `spike` 는 2단계까지 통과한 문서다
+        (V1 테이블 주석 · 명세 §3.2 3번). 호출자(`runtime.py`)가 거르지만 여기서도 막는다.
+
+        ⚠️ 후보 대기(`PENDING_VIEWS`)를 넣으면 **조회수를 안 본 문서가 이슈로 노출된다.**
+        미탐과 메시지를 갈라 둔 이유다 — 후보 대기가 여기까지 온 건 호출자 배선이
+        잘못된 것이지 판정이 틀린 게 아니다 (WP-126).
         """
+        if decision.is_pending:
+            raise ValueError(
+                "후보 대기(조회수 미도착)는 spike 에 넣지 않는다 — 조회수 도착 후 재판정")
         if not decision.is_spike:
             raise ValueError("미탐 판정은 spike 에 넣지 않는다 (테이블 정의)")
 
