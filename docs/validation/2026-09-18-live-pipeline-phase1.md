@@ -22,7 +22,7 @@ batch 1로 재개됐으며, 15분 canary와 Producer·Spark 명시적 재시작�
 | `wikipulse-edit-stream` | running, OOM 없음, `restart=unless-stopped` |
 | Spark application | `app-20260918083122-0014`, `wikipulse-edit-windows` |
 | worker 참여 | 데이터 EC2와 서비스 EC2 worker가 각각 1 core·1024 MiB executor 담당 |
-| HDFS checkpoint | `hdfs://192.0.2.10:8020/wikipulse/checkpoints/edit-windows-v1`, offsets/commits 최종 batch 57 |
+| HDFS checkpoint | `hdfs://192.0.2.10:8020/wikipulse/checkpoints/edit-windows-v1`, 정책 승격 시 batch 57·읽기 전용 후속 확인 시 batch 298 |
 | 기존 인프라 | 데이터 EC2 Kafka·Spark master/worker·HDFS NameNode/DataNode 정상, UFW active |
 
 ## 2. 배포 무결성과 보호 대상
@@ -46,7 +46,7 @@ batch 1로 재개됐으며, 15분 canary와 Producer·Spark 명시적 재시작�
 사용한 비밀 없는 핵심 명령은 다음과 같다.
 
 ```bash
-git archive --format=tar.gz --output=wikipulse-live-phase1-2d00cdb.tar.gz HEAD data-pipeline deploy/live-pipeline
+git archive --format=tar.gz --output=wikipulse-live-phase1-2d00cdb.tar.gz 2d00cdb963c52f8aa69b0b12369b497a3f7506a1 data-pipeline deploy/live-pipeline
 sha256sum wikipulse-live-phase1-2d00cdb.tar.gz
 sudo docker compose --env-file .env config --quiet
 sudo docker compose --env-file .env up -d --no-deps --force-recreate edit-stream
@@ -71,15 +71,18 @@ Spark Master는 `wikipulse-edit-windows` 한 개를 active application으로 표
 호스트 `192.0.2.10`, `192.0.2.20`가 각각 1 core·1024 MiB executor를 받았다. worker가
 반복적으로 executor를 잃은 흔적은 없었다.
 
-console sink는 원시 행을 보존하지 않고 batch별 행 수와 schema만 확인했다. batch 1~6과
-명시적 재시작 후 batch 45~48은 각각 20행이었다. 관측한 schema는 다음과 같다.
+console sink는 batch마다 집계 행을 최대 20개 출력한다. batch 1~6과 명시적 재시작 후
+batch 45~48은 각각 20행이었다. 관측한 schema는 다음과 같다.
 
 ```text
 window_start, window_end, wiki, title, edit_count, editor_count,
 byte_delta_sum, last_edit_ts, max_rev_id
 ```
 
-원시 title·user·meta ID·이벤트 본문은 출력하거나 기록하지 않았다.
+이 집계 행에는 공개 Wikipedia `title`과 wiki, window, 집계값이 포함되며 Docker의 bounded
+`json-file` 로그(`max-size=10m`, `max-file=3`)에 보존되어 호스트 관리자에게 노출된다.
+원시 `user`·meta ID·이벤트 본문·cursor·연락처 환경변수는 이 sink가 출력하거나 문서에
+기록하지 않았다.
 
 ## 4. 15분 canary
 
@@ -114,6 +117,22 @@ Kafka 관리 CLI의 end-offset 조회는 canary 중 8~20초 제한 안에 응답
 위 값은 broker CLI 결과가 아니라 Spark가 각 batch에 commit한 Kafka source offset이다.
 이 값은 실제 소비 진행을 증명하지만 broker의 순간 최신 end offset과 동일하다고 주장하지
 않는다.
+
+### 후속 broker–checkpoint 오프셋 대조
+
+canary 종료 후 Kafka `AdminClient.list_offsets(latest)`와 HDFS checkpoint를 읽기 전용으로
+두 번 대조했다. consumer group·subscription·offset commit은 만들거나 사용하지 않았다.
+broker를 먼저 읽고 이어 checkpoint를 읽었으므로 각 행은 완전히 원자적인 한 시점의
+snapshot은 아니다.
+
+| KST | checkpoint batch | P0 broker / checkpoint / lag | P1 broker / checkpoint / lag | P2 broker / checkpoint / lag |
+| --- | ---: | ---: | ---: | ---: |
+| 19:32:57 | 295 | 4,557 / 4,550 / 7 | 4,935 / 4,930 / 5 | 4,725 / 4,719 / 6 |
+| 19:34:16 | 298 | 4,583 / 4,580 / 3 | 4,948 / 4,945 / 3 | 4,746 / 4,742 / 4 |
+
+79초 동안 broker와 checkpoint가 세 파티션 모두 전진했고 관측 lag 합계는 18건에서
+10건으로 줄었다. 현재 소비가 broker 최신 위치에 근접해 따라가는 증거다. 이 후속 표본은
+canary 시작·종료 시점의 broker end offset을 소급해 증명하지는 않는다.
 
 ## 5. 재시작 복구
 
@@ -194,8 +213,8 @@ HDFS DataNode는 모두 running이며 건강 검사가 있는 컨테이너는 he
 - 이번 단계의 Spark sink는 console이다. PostgreSQL/API 제공 경로는 별도 단계다.
 - checkpoint는 약 15분에 7.36 MiB → 16.73 MiB로 증가했다. 장시간 state 크기와 HDFS
   보존 정책을 관찰해야 한다.
-- Kafka 관리 CLI offset 조회 지연 원인은 별도로 확인해야 한다. 이번 판정은 checkpoint의
-  Kafka source offset을 사용했다.
+- canary 중 Kafka 관리 CLI 조회 지연 원인은 별도로 확인해야 한다. 후속 검증에서는
+  읽기 전용 AdminClient 조회가 성공해 현재 broker–checkpoint lag를 보완 기록했다.
 - Producer cursor 파일은 root 소유 mode `0644`였으나 지정 state 디렉터리 안에서 저장·재개에
   성공했다. 운영 계정 정책을 정할 때 소유권을 재검토할 수 있다.
 - 데이터 EC2 RAM 16 GiB에서 현재 두 신규 서비스는 제한 안에서 안정적이었지만 Kafka,

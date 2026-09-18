@@ -68,6 +68,18 @@ sudo docker compose --env-file .env up -d producer
 sudo docker compose --env-file .env up -d edit-stream
 ```
 
+## 로그 취급
+
+현재 `SINK=console`은 검증용으로 batch마다 집계 행을 최대 20개 출력한다. 집계 행에는
+공개 Wikipedia `title`, wiki, window와 편집 집계값이 포함되며, 호스트 관리자는 Docker
+로그로 열람할 수 있다. 두 서비스 로그는 `json-file`의 `max-size=10m`, `max-file=3`으로
+제한된다. 집계 schema에는 원시 사용자명·meta ID·이벤트 본문·producer cursor·연락처
+환경변수가 포함되지 않는다.
+
+운영자가 `docker compose logs` 출력을 외부에 공유할 때는 공개 문서 제목과 시각·집계값이
+포함된다는 점을 고려한다. PostgreSQL 적재 sink로 전환하기 전까지 console sink는 영구
+결과 저장소가 아니라 동작 확인 수단이다.
+
 ## 중지와 복구
 
 롤백 때는 이 독립 프로젝트의 `edit-stream`, `producer` 두 서비스만 중지한다. 기존
