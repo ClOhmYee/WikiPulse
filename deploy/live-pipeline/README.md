@@ -14,17 +14,28 @@ edit stream만 실행한다. 기존 EC2 인프라 Compose와 UFW 설정은 수�
 cd deploy/live-pipeline
 cp .env.example .env
 chmod 0600 .env
+unset RESTART_POLICY
+PIPELINE_IVY_PATH="$(sed -n 's/^PIPELINE_IVY_DIR=//p' .env)"
+test -n "$PIPELINE_IVY_PATH"
+sudo install -d -m 0775 -o 185 -g 185 -- "$PIPELINE_IVY_PATH"
+test "$(stat -c '%u:%g:%a' "$PIPELINE_IVY_PATH")" = "185:185:775"
 ```
 
 운영 `.env`는 반드시 mode `0600`을 유지하고 실제 `CONTACT_EMAIL`과 서버 경로·주소를
 채운다. `.env`와 자격 증명은 Git에 커밋하지 않는다. 저장소 체크아웃에서는 예제의
 `PIPELINE_APP_DIR=../../data-pipeline`이 그대로 렌더링된다.
 
-## 사전 확인과 시작
+Spark 이미지는 UID/GID `185:185`로 실행한다. 위 preflight는 전용
+`PIPELINE_IVY_DIR`을 그 계정이 쓸 수 있게 만들고 소유권과 mode를 검사한다. 이 검사가
+통과하지 않으면 `--packages` 의존성 다운로드 전에 중단한다.
 
-컨테이너를 시작하기 전에 구성을 렌더링한다.
+## 사전 확인과 canary 시작
+
+컨테이너를 시작하기 전에 구성을 렌더링한다. `.env`의 `RESTART_POLICY=no`가 canary
+기본값이므로 프로세스가 실패해도 무한 재시작하지 않는다.
 
 ```bash
+grep -qx 'RESTART_POLICY=no' .env
 sudo docker compose --env-file .env config --quiet
 ```
 
@@ -35,6 +46,17 @@ sudo docker compose --env-file .env up -d --build producer
 sudo docker compose --env-file .env logs --since 3m producer
 sudo docker compose --env-file .env up -d edit-stream
 sudo docker compose --env-file .env logs --since 5m edit-stream
+```
+
+두 로그 검증이 통과한 뒤에만 운영 재시작 정책을 활성화한다. 변경된 정책을 producer,
+edit-stream 순서로 적용한다.
+
+```bash
+sed -i 's/^RESTART_POLICY=no$/RESTART_POLICY=unless-stopped/' .env
+grep -qx 'RESTART_POLICY=unless-stopped' .env
+sudo docker compose --env-file .env config --quiet
+sudo docker compose --env-file .env up -d producer
+sudo docker compose --env-file .env up -d edit-stream
 ```
 
 ## 중지와 복구

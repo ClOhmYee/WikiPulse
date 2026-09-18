@@ -13,7 +13,7 @@ services:
     container_name: wikipulse-producer
     network_mode: host
     init: true
-    restart: unless-stopped
+    restart: ${RESTART_POLICY:-no}
     cpus: 0.25
     mem_limit: 256m
     environment:
@@ -32,7 +32,7 @@ services:
     container_name: wikipulse-edit-stream
     network_mode: host
     init: true
-    restart: unless-stopped
+    restart: ${RESTART_POLICY:-no}
     mem_limit: 1536m
     environment:
       SPARK_LOCAL_IP: ${DATA_SERVER_IP:-192.0.2.10}
