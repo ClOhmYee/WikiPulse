@@ -14,6 +14,7 @@ def _env(name: str, default: str) -> str:
 class Config:
     stream_url: str
     user_agent: str
+    cursor_file: str | None
     bootstrap_servers: str
     topic: str
     wikis: frozenset[str] | None
@@ -34,11 +35,14 @@ class Config:
                 "  data-pipeline/.env.example 을 .env 로 복사해 채운다."
             )
 
+        cursor_raw = _env("SSE_CURSOR_FILE", "").strip()
+
         return cls(
             stream_url=_env(
                 "STREAM_URL", "https://stream.wikimedia.org/v2/stream/recentchange"
             ),
             user_agent=f"WikiPulse/0.1 (WikiPulse; {contact})",
+            cursor_file=cursor_raw or None,
             bootstrap_servers=_env("KAFKA_BOOTSTRAP_SERVERS", "localhost:9092"),
             topic=_env("KAFKA_TOPIC", "wiki.edits"),
             wikis=wikis,

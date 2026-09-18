@@ -112,6 +112,15 @@ def test_wikis_가_None_이면_전부_통과():
     assert normalize(make(wiki="kowiki"), wikis=None)["wiki"] == "kowiki"
 
 
+@pytest.mark.parametrize("meta_id", [None, "", " \t"])
+def test_meta_id_가_비어_있으면_거부한다(meta_id):
+    raw = copy.deepcopy(REAL_EDIT)
+    raw["meta"]["id"] = meta_id
+
+    with pytest.raises(ValueError, match="meta.id"):
+        normalize(raw)
+
+
 def test_같은_문서는_같은_키를_받는다():
     """문서 단위 윈도우 집계라 같은 문서가 여러 파티션에 흩어지면 안 된다."""
     first = partition_key(normalize(REAL_EDIT))

@@ -5,6 +5,9 @@
 # Codex 개인 설정과 작업 메모 (절대 커밋 금지)
 .agents/local/
 
+# 기능 구현 격리용 git worktree
+.worktrees/
+
 # 환경 변수
 .env
 .env.*

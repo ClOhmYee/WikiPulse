@@ -85,10 +85,21 @@ docker compose run --rm spark
 | `WIKIS` | `enwiki` | 쉼표로 여러 개. `*` 면 전 위키 |
 | `KAFKA_BOOTSTRAP_SERVERS` | `localhost:9092` | 컨테이너 안에서는 `kafka:29092` |
 | `KAFKA_TOPIC` | `wiki.edits` | |
+| `SSE_CURSOR_FILE` | (빈 값) | Kafka 확인 완료 뒤 저장할 EventStreams cursor 파일. 빈 값이면 로컬 임시 동작 유지 |
 | `WINDOW_SIZE` / `SLIDE_SIZE` | `1 hour` / `5 minutes` | 현재 집계 구현값. 현행 v0.3에서는 편집 횟수 임계가 아니라 조회수 검사 후보를 내는 주기를 결정하며 WP-118에서 재검토 |
 | `STARTING_OFFSETS` | `latest` | 처음부터 읽으려면 `earliest` |
 | `SINK` | `console` | `spike` 면 판정까지 가서 `spike(source='live')` 에 적재 (WP-100) |
 | `DATABASE_URL` | (없음) | `SINK=spike` 에 필수. 없으면 기동 때 멈춘다 — 조용히 콘솔로 안 떨어진다 |
+
+### 재시작 상태
+
+producer는 Kafka가 이벤트 전달을 확인한 뒤에만 `SSE_CURSOR_FILE`을 갱신한다. 전달 실패나
+확인 timeout에서는 cursor를 진행시키지 않으며, 재연결 때 저장된 값을 `Last-Event-ID`로
+보낸다. 로컬에서 `SSE_CURSOR_FILE`을 비워 두면 cursor를 디스크에 저장하지 않는다.
+
+Spark의 로컬 기본 checkpoint는 `/tmp/wikipulse-checkpoint`지만 운영 Compose는
+`CHECKPOINT_DIR=hdfs://192.0.2.10:8020/wikipulse/checkpoints/edit-windows-v1`을 사용한다. 이 HDFS 경로에는
+streaming offset과 상태가 있으므로 재시작·복구 때 삭제하거나 다른 실행과 공유하지 않는다.
 
 ### LIVE 적재 경로 (`SINK=spike`, WP-100)
 
