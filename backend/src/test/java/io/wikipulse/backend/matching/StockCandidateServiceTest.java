@@ -39,9 +39,7 @@ class StockCandidateServiceTest {
     @Test
     void 확정된_K값으로_두_경로를_뽑아_합집합을_적재한다() {
         float[] vector = {0.1f, 0.2f};
-        when(repository.memberTitlesByPulse(42L)).thenReturn(List.of("Hurricane Milton", "Florida"));
-        when(embeddingSource.embed(List.of("Hurricane Milton", "Florida")))
-                .thenReturn(Optional.of(vector));
+        when(embeddingSource.embed(42L)).thenReturn(Optional.of(vector));
         when(repository.embeddingTopK(vector, 20)).thenReturn(Map.of("NEE", 0.31));
         when(repository.gdeltTopK(42L, 10)).thenReturn(Map.of("NEE", 10.5, "GNRC", 9.3));
         when(repository.replaceCandidates(eq(42L), candidatesCaptor.capture())).thenReturn(2);
@@ -67,8 +65,7 @@ class StockCandidateServiceTest {
         // GATEWAY·위키 전송 실패는 삼키지 않는다(fix-impact 반려안 B). -66 이후 클라이언트 폴백이
         // UpstreamUnavailableException 으로 정규화해 던지고, 소스·서비스가 전파한다. 예외가 전파되면
         // replaceCandidates 에 도달하지 못해 아무 행도 안 쓰이고, 폴러가 다음 주기에 재시도한다.
-        when(repository.memberTitlesByPulse(9L)).thenReturn(List.of("Some Title"));
-        when(embeddingSource.embed(List.of("Some Title")))
+        when(embeddingSource.embed(9L))
                 .thenThrow(new UpstreamUnavailableException("GATEWAY 임베딩 호출 불가", new RuntimeException("503")));
 
         org.assertj.core.api.Assertions.assertThatThrownBy(() -> service().generateFor(9L))
@@ -80,8 +77,7 @@ class StockCandidateServiceTest {
 
     @Test
     void 대표_텍스트가_비면_임베딩_경로를_건너뛰고_GDELT만으로_적재한다() {
-        when(repository.memberTitlesByPulse(7L)).thenReturn(List.of("Some Title"));
-        when(embeddingSource.embed(List.of("Some Title"))).thenReturn(Optional.empty());
+        when(embeddingSource.embed(7L)).thenReturn(Optional.empty());
         when(repository.gdeltTopK(7L, 10)).thenReturn(Map.of("DAL", 6.0));
         when(repository.replaceCandidates(eq(7L), candidatesCaptor.capture())).thenReturn(1);
 

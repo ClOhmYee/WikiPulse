@@ -40,9 +40,7 @@ public class StockCandidateService {
      * 대표 텍스트를 만들 도입부가 하나도 없으면 임베딩 경로는 비고 GDELT 경로만으로 후보를 낸다.
      */
     public Result generateFor(long clusterId) {
-        List<String> titles = repository.memberTitlesByPulse(clusterId);
-
-        Map<String, Double> embedding = embeddingSource.embed(titles)
+        Map<String, Double> embedding = embeddingSource.embed(clusterId)
                 .map(vector -> repository.embeddingTopK(vector, props.getEmbeddingTopK()))
                 .orElseGet(Map::of);
         Map<String, Double> gdelt = repository.gdeltTopK(clusterId, props.getGdeltTopK());
