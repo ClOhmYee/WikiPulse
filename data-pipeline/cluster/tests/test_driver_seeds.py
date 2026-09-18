@@ -52,7 +52,7 @@ class FakeCursor:
             # SELECT_SEEDS_SQL 파라미터: (source, detected_at).
             # 시각은 거르지 않는다 — 대역의 `spikes` 가 곧 "이 질의가 낼 행" 이다.
             source = params[0]
-            self._rows = [row[:9] for row in self._conn.spikes if row[9] == source]
+            self._rows = [row[:11] for row in self._conn.spikes if row[11] == source]
         elif "FROM issue_cluster" in sql:
             self._rows = list(self._conn.prior.items())
         else:
@@ -88,15 +88,19 @@ class FakeConn:
 
 def spike_row(page_id=398, wiki="enwiki", title="Hurricane Milton",
               window_start=WINDOW_START, detected_at=DETECTED_AT,
-              edit_count=10, view_ratio=None, spike_score=26.4575, row_id=1,
-              source="replay"):
+              edit_count=10, views=24_669, view_baseline=None, view_ratio=None,
+              spike_score=26.4575, row_id=1, source="replay"):
     """SELECT_SEEDS_SQL 의 컬럼 순서 그대로 + 맨 뒤에 출처 태그.
 
     `source` 는 조회 컬럼이 아니라 대역 테이블의 태그다 — `FakeCursor` 가 그걸로 거르고
-    드라이버에는 앞 9개만 넘긴다(실 질의가 내는 컬럼 수와 같다).
+    드라이버에는 앞 11개만 넘긴다(실 질의가 내는 컬럼 수와 같다).
+
+    기본값은 canary 실측(2025-06-12 `Air India Flight 171`)을 따랐다 — 신규 문서라
+    기준선 표본이 없어 `view_baseline`·`view_ratio` 가 NULL 이고 조회수 원값만 있다.
+    **그 조합이 바로 이번 결함이 났던 자리다** (WP-129).
     """
     return (row_id, page_id, wiki, title, window_start, detected_at,
-            edit_count, view_ratio, spike_score, source)
+            edit_count, views, view_baseline, view_ratio, spike_score, source)
 
 
 # ---------------------------------------------------------------- 씨드 매핑
@@ -120,17 +124,49 @@ def test_event_date는_window_start의_UTC_날짜다():
     assert seeds[0].event_date == date(2024, 10, 6)
 
 
-def test_없는_값은_지어내지_않는다():
-    """spike 는 조회수 원값·기준선을 저장하지 않는다 — None 이 맞다."""
+def test_조회수_원값과_기준선은_spike_에서_그대로_온다():
+    """~~spike 는 조회수 원값·기준선을 저장하지 않는다~~ → V7 부터 저장한다
+    (2026-09-18, WP-129).
+
+    canary 에서 실제 판정 조회수 25,426 이 있는데도 `cluster_member.views` 가 null 로
+    나갔다. driver 가 `views=None` 을 하드코딩했기 때문인데, 읽을 컬럼이 없어서였다.
+    """
     seed = load_seeds_from_spike(FakeConn(spikes=[spike_row()]), DETECTED_AT, "replay")[0]
+    assert seed.views == 24_669
+    assert seed.view_baseline is None      # 신규 문서 — 기준선 표본이 없다
+    assert seed.edit_baseline is None      # 편집 기준선은 아직 spike 에 없다(지어내지 않는다)
+
+
+def test_표본_없는_신규문서가_complete_로_나온다():
+    """🔴 이 이슈의 발단 (canary §5, WP-129).
+
+    신규 문서는 기준선 표본이 없어 절대 하한(>=100)으로 확정된다 — 명세 §3.2 3번
+    "0 에서의 급등". 그 경로는 배수를 낼 분모가 없어 `view_ratio` 가 NULL 인데,
+    ~~그걸 판정 미완료로 읽어 pending 으로 저장했다~~. 판정은 끝났으니 complete 다.
+    """
+    seed = load_seeds_from_spike(
+        FakeConn(spikes=[spike_row(views=25_426, view_baseline=None, view_ratio=None)]),
+        DETECTED_AT, "replay")[0]
+    assert seed.completeness == "complete"
+    assert seed.views == 25_426
+
+
+def test_조회수가_없는_옛_행은_여전히_None_이다():
+    """V7 이전에 저장된 행. 지어내지 않고 그대로 통과시킨다."""
+    seed = load_seeds_from_spike(
+        FakeConn(spikes=[spike_row(views=None)]), DETECTED_AT, "replay")[0]
     assert seed.views is None
-    assert seed.edit_baseline is None
-    assert seed.view_baseline is None
+    assert seed.completeness == "pending"
 
 
 def test_조회수_미판정은_pending_판정됐으면_complete():
+    """🔴 판단 근거가 `view_ratio` -> `views` 로 바뀌었다 (WP-129).
+
+    표본 없는 문서는 배수가 정당하게 NULL 이다(분모가 없다). 그걸 "판정 미완료" 로
+    읽어서 확정 건이 전부 pending 으로 저장됐다 — canary §5.
+    """
     assert _completeness(None) == "pending"
-    assert _completeness(3.2) == "complete"
+    assert _completeness(24_669) == "complete"
 
     seed = load_seeds_from_spike(
         FakeConn(spikes=[spike_row(view_ratio=3.2)]), DETECTED_AT, "replay")[0]

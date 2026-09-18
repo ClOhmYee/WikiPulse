@@ -37,7 +37,7 @@ from pyspark.sql import functions as F                      # noqa: E402
 from spike.baseline_repository import BaselineRepository    # noqa: E402
 from spike.baseline_rows import build_rows                  # noqa: E402
 from spike.baseline_sink import load                        # noqa: E402
-from spike.detector import MIN_ABSOLUTE_EDITS               # noqa: E402
+from spike.detector import MIN_ABSOLUTE_EDITS, MIN_ABSOLUTE_VIEWS   # noqa: E402
 from spike.runtime import PageWindow, SpikeRuntime          # noqa: E402
 from spike.spike_sink import SpikeSink                      # noqa: E402
 from streaming.edit_windows import aggregate_edit_windows   # noqa: E402
@@ -118,16 +118,31 @@ def edit_events(spark, title, *, count, editors, start=WINDOW_START):
     )
 
 
-def aggregated_batch(spark, title, *, count, editors):
+#: 2단계 관문(WP-126)을 통과시키는 조회수. 아래 문서들은 조회수 기준선 표본이
+#: 없어 절대 하한(MIN_ABSOLUTE_VIEWS=100)만 보는 "0 에서의 급등" 경로로 확정된다.
+CONFIRMING_VIEWS = 5_000
+
+
+def aggregated_batch(spark, title, *, count, editors, views=CONFIRMING_VIEWS):
     """편집 이벤트 -> 실제 집계 함수 -> LIVE 싱크가 받는 형태.
 
     슬라이드를 윈도우와 같게 줘서 정각 tumbling 하나만 나오게 한다 — 겹치는
     윈도우까지 세면 이 파일이 보려는 계약(멱등·출처)이 가려진다.
     """
-    return aggregate_edit_windows(
+    from pyspark.sql import functions as F
+
+    windows = aggregate_edit_windows(
         edit_events(spark, title, count=count, editors=editors),
         window_size="1 hour", slide_size="1 hour",
     )
+    if views is None:
+        return windows
+    # 🔴 **편집 스트림에는 조회수가 없다** (`streaming/live_spike.py` ⚠️). 이 파일이
+    #    보려는 건 Spark -> 싱크 이음매(출처 라벨·멱등·공존)지 관문 자체가 아닌데,
+    #    조회수가 없으면 전부 후보 대기가 돼 한 행도 안 남아 그 계약을 못 본다.
+    #    그래서 여기서만 조회수를 실어 확정이 나게 한다. 실제 주입 경로는 -128 이다.
+    #    조회수 없는 LIVE 의 진짜 결과는 `test_조회수_없는_LIVE_배치는_확정이_없다` 가 본다.
+    return windows.withColumn("views", F.lit(views))
 
 
 def seed_baseline(conn, title, *, edit_ewma, edit_stddev, sample_days):
@@ -166,7 +181,7 @@ def save_replay_spike(conn, title, *, edits):
     """리플레이 출처로 한 건 적재 — 공존 검사의 대조군."""
     SpikeRuntime(BaselineRepository(conn), SpikeSink(conn, source="replay")).process(
         PageWindow(wiki="enwiki", title=title, window_start=WINDOW_START,
-                   edit_count=edits, editor_count=4, views=None))
+                   edit_count=edits, editor_count=4, views=CONFIRMING_VIEWS))
     conn.commit()
 
 
@@ -174,11 +189,16 @@ def save_replay_spike(conn, title, *, edits):
 
 def test_집계_결과가_런타임_입력_컬럼을_낸다(spark):
     """`to_runtime_frame` 이 기대하는 컬럼이 실제 집계 출력에 다 있다."""
-    frame = to_runtime_frame(aggregated_batch(spark, "X", count=5, editors=2))
-    assert set(frame.columns) == {
-        "wiki", "title", "window_start_epoch", "window_end_epoch",
-        "edit_count", "editor_count",
-    }
+    required = {"wiki", "title", "window_start_epoch", "window_end_epoch",
+                "edit_count", "editor_count"}
+
+    # 편집 스트림 그대로 — 조회수 컬럼이 없다. 없는 걸 만들어 내지 않는다.
+    bare = to_runtime_frame(aggregated_batch(spark, "X", count=5, editors=2, views=None))
+    assert set(bare.columns) == required
+
+    # 조회수가 붙은 프레임이면 그대로 싣는다 (WP-128 이 쓸 이음매).
+    with_views = to_runtime_frame(aggregated_batch(spark, "X", count=5, editors=2))
+    assert set(with_views.columns) == required | {"views"}
 
 
 def test_epoch_변환이_UTC_순간값을_보존한다(spark):
@@ -212,11 +232,31 @@ def test_마이크로배치가_source_live로_적재한다(spark, conn, title):
 
 
 def test_미탐은_저장하지_않는다(spark, conn, title):
-    """편집자 1명은 편집 관문에서 걸린다 (MIN_DISTINCT_EDITORS)."""
-    batch = aggregated_batch(spark, title, count=MIN_ABSOLUTE_EDITS + 5, editors=1)
+    """🔴 ~~편집자 1명이면 편집 관문에서 걸린다~~ → 편집자 수는 관문이 아니다
+    (WP-126). 폐기를 내는 건 조회수다 — 절대 하한 미만이면 REJECTED 다.
+    """
+    batch = aggregated_batch(spark, title, count=MIN_ABSOLUTE_EDITS + 5, editors=1,
+                             views=MIN_ABSOLUTE_VIEWS - 1)
     summary = process_batch(conn, batch, batch_id=0)
 
     assert (summary.detected, summary.persisted) == (0, 0)
+    assert spikes(conn, title) == []
+
+
+def test_조회수_없는_LIVE_배치는_확정이_없다(spark, conn, title):
+    """🔴 지금 LIVE 의 실제 상태다 — 버그가 아니라 계약이다 (WP-126).
+
+    `wiki.edits` 에 조회수가 없어서 2단계를 못 넘는다. 확정도 폐기도 아닌 후보 대기라
+    `spike` 에 한 행도 안 남는다. `other/pageviews` 를 붙이는 -128 이 이걸 푼다.
+    이 테스트가 깨지면 둘 중 하나다: 조회수가 실제로 붙었거나(좋음, 이 검사를 바꾼다),
+    조회수 없는 윈도우가 다시 확정되기 시작했거나(나쁨, 관문이 뚫렸다).
+    """
+    batch = aggregated_batch(spark, title, count=MIN_ABSOLUTE_EDITS + 5, editors=4,
+                             views=None)
+    summary = process_batch(conn, batch, batch_id=0)
+
+    assert (summary.evaluated, summary.detected, summary.persisted) == (1, 0, 0)
+    assert summary.pending_views == 1
     assert spikes(conn, title) == []
 
 

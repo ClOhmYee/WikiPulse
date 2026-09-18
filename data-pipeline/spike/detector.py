@@ -291,8 +291,13 @@ def _edit_z(window: Window, baseline: Baseline | None) -> float | None:
     """편집 z — **진단값이다. 판정에 안 쓴다** (WP-126).
 
     로그·분석에서 "편집도 같이 튀었나" 를 보려고 계속 싣는다.
+
+    🔴 **기준선이 없거나 얇으면 None 이다.** 얇은 표본(sample_days < 7)에서 낸 z 는
+    숫자는 나오지만 통계적으로 의미가 없다 — 관측 두세 개로 낸 표준편차라 조금만
+    튀어도 z 가 폭발한다. 숫자를 실어 보내면 로그를 읽는 사람이 그걸 신뢰한다.
+    `spike.edit_z` 가 NULL 허용인 것도 이 경로 때문이다(V1).
     """
-    if baseline is None:
+    if _thin(baseline):
         return None
     return _z(window.edit_count, baseline.edit_ewma, baseline.edit_stddev)
 
