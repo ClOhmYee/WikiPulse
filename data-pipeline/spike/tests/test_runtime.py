@@ -326,6 +326,54 @@ def test_행에_window_end가_있으면_읽는다():
     assert w.window_end == datetime(2024, 10, 6, 19, 30, tzinfo=UTC)
 
 
+# ------------------------------------------- 시점 증거 (WP-129 2번)
+
+def test_증거를_싱크까지_그대로_넘긴다():
+    """판정에는 안 들어가고 저장만 된다 — 무엇까지 보고 판정했는지의 기록이다."""
+    sink = FakeSink()
+    SpikeRuntime(FakeBaselines(), sink).process(PageWindow(
+        wiki="enwiki", title="Hurricane Milton",
+        window_start=datetime(2024, 10, 6, 19, tzinfo=UTC),
+        edit_count=1, editor_count=2, views=CONFIRMING_VIEWS,
+        max_rev_id=1_295_198_287,
+        last_edit_ts=datetime(2024, 10, 6, 19, 40, tzinfo=UTC),
+    ))
+    assert sink.saved[0]["max_rev_id"] == 1_295_198_287
+    assert sink.saved[0]["last_edit_ts"] == datetime(2024, 10, 6, 19, 40, tzinfo=UTC)
+
+
+def test_증거가_없으면_None으로_간다():
+    """⚠️ 0 이나 지금 시각으로 메우지 않는다 — 감사에서 "증거 없음" 과 구분돼야 한다."""
+    sink = FakeSink()
+    SpikeRuntime(FakeBaselines(), sink).process(window())
+    assert sink.saved[0]["max_rev_id"] is None
+    assert sink.saved[0]["last_edit_ts"] is None
+
+
+def test_윈도우_밖_편집이_섞이면_막는다():
+    """🔴 마지막 편집이 윈도우 끝보다 뒤면 그 집계에 미래 편집이 들어간 것이다.
+
+    통과시키면 "증거는 있는데 그 증거가 규칙 위반" 인 행이 저장되고 아무도 안 본다.
+    리플레이에서 덤프 구간을 잘못 자르면 실제로 이렇게 된다.
+    """
+    with pytest.raises(ValueError, match="last_edit_ts"):
+        PageWindow(wiki="enwiki", title="X",
+                   window_start=datetime(2024, 10, 6, 19, tzinfo=UTC),
+                   edit_count=10, editor_count=2,
+                   last_edit_ts=datetime(2024, 10, 6, 20, 1, tzinfo=UTC))
+
+
+def test_행에서_읽은_증거도_같은_검사를_받는다():
+    w = PageWindow.from_row({
+        "wiki": "enwiki", "title": "Hurricane Milton",
+        "window_start": "2024-10-06T19:00:00",
+        "edit_count": 10, "editor_count": 2,
+        "max_rev_id": 1_295_198_287, "last_edit_ts": "2024-10-06T19:40:00",
+    })
+    assert w.max_rev_id == 1_295_198_287
+    assert w.last_edit_ts == datetime(2024, 10, 6, 19, 40, tzinfo=UTC)
+
+
 def test_거꾸로_된_window_end는_막는다():
     with pytest.raises(ValueError, match="window_end"):
         PageWindow(wiki="enwiki", title="X",

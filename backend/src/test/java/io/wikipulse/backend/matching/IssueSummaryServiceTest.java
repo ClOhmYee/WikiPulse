@@ -47,10 +47,9 @@ class IssueSummaryServiceTest {
     @BeforeEach
     void commonStubs() {
         lenient().when(verificationRepository.issueKeyOf(anyLong())).thenReturn("iran-2026-08");
-        lenient().when(verificationRepository.memberTitlesByPulse(anyLong())).thenReturn(List.of("Iran"));
         lenient().when(verificationRepository.topOrgMentions(anyLong(), anyInt()))
                 .thenReturn(List.of("Reuters"));
-        lenient().when(issueText.build(any())).thenReturn("Iran: ...");
+        lenient().when(issueText.build(anyLong())).thenReturn("Iran: ...");
         // 기본: 재사용 캐시 미스 — 대부분 테스트는 새 생성 경로를 본다.
         lenient().when(repository.findPriorSummary(anyLong(), anyString(), anyString()))
                 .thenReturn(Optional.empty());

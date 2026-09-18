@@ -50,6 +50,7 @@ from __future__ import annotations
 from collections.abc import Iterable, Iterator
 from dataclasses import dataclass
 from datetime import datetime
+from typing import NamedTuple
 
 from producer.normalize import canonical_title
 
@@ -66,7 +67,33 @@ class WindowRow:
     hour_of_day: int      # 0..23 (UTC 시)
     edit_count: int
     editor_count: int
-    views: int
+    #: 🔴 **조회수 원본이 없으면 None 이다. 0 이 아니다** (2026-09-18, WP-127).
+    #: ~~없으면 0~~ 은 두 곳에서 조용히 틀렸다:
+    #:   1. `build_rows` 가 0 을 **관측값으로** 세어 view_ewma 를 끌어내린다. 조회수를
+    #:      아직 안 받은 시간이 "그 시간엔 아무도 안 봤다" 가 되어 기준선이 낮아지고,
+    #:      그만큼 없는 급증이 생긴다.
+    #:   2. 2단계 계약에서 0 은 REJECTED(다시 안 봄)이고 None 은 후보 대기(재판정)다.
+    #:      `PageWindow.from_row` 가 경계에서 0 을 None 으로 되돌리고 있었는데
+    #:      (WP-126), 그 임시 보정의 근본 해결이 여기다.
+    #: ⚠️ "진짜 그 시간에 0회 조회" 와 "원본 미도착" 은 여전히 다른 값이다 — 전자는 0.
+    views: int | None
+    #: 시점 감사 증거 (V9, WP-129 2번). 판정에는 안 쓴다.
+    #: 조회수만 있고 편집이 없는 윈도우는 revision 이 없어 None 이다.
+    max_rev_id: int | None = None
+    last_edit_ts: str | None = None
+
+
+class EditAggregate(NamedTuple):
+    """한 (wiki, title, hour) 의 편집 집계.
+
+    ~~(편집 수, 편집자 수) 튜플~~ → 이름 붙인 네 값 (2026-09-18, WP-129 2번).
+    시점 증거 두 개가 붙으면서 위치 튜플로는 어느 자리가 무엇인지 알 수 없어졌다.
+    앞 두 자리는 그대로라 `agg[:2]` 는 여전히 옛 튜플과 같다.
+    """
+    edit_count: int
+    editor_count: int
+    max_rev_id: int | None
+    last_edit_ts: str | None
 
 
 def _parse_iso(ts: str) -> datetime:
@@ -100,7 +127,7 @@ def is_bot_edit(rec: dict) -> bool:
 
 def aggregate_edits(
     edit_events: Iterable[dict], *, keep_bots: bool = False
-) -> dict[tuple[str, str, str], tuple[int, int]]:
+) -> dict[tuple[str, str, str], EditAggregate]:
     """edit_event 레코드를 (wiki, title, hour) → (편집 수, 편집자 수) 로 집계한다.
 
     봇은 기본 제외(keep_bots=True 면 유지 — 진단용). 시간은 event_ts 를 정각으로 내린다.
@@ -109,6 +136,8 @@ def aggregate_edits(
     """
     counts: dict[tuple[str, str, str], int] = {}
     editors: dict[tuple[str, str, str], set[str]] = {}
+    max_rev: dict[tuple[str, str, str], int] = {}
+    last_ts: dict[tuple[str, str, str], str] = {}
     for rec in edit_events:
         if not keep_bots and is_bot_edit(rec):
             continue
@@ -118,7 +147,18 @@ def aggregate_edits(
         user = rec.get("user")
         if user:
             editors.setdefault(key, set()).add(user)
-    return {k: (n, len(editors.get(k, ()))) for k, n in counts.items()}
+        # 시점 증거 (V9). 스트리밍의 max(rev_id)·max(event_ts) 와 같은 집계다 —
+        # 갈리면 두 경로가 서로 다른 증거를 남긴다(`tests/test_stream_batch_parity.py`).
+        rev_id = rec.get("rev_id")
+        if rev_id is not None:
+            max_rev[key] = max(max_rev.get(key, 0), int(rev_id))
+        event_ts = rec.get("event_ts")
+        if event_ts is not None and event_ts > last_ts.get(key, ""):
+            last_ts[key] = event_ts
+    return {
+        k: EditAggregate(n, len(editors.get(k, ())), max_rev.get(k), last_ts.get(k))
+        for k, n in counts.items()
+    }
 
 
 def sum_views(
@@ -139,25 +179,32 @@ def sum_views(
 
 
 def join_windows(
-    edit_counts: dict[tuple[str, str, str], tuple[int, int]],
+    edit_counts: dict[tuple[str, str, str], EditAggregate],
     view_totals: dict[tuple[str, str, str], int],
 ) -> Iterator[WindowRow]:
     """편집·조회 집계를 (wiki, title, hour) 기준 full outer join 한다.
 
     baseline 은 edit_z(편집)와 view_ewma(조회수)를 둘 다 잡으므로, 한쪽만 있는 윈도우도
-    남긴다(없는 쪽은 0). 편집만 있는 시간·조회만 있는 시간이 모두 baseline 슬롯에 든다.
+    남긴다. 편집만 있는 시간·조회만 있는 시간이 모두 baseline 슬롯에 든다.
+
+    🔴 **없는 쪽의 값이 다르다.** 편집이 없으면 0 건이 맞다 — 편집 덤프는 그 시간 전체를
+    담고 있어서 "안 나옴 = 0건" 이다. 조회수는 아니다: 그 시간 파일을 아직 못 받았을 수도,
+    이 문서가 후보 필터 밖일 수도 있다. 그래서 조회수만 None 으로 둔다 (WP-127).
     """
+    empty = EditAggregate(0, 0, None, None)
     for key in edit_counts.keys() | view_totals.keys():
         wiki, title, window_start = key
-        edits, editors = edit_counts.get(key, (0, 0))
+        agg = edit_counts.get(key, empty)
         yield WindowRow(
             wiki=wiki,
             title=title,
             window_start=window_start,
             hour_of_day=hour_of_day(window_start),
-            edit_count=edits,
-            editor_count=editors,
-            views=view_totals.get(key, 0),
+            edit_count=agg.edit_count,
+            editor_count=agg.editor_count,
+            views=view_totals.get(key),
+            max_rev_id=agg.max_rev_id,
+            last_edit_ts=agg.last_edit_ts,
         )
 
 

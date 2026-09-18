@@ -67,8 +67,8 @@ SPIKE_SOURCES = ("live", "replay")
 UPSERT_SPIKE_SQL = """
 INSERT INTO spike
     (source, page_id, detected_at, window_start, edit_count, edit_z,
-     views, view_baseline, view_ratio, spike_score)
-VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+     views, view_baseline, view_ratio, spike_score, max_rev_id, last_edit_ts)
+VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
 ON CONFLICT (source, page_id, window_start) DO UPDATE SET
     detected_at   = EXCLUDED.detected_at,
     edit_count    = EXCLUDED.edit_count,
@@ -76,7 +76,9 @@ ON CONFLICT (source, page_id, window_start) DO UPDATE SET
     views         = EXCLUDED.views,
     view_baseline = EXCLUDED.view_baseline,
     view_ratio    = EXCLUDED.view_ratio,
-    spike_score   = EXCLUDED.spike_score
+    spike_score   = EXCLUDED.spike_score,
+    max_rev_id    = EXCLUDED.max_rev_id,
+    last_edit_ts  = EXCLUDED.last_edit_ts
 """
 
 
@@ -148,11 +150,18 @@ class SpikeSink:
         decision: SpikeDecision,
         views: int | None = None,
         view_baseline: float | None = None,
+        max_rev_id: int | None = None,
+        last_edit_ts: datetime | None = None,
     ) -> int:
         """급증 한 건을 적재하고 `spike.page_id` 를 돌려준다.
 
         `views`·`view_baseline` 은 판정에 쓴 값 그대로 넣는다 — 호출자(`runtime.py`)가
         윈도우와 기준선을 들고 있어서 거기서 받는다. 지어내지 않는다.
+
+        `max_rev_id`·`last_edit_ts` 는 "무엇까지 보고 판정했는지" 의 증거다 (V9,
+        WP-129 2번). 입력에 revision id 가 없으면 None 으로 남는다 —
+        ⚠️ 0 이나 지금 시각으로 메우지 않는다. 그러면 감사에서 "증거 없음" 과
+        "증거가 이렇다" 가 구분되지 않는다.
 
         🔴 **확정(`CONFIRMED`)만 넣는다** — `spike` 는 2단계까지 통과한 문서다
         (V1 테이블 주석 · 명세 §3.2 3번). 호출자(`runtime.py`)가 거르지만 여기서도 막는다.
@@ -184,5 +193,8 @@ class SpikeSink:
                 view_baseline,
                 decision.view_ratio,
                 decision.spike_score,
+                # 🔴 시점 감사 증거 (V9, WP-129 2번). 없으면 NULL — 지어내지 않는다.
+                max_rev_id,
+                None if last_edit_ts is None else require_utc(last_edit_ts, "last_edit_ts"),
             ))
         return page_id

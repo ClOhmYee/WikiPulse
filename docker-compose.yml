@@ -116,6 +116,35 @@ services:
       # 여기서 강제하면 producer 를 안 쓸 때도 compose 전체가 막힌다.
       CONTACT_EMAIL: ${CONTACT_EMAIL:-}
 
+  # 시간별 조회수 적재 -> 후보 대기 재판정 (WP-135).
+  #
+  # 🔴 **이게 없으면 LIVE 는 확정을 못 낸다.** 편집 스트림에 조회수가 없어서 판정이
+  #     전부 후보 대기로 남고(WP-126·-128), 그 대기를 깨우는 건 조회수 도착뿐이다.
+  #
+  # 받는 양은 대기 목록이 정한다 — 전수 적재는 시간당 149만 행이라 못 한다(-127 실측).
+  # 한 주기가 대기 중인 시간·문서만 골라 받고 바로 재판정한다.
+  #
+  # ⚠️ 주기가 15분인 이유: 파일은 매시 한 번 나오지만 공개 시각이 5~19분 흔들린다
+  #    (2026-09-18 실측). 한 시간에 한 번만 보면 최대 한 시간을 그냥 기다린다.
+  #    중복 실행은 PostgreSQL advisory lock 이 막으므로 여러 번 떠도 하나만 돈다.
+  live-cycle:
+    build:
+      context: ./data-pipeline
+    container_name: wikipulse-live-cycle
+    profiles: ["pipeline"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-wikipulse}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in your local .env}@postgres:5432/${POSTGRES_DB:-wikipulse}
+      DUMP_CACHE: /data/cache
+      PAGEVIEW_HOURLY_OUT: /data/pageview-hourly
+      # Wikimedia 는 연락처 없는 User-Agent 를 차단한다 (batch/ingest.py user_agent).
+      CONTACT_EMAIL: ${CONTACT_EMAIL:-}
+    volumes:
+      - pageview-cache:/data
+    command: ["python", "-m", "spike.live_cycle", "--loop", "--interval", "900"]
+
   # Kafka -> 문서별 편집 윈도우 집계 (WP-38).
   #
   # 🔴 **`SINK=spike` 는 이 이미지에서 아직 못 돈다** (2026-09-15 실측, WP-100).
@@ -250,6 +279,8 @@ services:
     command: ["python", "-m", "gdelt.producer"]
 
 volumes:
+  # 받은 시간별 덤프 캐시와 샤드. 45.7 MB/시간이라 컨테이너 재기동마다 다시 받지 않게 둔다.
+  pageview-cache:
   postgres-data:
   kafka-data:
   spark-checkpoint:

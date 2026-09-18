@@ -88,6 +88,11 @@ class PageWindow:
     views: int | None = None
     #: 윈도우 끝. 안 주면 `window_start + WINDOW_HOURS`. 소스가 주면 그 값이 이긴다.
     window_end: datetime | None = None
+    #: 이 윈도우 집계에 들어간 최대 revision id. 판정에는 안 쓰고 **증거로만** 남긴다
+    #: (V9, WP-129 2번). 없으면 None — 0 으로 메우지 않는다.
+    max_rev_id: int | None = None
+    #: 이 윈도우에서 본 마지막 편집 시각. `last_edit_ts <= window_end` 가 자체 검증식이다.
+    last_edit_ts: datetime | None = None
 
     def __post_init__(self) -> None:
         # 제목은 읽는 지점에서 canonical 로 (WP-92 와 같은 규칙). 멱등이다.
@@ -100,6 +105,18 @@ class PageWindow:
         if end <= start:
             raise ValueError(f"window_end({end}) 가 window_start({start}) 보다 뒤가 아니다")
         object.__setattr__(self, "window_end", end)
+
+        # 🔴 증거가 증거 구실을 하려면 여기서 막아야 한다 (WP-129 2번).
+        #    마지막 편집이 윈도우 끝보다 뒤면 그 윈도우에 미래 편집이 섞인 것이다 —
+        #    리플레이에서 덤프 구간을 잘못 자르면 이렇게 된다. 통과시키면 그 행은
+        #    "증거가 있는데 그 증거가 규칙 위반" 인 상태로 저장되고, 아무도 안 본다.
+        if self.last_edit_ts is not None:
+            last = require_utc(self.last_edit_ts, "last_edit_ts")
+            object.__setattr__(self, "last_edit_ts", last)
+            if last >= end:
+                raise ValueError(
+                    f"last_edit_ts({last}) 가 window_end({end}) 뒤다 — 이 윈도우에 "
+                    "윈도우 밖 편집이 섞였다")
 
     @classmethod
     def from_row(cls, row: dict) -> PageWindow:
@@ -133,6 +150,11 @@ class PageWindow:
             editor_count=int(row.get("editor_count") or 0),
             views=None if views is None else int(views),
             window_end=None if end is None else parse_window_start(end),
+            # 시점 감사 증거. 안 싣는 입력(옛 산출물)도 있어서 없으면 None 이다.
+            max_rev_id=(None if row.get("max_rev_id") is None
+                        else int(row["max_rev_id"])),
+            last_edit_ts=(None if row.get("last_edit_ts") is None
+                          else parse_window_start(row["last_edit_ts"])),
         )
 
     @property
@@ -221,9 +243,13 @@ class SpikeRuntime:
     그건 호출자가 명시적으로 고른 경우다.
     """
 
-    def __init__(self, baselines: BaselineRepository, sink: SpikeSink | None = None) -> None:
+    def __init__(self, baselines: BaselineRepository, sink: SpikeSink | None = None,
+                 candidates=None) -> None:
         self._baselines = baselines
         self._sink = sink
+        #: 후보 대기 보관소(`spike/candidate_store.CandidateStore`). 없으면 대기를 세기만
+        #: 하고 버린다 — 그게 WP-128 이전의 동작이고, LIVE 가 확정을 못 내던 이유다.
+        self._candidates = candidates
 
     def evaluate(self, window: PageWindow) -> DetectionOutcome:
         """판정만 한다. 저장하지 않는다."""
@@ -233,12 +259,18 @@ class SpikeRuntime:
                                 decision=decision, persisted=False)
 
     def process(self, window: PageWindow) -> DetectionOutcome:
-        """판정하고, **확정이면** 저장한다.
+        """판정하고, **확정이면** `spike` 에 저장한다.
 
-        미탐도 후보 대기도 저장하지 않는다 — `spike` 는 2단계까지 통과한 문서만 담는다
-        (WP-126). 후보 대기는 `RuntimeSummary.pending_views` 로만 센다.
+        미탐은 아무 데도 안 남긴다. **후보 대기는 보관소가 있으면 거기 담는다**
+        (WP-128) — `spike` 에는 못 넣는다. 2단계까지 통과한 문서만 담는 테이블이라
+        대기를 넣으면 조회수를 안 본 문서가 이슈로 노출된다.
+
+        🔴 대기가 아닌 판정이 나면 **보관소에서 지운다.** 재판정으로 확정·폐기된 윈도우가
+        남아 있으면 다음 실행이 같은 것을 또 판정하고, 폐기된 것이 영영 안 사라진다.
         """
         outcome = self.evaluate(window)
+        if self._candidates is not None:
+            self._record_candidate(outcome)
         if not (outcome.decision.is_spike and self._sink is not None):
             return outcome
         self._sink.save(
@@ -254,9 +286,30 @@ class SpikeRuntime:
             # decision 은 배수(view_ratio)만 갖고, 원값과 기준선은 입력 쪽에 있다.
             views=window.views,
             view_baseline=outcome.baseline.view_ewma if outcome.baseline else None,
+            # 무엇까지 보고 판정했는지 (V9, WP-129 2번). 판정에는 안 들어간다.
+            max_rev_id=window.max_rev_id,
+            last_edit_ts=window.last_edit_ts,
         )
         return DetectionOutcome(window=outcome.window, baseline=outcome.baseline,
                                 decision=outcome.decision, persisted=True)
+
+    def _record_candidate(self, outcome: DetectionOutcome) -> None:
+        """후보 대기는 보관하고, 확정·폐기는 보관소에서 지운다.
+
+        page_id 는 싱크가 이미 캐시하고 있다 — 보관만 하는 실행(싱크 없음)에서는
+        보관소가 직접 해석한다.
+        """
+        window = outcome.window
+        page_id = self._page_id(window)
+        if outcome.decision.is_pending:
+            self._candidates.save(page_id, window)
+        else:
+            self._candidates.drop(page_id, window.window_start)
+
+    def _page_id(self, window: PageWindow) -> int:
+        if self._sink is not None:
+            return self._sink.page_id(window.wiki, window.title)
+        return self._candidates.page_id(window.wiki, window.title)
 
     def process_all(self, windows: Iterable[PageWindow]) -> RuntimeSummary:
         """여러 윈도우를 한 배치로. 커밋은 호출자가 한 번에 한다."""

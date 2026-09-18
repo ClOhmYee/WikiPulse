@@ -54,16 +54,8 @@ public class VerificationRepository {
                         rs.getString("ticker"), CandidateTier.valueOf(rs.getString("tier"))));
     }
 
-    /** 클러스터의 멤버 문서 제목. 급등도 내림차순 (명세 §6.2 순서, {@link CandidateRepository} 와 동일 조회). */
-    public List<String> memberTitlesByPulse(long clusterId) {
-        return jdbc.queryForList("""
-                SELECT wp.title
-                  FROM cluster_member cm
-                  JOIN wiki_page wp ON wp.id = cm.page_id
-                 WHERE cm.cluster_id = :cid
-                 ORDER BY cm.spike_score DESC NULLS LAST, cm.weight DESC
-                """, new MapSqlParameterSource("cid", clusterId), String.class);
-    }
+    // 멤버 제목 조회는 ClusterIntroRepository.context 로 옮겼다 (WP-129) — 이유는
+    // CandidateRepository 의 같은 자리 주석 참고.
 
     /**
      * GDELT 동시 출현 상위 기관명 (lift 내림차순). LLM 검증 컨텍스트로 넘긴다 (명세 §11).

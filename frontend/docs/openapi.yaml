@@ -3,7 +3,7 @@ info:
   title: WikiPulse implemented read APIs
   version: 1.0.0-backend
   description: >-
-    Eight GET routes verified against Spring controllers and DTOs at f3c0160, 2026-09-15. WP-95/-97.
+    Nine GET routes verified against Spring controllers and DTOs (eight at f3c0160, 2026-09-15, WP-95/-97; /stocks/{ticker}/prices added 2026-09-18, WP-124).
     This replaces the 0.2.0 frontend proposal. Unimplemented APIs and contract decisions are documented in
     docs/frontend/API_DECISIONS.md. Mock uses these wire shapes; this document is not evidence of a live
     deployment.
@@ -838,6 +838,16 @@ components:
           minimum: 0
           nullable: true
           description: Pageviews used to evaluate this snapshot window.
+        completeness:
+          type: string
+          enum:
+            - complete
+            - pending
+            - unavailable
+          description: >-
+            editCount/views 가 null 일 때 그 이유. complete 는 판정 완료,
+            pending 은 입력 대기, unavailable 은 그 시점 원본을 확보할 수 없음.
+            Node 와 같은 어휘다 (WP-129).
       required:
         - pageId
         - wiki
