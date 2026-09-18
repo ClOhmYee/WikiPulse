@@ -16,10 +16,17 @@ from __future__ import annotations
 import logging
 import time
 from collections.abc import Iterator
+from dataclasses import dataclass
 
 import requests
 
 log = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True)
+class SSEEvent:
+    data: str
+    event_id: str | None
 
 
 class SSEClient:
@@ -32,12 +39,13 @@ class SSEClient:
         user_agent: str,
         timeout: float = 60.0,
         max_backoff: float = 60.0,
+        last_event_id: str | None = None,
     ) -> None:
         self.url = url
         self.user_agent = user_agent
         self.timeout = timeout
         self.max_backoff = max_backoff
-        self.last_event_id: str | None = None
+        self.last_event_id = last_event_id
 
     def _headers(self) -> dict[str, str]:
         headers = {"User-Agent": self.user_agent, "Accept": "text/event-stream"}
@@ -45,8 +53,8 @@ class SSEClient:
             headers["Last-Event-ID"] = self.last_event_id
         return headers
 
-    def events(self) -> Iterator[str]:
-        """`data:` 본문을 끝없이 내놓는다. 끊기면 알아서 다시 붙는다.
+    def events(self) -> Iterator[SSEEvent]:
+        """`data:` 본문과 `id:`를 끝없이 내놓는다. 끊기면 알아서 다시 붙는다.
 
         중단하려면 호출자가 루프를 빠져나가거나 KeyboardInterrupt 를 쓴다.
         """
@@ -73,10 +81,10 @@ class SSEClient:
             time.sleep(backoff)
             backoff = min(backoff * 2, self.max_backoff)
 
-    def _parse_frames(self, response: requests.Response) -> Iterator[str]:
+    def _parse_frames(self, response: requests.Response) -> Iterator[SSEEvent]:
         """SSE 프레임을 파싱한다.
 
-        프레임은 빈 줄로 끝난다. 한 프레임 안에서 id: 는 저장하고 data: 만 내놓는다.
+        프레임은 빈 줄로 끝난다. 한 프레임의 data: 와 id: 를 함께 내놓는다.
         `:ok` 같은 주석 줄은 버린다.
         """
         data_lines: list[str] = []
@@ -92,7 +100,7 @@ class SSEClient:
                     # 중간에 죽으면 그 프레임부터 다시 받아야 하므로.
                     payload = "\n".join(data_lines)
                     data_lines = []
-                    yield payload
+                    yield SSEEvent(payload, pending_id)
                     if pending_id is not None:
                         self.last_event_id = pending_id
                         pending_id = None
