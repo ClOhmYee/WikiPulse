@@ -87,7 +87,7 @@ from .writer import persist_snapshot
 #: 정렬은 저장 순서일 뿐 — 노출 순위는 백엔드가 pulse_score 로 다시 매긴다.
 SELECT_SEEDS_SQL = """
 SELECT s.id, s.page_id, p.wiki, p.title, s.window_start, s.detected_at,
-       s.edit_count, s.view_ratio, s.spike_score
+       s.edit_count, s.views, s.view_baseline, s.view_ratio, s.spike_score
   FROM spike s
   JOIN wiki_page p ON p.id = s.page_id
  WHERE s.source = %s
@@ -117,17 +117,26 @@ SELECT issue_key, min(snapshot_ts)
 """
 
 
-def _completeness(view_ratio: float | None) -> str:
-    """`spike` 한 행의 지표 완성도. V1 의 view_ratio 주석 그대로 읽는다.
+def _completeness(views: int | None) -> str:
+    """`spike` 한 행의 지표 완성도. **조회수 원값이 있으면 2차 판정이 돌았다는 뜻이다.**
 
-    "Pageviews 가 1시간 늦어서 판정 시점에 NULL 일 수 있다. NULL = 아직 2차 판정 전."
-    → 값이 있으면 complete, 없으면 pending.
+    ~~view_ratio 가 있으면 complete~~ → **views 로 판단한다**
+    (2026-09-18, WP-129, V7).
 
-    ⚠️ `spike` 만으로는 pending(곧 온다)과 unavailable(그 구간 조회수 적재본이 아예 없다)을
-    **구분할 수 없다.** 2024-10 처럼 조회수 덤프가 없는 구간도 pending 으로 나온다.
-    구분하려면 적재 범위를 아는 쪽이 값을 넣어줘야 한다 — 후속 과제.
+    🔴 왜 바꿨나. `view_ratio` 는 두 뜻을 지고 있었다:
+        "배수를 낼 수 없음"(기준선 표본 없음)  vs  "아직 판정 안 됨"(조회수 미도착)
+    WP-126 의 2단계 계약에서 **표본 없는 문서는 배수가 정당하게 NULL** 이다 —
+    분모(view_ewma)가 없다. 신규 문서는 대부분 이 경로로 확정되는데(절대 하한 >= 100,
+    "0 에서의 급등"), 그게 전부 pending 으로 저장됐다. 판정은 끝났는데 화면은 대기로
+    보였다 — canary 실측(docs/validation/2026-09-18-one-day-e2e-canary.md §5).
+
+    `views` 는 뜻이 하나다: 있으면 조회수를 보고 판정했다.
+
+    ⚠️ 여전히 pending(곧 온다)과 unavailable(그 구간 조회수 적재본이 아예 없다)은
+    **구분할 수 없다.** 구분하려면 적재 범위를 아는 쪽이 값을 넣어줘야 한다 — 후속 과제.
+    ⚠️ V7 이전에 저장된 옛 행은 `views` 가 NULL 이라 pending 으로 나온다. 재적재하면 찬다.
     """
-    return "complete" if view_ratio is not None else "pending"
+    return "complete" if views is not None else "pending"
 
 
 def require_spike_source(source: str) -> str:
@@ -173,7 +182,7 @@ def load_seeds_from_spike(conn, snapshot_ts: datetime, source: str) -> list[Seed
 
     seeds: list[Seed] = []
     for (_id, page_id, wiki, title, window_start, detected_at,
-         edit_count, view_ratio, spike_score) in rows:
+         edit_count, views, view_baseline, view_ratio, spike_score) in rows:
         # spike 에 window_end 가 없어 detected_at 을 쓴다(모듈 독스트링 ⚠️).
         # Seed 계약은 "시작 < 종료" 다 — 어긋나면 조용히 이상한 구간이 저장되므로 막는다.
         if detected_at <= window_start:
@@ -192,12 +201,13 @@ def load_seeds_from_spike(conn, snapshot_ts: datetime, source: str) -> list[Seed
             window_start=window_start,
             window_end=detected_at,
             edit_count=edit_count,
-            # spike 는 조회수 원값·기준선을 저장하지 않는다(edit_z·view_ratio 만).
-            # 없는 값을 지어내지 않고 None 으로 둔다 — 화면이 '미제공'으로 그린다.
-            views=None,
+            # V7 부터 spike 가 조회수 원값·기준선을 들고 있다 (WP-129).
+            # ~~None 으로 두어 화면이 '미제공'으로 그린다~~ → 실제 판정값을 그대로 넘긴다.
+            views=views,
+            # 편집 기준선은 아직 spike 에 없다. 지어내지 않고 None 으로 둔다.
             edit_baseline=None,
-            view_baseline=None,
-            completeness=_completeness(view_ratio),
+            view_baseline=view_baseline,
+            completeness=_completeness(views),
         ))
     return seeds
 

@@ -250,6 +250,10 @@ class SpikeRuntime:
             detected_at=window.window_end,
             edit_count=window.edit_count,
             decision=outcome.decision,
+            # 판정에 실제로 쓴 값 그대로 (V7, WP-129). 여기서만 둘 다 들고 있다 —
+            # decision 은 배수(view_ratio)만 갖고, 원값과 기준선은 입력 쪽에 있다.
+            views=window.views,
+            view_baseline=outcome.baseline.view_ewma if outcome.baseline else None,
         )
         return DetectionOutcome(window=outcome.window, baseline=outcome.baseline,
                                 decision=outcome.decision, persisted=True)

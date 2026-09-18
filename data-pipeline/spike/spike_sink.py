@@ -66,14 +66,17 @@ SPIKE_SOURCES = ("live", "replay")
 #: 적어 두면 "출처가 갱신될 수 있다" 로 읽힌다.
 UPSERT_SPIKE_SQL = """
 INSERT INTO spike
-    (source, page_id, detected_at, window_start, edit_count, edit_z, view_ratio, spike_score)
-VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+    (source, page_id, detected_at, window_start, edit_count, edit_z,
+     views, view_baseline, view_ratio, spike_score)
+VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
 ON CONFLICT (source, page_id, window_start) DO UPDATE SET
-    detected_at = EXCLUDED.detected_at,
-    edit_count  = EXCLUDED.edit_count,
-    edit_z      = EXCLUDED.edit_z,
-    view_ratio  = EXCLUDED.view_ratio,
-    spike_score = EXCLUDED.spike_score
+    detected_at   = EXCLUDED.detected_at,
+    edit_count    = EXCLUDED.edit_count,
+    edit_z        = EXCLUDED.edit_z,
+    views         = EXCLUDED.views,
+    view_baseline = EXCLUDED.view_baseline,
+    view_ratio    = EXCLUDED.view_ratio,
+    spike_score   = EXCLUDED.spike_score
 """
 
 
@@ -143,8 +146,13 @@ class SpikeSink:
         detected_at: datetime,
         edit_count: int,
         decision: SpikeDecision,
+        views: int | None = None,
+        view_baseline: float | None = None,
     ) -> int:
         """급증 한 건을 적재하고 `spike.page_id` 를 돌려준다.
+
+        `views`·`view_baseline` 은 판정에 쓴 값 그대로 넣는다 — 호출자(`runtime.py`)가
+        윈도우와 기준선을 들고 있어서 거기서 받는다. 지어내지 않는다.
 
         🔴 **확정(`CONFIRMED`)만 넣는다** — `spike` 는 2단계까지 통과한 문서다
         (V1 테이블 주석 · 명세 §3.2 3번). 호출자(`runtime.py`)가 거르지만 여기서도 막는다.
@@ -169,6 +177,11 @@ class SpikeSink:
                 edit_count,
                 # 신규 문서 경로는 기준선이 없어 z 를 못 낸다 — NULL 이 맞다(V1 은 NULL 허용).
                 decision.edit_z,
+                # 🔴 판정에 쓴 조회수 원값과 기준선을 같이 남긴다 (V7, WP-129).
+                # 여태 view_ratio 만 저장해서 두 결함이 났다: cluster_member.views 가 null 이고,
+                # 표본 없는 경로(배수 NULL)가 "판정 미완료" 로 읽혀 completeness=pending 이 됐다.
+                views,
+                view_baseline,
                 decision.view_ratio,
                 decision.spike_score,
             ))
