@@ -59,8 +59,7 @@ class VerificationServiceTest {
     @BeforeEach
     void commonStubs() {
         // lenient — PENDING 후보가 없으면 조기 반환해 아래 스텁이 안 쓰인다(그 테스트만의 정상 경로).
-        lenient().when(issueText.build(any())).thenReturn("issue text");
-        lenient().when(repository.memberTitlesByPulse(anyLong())).thenReturn(List.of("Doc"));
+        lenient().when(issueText.build(anyLong())).thenReturn("issue text");
         lenient().when(repository.topOrgMentions(anyLong(), org.mockito.ArgumentMatchers.anyInt()))
                 .thenReturn(List.of("NextEra Energy", "Duke Energy"));
         lenient().when(repository.issueKeyOf(anyLong())).thenReturn("milton-2024-10");
