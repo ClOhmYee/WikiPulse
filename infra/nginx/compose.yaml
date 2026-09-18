@@ -1,0 +1,35 @@
+# EC2 1번(기본 서버) 리버스 프록시 + TLS 종단.
+# 백엔드는 wikipulse-net 에 붙으면 nginx 가 이름으로 찾는다.
+name: nginx
+
+networks:
+  wikipulse:
+    external: true
+    name: wikipulse-net
+
+services:
+  nginx:
+    image: nginx:stable-alpine
+    restart: unless-stopped
+    networks: [wikipulse]
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./conf.d:/etc/nginx/conf.d:ro
+      - ../service/frontend/dist:/usr/share/nginx/html:ro     # 프론트 dist/ 를 여기에 넣는다
+      - ./certbot/www:/var/www/certbot:ro   # ACME 챌린지
+      - ./certbot/conf:/etc/letsencrypt:ro  # 인증서
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # 발급·갱신할 때만 띄운다.
+  certbot:
+    image: certbot/certbot:latest
+    profiles: ["certbot"]
+    volumes:
+      - ./certbot/www:/var/www/certbot
+      - ./certbot/conf:/etc/letsencrypt
