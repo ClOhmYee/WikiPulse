@@ -8,6 +8,7 @@ export function TrendChart({
   color = "#86c9c4",
   baseline = false,
   height = 180,
+  markers = [],
 }) {
   const id = useId().replace(/:/g, "");
   const [hover, setHover] = useState(null);
@@ -205,6 +206,57 @@ export function TrendChart({
                 strokeWidth="2"
               />
             )}
+            {timeAxis &&
+              markers.map((marker) => {
+                const ms = Date.parse(marker.date);
+                // 창보다 이른 이슈는 버린다. 최신 봉 이후(가격 미도착) 이슈는 30일
+                // 유예 안에서 오른쪽 끝에 붙여 표시한다 — tooltip 은 실제 날짜.
+                const graceMs = 1000 * 60 * 60 * 24 * 30;
+                if (
+                  !Number.isFinite(ms) ||
+                  ms < times[0] ||
+                  ms > times.at(-1) + graceMs
+                )
+                  return null;
+                const frac = Math.min(
+                  1,
+                  (ms - times[0]) / (times.at(-1) - times[0]),
+                );
+                const mx = left + frac * (width - left - right);
+                const node = (
+                  <>
+                    <line
+                      x1={mx}
+                      x2={mx}
+                      y1={top}
+                      y2={y(min)}
+                      stroke="#dbb057"
+                      strokeWidth="1.5"
+                      strokeDasharray="2 3"
+                    />
+                    <circle
+                      cx={mx}
+                      cy={top}
+                      r="4"
+                      fill="#dbb057"
+                      stroke="#0b141b"
+                      strokeWidth="1.5"
+                    />
+                    <title>{`${marker.date} · ${marker.label}`}</title>
+                  </>
+                );
+                return marker.href ? (
+                  <a
+                    key={marker.key ?? marker.href}
+                    href={marker.href}
+                    aria-label={`이슈 ${marker.label} (${marker.date})`}
+                  >
+                    {node}
+                  </a>
+                ) : (
+                  <g key={marker.key ?? marker.date}>{node}</g>
+                );
+              })}
           </>
         )}
         {data.map((item, i) => (
@@ -249,6 +301,12 @@ export function TrendChart({
           <span>
             <i style={{ background: "#dbb057" }} />
             평소 편집량
+          </span>
+        )}
+        {markers.length > 0 && (
+          <span>
+            <i style={{ background: "#dbb057" }} />
+            이슈 발생 시점
           </span>
         )}
         <span className="wp-muted">

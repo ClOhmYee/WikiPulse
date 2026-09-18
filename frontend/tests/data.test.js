@@ -210,7 +210,7 @@ test("saved records keep original keys, ignore individual 404s and expose remova
   );
 });
 
-test("all eight API methods use current paths and query encoding; failures have no mock fallback", async () => {
+test("all nine API methods use current paths and query encoding; failures have no mock fallback", async () => {
   let seen;
   const signal = new AbortController().signal;
   const api = createApiClient(
@@ -233,6 +233,28 @@ test("all eight API methods use current paths and query encoding; failures have 
   await related.listIssueStocks(42, { limit: 100 }, { signal });
   assert.equal(seen.url, "/api/v1/issues/42/stocks?limit=100");
   assert.equal(seen.options.signal, signal);
+  // 주가: 티커 대문자화 + from/to 쿼리 인코딩. 응답은 계약 검증(빈 배열 허용).
+  const priced = createApiClient("/api/v1", async (url, options) => {
+    seen = { url, options };
+    return Response.json({ data: [] });
+  });
+  await priced.getStockPrices(
+    "nvda",
+    { from: "2026-01-01", to: "2026-09-01" },
+    { signal },
+  );
+  assert.equal(
+    seen.url,
+    "/api/v1/stocks/NVDA/prices?from=2026-01-01&to=2026-09-01",
+  );
+  assert.equal(seen.options.signal, signal);
+  // 형식이 계약과 다르면 폴백 없이 INVALID_RESPONSE (mock 로 떨어지지 않는다).
+  await assert.rejects(
+    createApiClient("/api/v1", async () =>
+      Response.json({ data: [{ tradeDate: "2026-01-02" }] }),
+    ).getStockPrices("NVDA"),
+    { code: "INVALID_RESPONSE" },
+  );
   for (const status of [404, 500])
     await assert.rejects(
       createApiClient("/api/v1", async () =>

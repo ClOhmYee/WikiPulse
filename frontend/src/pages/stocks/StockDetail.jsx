@@ -1,7 +1,11 @@
+import { useCallback, useMemo } from "react";
 import { ArrowLeft, ArrowRight, ChevronRight } from "lucide-react";
 import { usePageData } from "../../data/hooks/PageData";
 import { EmptyState } from "../../components/ui/EmptyState";
 import { IssueState } from "../../components/event/IssueState";
+import { TrendChart } from "../../components/charts/TrendChart";
+import { dataClient } from "../../data/index.js";
+import { useAsyncResource } from "../../data/hooks/useAsyncResource.js";
 import {
   metricLabel,
   timestampLabel,
@@ -9,8 +13,42 @@ import {
 } from "../event/presentation.js";
 import { StockMark, SaveButton, MatchEvidence } from "./StockElements";
 export default function StockDetail({ symbol, savedStocks, onToggleStock }) {
-  const { events, getStock, collectionLimit } = usePageData();
+  const { events, getStock, collectionLimit, isExample } = usePageData();
   const stock = getStock(symbol);
+  // 훅은 조기 반환 전에 무조건 호출한다(rules-of-hooks). stock 이 없으면 빈 값.
+  const relatedEvents = useMemo(
+    () =>
+      stock ? events.filter((event) => stock.eventIds.includes(event.id)) : [],
+    [events, stock],
+  );
+  // 차트 위에 겹칠 이슈 발생 시점 마커. 마커에서 이슈 상세로 이동한다.
+  const markers = useMemo(
+    () =>
+      relatedEvents
+        .filter((event) => event.snapshotTs)
+        .map((event) => ({
+          key: event.id,
+          date: String(event.snapshotTs).slice(0, 10),
+          label: event.title,
+          href: `#/issues/${encodeURIComponent(event.id)}`,
+        })),
+    [relatedEvents],
+  );
+  // 기본은 서버 기본(최근 1년). 관련 이슈가 1년보다 오래됐으면 그 시점이 창에
+  // 들어오도록 from 을 당긴다 — 마커가 로딩된 가격 구간 밖으로 벗어나지 않게.
+  const from = useMemo(() => {
+    const stamps = markers
+      .map((marker) => Date.parse(marker.date))
+      .filter(Number.isFinite);
+    if (!stamps.length) return undefined;
+    const oneYearAgo = new Date();
+    oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
+    const earliest = Math.min(...stamps);
+    if (earliest >= oneYearAgo.getTime()) return undefined;
+    const start = new Date(earliest);
+    start.setDate(start.getDate() - 14);
+    return start.toISOString().slice(0, 10);
+  }, [markers]);
   if (!stock)
     return (
       <div className="wp-page">
@@ -29,9 +67,6 @@ export default function StockDetail({ symbol, savedStocks, onToggleStock }) {
         />
       </div>
     );
-  const relatedEvents = events.filter((event) =>
-    stock.eventIds.includes(event.id),
-  );
   return (
     <div className="wp-page st-page st-detail-page">
       <a href="#/stocks" className="st-back">
@@ -137,19 +172,12 @@ export default function StockDetail({ symbol, savedStocks, onToggleStock }) {
           </div>
         </section>
         <aside className="st-stock-aside" aria-label="종목 참고 정보">
-          <section className="wp-panel st-price-panel">
-            <div className="st-price-title">
-              <h2>가격 흐름</h2>
-              <span className="wp-tag">미제공</span>
-            </div>
-            <div className="data-availability">
-              <strong>가격 자료 미제공</strong>
-              <p>
-                주가 시계열과 등락률이 제공되지 않았습니다. 이슈 발생 시점과
-                가격을 비교할 자료가 없습니다.
-              </p>
-            </div>
-          </section>
+          <StockPriceSection
+            symbol={stock.symbol}
+            from={from}
+            markers={markers}
+            isExample={isExample}
+          />
           <section className="st-how-to-read">
             <h2>연결은 이렇게 읽어요.</h2>
             <p>
@@ -166,5 +194,109 @@ export default function StockDetail({ symbol, savedStocks, onToggleStock }) {
         </aside>
       </div>
     </div>
+  );
+}
+
+/**
+ * 종목 상세 가격 흐름. /stocks/{ticker}/prices 에 독립적으로 연결한다 —
+ * 가격 로딩 실패가 페이지 전체를 깨지 않게 자체 상태를 가진다.
+ * 🔴 API 실패 시 mock 폴백 금지(UI_GUIDE) — loading·error·unavailable·empty 를 구분한다.
+ */
+function StockPriceSection({ symbol, from, markers, isExample }) {
+  const params = useMemo(() => (from ? { from } : {}), [from]);
+  const key = JSON.stringify({ symbol, from: from ?? null });
+  const load = useCallback(
+    (signal) => dataClient.getStockPrices(symbol, params, { signal }),
+    [symbol, params],
+  );
+  const { data, error, loading, reload } = useAsyncResource(load, key);
+  const points = useMemo(
+    () =>
+      (data?.data ?? []).map((row) => ({
+        date: row.tradeDate,
+        price: row.close,
+        open: row.open,
+        high: row.high,
+        low: row.low,
+        volume: row.volume,
+      })),
+    [data],
+  );
+  const heading = (tag) => (
+    <div className="st-price-title">
+      <h2>가격 흐름</h2>
+      {tag}
+    </div>
+  );
+  // 데모 데이터에는 주가가 없다(unavailable). 실데이터 empty 와 다른 상태로 구분한다.
+  if (isExample)
+    return (
+      <section className="wp-panel st-price-panel">
+        {heading(<span className="wp-tag">데모</span>)}
+        <div className="data-availability">
+          <strong>데모 데이터에는 주가가 없습니다</strong>
+          <p>
+            시연용 데모에서는 실제 일봉을 제공하지 않습니다. API 데이터로
+            전환하면 이슈 발생 시점과 종가를 겹쳐 볼 수 있습니다.
+          </p>
+        </div>
+      </section>
+    );
+  if (loading && !data)
+    return (
+      <section className="wp-panel st-price-panel">
+        {heading(<span className="wp-tag">불러오는 중</span>)}
+        <div
+          className="data-availability"
+          role="status"
+          aria-label="가격 불러오는 중"
+        >
+          <span className="wp-skeleton wp-skeleton--panel" />
+        </div>
+      </section>
+    );
+  if (error)
+    return (
+      <section className="wp-panel st-price-panel">
+        {heading(<span className="wp-tag">불러오기 실패</span>)}
+        <div className="data-availability">
+          <strong>가격을 불러오지 못했습니다</strong>
+          <p>{error.message}</p>
+          <button className="wp-button" data-variant="ghost" onClick={reload}>
+            다시 시도
+          </button>
+        </div>
+      </section>
+    );
+  if (!points.length)
+    return (
+      <section className="wp-panel st-price-panel">
+        {heading(<span className="wp-tag">거래 없음</span>)}
+        <div className="data-availability">
+          <strong>선택 구간에 거래 데이터가 없습니다</strong>
+          <p>거래일 기준 일봉만 제공되며 휴장일은 보간하지 않습니다.</p>
+        </div>
+      </section>
+    );
+  return (
+    <section className="wp-panel st-price-panel" aria-labelledby="stock-price-title">
+      <div className="st-price-title">
+        <h2 id="stock-price-title">가격 흐름</h2>
+        <span className="wp-muted">{points.length}거래일 · 종가(USD)</span>
+      </div>
+      <TrendChart
+        data={points}
+        valueKey="price"
+        label="종가"
+        color="#86c9c4"
+        height={220}
+        markers={markers}
+        isExample={false}
+      />
+      <p className="data-scope">
+        조정 전 원시 종가입니다. 분할·배당일에 값이 튈 수 있으며 정밀 수익률이
+        아니라 참고용입니다. 마커는 이 종목과 연결된 이슈 발생 시점입니다.
+      </p>
+    </section>
   );
 }

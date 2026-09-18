@@ -16,6 +16,7 @@ assert.deepEqual(
     "listStocks",
     "getStock",
     "listStockIssues",
+    "getStockPrices",
     "listSnapshots",
     "getPulseMap",
   ].sort(),
@@ -76,6 +77,17 @@ const stocks = await collect("listStocks", "StockListResponse");
 for (const stock of stocks) {
   check("StockDetailResponse", await mockClient.getStock(stock.ticker));
   check("StockIssuesResponse", await mockClient.listStockIssues(stock.ticker));
+  // mock 은 가격을 지어내지 않는다 — 빈 배열이지만 봉투·항목 스키마는 지켜야 한다.
+  check("StockPricesResponse", await mockClient.getStockPrices(stock.ticker));
+}
+if (stocks.length) {
+  check(
+    "StockPricesResponse",
+    await mockClient.getStockPrices(stocks[0].ticker, {
+      from: "2026-01-01",
+      to: "2026-09-01",
+    }),
+  );
 }
 const snapshots = check("SnapshotResponse", await mockClient.listSnapshots());
 if (snapshots.data.length) {
