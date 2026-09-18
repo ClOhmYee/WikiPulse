@@ -114,12 +114,13 @@ public class IssueSummaryService {
     /** issue_report 를 채운다: 같은 issue_key 재사용 → 없으면 LLM 생성. 저장 못 하면 stored=false. */
     private EnsureResult ensureSummary(long clusterId) {
         String issueKey = verificationRepository.issueKeyOf(clusterId);
+        String model = modelTag();
 
-        // 재사용: 같은 issue_key 의 다른 스냅샷 요약을 복사한다(LLM 0). issue_key 가 없는(V1 옛)
-        // 클러스터는 재사용을 못 써 아래 생성으로 내려간다.
+        // 재사용: 같은 issue_key + 같은 model(=모델·프롬프트버전)의 다른 스냅샷 요약을 복사한다(LLM 0).
+        // issue_key 가 없는(V1 옛) 클러스터는 재사용을 못 써 아래 생성으로 내려간다.
         if (issueKey != null) {
             Optional<IssueSummaryRepository.PriorSummary> prior =
-                    repository.findPriorSummary(clusterId, issueKey);
+                    repository.findPriorSummary(clusterId, issueKey, model);
             if (prior.isPresent()) {
                 repository.upsertReport(clusterId, prior.get().summary(), prior.get().model());
                 log.debug("요약 재사용 cluster={} issueKey={}", clusterId, issueKey);
@@ -137,7 +138,7 @@ public class IssueSummaryService {
             // 근거 부족·스키마 실패 — 저장하지 않는다(거부/할루시네이션 저장 방지). VERIFYING 유지.
             return new EnsureResult(false, false);
         }
-        repository.upsertReport(clusterId, summary.get(), modelTag());
+        repository.upsertReport(clusterId, summary.get(), model);
         return new EnsureResult(true, false);
     }
 

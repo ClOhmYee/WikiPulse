@@ -6,12 +6,17 @@ import java.util.Set;
 /**
  * 이슈 요약 LLM 응답 (WP-119, 프롬프트 llm/summary_system_v1.txt).
  *
- * <p>{@code sufficientContext} 는 판정 전 강제 게이트다 — {@link VerificationResponse} 의
- * {@code issueClass} 게이트와 같은 방식(구조로 막기, -45). 근거가 부족하면 모델이
- * {@code sufficient_context=false} 를 내야 하고, 그때는 {@code summaryKo} 가 null 이라
- * 호출자가 <b>저장하지 않는다</b>. 이렇게 해야 "설명할 수 없다"는 거부 문장이나 지어낸 요약이
- * {@code issue_report} 에 조용히 들어가는 실패 모드(ai/issue-text-poc/RESULT.md ②③)를
- * 구조적으로 막는다.
+ * <p>{@code sufficientContext} 는 판정 전 강제 게이트다. 모델이 근거 부족을 <b>정직하게</b>
+ * {@code sufficient_context=false} 로 신고하면 {@code summaryKo} 가 null 이라 호출자가
+ * <b>저장하지 않는다</b> — "설명할 수 없다"는 거부 문장이 요약으로 저장되는 실패 모드
+ * (ai/issue-text-poc/RESULT.md ②)를 구조적으로 막는다.
+ *
+ * <p>⚠️ 다만 이 게이트가 막는 것은 <b>정직-불충분 신고 경로뿐</b>이다. 모델이
+ * {@code sufficient_context=true} 로 신고하면서 입력에 없는 사실을 지어내면(RESULT.md ③) 스키마를
+ * 통과해 그대로 저장된다 — 이 경로의 방어는 구조가 아니라 프롬프트의 GROUNDING RULE
+ * (llm/summary_system_v1.txt)이다. {@link VerificationResponse} 의 {@code issueClass} 는 enum 강제
+ * 분류라 프롬프트 로직이 오탐을 실제로 차단하는 반면, 여기 {@code sufficientContext} 는 모델
+ * 자기신고 boolean 이라 지어냄에 대한 실질 방어력은 프롬프트에 의존한다.
  *
  * <p>🔴 요약만 한국어다(사용자 노출). 파이프라인 내부 텍스트는 영어 유지(명세 §6.2, CLAUDE.md 폐기 절).
  */

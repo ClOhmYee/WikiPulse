@@ -52,7 +52,8 @@ class IssueSummaryServiceTest {
                 .thenReturn(List.of("Reuters"));
         lenient().when(issueText.build(any())).thenReturn("Iran: ...");
         // 기본: 재사용 캐시 미스 — 대부분 테스트는 새 생성 경로를 본다.
-        lenient().when(repository.findPriorSummary(anyLong(), anyString())).thenReturn(Optional.empty());
+        lenient().when(repository.findPriorSummary(anyLong(), anyString(), anyString()))
+                .thenReturn(Optional.empty());
         lenient().when(repository.advanceToVerifying(anyLong())).thenReturn(1);
         lenient().when(repository.confirm(anyLong())).thenReturn(1);
     }
@@ -145,7 +146,7 @@ class IssueSummaryServiceTest {
     void 같은_issue_key의_이전_요약이_있으면_복사하고_LLM을_안_부른다() {
         when(repository.statusOf(7L)).thenReturn("VERIFYING");
         when(repository.hasReport(7L)).thenReturn(false);
-        when(repository.findPriorSummary(7L, "iran-2026-08"))
+        when(repository.findPriorSummary(eq(7L), eq("iran-2026-08"), anyString()))
                 .thenReturn(Optional.of(new PriorSummary("이전 스냅샷 요약.", "claude-x (summary_v1)")));
         when(repository.stockVerificationComplete(7L)).thenReturn(false);
 
@@ -159,6 +160,35 @@ class IssueSummaryServiceTest {
     }
 
     @Test
+    void 재사용_후_종목검증_완료면_같은_폴에서_CONFIRMED된다() {
+        // 재사용(EnsureResult(true,true)) 후 confirm 블록으로 fall-through 해 확정되는 경로 —
+        // ensureSummary 재사용 분기가 조기 return 하도록 리팩터되는 회귀를 막는다.
+        when(repository.statusOf(20L)).thenReturn("VERIFYING");
+        when(repository.hasReport(20L)).thenReturn(false);
+        when(repository.findPriorSummary(eq(20L), eq("iran-2026-08"), anyString()))
+                .thenReturn(Optional.of(new PriorSummary("복사된 요약.", "claude-x (summary_v1)")));
+        when(repository.stockVerificationComplete(20L)).thenReturn(true);
+
+        IssueSummaryService.Result r = service().processCluster(20L);
+
+        verify(summarizer, never()).summarize(any());
+        verify(repository).confirm(20L);
+        assertThat(r.reused()).isTrue();
+        assertThat(r.confirmed()).isTrue();
+    }
+
+    @Test
+    void confirm_경합에서_지면_confirmed는_false다() {
+        // 다른 폴러가 먼저 CONFIRMED 로 올려 가드 UPDATE 가 0행이면 confirmed=false.
+        when(repository.statusOf(21L)).thenReturn("VERIFYING");
+        when(repository.hasReport(21L)).thenReturn(true);
+        when(repository.stockVerificationComplete(21L)).thenReturn(true);
+        when(repository.confirm(21L)).thenReturn(0); // 경합 패배
+
+        assertThat(service().processCluster(21L).confirmed()).isFalse();
+    }
+
+    @Test
     void issue_key가_null이면_재사용조회를_안_하고_생성한다() {
         when(repository.statusOf(8L)).thenReturn("VERIFYING");
         when(repository.hasReport(8L)).thenReturn(false);
@@ -168,7 +198,7 @@ class IssueSummaryServiceTest {
 
         service().processCluster(8L);
 
-        verify(repository, never()).findPriorSummary(anyLong(), anyString());
+        verify(repository, never()).findPriorSummary(anyLong(), anyString(), anyString());
         verify(summarizer).summarize(any());
     }
 

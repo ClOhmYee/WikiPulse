@@ -74,9 +74,31 @@ public class GatewayVerificationClient {
     @CircuitBreaker(name = "gateway")
     @Retry(name = "gateway", fallbackMethod = "completeFallback")
     public String complete(String system, List<Map<String, String>> messages) {
+        return call(system, messages, gateway.getVerificationModel(), gateway.getVerificationMaxTokens());
+    }
+
+    /**
+     * 이슈 요약(-119)용 전송. 검증과 같은 gateway 신뢰성 계층·모델을 타되 <b>max_tokens 만 요약 전용값</b>을
+     * 쓴다({@code summary-max-tokens}) — 검증 rationale 절단 방지용 예산과 사용자 노출 요약 예산을
+     * 분리해, 한쪽 튜닝이 다른 쪽을 조용히 절단시키지 않게 한다. {@link #complete}(검증)의 동작은
+     * 이 메서드 추가로 바뀌지 않는다(공용 전송은 {@link #call} 에 있고 검증 경로는 무손상).
+     */
+    @RateLimiter(name = "gateway")
+    @CircuitBreaker(name = "gateway")
+    @Retry(name = "gateway", fallbackMethod = "completeFallback")
+    public String completeForSummary(String system, List<Map<String, String>> messages) {
+        return call(system, messages, gateway.getVerificationModel(), gateway.getSummaryMaxTokens());
+    }
+
+    /**
+     * 공용 전송 본체. 🔴 애노테이션 없음 — 신뢰성 계층은 위 두 public 진입점이 소유하고, 이
+     * private 메서드는 그 안에서 호출돼 같은 aspect 로 감싸인다(자기호출 프록시 우회 아님).
+     */
+    private String call(
+            String system, List<Map<String, String>> messages, String model, int maxTokens) {
         if (gateway.getApiKey() == null || gateway.getApiKey().isBlank()) {
             throw new IllegalStateException(
-                    "LLM_GATEWAY_KEY 가 비어 있다. LLM 검증을 호출할 수 없다 (명세 §4, tech-spec 환경변수).");
+                    "LLM_GATEWAY_KEY 가 비어 있다. GATEWAY 를 호출할 수 없다 (명세 §4, tech-spec 환경변수).");
         }
         JsonNode root;
         try {
@@ -86,8 +108,8 @@ public class GatewayVerificationClient {
                     .header("anthropic-version", "2023-06-01")
                     .contentType(MediaType.APPLICATION_JSON)
                     .body(Map.of(
-                            "model", gateway.getVerificationModel(),
-                            "max_tokens", gateway.getVerificationMaxTokens(),
+                            "model", model,
+                            "max_tokens", maxTokens,
                             "system", system,
                             "messages", messages))
                     .retrieve()
@@ -100,7 +122,7 @@ public class GatewayVerificationClient {
         JsonNode text = root == null ? null : root.path("content").path(0).path("text");
         if (text == null || !text.isTextual() || text.asText().isBlank()) {
             // 200 인데 텍스트 없음 = 스키마 문제(−68 소관). 전송 taxonomy 아님 → 회로에 안 센다.
-            throw new IllegalStateException("GATEWAY 검증 응답에 텍스트가 없다 (content[0].text 누락/빈 값)");
+            throw new IllegalStateException("GATEWAY 응답에 텍스트가 없다 (content[0].text 누락/빈 값)");
         }
         return text.asText();
     }

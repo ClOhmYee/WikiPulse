@@ -30,9 +30,10 @@ import org.springframework.util.StreamUtils;
  * <p>🔴 요약 입력은 영어 대표 텍스트 + GDELT <b>기관명</b>뿐이다. GDELT 테마·지역은 넣지 않는다
  * (기사 필터 술어 전용, 지라 계약). 요약 출력만 한국어다(사용자 노출).
  *
- * <p>할루시네이션 차단은 {@link SummaryResponse#sufficientContext} 게이트로 <b>구조적으로</b> 한다:
- * 근거가 부족하면 모델이 false 를 내야 하고, {@link #summarize} 가 그때 빈 결과를 돌려줘 호출자가
- * 저장을 건너뛴다(거부 문장·지어낸 요약이 저장되지 않는다).
+ * <p>할루시네이션 차단은 두 겹이다: (1) 근거 부족을 정직하게 신고한 경우
+ * ({@link SummaryResponse#sufficientContext}=false)는 {@link #summarize} 가 빈 결과를 돌려줘
+ * 저장을 건너뛴다(거부 문장 저장 방지 — 구조적). (2) 입력에 없는 사실을 지어내는 경우는
+ * 프롬프트의 GROUNDING RULE 로 완화한다(구조가 아닌 프롬프트 의존 — {@link SummaryResponse} 참고).
  */
 @Component
 public class IssueSummarizer {
@@ -69,7 +70,7 @@ public class IssueSummarizer {
         messages.add(message("user", buildUserMessage(input)));
 
         for (int attempt = 0; attempt < 2; attempt++) {
-            String raw = client.complete(systemPrompt, messages); // 전송 실패는 전파
+            String raw = client.completeForSummary(systemPrompt, messages); // 전송 실패는 전파
             try {
                 JsonNode node = mapper.readTree(LlmVerifier.stripFences(raw));
                 SummaryResponse resp = SummaryResponse.fromJson(node);

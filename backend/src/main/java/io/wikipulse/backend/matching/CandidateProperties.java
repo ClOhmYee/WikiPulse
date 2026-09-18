@@ -132,6 +132,13 @@ public class CandidateProperties {
          * 400 에 맞던 응답엔 영향 없음).
          */
         private int verificationMaxTokens = 800;
+        /**
+         * 이슈 요약(WP-119) 응답 상한 토큰. 검증과 분리한다 — 요약은 사용자 노출용 한국어
+         * 1~3문장(대략 200토큰)이라 800이면 충분하지만, 검증 예산({@link #verificationMaxTokens})을
+         * 낮추면 요약이 조용히 절단돼 파싱 실패→미저장으로 흐르므로 노브를 나눈다(멀티렌즈 리뷰).
+         * 모델은 검증과 같은 Anthropic 모델을 공유한다({@link #verificationModel}).
+         */
+        private int summaryMaxTokens = 800;
         /** 🔴 환경변수 LLM_GATEWAY_KEY. 저장소에 넣지 않는다. */
         private String apiKey = "";
         /** 🔴 타임아웃 필수. read 는 게이트웨이 p99 지연을 덮게 잡는다(페이로드는 항상 작다). */
@@ -168,6 +175,14 @@ public class CandidateProperties {
 
         public void setVerificationMaxTokens(int verificationMaxTokens) {
             this.verificationMaxTokens = verificationMaxTokens;
+        }
+
+        public int getSummaryMaxTokens() {
+            return summaryMaxTokens;
+        }
+
+        public void setSummaryMaxTokens(int summaryMaxTokens) {
+            this.summaryMaxTokens = summaryMaxTokens;
         }
 
         public String getApiKey() {

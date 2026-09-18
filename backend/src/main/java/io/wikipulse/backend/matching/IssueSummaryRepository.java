@@ -84,20 +84,27 @@ public class IssueSummaryRepository {
      *
      * <p>여러 스냅샷에 요약이 걸쳐 있으면 generated_at 최신 1행. 현재 cluster_id 자신은 제외한다.
      *
+     * <p>🔴 {@code model} 이 일치하는 요약만 재사용한다 — model 문자열에 프롬프트 버전이 박혀 있어
+     * (예: {@code "claude-... (summary_v1)"}), 프롬프트·모델을 올리면 이전 요약이 재사용되지 않고
+     * 재생성된다. 검증 재사용이 prompt_version 컬럼으로 거는 것({@code VerificationRepository
+     * .findPriorVerdict})과 같은 의도를, issue_report 에 별도 버전 컬럼 없이 model 동등성으로 이룬다.
+     *
      * @return 재사용할 요약, 없으면 {@link Optional#empty()}
      */
-    public Optional<PriorSummary> findPriorSummary(long clusterId, String issueKey) {
+    public Optional<PriorSummary> findPriorSummary(long clusterId, String issueKey, String model) {
         List<PriorSummary> rows = jdbc.query("""
                 SELECT r.summary, r.model
                   FROM issue_report r
                   JOIN issue_cluster c ON c.id = r.cluster_id
                  WHERE c.issue_key = :issueKey
                    AND r.cluster_id <> :cid
+                   AND r.model = :model
                  ORDER BY r.generated_at DESC
                  LIMIT 1
                 """, new MapSqlParameterSource()
                 .addValue("cid", clusterId)
-                .addValue("issueKey", issueKey),
+                .addValue("issueKey", issueKey)
+                .addValue("model", model),
                 (rs, n) -> new PriorSummary(rs.getString("summary"), rs.getString("model")));
         return rows.isEmpty() ? Optional.empty() : Optional.of(rows.get(0));
     }
@@ -111,16 +118,13 @@ public class IssueSummaryRepository {
      * 재시도 대기, -50) 아직 검증 중이라 false. DONE(통과·탈락)·FAILED(파킹)만 남으면 완료다.
      */
     public boolean stockVerificationComplete(long clusterId) {
-        Integer total = jdbc.queryForObject(
-                "SELECT count(*) FROM cluster_stock WHERE cluster_id = :cid",
-                new MapSqlParameterSource("cid", clusterId), Integer.class);
-        if (total == null || total == 0) {
-            return false;
-        }
-        Integer pending = jdbc.queryForObject(
-                "SELECT count(*) FROM cluster_stock WHERE cluster_id = :cid AND check_state = 'PENDING'",
-                new MapSqlParameterSource("cid", clusterId), Integer.class);
-        return pending != null && pending == 0;
+        // 🔴 한 쿼리로 total·pending 을 같은 스냅샷에서 읽는다(원자성 + 왕복 1회). autocommit 에서
+        // 두 쿼리로 나누면 그 사이 삽입/삭제로 서로 다른 스냅샷을 볼 수 있다.
+        return Boolean.TRUE.equals(jdbc.queryForObject("""
+                SELECT count(*) > 0 AND count(*) FILTER (WHERE check_state = 'PENDING') = 0
+                  FROM cluster_stock
+                 WHERE cluster_id = :cid
+                """, new MapSqlParameterSource("cid", clusterId), Boolean.class));
     }
 
     /**

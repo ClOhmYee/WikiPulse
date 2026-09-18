@@ -78,6 +78,7 @@ _FIND_PRIOR = """
       JOIN issue_cluster c ON c.id = r.cluster_id
      WHERE c.issue_key = %s
        AND r.cluster_id <> %s
+       AND r.model = %s
      ORDER BY r.generated_at DESC
      LIMIT 1
 """
@@ -105,15 +106,13 @@ def _rowcount(conn, sql, *args) -> int:
 
 
 def _stock_verification_complete(conn, cluster_id: int) -> bool:
-    total = q(conn, "SELECT count(*) FROM cluster_stock WHERE cluster_id = %s", cluster_id)[0][0]
-    if total == 0:
-        return False
-    pending = q(
+    # IssueSummaryRepository.stockVerificationComplete 의 단일 원자 쿼리를 그대로 옮긴다.
+    return q(
         conn,
-        "SELECT count(*) FROM cluster_stock WHERE cluster_id = %s AND check_state = 'PENDING'",
+        "SELECT count(*) > 0 AND count(*) FILTER (WHERE check_state = 'PENDING') = 0 "
+        "FROM cluster_stock WHERE cluster_id = %s",
         cluster_id,
     )[0][0]
-    return pending == 0
 
 
 # ── issue_report 멱등 upsert ────────────────────────────────────────────────
@@ -175,7 +174,7 @@ def test_find_prior_summary_returns_other_snapshot(conn):
     new = _new_cluster(conn, issue_key="iran-2026-08", snapshot_ts="2026-09-01T00:00:00+00:00")
     _upsert(conn, old, "이전 스냅샷 요약", "model-x")
 
-    rows = q(conn, _FIND_PRIOR, "iran-2026-08", new)
+    rows = q(conn, _FIND_PRIOR, "iran-2026-08", new, "model-x")
     assert rows == [("이전 스냅샷 요약", "model-x")]
 
 
@@ -183,7 +182,7 @@ def test_find_prior_summary_excludes_self(conn):
     cid = _new_cluster(conn, issue_key="iran-2026-08")
     _upsert(conn, cid, "자기 요약", "m")
     # 자기 행뿐이면 재사용원이 없다(cluster_id <> self).
-    assert q(conn, _FIND_PRIOR, "iran-2026-08", cid) == []
+    assert q(conn, _FIND_PRIOR, "iran-2026-08", cid, "m") == []
 
 
 def test_find_prior_summary_picks_latest(conn):
@@ -191,10 +190,10 @@ def test_find_prior_summary_picks_latest(conn):
     a = _new_cluster(conn, issue_key="k")
     b = _new_cluster(conn, issue_key="k")
     target = _new_cluster(conn, issue_key="k")
-    _insert_report_at(conn, a, "오래된 요약", "m1", "2026-08-31T00:00:00+00:00")
-    _insert_report_at(conn, b, "최신 요약", "m2", "2026-09-01T00:00:00+00:00")
+    _insert_report_at(conn, a, "오래된 요약", "m", "2026-08-31T00:00:00+00:00")
+    _insert_report_at(conn, b, "최신 요약", "m", "2026-09-01T00:00:00+00:00")
 
-    assert q(conn, _FIND_PRIOR, "k", target)[0] == ("최신 요약", "m2")
+    assert q(conn, _FIND_PRIOR, "k", target, "m")[0] == ("최신 요약", "m")
 
 
 def test_find_prior_summary_scoped_by_issue_key(conn):
@@ -202,7 +201,19 @@ def test_find_prior_summary_scoped_by_issue_key(conn):
     target = _new_cluster(conn, issue_key="my-issue")
     _upsert(conn, other, "다른 이슈 요약", "m")
     # 다른 issue_key 의 요약은 재사용 안 된다.
-    assert q(conn, _FIND_PRIOR, "my-issue", target) == []
+    assert q(conn, _FIND_PRIOR, "my-issue", target, "m") == []
+
+
+def test_find_prior_summary_scoped_by_model(conn):
+    # 🔴 model(=모델·프롬프트버전)이 다르면 재사용 안 한다 — 프롬프트/모델 상향 시 재생성되게.
+    old = _new_cluster(conn, issue_key="k")
+    target = _new_cluster(conn, issue_key="k")
+    _upsert(conn, old, "옛 프롬프트 요약", "claude-x (summary_v1)")
+    # 현재 모델이 summary_v2 면 v1 요약은 재사용 대상이 아니다.
+    assert q(conn, _FIND_PRIOR, "k", target, "claude-x (summary_v2)") == []
+    # 같은 model 이면 재사용된다.
+    assert q(conn, _FIND_PRIOR, "k", target, "claude-x (summary_v1)")[0] == (
+        "옛 프롬프트 요약", "claude-x (summary_v1)")
 
 
 # ── CONFIRMED 게이트: 종목 검증 완료 판정 ────────────────────────────────────

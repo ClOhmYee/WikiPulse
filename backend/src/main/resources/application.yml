@@ -49,6 +49,8 @@ wikipulse:
       verification-model: claude-sonnet-4-5-20250929
       # 응답은 6필드 JSON. 한국어 rationale 절단 방지 마진(상한만 늘 뿐 짧은 응답엔 무영향).
       verification-max-tokens: 800
+      # 이슈 요약(WP-119) 전용 상한. 검증과 분리해 한쪽 튜닝이 다른 쪽을 절단시키지 않게 한다.
+      summary-max-tokens: 800
     scheduler:
       enabled: ${WIKIPULSE_MATCHING_SCHEDULER_ENABLED:false}
       fixed-delay: PT5M
