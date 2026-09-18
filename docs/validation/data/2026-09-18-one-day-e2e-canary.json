@@ -1,6 +1,7 @@
 {
   "validation_id": "VAL-2026-09-18-LOCAL-04",
   "environment": "local-only",
+  "verdict": "PARTIAL",
   "date_utc": "2025-06-12",
   "representative_title": "Air India Flight 171",
   "actual_inputs": {

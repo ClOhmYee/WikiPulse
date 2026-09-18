@@ -99,7 +99,7 @@ DB `CHECK` 제약과 **같은 값을 그대로** 쓴다. 번역하지 않는다.
 
 `status`는 이슈 판정 단계가 아니라 판정 후 AI 보강 상태다. `DETECTED`는 요약·종목 검증 전, `VERIFYING`은 처리 중, `CONFIRMED`는 요약 생성과 종목 검증 작업이 끝난 상태다. 조회수 미도착은 아직 이슈가 아닌 후보 대기이며, GATEWAY·GDELT 실패는 재시도/`VERIFYING`으로 남긴다. 모든 작업이 끝난 뒤 검증 통과 종목이 없는 `CONFIRMED`만 정상 0건이다. 미처리·장애 데이터를 시연 편의로 `CONFIRMED`에 올리면 안 된다.
 
-과거 스냅샷을 조회할 때 버블 점수·멤버·편집수·조회수·기준선은 해당 `cluster_id`의 `cluster_member` 고정값을 사용한다. 일반 이슈 상세도 최신 `page_edit_window`나 `page_view_hourly` 행으로 이를 보충하지 않는다. 요약·검증 종목은 `issue_key` 단위 결과를 재사용하되 `createdAt/effectiveAt <= snapshotTs`인 결과만 노출해야 한다. 미래에 생성된 원문·수치·요약·종목 결과를 같은 `issue_key`의 과거 화면에 소급 노출하지 않는다. 현재 상세 쿼리와 요약·종목 저장 구조는 이 계약을 모두 만족하지 못하므로 WP-119·120에서 보완한다.
+과거 스냅샷을 조회할 때 버블 점수·멤버·편집수·조회수·기준선은 해당 `cluster_id`의 `cluster_member` 고정값을 사용한다. 일반 이슈 상세도 최신 `page_edit_window`나 `page_view_hourly` 행으로 이를 보충하지 않는다. 요약·검증 종목은 `issue_key` 단위 결과를 재사용하되, 요약은 `issue_report.generated_at <= snapshotTs`, 종목은 `cluster_stock.check_state='DONE' AND verified=true AND verified_at IS NOT NULL AND verified_at <= snapshotTs`인 결과만 노출한다. 재사용 결과를 다른 `cluster_id` 행으로 복사할 때도 원 결과의 `generated_at`·`verified_at`을 보존하며 복사 시각으로 덮지 않는다. 미래에 생성된 원문·수치·요약·종목 결과를 같은 `issue_key`의 과거 화면에 소급 노출하지 않는다. 현재 상세 쿼리와 요약·종목 저장 구조는 이 계약을 모두 만족하지 못하므로 WP-119·120에서 보완한다.
 
 ---
 

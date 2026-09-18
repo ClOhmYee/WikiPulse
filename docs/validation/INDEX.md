@@ -11,7 +11,7 @@
 | VAL-2026-09-18-LOCAL-01 | 2026-09-18 | 로컬 | 실제 편집 덤프·24시간 `other/pageviews` → 재평가 | PASS, 기준선 품질 미검증 | [골든 데이 §10](../golden-day-validation-2025-06-12.md#10-로컬-후속-검증-2026-09-18-ec2-미사용) |
 | VAL-2026-09-18-LOCAL-02 | 2026-09-18 | 로컬 | `creation` 대기 73개 전수 원인 분석 | PASS | [생성 기준 시각 대기 감사](2026-09-18-creation-pending-audit.md) |
 | VAL-2026-09-18-LOCAL-03 | 2026-09-18 | 로컬 | MVP 전체 파이프라인 구현·회귀 최종 게이트 | PARTIAL — 구현 전환 | [로컬 파이프라인 최종 게이트](2026-09-18-local-pipeline-gate.md) |
-| VAL-2026-09-18-LOCAL-04 | 2026-09-18 | 로컬 | 실제 하루 대표 이슈 `원본 → spike → cluster → AI → API` | PASS with 2 manual bridges | [1일 E2E canary](2026-09-18-one-day-e2e-canary.md) |
+| VAL-2026-09-18-LOCAL-04 | 2026-09-18 | 로컬 | 실제 하루 대표 이슈 `원본 → spike → cluster → AI → API` | PARTIAL — 수동 bridge 2개·시점 정합성 미통과 | [1일 E2E canary](2026-09-18-one-day-e2e-canary.md) |
 
 ## 기록 규칙
 
@@ -20,7 +20,7 @@
 - 저장소 상태와 실행 환경
 - 입력 범위·파일 크기·체크섬
 - 실행 방법과 실제 집계 수치
-- `PASS / FAIL / BLOCKED / UNAVAILABLE`
+- `PASS / PARTIAL / FAIL / BLOCKED / UNAVAILABLE`
 - 실제값과 통제값의 구분
 - 명세 변경 필요 여부와 반영 위치
 - 재현되지 않은 부분과 다음 검증
