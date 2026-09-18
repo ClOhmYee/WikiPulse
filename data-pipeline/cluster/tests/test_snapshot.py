@@ -168,7 +168,9 @@ def test_이동량은_문턱이_아니라_weight로만_쓴다():
     cluster = build_snapshot(_dt(2025, 6, 16), "live", [seed], neighbors).clusters[0]
     nb = next(m for m in cluster.members if m.page_id == 2)
     assert nb.weight == 10.0
-    assert nb.is_seed is False
+    # 🔴 생성일 창을 통과한 이웃은 **추가 씨드**다 (명세 v0.3 §3.2 4번, -115).
+    #    `is_seed=false` 자리는 -77 재급증 문서 몫이고 이 모듈은 그 경로를 안 만든다.
+    assert nb.is_seed is True
 
 
 def test_생성일_미상_이웃은_포함하지_않는다():
@@ -194,8 +196,12 @@ def test_씨드는_지표와_sizeScore를_고정한다():
     assert 0 < m.size_score < 1
 
 
-def test_비씨드_멤버는_sizeScore가_None이다():
-    """원시 급증 점수가 없으니 None. 화면은 작은 점선 노드로 그린다(0과 구분)."""
+def test_추가_씨드_멤버는_sizeScore가_None이다():
+    """원시 급증 점수가 없으니 None. 화면은 작은 점선 노드로 그린다(0과 구분).
+
+    추가 씨드는 detector 를 직접 통과한 문서가 아니라 급증 수치 자체가 없다 —
+    `is_seed=true` 라고 해서 루트 씨드와 같은 지표를 갖는 것이 아니다.
+    """
     seed = _seed()
     neighbors = {1: [Neighbor(page_id=2, wiki="enwiki", title="Sibling",
                               clickstream_n=200, clickstream_month="2025-05",
