@@ -1,10 +1,11 @@
 # 기술 명세서 — WikiPulse (WikiPulse)
 
-- 버전: **v0.2 (2026-09-17 개정)**
-- v0.2 변경: 이슈 판정 관문과 생성 28일 미만 문서의 조회수 기준선을 팀 결정에 맞춰 갱신 (WP-118)
-- 상위 문서: [requirements-v0.2.md](requirements-v0.2.md) — **왜 이 컴포넌트가 있는가는 §3.1이 정본이다.** 여기 다시 적지 않는다.
+- 버전: **v0.3 (2026-09-18 개정)**
+- v0.3 변경: 1일 실제 원본 E2E 결과와 historical 대표 텍스트·스냅샷 증거·상세 API의 시점 계약을 반영했다.
+- 상위 문서: [requirements-v0.3.md](requirements-v0.3.md) — **왜 이 컴포넌트가 있는가는 §3.1이 정본이다.** 여기 다시 적지 않는다.
 - 이 문서가 다루는 것: **무엇이 어느 버전으로, 어느 서버 어느 포트에서, 어떻게 뜨는가.**
-- API는 [api-v0.2.md](api-v0.2.md), 데이터 모델은 [erd-v0.1.md](erd-v0.1.md).
+- API는 [api-v0.3.md](api-v0.3.md), 데이터 모델은 [erd-v0.1.md](erd-v0.1.md).
+- 구현·검증 순서는 [MVP 구현·검증 실행서](mvp-validation-runbook.md), 2026-09-17 서버 실측·변경 흔적은 [프로젝트 문서](https://github.com/ClOhmYee/WikiPulse)를 따른다.
 
 ⚠️ 아래 표에서 **(저장소)** 는 저장소 파일에서 읽은 확정 값, **(계획)** 은 아직 안 깔아본 값이다. 계획값을 실측값처럼 인용하지 말 것.
 
@@ -45,13 +46,13 @@
 
 | | 버전 | 상태 |
 | --- | --- | --- |
-| PostgreSQL | **17** (`pgvector/pgvector:0.8.6-pg17-bookworm`) | 설치 완료 (WP-29), 기본 EC2. 2026-09-17 실측. ⚠️ 앱 사용자·스키마 적재·백엔드 연결까지 됐는지는 별개다 |
+| PostgreSQL | **17.11** (`pgvector/pgvector:0.8.6-pg17-bookworm`) | 기본 EC2. 앱 사용자·V1~V6 테이블·pgvector 존재, health 정상. ~~사용자 테이블 전부 0행~~ → 2025-06-12 canary 원시 신호 `page_edit_window` 72,632행·`page_view_hourly` 61,197행 적재, `spike` 0행 (2026-09-17 19:20 KST 정확 조회). Backend는 미배포 |
 | pgvector | **0.8.6**, 차원 **1536** 고정 | 같은 이미지 (2026-09-17 실측). `vector(1536)` — `text-embedding-3-small` 기준. 모델을 바꾸면 DDL도 바꿔야 한다 |
-| Hadoop / HDFS | **3.5.0** (`apache/hadoop:3.5.0`) | 설치 완료 (WP-28). NameNode 1 + DataNode 2, 복제 2. 2026-09-17 실측 |
-| Spark (EC2) | **3.5.3** (`apache/spark:3.5.3-python3`) | 설치 완료 (WP-27). Standalone 2노드, client 모드. 2026-09-17 실측 |
-| Kafka (EC2) | **3.9.0** (`apache/kafka:3.9.0`) | 설치 완료 (WP-26), 추가 EC2. KRaft 단일 broker + controller. 2026-09-17 실측 |
+| Hadoop / HDFS | **3.5.0** (`apache/hadoop:3.5.0`) | NameNode 1 + DataNode 2, 복제 2. 104 blocks 건강·누락 0. 저장 원본은 2024-10/2025-06 표본이며 고정 MVP 2개월은 없음 (2026-09-17 18:30 KST 실측) |
+| Spark (EC2) | **3.5.3** (`apache/spark:3.5.3-python3`) | Standalone 2노드, client 모드. 제한 2코어 작업에서 Worker 2대 참여·HDFS Parquet 20행 왕복 통과 (2026-09-17 18:26 KST) |
+| Kafka (EC2) | **3.9.0** (`apache/kafka:3.9.0`) | 추가 EC2 KRaft 단일 broker + controller. `wiki.edits` 3파티션, 실제 이벤트 0건 상태에서 smoke 1건 발행·읽기 통과 (2026-09-17 18:26 KST) |
 | Redis | **채택 여부 미정** | CLAUDE.md 인프라 절에 이름만 있고 명세 §3.1 컴포넌트 표에는 없다. 지금 필요한 캐시가 무엇인지부터 정할 것 |
-| Nginx / Jenkins | **미설치** | 2026-09-17 확인 — 기본 EC2 서비스 스택은 아직 안 올렸다. 배포 방식 미정 |
+| Nginx / Jenkins | Nginx **1.30.5** / Jenkins inactive | Nginx container가 80/443에서 동작하고 HTTPS 200이나 `nginx ok` placeholder뿐이다. Backend·Frontend 미배포, Jenkins 미사용 (2026-09-17 18:30 KST 실측) |
 
 ⚠️ **로컬 개발 스택의 Hadoop 은 3.4.1, EC2 는 3.5.0 이다** (2026-09-17 확인). 서로 다른 환경이라 그 자체로 불일치는 아니지만, 한쪽만 보고 다른 쪽을 "고치지" 말 것. 맞출지 여부는 결정된 바 없다. Kafka(3.9.0)·Spark(3.5.3)는 양쪽이 같다.
 
@@ -63,7 +64,7 @@
 | OpenAI 임베딩 | `text-embedding-3-small` (1536차원) | GATEWAY 경유. `Authorization: Bearer` |
 | Anthropic | `/v1/messages` + `web_search_20250305` | GATEWAY 경유. `x-api-key`. 중계 실동작 확인 (2026-09-07) |
 | Wikimedia | EventStreams SSE, `other/pageviews` 시간별 덤프, `pageview_complete` 일별 user 덤프, Clickstream | 운영 조회수 최종 관문은 시간별 덤프. 일별 user는 품질 검증. AQS 일별 API는 PoC용만. ⚠️ **연락처 없는 User-Agent는 차단된다.** `CONTACT_EMAIL` 필수 |
-| GDELT 2.0 GKG | 15분 파일 | ~~2025-06-13~07-04~~ → **2025-06-14 18:00~07-02 02:00 UTC 결손**(경계 이분 탐색 재확인, 2026-09-16, `docs/requirements-v0.2.md` §11) |
+| GDELT 2.0 GKG | 15분 파일 | ~~2025-06-13~07-04~~ → **2025-06-14 18:00~07-02 02:00 UTC 결손**(경계 이분 탐색 재확인, 2026-09-16, `docs/requirements-v0.3.md` §11) |
 | yfinance | `longBusinessSummary`, 일봉 | 비공식 API. 스로틀·스키마 변경 리스크 |
 | SEC / NASDAQ Trader | 종목 마스터 | ⚠️ Wikidata로 티커를 받지 말 것 (`wdt:P249` 40건 함정) |
 
@@ -197,15 +198,17 @@ docker compose run --rm spark            # 윈도우 집계 잡
 | 운영 조회수 소스 | `other/pageviews` 시간별 덤프. `pageview_complete` 일별 `agent=user`는 품질 검증용 병행 보존. AQS 일별 API는 LIVE 최종 관문에서 제외 | 약 1시간 지연을 받아들이고 품질 우선 |
 | 처리 지연 목표 | 사건 발생 후 통상 1~2시간 이내 최종 노출, 시간별 원본 도착 후 내부 처리 15분 이내 | 지연 상한이 아니라 MVP 운영 목표. 미도착은 후보 대기 |
 | 조회수 기준선 | 생성 28일 이상은 직전 28일, 미만은 생성 시각부터 현재 직전까지 | `page_baseline`; 짧은 표본 구현은 WP-118 |
-| 실제 문서 생성 시각 | 리플레이: `mediawiki_history.page_creation_timestamp`. LIVE: MediaWiki 최초 리비전 시각(`prop=revisions`, `rvdir=newer`, `rvlimit=1`). `wiki_page.first_seen`으로 대체 금지 | 저장 컬럼·LIVE 수집은 WP-118 구현 대상 |
+| 문서 생성 기준 시각 | 리플레이: snapshot/month 전체를 보강한 뒤 `page_first_edit_timestamp` 우선, 결측이면 미래가 아닌 `page_creation_timestamp`. 현재 API backfill 금지. LIVE: MediaWiki 최초 리비전 시각(`prop=revisions`, `rvdir=newer`, `rvlimit=1`). `wiki_page.first_seen`으로 대체 금지 | 호환 컬럼 `wiki_page.page_created_at`·덤프/API 추출·멱등 sink와 실제 2025-06-12 로컬 E2E 완료. 당일 대기 73 → 월 전체 60, [전수 감사](validation/2026-09-18-creation-pending-audit.md). 운영 호출 스케줄링은 미연결 |
 | 클러스터 멤버 역할 | 루트 씨드=최종 급증 통과 문서, 추가 씨드=Clickstream 이웃 중 생성일 시간 동시성 통과 새 사건 문서, 비-seed=기존 문서 중 재급증 비율 ≥5 AND 사건기간 편집 ≥20. 공통으로 UTC 실제 생성 시각 `<= snapshot_ts` | WP-51·77. 현재 `cluster/snapshot.py`는 시점 상한은 적용하지만 추가 씨드 승격·비-seed 재급증은 미구현 |
-| Clickstream 관계 가중치 | `n` 100%. 스냅샷 월보다 앞선 검증 완료본 중 직전 월 우선, 없으면 가장 최근 완료 월(통상 전전월). 서로 다른 월을 합산하지 않음 | 당월·미래 데이터 기간은 제외하며 로컬 적재 시각은 event-time 상한이 아님. 생성일·재급증 조건은 멤버 편입 관문이고 가중치에 혼합하지 않음. Wikidata 보조 간선은 `observed_at <= snapshot_ts` |
+| Clickstream 관계 가중치 | `n` 100%. 스냅샷 월보다 앞선 검증 완료본 중 직전 월 우선, 없으면 가장 최근 검증 완료 월(통상 전전월). 서로 다른 월을 합산하지 않음 | 당월·미래 데이터 기간은 제외하며 로컬 적재 시각은 event-time 상한이 아님. 생성일·재급증 조건은 멤버 편입 관문이고 가중치에 혼합하지 않음. Wikidata 보조 간선은 `observed_at <= snapshot_ts`. 새 덤프는 다운로드·스키마·매니페스트 검증 후 교체 |
 | 종목 임베딩 텍스트 | `{회사명}. {섹터} — {산업}. {longBusinessSummary}`, 2,000자 상한 | 명세 §6.1 |
-| 이슈 대표 텍스트 | `{문서 제목}: {도입부 앞 N문장}` 나열. N = 문서 1개면 6, 2~3개면 4, 4개↑면 2. 2,000자 상한 | 명세 §6.2 |
+| 이슈 대표 텍스트 | `{문서 제목}: {도입부 앞 N문장}` 나열. N = 문서 1개면 6, 2~3개면 4, 4개↑면 2. 2,000자 상한. LIVE=현재 API, replay=`snapshot_ts` 이하 revision 고정 | 현재 API의 historical 폴백 금지, 명세 §6.2 |
 | 🔴 파이프라인 내부 텍스트 | **영어** | 한국어로 만들면 코사인이 절반 (0.160 → 0.081) |
 | 후보 우선순위 | `BOTH` → `GDELT_ONLY` → `EMBEDDING_ONLY` | 명세 §6.3 |
 | 과거/LIVE 범위 | 과거 2026-07-17~09-17 고정, 이후 LIVE 계속 누적. 정규화부터 종목 매칭까지 같은 계약 | 과거=미리 계산한 스냅샷, LIVE=최신 스냅샷 |
 | 시점별 재사용 | 점수·멤버는 시점별 스냅샷. 요약·검증 종목은 `issue_key` 단위로 재사용하되 조회 시각까지 완료된 결과만 노출 | 미래 결과의 과거 소급 노출 금지, WP-119·120 |
+| 멤버 증거 고정 | `edit_count/views/edit_baseline/view_baseline/spike_score/size_score/window_start/end`를 판정 시점에 `cluster_member`로 복사 | API는 최신 원시 지표로 보충하지 않음, 명세 §5.2 |
+| `completeness` | `complete`=최종 조회수 판정 완료, `pending`=입력 대기, `unavailable`=원본 없음 | `view_ratio IS NULL`만으로 판정 금지. 신규 문서 기준선 0 경로도 완료되면 `complete` |
 | 처리 실패 의미 | 조회수 미도착=후보 대기, GATEWAY/GDELT 실패=재시도/처리 중, 전체 완료 뒤 통과 종목 없음=정상 0건 | 빈 배열로 장애를 숨기지 않음 |
 | Spark Worker 자원 | 2 코어 · 4 g × 2대. `spark.cores.max 4` · `executor.cores 2` · `executor.memory 2g` | 2026-09-17 기동값 |
 | Spark HDFS 기본 경로 | `/wikipulse/spark` | WP-27 |
@@ -235,10 +238,13 @@ docker compose run --rm spark            # 윈도우 집계 잡
 
 **남은 설계·검증**
 
-- 문서 실제 생성 시각 저장 필드와 LIVE 수집 배선(WP-118). `first_seen`은 시스템 최초 관측 시각이라 대체할 수 없음
+- 문서 최초 revision 시각의 LIVE 수집 배선(WP-118). 저장 필드는 구현 완료했으며 `first_seen`은 시스템 최초 관측 시각이라 대체할 수 없음
 - 시간별 조회수 원본 미도착 후보 보관·재평가와 원본 도착 후 15분 이내 처리 계측(WP-118)
-- Docker Compose에서 GATEWAY 키·후보 생성/검증 워커 설정 전달 및 로컬 E2E 검증(WP-120)
-- 실시간 이슈 요약 생성과 `issue_report` 멱등 적재(WP-119)
+- Docker Compose에서 GATEWAY 키·후보 생성/검증 워커 설정 전달(WP-120). 2026-09-18 별도 canary DB에서는 수동 환경 주입으로 후보·LLM·API/Frontend proxy E2E를 통과했으나 root Compose 배선은 그대로임
+- 클러스터 → GKG 검색 술어·lift 자동 실행, 실시간 이슈 요약 생성·`issue_report` 멱등 적재와 상태 전이(WP-119·120). canary에서는 두 경계를 수동으로 이음
+- replay 대표 텍스트를 `snapshot_ts` 이하 revision에서 고정하고 page ID·revision ID·기준 시각을 보존. 현재 Wikipedia API historical 폴백 금지(WP-120)
+- spike 판정의 조회수·기준선을 `cluster_member`로 전달하고 `completeness`를 판정 상태에서 결정. 현재 `cluster/driver.py`는 수치를 `NULL`로 두고 `view_ratio=NULL`을 pending으로 해석함(WP-120)
+- 일반 이슈 상세가 `cluster_member` 고정값을 읽도록 수정. 현재 `IssueQueryRepository.findMembers`는 최신 `page_edit_window/page_view_hourly`를 읽어 과거 응답에 미래 수치가 섞일 수 있음(WP-120)
 - 같은 `issue_key`의 요약·검증 결과를 유효 시각과 함께 재사용하고 과거 조회에 미래 결과가 섞이지 않게 하는 저장·조회 방식(WP-119·120). 데모 시드는 마지막 스냅샷에만 보강 데이터를 붙여 과거 상세가 비어 있음
 - 2026-07-17~09-17 실제 원본 공통 리플레이로 1,112개 수작업 시드를 교체하고 이후 LIVE 누적까지 연결(WP-120)
 - 종목 상세 가격 API·FE 연결(WP-124). yfinance 적재기(WP-64)는 있으나 `/stocks/{ticker}/prices`와 로컬 가격 데이터는 없음
@@ -247,4 +253,3 @@ docker compose run --rm spark            # 윈도우 집계 잡
 
 - 2노드 RAM 배분, t3 CPU 크레딧 실측
 - `page_edit_window`와 2026-09-18 이후 LIVE 원본의 장기 보존 기간. 고정 MVP 2개월 원본은 실제 재생 검증 전 삭제 금지로 확정
-- GATEWAY 키 서비스별 사용 조건 확인갱신 절차 (-52)

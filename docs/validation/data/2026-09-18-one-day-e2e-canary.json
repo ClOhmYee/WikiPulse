@@ -1,0 +1,54 @@
+{
+  "validation_id": "VAL-2026-09-18-LOCAL-04",
+  "environment": "local-only",
+  "date_utc": "2025-06-12",
+  "representative_title": "Air India Flight 171",
+  "actual_inputs": {
+    "edit_windows": 16,
+    "pageview_hours_joined": 16,
+    "page_created_at": "2025-06-12T08:58:02Z"
+  },
+  "detection": {
+    "evaluated": 16,
+    "awaiting_views": 0,
+    "awaiting_creation": 0,
+    "awaiting_baseline": 0,
+    "spikes_persisted": 15,
+    "first_spike_window": "2025-06-12T09:00:00Z",
+    "first_spike_edits": 126,
+    "first_spike_views": 24669
+  },
+  "cluster": {
+    "snapshots": 15,
+    "latest_cluster_id": 15,
+    "latest_snapshot_ts": "2025-06-13T00:00:00Z",
+    "latest_pulse_score": 5.542,
+    "members": 1,
+    "edges": 0
+  },
+  "matching": {
+    "ticker": "BA",
+    "tier": "BOTH",
+    "similarity": 0.3812,
+    "controlled_gdelt_lift": 6.0,
+    "verified": true,
+    "match_path": "DIRECT_MENTION",
+    "confidence": "strong",
+    "check_state": "DONE"
+  },
+  "api": {
+    "health": "UP",
+    "snapshot_count": 15,
+    "latest_map_clusters": 1,
+    "latest_map_nodes": 1,
+    "summary_present": true,
+    "related_stock_count": 1,
+    "reverse_issue_count": 1,
+    "frontend_http": 200,
+    "frontend_proxy_pass": true
+  },
+  "manual_bridges": [
+    "cluster_to_gkg_predicate: controlled Boeing organization lift row",
+    "issue_summary_and_status: direct GATEWAY summary insert and CONFIRMED update"
+  ]
+}
