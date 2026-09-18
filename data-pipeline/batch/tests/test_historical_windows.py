@@ -6,6 +6,7 @@ import gzip
 import json
 
 from batch.historical_windows import (
+    EditAggregate,
     WindowRow,
     aggregate_edits,
     build_windows,
@@ -17,8 +18,9 @@ from batch.historical_windows import (
 )
 
 
-def edit(wiki, title, ts, is_bot=False, user="u1"):
-    return {"wiki": wiki, "title": title, "event_ts": ts, "is_bot": is_bot, "user": user}
+def edit(wiki, title, ts, is_bot=False, user="u1", rev_id=None):
+    return {"wiki": wiki, "title": title, "event_ts": ts, "is_bot": is_bot, "user": user,
+            "rev_id": rev_id}
 
 
 def view(wiki, title, ts_hour, agent, views):
@@ -55,13 +57,13 @@ def test_봇은_기본_제외():
         edit("enwiki", "Iran", "2025-06-12T14:05:00", is_bot=True, user="bot"),  # 봇 제외
     ])
     # (편집 수, 편집자 수) — 봇은 둘 다에서 빠진다
-    assert counts[("enwiki", "Iran", "2025-06-12T14:00:00")] == (2, 2)
+    assert counts[("enwiki", "Iran", "2025-06-12T14:00:00")][:2] == (2, 2)
 
 
 def test_봇_유지_옵션():
     counts = aggregate_edits(
         [edit("enwiki", "Iran", "2025-06-12T14:05:00", is_bot=True)], keep_bots=True)
-    assert counts[("enwiki", "Iran", "2025-06-12T14:00:00")] == (1, 1)
+    assert counts[("enwiki", "Iran", "2025-06-12T14:00:00")][:2] == (1, 1)
 
 
 def test_시간별로_나뉜다():
@@ -69,8 +71,8 @@ def test_시간별로_나뉜다():
         edit("enwiki", "Iran", "2025-06-12T14:10:00"),
         edit("enwiki", "Iran", "2025-06-12T15:10:00"),
     ])
-    assert counts[("enwiki", "Iran", "2025-06-12T14:00:00")] == (1, 1)
-    assert counts[("enwiki", "Iran", "2025-06-12T15:00:00")] == (1, 1)
+    assert counts[("enwiki", "Iran", "2025-06-12T14:00:00")][:2] == (1, 1)
+    assert counts[("enwiki", "Iran", "2025-06-12T15:00:00")][:2] == (1, 1)
 
 
 def test_편집자_수를_따로_센다():
@@ -80,7 +82,52 @@ def test_편집자_수를_따로_센다():
         edit("enwiki", "Iran", "2025-06-12T14:15:00", user="a"),
         edit("enwiki", "Iran", "2025-06-12T14:25:00", user="a"),
     ])
-    assert counts[("enwiki", "Iran", "2025-06-12T14:00:00")] == (3, 1)
+    assert counts[("enwiki", "Iran", "2025-06-12T14:00:00")][:2] == (3, 1)
+
+
+# ------------------------------------------------- 시점 증거 (WP-129 2번)
+
+def test_최대_revision_id와_마지막_편집시각을_남긴다():
+    """판정에는 안 쓴다. "무엇까지 보고 판정했는지" 를 나중에 확인하려고 남긴다.
+
+    revision id 는 위키 전체에서 단조 증가하므로 최대값 하나면 "그 뒤 편집은 안 썼다" 가
+    외부 대조된다. 마지막 편집 시각은 API 없이 자체 대조할 수 있는 값이다.
+    """
+    agg = aggregate_edits([
+        edit("enwiki", "Iran", "2025-06-12T14:10:00", user="a", rev_id=100),
+        edit("enwiki", "Iran", "2025-06-12T14:50:00", user="b", rev_id=250),
+        edit("enwiki", "Iran", "2025-06-12T14:30:00", user="c", rev_id=180),
+    ])[("enwiki", "Iran", "2025-06-12T14:00:00")]
+
+    assert agg.max_rev_id == 250
+    assert agg.last_edit_ts == "2025-06-12T14:50:00"
+
+
+def test_봇_편집의_revision은_증거에_안_들어간다():
+    """봇은 집계에서 빠지므로 증거에서도 빠져야 한다 — 안 그러면 "우리가 안 센 편집"이
+    증거로 남아 감사에서 편집 수와 어긋난다."""
+    agg = aggregate_edits([
+        edit("enwiki", "Iran", "2025-06-12T14:10:00", user="a", rev_id=100),
+        edit("enwiki", "Iran", "2025-06-12T14:55:00", user="bot", rev_id=999, is_bot=True),
+    ])[("enwiki", "Iran", "2025-06-12T14:00:00")]
+
+    assert agg.max_rev_id == 100
+    assert agg.last_edit_ts == "2025-06-12T14:10:00"
+
+
+def test_revision_id가_없는_입력은_None으로_둔다():
+    """⚠️ 0 으로 메우지 않는다. "증거 없음" 과 "증거가 0" 은 다른 말이다."""
+    agg = aggregate_edits([edit("enwiki", "Iran", "2025-06-12T14:10:00")])[
+        ("enwiki", "Iran", "2025-06-12T14:00:00")]
+
+    assert agg.max_rev_id is None
+
+
+def test_조회수만_있는_윈도우는_증거가_없다():
+    """편집이 없으니 revision 도 없다 — 빈 값이 맞다."""
+    rows = build_windows([], [view("enwiki", "Iran", "2025-06-09T00:00:00", "user", 40)])
+
+    assert (rows[0].max_rev_id, rows[0].last_edit_ts) == (None, None)
 
 
 # ---------------------------------------------------------------- 조회 집계
@@ -99,7 +146,7 @@ def test_agent_가로질러_합산_선택():
 # ---------------------------------------------------------------- join
 
 def test_full_outer_한쪽만_있으면_0():
-    edits = {("enwiki", "A", "2025-06-09T00:00:00"): (3, 2)}
+    edits = {("enwiki", "A", "2025-06-09T00:00:00"): EditAggregate(3, 2, None, None)}
     views = {("enwiki", "B", "2025-06-09T01:00:00"): 50}
     out = {(r.title, r.window_start): r for r in join_windows(edits, views)}
     assert out[("A", "2025-06-09T00:00:00")].edit_count == 3
@@ -115,7 +162,8 @@ def test_build_windows_정렬_결합():
     )
     assert rows == [WindowRow(
         "enwiki", "Iran", "2025-06-09T00:00:00", hour_of_day("2025-06-09T00:00:00"),
-        edit_count=1, editor_count=1, views=40)]
+        edit_count=1, editor_count=1, views=40,
+        last_edit_ts="2025-06-09T00:10:00")]
 
 
 
@@ -135,7 +183,8 @@ def test_샤드_세대가_섞여도_한_문서로_join_된다():
     assert rows == [WindowRow(
         "enwiki", "Hurricane Milton", "2024-10-06T19:00:00",
         hour_of_day("2024-10-06T19:00:00"),
-        edit_count=1, editor_count=1, views=500)]
+        edit_count=1, editor_count=1, views=500,
+        last_edit_ts="2024-10-06T19:10:00")]
 
 
 def test_canonical_은_멱등이라_신세대_샤드에_무영향():
@@ -155,7 +204,8 @@ def test_같은_문서의_두_표기가_한_키로_합쳐진다():
         edit("enwiki", "Hurricane_Milton", "2024-10-06T19:10:00", user="a"),
         edit("enwiki", "Hurricane Milton", "2024-10-06T19:20:00", user="b"),
     ])
-    assert counts == {("enwiki", "Hurricane Milton", "2024-10-06T19:00:00"): (2, 2)}
+    assert counts == {("enwiki", "Hurricane Milton", "2024-10-06T19:00:00"):
+                      EditAggregate(2, 2, None, "2024-10-06T19:20:00")}
 
 # ---------------------------------------------------------------- CLI 왕복
 

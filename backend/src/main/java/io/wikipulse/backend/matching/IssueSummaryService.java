@@ -128,7 +128,9 @@ public class IssueSummaryService {
             }
         }
 
-        String text = issueText.build(verificationRepository.memberTitlesByPulse(clusterId));
+        // 🔴 클러스터 id 로 부른다 — 요약도 그 시점 도입부로 만들어야 한다 (WP-129 1번).
+        // 제목 목록을 넘기던 옛 시그니처는 리플레이에서도 현재 도입부를 읽었다.
+        String text = issueText.build(clusterId);
         String gdelt = String.join(", ",
                 verificationRepository.topOrgMentions(
                         clusterId, props.getVerification().getOrgContextLimit()));
