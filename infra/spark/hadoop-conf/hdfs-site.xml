@@ -1,0 +1,32 @@
+<?xml version="1.0"?>
+<configuration>
+  <property>
+    <name>dfs.datanode.data.dir</name>
+    <value>file:///data/blocks</value>
+  </property>
+
+  <property>
+    <name>dfs.datanode.hostname</name>
+    <value>192.0.2.20</value>
+  </property>
+
+  <property>
+    <name>dfs.datanode.address</name>
+    <value>192.0.2.20:9866</value>
+  </property>
+
+  <property>
+    <name>dfs.datanode.ipc.address</name>
+    <value>192.0.2.20:9867</value>
+  </property>
+
+  <property>
+    <name>dfs.datanode.http.address</name>
+    <value>127.0.0.1:9864</value>
+  </property>
+
+  <property>
+    <name>dfs.replication</name>
+    <value>2</value>
+  </property>
+</configuration>

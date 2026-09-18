@@ -8,6 +8,10 @@
 # 환경 변수
 .env
 .env.*
+# 🔴 예시 파일은 커밋한다 — 키 이름이 어디에도 없으면 서버를 다시 못 만든다
+# (WP-133). 값은 비운다.
+!.env.example
+!**/.env.example
 !.env.example
 
 # Python

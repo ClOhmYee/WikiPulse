@@ -1,0 +1,35 @@
+name: hdfs
+
+services:
+  datanode:
+    image: apache/hadoop:3.5.0
+    network_mode: host
+    init: true
+    restart: unless-stopped
+
+    entrypoint: ["/opt/hadoop/bin/hdfs"]
+    command: ["datanode"]
+
+    environment:
+      HADOOP_CONF_DIR: /opt/hadoop/etc/hadoop
+      HADOOP_HEAPSIZE_MAX: "1g"
+
+    volumes:
+      - ./conf/core-site.xml:/opt/hadoop/etc/hadoop/core-site.xml:ro
+      - ./conf/hdfs-site.xml:/opt/hadoop/etc/hadoop/hdfs-site.xml:ro
+      - ./data/datanode:/data/blocks
+
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:9864/"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+
+    stop_grace_period: 60s
+
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
