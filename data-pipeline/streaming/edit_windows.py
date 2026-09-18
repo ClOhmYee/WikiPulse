@@ -145,7 +145,6 @@ def aggregate_edit_windows(
     *,
     window_size: str = DEFAULT_WINDOW_SIZE,
     slide_size: str = DEFAULT_SLIDE_SIZE,
-    watermark: str = DEFAULT_WATERMARK,
 ) -> DataFrame:
     """파싱된 edit_event DataFrame → 문서 × 윈도우 집계.
 
@@ -156,16 +155,13 @@ def aggregate_edit_windows(
     🔴 이 함수의 필터·집계는 배치 판과 한 벌이다. 한쪽을 고치면 다른 쪽도 고친다 —
     갈리면 `edit_z` 가 에러 없이 어긋난다.
 
-    watermark 는 스트리밍에서만 건다. 배치 DataFrame 에 걸면 의미가 없다.
+    스트리밍 입력의 watermark 는 upstream `prepare_live_events()`가 한 번만 건다.
+    그 watermark 가 중복 제거와 이 윈도우 집계에 함께 전파된다.
     """
     # 노이즈 제거. 지금은 봇만 거른다.
     # 1인 반복 편집·되돌리기 필터는 급증 판정 스토리에서 붙인다 (WP-38).
     # 봇 편집이 적지 않다 — 2026-09-08 표본에서 enwiki 41건 중 11건이 봇이었다.
     filtered = events.filter(~F.coalesce(F.col("is_bot"), F.lit(False)))
-
-    if filtered.isStreaming:
-        # 늦게 온 이벤트를 언제까지 받아줄지. 이걸 안 걸면 상태가 무한히 쌓인다.
-        filtered = filtered.withWatermark("event_ts", watermark)
 
     aggregations = [
         F.count("*").alias("edit_count"),
@@ -221,7 +217,6 @@ def build_stream(spark: SparkSession):
         events,
         window_size=env("WINDOW_SIZE", DEFAULT_WINDOW_SIZE),
         slide_size=env("SLIDE_SIZE", DEFAULT_SLIDE_SIZE),
-        watermark=env("WATERMARK", DEFAULT_WATERMARK),
     )
 
 

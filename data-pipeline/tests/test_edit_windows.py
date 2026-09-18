@@ -13,6 +13,8 @@ from __future__ import annotations
 
 import copy
 import json
+import os
+import time
 
 import pytest
 
@@ -23,7 +25,11 @@ pyspark = pytest.importorskip("pyspark", reason="pyspark 미설치 — 이 파�
 from pyspark.sql import SparkSession  # noqa: E402
 from pyspark.sql import functions as F  # noqa: E402
 
-from streaming.edit_windows import EDIT_EVENT_SCHEMA, prepare_live_events  # noqa: E402
+from streaming.edit_windows import (  # noqa: E402
+    EDIT_EVENT_SCHEMA,
+    aggregate_edit_windows,
+    prepare_live_events,
+)
 
 BASE = {
     "$schema": "/mediawiki/recentchange/1.0.0",
@@ -88,6 +94,71 @@ def test_live_preparation_rejects_missing_meta_id(spark):
     payload = event(meta={"id": None})
     raw = spark.createDataFrame([(payload,)], "value string")
     assert prepare_live_events(raw, watermark="10 minutes").count() == 0
+
+
+def test_live_pipeline_does_not_crash_when_planning_second_micro_batch(spark):
+    raw = (
+        spark.readStream.format("rate-micro-batch")
+        .option("rowsPerBatch", 1)
+        .option("advanceMillisPerBatch", 1000)
+        .option("startTimestamp", 1788826200000)
+        .load()
+        .select(
+            F.to_json(
+                F.struct(
+                    F.lit("enwiki").alias("wiki"),
+                    F.lit("en.wikipedia.org").alias("domain"),
+                    F.lit("Hurricane Milton").alias("title"),
+                    F.lit("edit").alias("event_type"),
+                    (F.col("value") + 1).cast("long").alias("rev_id"),
+                    F.col("value").cast("long").alias("rev_parent_id"),
+                    F.lit(100).alias("byte_delta"),
+                    F.lit(1100).alias("new_length"),
+                    F.lit("Alice").alias("user"),
+                    F.lit(False).alias("is_bot"),
+                    F.lit(False).alias("is_minor"),
+                    F.col("timestamp").cast("string").alias("event_ts"),
+                    (F.col("timestamp").cast("double") * 1000)
+                    .cast("long")
+                    .alias("event_ts_ms"),
+                    F.lit("eventstreams").alias("source"),
+                    F.concat(F.lit("batch-"), F.col("value")).alias("meta_id"),
+                )
+            ).alias("value")
+        )
+    )
+    aggregated = aggregate_edit_windows(
+        prepare_live_events(raw, watermark="10 minutes")
+    )
+
+    def count_watermarks(plan):
+        children = plan.children()
+        return int(plan.nodeName() == "EventTimeWatermark") + sum(
+            count_watermarks(children.apply(index)) for index in range(children.size())
+        )
+
+    # Windows PySpark cannot create a local streaming checkpoint without Hadoop's
+    # native DLL.  The logical plan still gives a platform-independent regression:
+    # the broken implementation contains two EventTimeWatermark nodes.
+    assert count_watermarks(aggregated._jdf.logicalPlan()) == 1
+    if os.name == "nt":
+        return
+
+    query = (
+        aggregated.writeStream.format("memory")
+        .queryName("test_second_micro_batch_watermark")
+        .outputMode("update")
+        .trigger(processingTime="100 milliseconds")
+        .start()
+    )
+    try:
+        deadline = time.monotonic() + 30
+        while query.isActive and len(query.recentProgress) < 2:
+            query.awaitTermination(0.2)
+            assert time.monotonic() < deadline, "second micro-batch did not finish"
+        assert len(query.recentProgress) >= 2
+    finally:
+        query.stop()
 
 
 def test_스키마가_프로듀서_출력과_맞는다(spark):
