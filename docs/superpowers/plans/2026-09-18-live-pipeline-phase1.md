@@ -420,7 +420,7 @@ services:
     container_name: wikipulse-producer
     network_mode: host
     init: true
-    restart: unless-stopped
+    restart: ${RESTART_POLICY:-no}
     cpus: 0.25
     mem_limit: 256m
     environment:
@@ -439,7 +439,7 @@ services:
     container_name: wikipulse-edit-stream
     network_mode: host
     init: true
-    restart: unless-stopped
+    restart: ${RESTART_POLICY:-no}
     mem_limit: 1536m
     environment:
       SPARK_LOCAL_IP: ${DATA_SERVER_IP:-192.0.2.10}
@@ -490,6 +490,7 @@ CONTACT_EMAIL=operator@example.com
 PIPELINE_APP_DIR=../../data-pipeline
 PIPELINE_STATE_DIR=./state
 PIPELINE_IVY_DIR=./ivy
+RESTART_POLICY=no
 SPARK_INFRA_DIR=/home/deploy/infra/spark
 DATA_SERVER_IP=192.0.2.10
 SPARK_MASTER=spark://192.0.2.10:7077
@@ -498,7 +499,7 @@ KAFKA_BOOTSTRAP_SERVERS=192.0.2.10:9092
 
 - [ ] **Step 3: Document exact preflight, start, observe, stop, and recovery commands**
 
-`deploy/live-pipeline/README.md` must state that production `.env` is mode `0600`, topic/checkpoint deletion is prohibited, `producer` starts before `edit-stream`, and only these two services may be stopped during rollback. Include these commands:
+`deploy/live-pipeline/README.md` must state that production `.env` is mode `0600`, topic/checkpoint deletion is prohibited, `producer` starts before `edit-stream`, and only these two services may be stopped during rollback. Keep `RESTART_POLICY=no` throughout canary validation; only after every canary gate passes, change it to `unless-stopped` and apply the policy to `producer` first, then `edit-stream`. Include these commands:
 
 ```bash
 sudo docker compose --env-file .env config --quiet
