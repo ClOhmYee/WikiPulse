@@ -4,7 +4,7 @@
 - 실행일: 2026-09-18 KST
 - 배포 대상: 데이터 EC2 `data.example.com`
 - 서비스 EC2: 직접 SSH·설정·컨테이너 관리 작업은 읽기 전용; 기존 Spark Worker는 신규 executor 수행
-- 배포 커밋: `2d00cdb963c52f8aa69b0b12369b497a3f7506a1`
+- 배포 커밋: `2d00cdb963c52f8aa69b0b12369b497a3f7506a1` → 재배포 `fae8bb7794d2550f46953ce4f78e1fe2fb068415` (§10)
 - 판정: **PASS — EventStreams → Kafka → 2-node Spark → HDFS checkpoint 지속 실행과 재시작 복구 확인**
 
 ## 1. 결론
@@ -230,3 +230,92 @@ running이었으며 건강 검사가 있는 컨테이너는 healthy였다. 두 �
 롤백 시 기존 topic이나 checkpoint를 삭제하지 않는다. 먼저 정책을 `no`로 되돌리고 Compose
 렌더링을 확인한 뒤 `wikipulse-edit-stream`, `wikipulse-producer` 두 신규 서비스만 중지한다.
 기존 Kafka·Spark·HDFS·UFW·서비스 EC2는 건드리지 않는다.
+
+## 10. `fae8bb7` 재배포 재검증 (2026-09-18 21:03~21:15 KST)
+
+`2d00cdb` 배포 뒤 리뷰에서 `meta_id`가 빈 문자열이거나 공백뿐일 때 정규화와 중복 제거가
+이를 유효 식별자로 취급한다는 결함을 찾았다. `fae8bb7`이 두 경계를 막는다 — Producer는
+`normalize()`에서 `ValueError`를 던져 malformed로 세고, Spark는 `meta_id` 필터에
+`rlike(r"\S")`를 더한다. 실제 EventStreams 표본에서 관측된 적은 없는 방어 규칙이다.
+
+### 10.1 로컬 게이트
+
+| 실행 | 결과 |
+| --- | --- |
+| `python -m pytest data-pipeline/tests -q -rs` (Python 3.10, pyspark 없음) | 52 passed, 2 skipped |
+| `.venv\python.exe -m pytest tests/test_edit_windows.py tests/test_stream_batch_parity.py -q -rs` (Python 3.11 + pyspark 3.5.3) | 26 passed, 1 skipped |
+
+skip 사유는 두 종류다. 앞 실행의 2건은 그 인터프리터에 pyspark가 없어서이고, 뒤 실행의
+1건은 `writeStream`에 필요한 Hadoop native DLL이 Windows에 없어서다. 즉 streaming 계획
+회귀(`test_live_pipeline_does_not_crash_when_planning_second_micro_batch`)는 로컬에서
+증명되지 않았고 CI `test:pipeline-spark`와 아래 EC2 실행이 담당한다.
+
+### 10.2 배포 무결성
+
+| 항목 | 값 |
+| --- | --- |
+| 파일 | `wikipulse-live-phase1-fae8bb7.tar.gz` |
+| 크기 | 264,495 bytes |
+| SHA256 | `aea3cae12aa4033922e979aa1a5cbd405a6100830e615aedc59f841ad9ada456` (로컬·원격 일치) |
+| 설치 전 차이 | `producer/normalize.py`, `streaming/edit_windows.py`, `tests/test_normalize.py`, `tests/test_edit_windows.py` 4개 파일뿐. 나머지 트리는 동일 |
+| compose.yaml | 서버 파일과 동일 — 교체하지 않음 |
+| 보호 대상 | 복사 전후 `stat` 비교로 `.env`(mode `0600`), `state/`, `state/last-event-id`, `ivy/` 미변경 확인 |
+
+비밀 없는 핵심 명령은 다음과 같다.
+
+```bash
+cp -a /home/deploy/infra/pipeline-upload/fae8bb7/data-pipeline/. /home/deploy/infra/pipeline/app/
+sudo docker compose --env-file .env config --quiet
+sudo docker compose --env-file .env up -d --build producer
+sudo docker compose --env-file .env restart edit-stream
+```
+
+실행 중인 컨테이너 안에서 새 코드를 직접 확인했다.
+
+- `wikipulse-producer`: `/app/producer/normalize.py:124`에 `meta.id must be a non-empty string`
+- `wikipulse-edit-stream`: `/opt/app/streaming/edit_windows.py:133`에 `rlike` 필터
+- 새 Producer image `sha256:caaea705feef61297b231a39addf9f610e21c49759de85b2fcc4835c836a1d5f`
+- Spark application `app-20260918120421-0015`
+
+### 10.3 11분 카나리
+
+- 시작 표본 `2026-09-18T12:04:54Z`, 종료 표본 `2026-09-18T12:15:28Z`
+
+| 지표 | 시작 | 종료 |
+| --- | ---: | ---: |
+| Kafka end offset P0 / P1 / P2 | 6,182 / 6,497 / 6,293 | 6,374 / 6,691 / 6,502 |
+| Spark batch | 479 | 501 |
+| Producer 누적(재시작 후) 수신 / 발행 / 건너뜀 / 파싱실패 | 1,323 / 23 / 1,300 / 0 | 26,051 / 599 / 25,452 / 0 |
+| Producer CPU / memory | 0.84% / 20.54 MiB | 1.24% / 20.82 MiB |
+| Spark driver CPU / memory | 15.09% / 541.7 MiB | 1.60% / 716.9 MiB |
+| 호스트 가용 메모리 | 10 GiB | 10 GiB |
+| 루트 디스크 | 4% | 4% |
+
+cursor 파일 mtime은 표본마다 갱신됐다(내용은 읽지 않았다). driver 로그의 최근 12분
+`ERROR|Exception` 일치는 0건이었다. HDFS checkpoint는 `commits/501`까지 전진했고 논리
+크기 29.8 MiB, 복제 포함 59.5 MiB였다.
+
+재시작 복구는 이번에도 성립했다. Producer는 `EventStreams 연결됨 (이어받기)` 1회로
+cursor에서 재개했고, edit-stream은 재시작 직전 commit batch 475 다음인 479부터 이어져
+`STARTING_OFFSETS=earliest`를 새 query로 적용하지 않았다. checkpoint 호환성·동시 query
+오류는 0건이다.
+
+### 10.4 기존 서비스
+
+데이터 EC2의 `kafka-kafka-1`(10일), `hdfs-namenode-1`·`hdfs-datanode-1`(9일),
+`wikipulse-spark-master-1`·`wikipulse-spark-worker-1`(35시간)은 재생성 없이 같은
+컨테이너로 running/healthy를 유지했고 UFW는 active였다. 이번 재배포에서 서비스 EC2에는
+접속하지 않았다. 다만 서비스 EC2의 기존 Spark Worker는 §7과 같은 이유로 새 application의
+executor를 계속 실행한다.
+
+### 10.5 한계와 판정
+
+- 빈 `meta_id` 거부는 로컬 테스트로만 증명했다. 카나리 내내 파싱실패는 0이라 실데이터가
+  이 경로를 실행한 증거는 없다. 확인한 것은 방어 규칙이 정상 트래픽을 떨어뜨리지 않는다는
+  사실뿐이다.
+- 카나리 길이는 11분으로 §4의 15분보다 짧다. EC2 사용 창(22:00 KST) 안에서 배포와 확인을
+  끝내기 위한 선택이며, 관측 간격·지표는 동일하다.
+- 이번 재배포는 `wikipulse-producer`, `wikipulse-edit-stream` 두 서비스만 재생성했다.
+  topic·checkpoint·기존 Compose·UFW는 변경하지 않았다.
+
+판정: **PASS — `fae8bb7`이 현재 배포 상태이며 §1의 결론을 유지한다.**
