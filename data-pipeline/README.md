@@ -8,7 +8,7 @@ Wikipedia EventStreams 를 Kafka 로 옮기고, Spark Structured Streaming 이
 - `WP-32` GDELT GKG 15분 폴링 → HDFS 적재 Producer — [gdelt/README.md](gdelt/README.md)
 - `WP-65` GDELT GKG 기관명 lift 집계 → `cluster_org_mention` Spark 배치 — [gkg/README.md](gkg/README.md)
 
-명세: [docs/requirements-v0.2.md](../docs/requirements-v0.2.md) §3
+명세: [docs/requirements-v0.3.md](../docs/requirements-v0.3.md) §3
 
 > 이 폴더엔 서로 다른 잡이 산다. 위 두 개는 위키 편집 실시간 경로(Kafka·Spark),
 > `gdelt/` 는 뉴스 원본을 HDFS 에 쌓는 별도 배치성 수집기다. 각각 따로 뜬다.
@@ -85,7 +85,7 @@ docker compose run --rm spark
 | `WIKIS` | `enwiki` | 쉼표로 여러 개. `*` 면 전 위키 |
 | `KAFKA_BOOTSTRAP_SERVERS` | `localhost:9092` | 컨테이너 안에서는 `kafka:29092` |
 | `KAFKA_TOPIC` | `wiki.edits` | |
-| `WINDOW_SIZE` / `SLIDE_SIZE` | `1 hour` / `5 minutes` | 현재 집계 구현값. v0.2에서는 편집 횟수 임계가 아니라 조회수 검사 후보를 내는 주기를 결정하며 WP-118에서 재검토 |
+| `WINDOW_SIZE` / `SLIDE_SIZE` | `1 hour` / `5 minutes` | 현재 집계 구현값. 현행 v0.3에서는 편집 횟수 임계가 아니라 조회수 검사 후보를 내는 주기를 결정하며 WP-118에서 재검토 |
 | `STARTING_OFFSETS` | `latest` | 처음부터 읽으려면 `earliest` |
 | `SINK` | `console` | `spike` 면 판정까지 가서 `spike(source='live')` 에 적재 (WP-100) |
 | `DATABASE_URL` | (없음) | `SINK=spike` 에 필수. 없으면 기동 때 멈춘다 — 조용히 콘솔로 안 떨어진다 |
@@ -213,7 +213,7 @@ Kafka·Docker 없이 돈다. Spark 테스트는 로컬 `local[2]` 로 실제 집
 
 ## 아직 안 한 것
 
-- **v0.2 최종 이슈 판정 계약 적용** — 편집 발생을 후보 관문으로만 쓰고, 문서 생성일부터
+- **v0.3 최종 이슈 판정 계약 적용** — 편집 발생을 후보 관문으로만 쓰고, 문서 생성일부터
   현재까지(최대 28일) 조회수 급등으로 최종 판정하는 경로는 `WP-118`에서 구현한다.
   운영 입력은 `other/pageviews` 시간별 덤프이며 미도착 후보 재평가와 내부 15분 SLA 계측도
   포함한다. 현재 `spike/detector.py`의 편집 임계·신규 문서 별도 식은 이전 계약이다.

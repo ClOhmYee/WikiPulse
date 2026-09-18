@@ -9,7 +9,7 @@
     3. GDELT 에 없는 구간(404·미등록)은 결손으로 기록
 
 싱크가 "이미 받은 파일"의 정본이라(sink.exists) 매번 목록을 통째로 안 봐도 되고,
-재시작·장애 후에도 빠진 것만 다시 채운다. 근거: docs/requirements-v0.2.md §3.1·§5.
+재시작·장애 후에도 빠진 것만 다시 채운다. 근거: docs/requirements-v0.3.md §3.1·§5.
 """
 
 from __future__ import annotations

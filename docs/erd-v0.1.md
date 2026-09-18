@@ -56,7 +56,7 @@ spike → issue_cluster ─┬─ cluster_member   (어떤 문서가 묶였나)
 
 | 테이블 | PK | 밖으로 나가는 FK | 비고 |
 | --- | --- | --- | --- |
-| `wiki_page` | `id` (대리키) | — | 자연키는 `UNIQUE (wiki, title)`. EventStreams에 `page_id`가 없다. `first_seen`은 시스템 최초 관측 시각이며 실제 문서 생성 시각이 아니다 |
+| `wiki_page` | `id` (대리키) | — | 자연키는 `UNIQUE (wiki, title)`. EventStreams에 `page_id`가 없다. `first_seen`은 시스템 최초 관측, nullable `page_created_at`은 확인 가능한 최초 revision 시각 |
 | `page_edit_window` | `(page_id, window_start)` | `page_id` | 슬라이딩이라 편집 1건이 여러 행에 걸린다 |
 | `page_view_hourly` | `(page_id, ts_hour)` | `page_id` | |
 | `page_baseline` | `(page_id, hour_of_day)` | `page_id` | `hour_of_day` 0~23 (UTC 시). ~~`hour_of_week` 0~167~~ → 2026-09-15 (WP-84, `V3__baseline_hour_of_day.sql`). `view_stddev` 추가 — 2026-09-15 (WP-90, `V4__baseline_view_stddev.sql`). 조회수 z 의 유일한 입력이고, NULL 이면 조회수 단독 발동을 안 한다 |
@@ -116,7 +116,7 @@ LIMIT :k;
 ## 5. v0.1에서 안 푼 것
 
 - **리플레이 스냅샷과 토론의 수명이 엮여 있다.** `comment_thread`가 `issue_cluster`에 CASCADE로 달려 있는데 클러스터는 재계산 대상이다. 다만 토론은 MVP 제외 기능이므로 이번 구현에서는 사용하지 않는다.
-- **실제 문서 생성 시각 저장 위치** — 생성 28일 미만 판정에는 `first_seen`이 아니라 실제 최초 리비전 시각이 필요하다. 리플레이는 `mediawiki_history.page_creation_timestamp`, LIVE는 MediaWiki 최초 리비전 API를 쓰며, 저장 컬럼은 WP-118 구현에서 추가한다.
+- ~~**실제 문서 생성 시각 저장 위치 미정**~~ → `wiki_page.page_created_at TIMESTAMPTZ NULL`로 추가했다(WP-118, 2026-09-17). ~~리플레이 `page_creation_timestamp`~~ → `page_first_edit_timestamp` 우선, 결측 시 미래가 아닌 lifecycle 생성 시각으로 교정했다(2026-09-18). LIVE는 MediaWiki 최초 리비전 API를 쓰며 운영 스케줄링은 아직 연결되지 않았다.
 - **`issue_key` 결과의 as-of 연결** — 점수·멤버는 시점별 스냅샷, 요약·검증 종목은 이슈 단위 재사용이지만 현재 스키마는 결과의 유효 시각과 과거 조회 규칙을 충분히 표현하지 못한다. WP-119·120에서 마이그레이션 여부를 정한다.
 - **`page_edit_window` 보존 기간** — 정해지면 파티션·삭제 잡이 붙는다
 - **마이그레이션 도구** — 파일명만 Flyway 규칙(`V1__`)을 따랐다. Flyway/Liquibase 확정은 백엔드 합의 사항
@@ -131,7 +131,7 @@ LIMIT :k;
 | 테이블 | 추가 컬럼 | 이유 |
 | --- | --- | --- |
 | `issue_cluster` | `issue_key`, `first_detected_at`, `hot`, `category` | 시점 간 추적(`id`는 스냅샷마다 새로 생김)·최초 감지·급증·뉴스형 카테고리 |
-| `cluster_member` | `edit_count`, `views`, `edit_baseline`, `view_baseline`, `spike_score`, `size_score`(0~1), `completeness`, `window_start/end` | 시점별 지표를 **고정** 저장 — 리플레이가 현재 `spike`를 다시 읽으면 과거·현재가 섞인다 |
+| `cluster_member` | `edit_count`, `views`, `edit_baseline`, `view_baseline`, `spike_score`, `size_score`(0~1), `completeness`, `window_start/end` | 판정에 사용한 시점별 지표를 **고정** 저장 — API가 최신 원시 테이블이나 현재 `spike`를 다시 읽으면 과거·현재가 섞인다. `complete`는 최종 조회수 판정 완료, `pending`은 입력 대기, `unavailable`은 원본 없음이며 `view_ratio IS NULL`만으로 정하지 않는다 (2026-09-18, 명세 v0.3 §5.2) |
 
 **테이블 추가**
 

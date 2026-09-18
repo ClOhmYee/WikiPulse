@@ -1,7 +1,7 @@
 package io.wikipulse.backend.issue.dto;
 
 /**
- * 이슈 피드 카드 / 버블맵 버블. API 명세 v0.2 §2 `GET /issues`.
+ * 이슈 피드 카드 / 버블맵 버블. API 명세 v0.3 §2 `GET /issues`.
  *
  * <p>memberCount·stockCount 는 버블 크기·배지용 집계다 — 목록에서 상세를 N번
  * 부르지 않게 하려고 넣었다. label 은 LLM 이 붙기 전 null (FE 가 대표 문서명 사용).

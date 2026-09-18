@@ -1,5 +1,5 @@
 -- WikiPulse 데이터 모델 v1  (WP-35)
--- 명세: docs/requirements-v0.2.md §3.2, §5
+-- 명세: docs/requirements-v0.3.md §3.2, §5
 --
 -- 설계에서 결정한 것 세 가지. 나머지는 각 테이블 주석에 붙였다.
 --

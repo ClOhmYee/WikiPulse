@@ -82,7 +82,7 @@ paths:
       operationId: getIssue
       description: >-
         Optional NON_NULL fields may be absent. relatedStocks is a preview of at most five. Member metrics
-        currently come from latest rows, not the issue snapshot.
+        are fixed values copied into cluster_member for this issue snapshot; never substitute later raw rows.
       parameters:
         - name: id
           in: path
@@ -778,10 +778,12 @@ components:
           type: integer
           minimum: 0
           nullable: true
+          description: Edit count used to evaluate this snapshot window.
         views:
           type: integer
           minimum: 0
           nullable: true
+          description: Pageviews used to evaluate this snapshot window.
       required:
         - pageId
         - wiki

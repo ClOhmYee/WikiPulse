@@ -3,7 +3,7 @@ package io.wikipulse.backend.common;
 import com.fasterxml.jackson.annotation.JsonInclude;
 
 /**
- * 목록 응답의 meta. API 명세 v0.2 §1.2.
+ * 목록 응답의 meta. API 명세 v0.3 §1.2.
  *
  * <p>{@code meta.pagination} 과 목록별 추가 필드(snapshotTs 등)를 담는다.
  * total 은 자르기 이전 조건 일치 개수, hasMore = offset + 반환 개수 < total.
