@@ -633,6 +633,7 @@ Set only these values in `/home/deploy/infra/pipeline/.env`, then set mode `0600
 PIPELINE_APP_DIR=/home/deploy/infra/pipeline/app
 PIPELINE_STATE_DIR=/home/deploy/infra/pipeline/state
 PIPELINE_IVY_DIR=/home/deploy/infra/pipeline/ivy
+RESTART_POLICY=no
 SPARK_INFRA_DIR=/home/deploy/infra/spark
 DATA_SERVER_IP=192.0.2.10
 SPARK_MASTER=spark://192.0.2.10:7077
