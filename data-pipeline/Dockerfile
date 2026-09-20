@@ -34,9 +34,17 @@ RUN pip install --no-cache-dir \
 #    한 번도 뜬 적이 없다. 2026-09-20 에 이미지를 직접 빌드해 확인했다.
 #    batch 는 live_cycle 이 시간별 덤프를 받는 데 쓰고(batch.pageview_hourly_ingest),
 #    producer 는 canonical_title(§5.1) 때문에 spike 쪽에서 들어온다.
+#
+#    ⚠️ **같은 누락이 세 번째다.** `spike`(-135) · `stock`(-147) · `cluster`(-149).
+#    전부 운영에서 `ModuleNotFoundError` 로 처음 드러났다. 모듈을 새로 만들면
+#    **여기에 COPY 를 더하는 것까지가 그 작업이다.**
+#
+#    cluster 는 `python -m cluster.driver` 로 스냅샷을 만든다(-149). 외부 의존성이
+#    없고(표준 라이브러리 + 이미 있는 psycopg) batch·spike 만 쓰므로 base 에 둔다.
 COPY producer/ ./producer/
 COPY spike/ ./spike/
 COPY batch/ ./batch/
+COPY cluster/ ./cluster/
 
 # 기본은 EventStreams → Kafka 프로듀서. compose 에서 command 로 바꿀 수 있다.
 CMD ["python", "-m", "producer.wiki_edits"]

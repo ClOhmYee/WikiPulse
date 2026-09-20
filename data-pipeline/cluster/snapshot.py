@@ -484,7 +484,15 @@ def _build_cluster(
         first_detected_at=prior_first_detected.get(key, snapshot_ts),
         members=tuple(members),
         edges=tuple(edges),
-        label=None,
+        # 🔴 **루트 씨드의 제목이 이슈 이름이다.** ~~`None`~~ → `seed.title`
+        # (2026-09-20, WP-149).
+        #
+        # ⚠️ 아무도 채우지 않아서 계속 NULL 이었다. 파이프라인 어디에도 `label` 을 쓰는
+        # UPDATE 가 없는데(백엔드 `matching` 포함) 프론트 `PulseCluster.jsx` 는
+        # `cluster.label` 로 제목을 그린다 — 운영에 4,474 클러스터를 적재하고 나서야
+        # **제목 없는 버블**로 드러났다. 데모 시드(`docker/seed/*.sql`)는 제목을 직접
+        # 넣어 뒀어서 화면상 차이가 안 보였다.
+        label=seed.title,
         seed_page_id=seed.page_id,
     )
 
