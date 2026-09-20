@@ -12,6 +12,8 @@ EC2 두 대의 `~/infra/*` 를 저장소로 옮긴 것이다. **서버가 날아
     infra/hdfs     NameNode · DataNode          (추가 EC2 = NameNode, 둘 다 DataNode)
     infra/pipeline LIVE producer + edit-stream  (추가 EC2, 2026-09-18 배포)
     infra/live-cycle 시간별 조회수·재판정 주기 (기본 EC2, WP-135)
+    infra/stock    종목 마스터·설명·임베딩 적재 (기본 EC2, WP-147)
+                   ⚠️ 상주 서비스가 아니라 일회성이다 — `run --rm` 으로 돌린다
 
 ## 🔴 비밀값은 안 들어온다
 

@@ -1,0 +1,73 @@
+# 종목 마스터·설명·임베딩 적재 (WP-147). **일회성이다.**
+#
+# 🔴 **상주 서비스가 아니다.** Kafka·Spark 처럼 떠 있는 게 아니라 한 번 돌려 DB 를
+#    채우고 끝난다. 그래서 세 서비스 모두 `profiles: [stock]` 뒤에 숨겨 뒀다 —
+#    `docker compose up` 에 딸려 올라가면 안 된다. 실행은 `run --rm` 으로 한다.
+#
+#    이 "자리가 애매하다"는 점 때문에 여태 `infra/` 에 아무것도 없었고, 그래서
+#    운영 DB 의 `stock` 이 **0행인 채로 아무도 몰랐다**(2026-09-20 발견). 코드와
+#    Jira 만 보면 끝난 것으로 보였다 — WP-33·34 는 "로컬 적재 확인"으로
+#    닫혔고 운영 적재는 어느 완료 조건에도 없었다.
+#
+# 🔴 **서비스(기본) EC2 에서 돈다.** 추가 EC2 가 아니다. PostgreSQL 이 여기 있고
+#    `wikipulse-net` 안에서 `postgres:5432` 로 붙는다. 추가 EC2 에서는 아직 못 붙는다
+#    — 5432 가 사설망에 게시돼 있지 않다(WP-143). live-cycle 과 같은 이유다.
+#
+# ⚠️ **순서가 있다.** universe → summaries → embed. 뒤 단계는 앞 단계가 채운 것 중
+#    아직 안 한 것만 집는다(`data-pipeline/stock/README.md`). 중간에 죽어도 다시
+#    돌리면 이어서 하므로 재호출 낭비가 없다 — 특히 embed 는 크레딧을 쓴다.
+
+name: stock-load
+
+networks:
+  wikipulse:
+    external: true
+    name: wikipulse-net
+
+x-stock-base: &stock-base
+  build:
+    context: ${STOCK_APP_DIR:-../../data-pipeline}
+  networks: [wikipulse]
+  init: true
+  # 🔴 일회성이라 재시작하지 않는다. 죽으면 사람이 보고 다시 돌린다 — 임베딩이
+  #    자동 재시작으로 크레딧을 태우면 안 된다.
+  restart: "no"
+  # t3 버스트다. 셋 다 네트워크 대기가 대부분이라 코어를 쓸 일이 없다.
+  cpus: 1.0
+  mem_limit: 1g
+  environment:
+    # ⚠️ 백엔드(infra/service)와 같은 값이지만 이름이 다르다. 파이썬 쪽은
+    #    DATABASE_URL 하나만 본다 (stock/db.py).
+    DATABASE_URL: postgresql://${POSTGRES_USER:?Set POSTGRES_USER in .env}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}@postgres:5432/${POSTGRES_DB:-wikipulse}
+  logging:
+    driver: json-file
+    options:
+      max-size: "10m"
+      max-file: "3"
+
+services:
+  # 1. 마스터 — SEC + NASDAQ Trader. 네트워크만 쓰고 키가 필요 없다.
+  universe:
+    <<: *stock-base
+    container_name: wikipulse-stock-universe
+    profiles: ["stock"]
+    command: ["python", "-m", "stock.universe"]
+
+  # 2. 사업 설명 — yfinance. 종목당 왕복이라 **수십 분 걸린다.**
+  summaries:
+    <<: *stock-base
+    container_name: wikipulse-stock-summaries
+    profiles: ["stock"]
+    command: ["python", "-m", "stock.summaries"]
+
+  # 3. 임베딩 — GATEWAY. 🔴 여기서만 크레딧을 쓴다. 돌리기 전에 잔액을 본다(README).
+  embed:
+    <<: *stock-base
+    container_name: wikipulse-stock-embed
+    profiles: ["stock"]
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:?Set POSTGRES_USER in .env}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}@postgres:5432/${POSTGRES_DB:-wikipulse}
+      # 🔴 저장소에 넣지 않는다. 서버 .env 에만 둔다.
+      LLM_GATEWAY_API_KEY: ${LLM_GATEWAY_API_KEY:?Set LLM_GATEWAY_API_KEY in .env}
+      LLM_GATEWAY_BASE_URL: ${LLM_GATEWAY_BASE_URL:-https://llm-gateway.example.com/api.openai.com/v1}
+    command: ["python", "-m", "stock.embed"]
