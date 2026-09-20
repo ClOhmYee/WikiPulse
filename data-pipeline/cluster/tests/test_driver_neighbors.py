@@ -14,11 +14,14 @@ import pytest
 
 from batch.clickstream import NeighborRef
 from batch.page_creation import write_index
+from batch.page_edit_daily import edit_days_for
+from batch.page_edit_daily import write_index as write_edit_index
 from cluster.driver import (
     MonthlyNeighborSource,
     NeighborStats,
     load_creation_dates,
     neighbors_for_snapshot,
+    resurgence_for,
 )
 from cluster.snapshot import DEFAULT_CREATION_WINDOW_DAYS, Seed
 
@@ -269,3 +272,117 @@ class _FakeConn:
 @pytest.fixture
 def fake_conn():
     return _FakeConn()
+
+
+# ------------------------------------------------ 비-씨드 재급증 배선 (WP-145)
+
+def _resurgence_index(tmp_path, days_by_title):
+    """`batch/page_edit_daily` 적재본을 만든다."""
+    out = tmp_path / "edits"
+    write_edit_index(days_by_title, out, shard_records=1000)
+    return out
+
+
+def _days(start: date, n: int, per_day: int) -> dict:
+    return {start + timedelta(days=i): per_day for i in range(n)}
+
+
+def test_사건기간은_생성일_창과_같은_폭이다():
+    """폭이 다르면 창을 떨어진 문서를 다른 자로 재게 돼 두 게이트가 비교 불가다."""
+    spike = resurgence_for({date(2026, 3, 8): 1}, date(2026, 3, 8), window_days=30)
+
+    assert spike.event_start == datetime(2026, 2, 6, tzinfo=UTC)   # -30일
+    assert spike.event_end == datetime(2026, 4, 8, tzinfo=UTC)     # +30일 다음날(끝 제외)
+    # 기준기간은 직전 같은 길이, 겹치지 않는다.
+    assert spike.baseline_end == spike.event_start
+    assert (spike.event_end - spike.event_start) == (
+        spike.baseline_end - spike.baseline_start)
+
+
+def test_편집_인덱스에_없으면_수치를_지어내지_않는다():
+    """0 으로 채우면 기준기간이 0 이 되어 덤프 구멍이 재급증으로 위장된다."""
+    assert resurgence_for(None, date(2026, 3, 8), window_days=30) is None
+
+
+def test_재조명_문서가_창밖이어도_이웃으로_살아남는다(tmp_path):
+    """Mojtaba_Khamenei 형 — 2009 생성이라 창 밖인데 사건기간 편집이 급증했다."""
+    seed = _seed("2026 Iran war", event_date=date(2026, 3, 8))
+    refs = {"2026 Iran war": [NeighborRef(title="Mojtaba Khamenei", n=500, directed=True)]}
+    created = {"Mojtaba Khamenei": datetime(2009, 1, 1, tzinfo=UTC)}
+    # 사건기간(2/6~4/7) 61일에 매일 20건, 직전 61일은 매일 1건 → 20배·1,220건
+    edits = _resurgence_index(tmp_path, {"Mojtaba Khamenei": {
+        **_days(date(2025, 12, 7), 61, 1),
+        **_days(date(2026, 2, 6), 61, 20),
+    }})
+
+    stats = NeighborStats()
+    out = neighbors_for_snapshot(
+        _FakeConn(), [seed], refs, created, "2026-02",
+        creation_window_days=DEFAULT_CREATION_WINDOW_DAYS, stats=stats,
+        snapshot_ts=datetime(2026, 5, 1, tzinfo=UTC),
+        edit_days_of_title=edit_days_for(edits, ["Mojtaba Khamenei"]),
+    )
+
+    assert stats.window_rejected == 1, "창은 떨어져야 한다 (2009 생성)"
+    assert stats.resurgence_passed == 1
+    neighbor = out[seed.page_id][0]
+    assert neighbor.title == "Mojtaba Khamenei"
+    assert neighbor.resurgence is not None
+    assert neighbor.resurgence.event_edits == 61 * 20
+
+
+def test_배경_문서는_재급증에서도_탈락한다(tmp_path):
+    """Hurricane_Helene 형 — 절대량은 큰데 비율이 1 근처다."""
+    seed = _seed("2026 Iran war", event_date=date(2026, 3, 8))
+    refs = {"2026 Iran war": [NeighborRef(title="Choke point", n=11778, directed=True)]}
+    created = {"Choke point": datetime(2009, 1, 1, tzinfo=UTC)}
+    edits = _resurgence_index(tmp_path, {"Choke point": {
+        **_days(date(2025, 12, 7), 61, 10),
+        **_days(date(2026, 2, 6), 61, 11),   # 1.1배
+    }})
+
+    stats = NeighborStats()
+    out = neighbors_for_snapshot(
+        _FakeConn(), [seed], refs, created, "2026-02",
+        creation_window_days=DEFAULT_CREATION_WINDOW_DAYS, stats=stats,
+        snapshot_ts=datetime(2026, 5, 1, tzinfo=UTC),
+        edit_days_of_title=edit_days_for(edits, ["Choke point"]),
+    )
+
+    assert stats.resurgence_rejected == 1
+    assert stats.resurgence_passed == 0
+    assert out[seed.page_id] == [], "이동량이 커도 비율이 낮으면 배경이다"
+
+
+def test_편집_인덱스_구멍은_탈락과_따로_센다(tmp_path):
+    """⚠️ 합치면 덤프 구멍이 '규칙대로 걸렀다' 로 읽힌다."""
+    seed = _seed("2026 Iran war", event_date=date(2026, 3, 8))
+    refs = {"2026 Iran war": [NeighborRef(title="없는문서", n=100, directed=True)]}
+    created = {"없는문서": datetime(2009, 1, 1, tzinfo=UTC)}
+
+    stats = NeighborStats()
+    neighbors_for_snapshot(
+        _FakeConn(), [seed], refs, created, "2026-02",
+        creation_window_days=DEFAULT_CREATION_WINDOW_DAYS, stats=stats,
+        snapshot_ts=datetime(2026, 5, 1, tzinfo=UTC),
+        edit_days_of_title={},
+    )
+
+    assert stats.resurgence_missing == 1
+    assert stats.resurgence_rejected == 0
+
+
+def test_편집_인덱스를_안_주면_옛_동작_그대로다(tmp_path):
+    """LIVE 처럼 월 덤프가 없는 구간은 씨드 전용으로 돈다 — 조용히 깨지지 않는다."""
+    seed = _seed("2026 Iran war", event_date=date(2026, 3, 8))
+    refs = {"2026 Iran war": [NeighborRef(title="Mojtaba Khamenei", n=500, directed=True)]}
+    created = {"Mojtaba Khamenei": datetime(2009, 1, 1, tzinfo=UTC)}
+
+    stats = NeighborStats()
+    out = neighbors_for_snapshot(
+        _FakeConn(), [seed], refs, created, "2026-02",
+        creation_window_days=DEFAULT_CREATION_WINDOW_DAYS, stats=stats)
+
+    assert stats.window_rejected == 1
+    assert stats.resurgence_missing == 0, "재급증 경로 자체를 안 돈다"
+    assert out[seed.page_id] == []
