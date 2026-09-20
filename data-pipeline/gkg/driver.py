@@ -1,10 +1,19 @@
 """GKG 기관명 lift 배치 — Spark 배선 + CLI (WP-65).
 
-    spark-submit gkg/driver.py \
+    PYTHONPATH=/opt/app python -m gkg.driver \
         --cluster-id 42 \
         --start 20241010000000 --end 20241010234500 \
-        --theme HURRICANE --location florida \
         --min-issue-count 5
+
+🔴 **`spark-submit gkg/driver.py` 로는 못 돈다.** 이 모듈은 상대 임포트를 쓰는데
+(`from .aliases import ...`), spark-submit 은 파일을 **스크립트로** 실행해서 패키지
+컨텍스트가 없다 — `ImportError: attempted relative import with no known parent
+package` 로 죽는다. ~~`spark-submit gkg/driver.py`~~ → **`python -m gkg.driver`**
+(2026-09-20 실측, WP-148). 로컬 모드에서는 pyspark 가 스스로
+SparkSession 을 띄우므로 spark-submit 이 필요 없다.
+
+⚠️ 이 명령은 **한 번도 실행된 적이 없었다.** `tests/test_driver.py` 가 함수 단위만
+덮고 CLI 는 안 돌려서, 틀린 채로 계속 문서에 남아 있었다.
 
 이슈(cluster_id) 하나에 대해, [start, end] 15분 격자의 GKG 원본을 읽어 이슈 술어
 (테마 ∧ 지역)로 이슈 기사를 고르고, 기관명 lift 를 계산해 cluster_org_mention 에
