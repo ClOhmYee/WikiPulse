@@ -80,6 +80,22 @@ class GatewayVerificationClientTest {
     }
 
     @Test
+    void 프롬프트_캐싱을_쓰지_않는다() {
+        // 🔴 회귀 고정 (WP-150). cache_control 을 붙이면 GATEWAY 에서 **쓰기만 되고 읽기가
+        // 안 된다** — 4회 연속 실측 전부 write=1143 read=0. 캐시 쓰기는 입력 단가의 1.25배라
+        // 켜면 25% 더 나간다(1,151 → 1,437). 상세는 클래스 주석·검증 문서.
+        //
+        // ⚠️ 조용히 틀린다: API 가 400 을 주지 않고 cache_creation_input_tokens 가 차올라
+        // 로그만 보면 동작하는 것처럼 보인다. 그래서 요청 본문을 직접 본다.
+        gateway.mode(FakeUpstream.Mode.OK);
+        client.complete("긴 시스템 프롬프트", MSGS);
+
+        String body = gateway.lastRequestBody();
+        assertThat(body).doesNotContain("cache_control");
+        assertThat(body).contains("긴 시스템 프롬프트");
+    }
+
+    @Test
     void 전이성_500은_재시도_후_UpstreamUnavailable로_정규화() {
         gateway.mode(FakeUpstream.Mode.STATUS_500);
 

@@ -6,6 +6,8 @@ import io.github.resilience4j.ratelimiter.annotation.RateLimiter;
 import io.github.resilience4j.retry.annotation.Retry;
 import java.util.List;
 import java.util.Map;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.MediaType;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
@@ -32,6 +34,35 @@ import org.springframework.web.client.RestClientException;
  * <p>이 클라이언트는 <b>전송만</b> 한다. 응답 JSON 의 스키마 검증·정정 재요청은 {@link LlmVerifier}
  * 몫이다(−66/−68 경계, {@link GatewayEmbeddingClient} 의 "200 무벡터는 −68 소관"과 같은 분리).
  *
+ * <h2>🔴 프롬프트 캐싱을 쓰지 않는다 — 켜면 오히려 25% 비싸진다 (WP-150)</h2>
+ *
+ * <p>{@link LlmVerifier} 는 <b>후보 하나당 1회</b> 호출이라, 한 클러스터의 후보 20~25개가 전부
+ * 같은 시스템 프롬프트(4,773자)를 새로 싣는다 — 2026-09-20 운영 실측에서 요청의 <b>84%가
+ * 후보마다 동일</b>했다. 그래서 {@code cache_control: ephemeral} 을 붙여 봤고, <b>실패했다.</b>
+ *
+ * <p>GATEWAY 게이트웨이에 같은 요청을 4회 연속 보낸 실측(2026-09-20):
+ *
+ * <pre>
+ * cached 1: in=8 write=1143 read=0
+ * cached 2: in=8 write=1143 read=0
+ * cached 3: in=8 write=1143 read=0
+ * cached 4: in=8 write=1143 read=0
+ * plain   : in=1151 write=0  read=0   ← 캐시 안 쓴 기준선
+ * </pre>
+ *
+ * <p><b>쓰기만 되고 읽기가 한 번도 안 된다.</b> 캐시 쓰기는 입력 단가의 1.25배라 결과적으로
+ * {@code 1,151 → 8 + 1,143×1.25 = 1,437} 로 <b>25% 더 나간다.</b> 추정 원인은 GATEWAY 가 상위 계정을
+ * 다중화하는 것이다 — Anthropic 프롬프트 캐시는 <b>조직 단위</b>라 요청마다 다른 상위로 가면
+ * 앞 호출이 만든 캐시가 안 보인다. (게이트웨이 내부는 확인할 수 없어 <b>추정</b>이다. 다만
+ * {@code cache_control} 자체는 통과된다 — {@code cache_creation_input_tokens} 가 차는 것이 증거다.)
+ *
+ * <p>⚠️ <b>이건 조용히 틀린다.</b> API 가 400 을 주지 않고, {@code cache_creation_input_tokens} 가
+ * 차올라서 <b>로그만 보면 캐싱이 동작하는 것처럼 보인다.</b> {@code cache_read_input_tokens} 를
+ * 같이 보지 않으면 비용이 늘어난 줄 모른다 — {@link #logUsage} 가 그래서 넷을 다 찍는다.
+ *
+ * <p>다시 시도하려면 <b>먼저 read 가 차는지부터 재고</b> 넣는다. 근거:
+ * {@code docs/validation/2026-09-20-gateway-prompt-cache.md}.
+ *
  * <p>⚠️ <b>알려진 잔여 위험 — 200 무텍스트의 상한 없는 재폴</b>: 200 인데 {@code content[0].text}
  * 가 비면 {@link IllegalStateException}(전송 taxonomy 아님 → 재시도·회로 대상 아님)이 워커까지
  * 전파돼 클러스터가 PENDING 으로 남고 {@code attempt_count} 는 안 오른다. 같은 응답이 지속되면
@@ -44,6 +75,8 @@ import org.springframework.web.client.RestClientException;
  */
 @Component
 public class GatewayVerificationClient {
+
+    private static final Logger log = LoggerFactory.getLogger(GatewayVerificationClient.class);
 
     private final RestClient client;
     private final CandidateProperties.Gateway gateway;
@@ -119,12 +152,39 @@ public class GatewayVerificationClient {
             throw UpstreamFailures.classify("GATEWAY", e, false); // 🔴 GATEWAY 429 = 하드(공유 예산 보호)
         }
 
+        logUsage(root, model);
+
         JsonNode text = root == null ? null : root.path("content").path(0).path("text");
         if (text == null || !text.isTextual() || text.asText().isBlank()) {
             // 200 인데 텍스트 없음 = 스키마 문제(−68 소관). 전송 taxonomy 아님 → 회로에 안 센다.
             throw new IllegalStateException("GATEWAY 응답에 텍스트가 없다 (content[0].text 누락/빈 값)");
         }
         return text.asText();
+    }
+
+    /**
+     * 응답의 {@code usage} 를 찍는다 (WP-150).
+     *
+     * <p>🔴 <b>여태 이 값을 버리고 있었다.</b> {@code content[0].text} 만 읽어서, 호출당 비용을
+     * 아는 방법이 크레딧 잔액을 호출 전후로 빼 보는 것밖에 없었다 — 실제로 2026-09-20 에 그렇게
+     * 쟀다(110건 = 6,781 크레딧, 건당 61.6). 캐시가 먹었는지도 이 값 없이는 확인이 안 된다.
+     *
+     * <p>{@code cache_read_input_tokens} 가 0 이면 캐시 미적중이다. 첫 호출(클러스터의 첫 후보)은
+     * {@code cache_creation_input_tokens} 가 차고 이후 후보들이 read 로 붙는 것이 정상이다.
+     * ⚠️ 계속 0 이면 셋 중 하나다 — 시스템 프롬프트가 1,024 토큰 미만으로 줄었거나, GATEWAY 게이트웨이가
+     * {@code cache_control} 을 안 넘기거나, TTL(5분)이 지났거나.
+     */
+    private void logUsage(JsonNode root, String model) {
+        JsonNode usage = root == null ? null : root.path("usage");
+        if (usage == null || usage.isMissingNode()) {
+            return;
+        }
+        log.info("GATEWAY usage model={} in={} out={} cache_write={} cache_read={}",
+                model,
+                usage.path("input_tokens").asInt(-1),
+                usage.path("output_tokens").asInt(-1),
+                usage.path("cache_creation_input_tokens").asInt(-1),
+                usage.path("cache_read_input_tokens").asInt(-1));
     }
 
     /**
