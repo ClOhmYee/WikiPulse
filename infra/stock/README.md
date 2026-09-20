@@ -46,8 +46,13 @@ docker compose --profile stock run --rm embed        # 3. 임베딩 (크레딧 �
 curl -s -H "Authorization: Bearer $LLM_GATEWAY_KEY" https://llm-gateway.example.com/key-info
 ```
 
-과거 실측은 **임베딩 502건에 100 남짓**이었다(2026-09-07). 5,400종목이면 그 10배 규모다.
-⚠️ 이 환산은 선형 가정이고 실측한 적이 없다 — 잔액을 보고 들어간다.
+~~과거 실측은 임베딩 502건에 100 남짓이었다(2026-09-07). 5,400종목이면 그 10배 규모다~~
+→ **실측했다 (2026-09-20): 5,311건에 215 크레딧.** 건당 약 0.04 다.
+
+⚠️ **옛 환산은 5배 과대였다.** 근거였던 "502건 + LLM 3건 = 143 크레딧"에서 비용의
+대부분은 **LLM 호출 3건**이었고 임베딩은 얼마 안 됐다. 둘을 합친 값을 임베딩 단가로
+나눠 쓴 것이 과대추정의 원인이다. **임베딩은 싸고 LLM 이 비싸다** — 크레딧 계획은 LLM
+호출 수로 잡는다.
 
 ## 확인
 
@@ -70,6 +75,7 @@ EC2 가 아니라 **로컬**에서 같은 이미지·같은 명령으로 돌린 
 | universe | **5,396종목** 적재 · CIK 매칭 5,347 (99%) | 수 분 |
 | | 거래소: NASDAQ 3,145 · NYSE 1,991 · NYSE American 260 | |
 | summaries | **확보 5,311 · 없음 85** (1.6%) | 약 1시간 |
+| embed | **5,311종목** · 1536차원 | 수 분 · **215 크레딧** |
 
 2026-09-08 실측(5,389)보다 7종목 많다 — 상장·폐지에 따른 정상 변동이다.
 
@@ -82,17 +88,44 @@ EC2 가 아니라 **로컬**에서 같은 이미지·같은 명령으로 돌린 
 ⚠️ `XOM` 의 이름이 `ExxonMobil Holdings Corp` 로 들어간다. SEC 원본 그대로이고 오류가
 아니다(`data-pipeline/stock/README.md` 함정 절).
 
-## ⚠️ 아직 EC2 에서 돌린 적이 없다
+## EC2 실측 (2026-09-20)
 
-이 폴더는 2026-09-20 에 **로컬 검증만 거쳤다.** EC2 실행 시 처음 만날 수 있는 것:
+**세 단계 모두 운영 EC2 에서 끝까지 돌렸다.** 그 전까지 운영 DB 는 전 테이블 0행이었다.
 
-- `wikipulse-net` 네트워크가 external 이라 **먼저 떠 있어야 한다**(`infra/service` 가 만든다).
-- 빌드 컨텍스트가 `../../data-pipeline` 이라 **저장소 체크아웃이 서버에 있어야 한다.**
-  `~/infra` 만 복사돼 있으면 빌드가 실패한다.
-- `embed` 는 `LLM_GATEWAY_KEY` 가 없으면 `stock/embed.py` 가 즉시 종료한다.
-  🔴 ~~compose 의 `:?` 치환으로 막는다~~ → **쓰지 않는다.** compose 는 어느 서비스를
-  돌리든 파일 전체를 보간해서, `embed` 에 `:?` 를 걸면 키가 필요 없는
+```
+종목 5,396 | cik 5,347 | 설명 5,311 | 임베딩 5,311 (1536차원)
+```
+
+pgvector 온전성 확인 — `XOM`(엑손모빌) 코사인 Top-5 가 전부 에너지다:
+`IMO` 0.731 · `CVX` 0.623 · `SHEL` 0.618 · `PSX` 0.618 · `OXY` 0.613.
+2026-09-08 로컬 실측(CVX 0.62)과 일치한다.
+
+### EC2 에서 실제로 걸린 것
+
+- 🔴 **이미지에 `stock/` 이 없었다.** `data-pipeline/Dockerfile` 이 producer·spike·batch
+  만 복사해서 `ModuleNotFoundError: No module named 'stock'` 로 죽었다. `stock` 타깃을
+  추가하고 compose 가 `target: stock` 을 지정하게 고쳤다.
+- 🔴 **`LLM_GATEWAY_KEY` 가 값 없이 이름만 있었다** (`infra/service/.env`). 매칭 워커가 여태 못
+  돈 이유이기도 하다.
+- ⚠️ **저장소 체크아웃이 서버에 없다.** `~/infra` 만 있다. `data-pipeline/` 을
+  `infra/stock/app` 으로 복사해 빌드 컨텍스트로 쓴다 — 데이터 EC2 의
+  `infra/pipeline/app` 과 같은 방식이다.
+
+### 그래도 아직 안 해 본 것
+
+- `wikipulse-net` 네트워크가 external 이라 먼저 떠 있어야 한다(`infra/service` 가 만든다).
+  이번에는 이미 떠 있어서 확인만 됐다.
+- 주가(`stock.prices`)는 안 돌렸다 — 범위 밖(WP-64).
+- `app/` 복사는 손으로 했다. CI 에 붙이는 것은 후속이다.
+
+## 함정
+
+- 🔴 **`embed` 에 `${LLM_GATEWAY_KEY:?}` 같은 가드를 걸지 말 것.** compose 는 어느 서비스를
+  돌리든 **파일 전체를 보간**해서, `embed` 에 `:?` 를 걸면 키가 필요 없는
   `universe`·`summaries` 까지 같이 막힌다 — 2026-09-20 EC2 에서 실제로 막혔다.
-- ⚠️ **2026-09-20 실측: 서버 `infra/service/.env` 의 `LLM_GATEWAY_KEY` 는 이름만 있고 값이 비어 있다.**
-  (`.env` 15번 줄이 `LLM_GATEWAY_KEY=` 9바이트, 백엔드 컨테이너에서도 길이 0). 매칭 워커가
-  여태 못 돈 이유이기도 하다. 적재 전에 값을 채워야 한다.
+  빈 키 검사는 `stock/embed.py` 가 한다.
+- ⚠️ **`LLM_GATEWAY_KEY` 는 `infra/service/.env` 와 같은 값을 쓴다.** 두 군데 적게 하면 한쪽이
+  반드시 빈다. 서버에서는 이렇게 가져온다:
+  `grep '^LLM_GATEWAY_KEY=' ~/infra/service/.env >> ~/infra/stock/.env`
+- ⚠️ `stock/embed.py` 만 `LLM_GATEWAY_API_KEY` 라는 이름을 읽는다. compose 가 `LLM_GATEWAY_KEY` 를
+  받아 그 이름으로 넘겨 주므로 `.env` 에는 `LLM_GATEWAY_KEY` 하나만 적는다.
