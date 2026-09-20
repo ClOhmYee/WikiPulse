@@ -20,4 +20,12 @@ services:
       WIKIPULSE_MATCHING_SCHEDULER_ENABLED:    ${WIKIPULSE_MATCHING_SCHEDULER_ENABLED:-false}
       WIKIPULSE_MATCHING_VERIFICATION_ENABLED: ${WIKIPULSE_MATCHING_VERIFICATION_ENABLED:-false}
       WIKIPULSE_MATCHING_SUMMARY_ENABLED:      ${WIKIPULSE_MATCHING_SUMMARY_ENABLED:-false}
+      # 🔴 **한 폴에 몇 클러스터를 집을지.** 기본 20 인데 LLM 검증은 **후보 하나당 1회**
+      #    호출이라(`LlmVerifier` docstring) 클러스터 20개면 수백 회가 된다 — 크레딧이
+      #    그만큼 나간다(2026-09-20 실측 환산: LLM 약 41 크레딧/회, 임베딩 0.04/건).
+      #    부트스트랩처럼 대량 클러스터가 미처리로 쌓여 있을 때는 작게 잡고 지켜본다.
+      #    폴러는 `snapshot_ts DESC` 순이라 작게 잡아도 최신 스냅샷 상위부터 집는다.
+      WIKIPULSE_MATCHING_SCHEDULER_BATCHSIZE:    ${WIKIPULSE_MATCHING_SCHEDULER_BATCHSIZE:-20}
+      WIKIPULSE_MATCHING_VERIFICATION_BATCHSIZE: ${WIKIPULSE_MATCHING_VERIFICATION_BATCHSIZE:-20}
+      WIKIPULSE_MATCHING_SUMMARY_BATCHSIZE:      ${WIKIPULSE_MATCHING_SUMMARY_BATCHSIZE:-20}
     # 열면 8080 이 외부에 직접 노출되고, 도커 게시 포트는 ufw 로 막히지도 않는다.
