@@ -7,7 +7,7 @@
 # apache/spark 이미지에서 돈다(compose 참고). 여기는 producer·live-cycle·stock
 # 같은 일반 파이썬 스크립트용이다.
 
-FROM python:3.11-slim
+FROM python:3.11-slim AS base
 
 WORKDIR /app
 
@@ -40,3 +40,35 @@ COPY batch/ ./batch/
 
 # 기본은 EventStreams → Kafka 프로듀서. compose 에서 command 로 바꿀 수 있다.
 CMD ["python", "-m", "producer.wiki_edits"]
+
+
+# --- stock 전용 타깃 (WP-147) ---------------------------------------
+#
+# 🔴 **`stock/` 도 위 COPY 목록에서 빠져 있었다.** 이 파일 맨 위 주석이 "여기는
+#    producer·live-cycle·stock 같은 일반 파이썬 스크립트용" 이라고 적어 뒀는데 정작
+#    복사가 없어서 `python -m stock.universe` 가 `ModuleNotFoundError: No module
+#    named 'stock'` 로 죽는다 — 2026-09-20 EC2 에서 실제로 그렇게 죽었다.
+#    `-135` 의 `spike` 누락과 **같은 유형**이다: 주석은 있는데 COPY 가 없다.
+#
+# ⚠️ 그런데 base 에 그냥 더할 수 없다. `stock/summaries.py`·`prices.py` 는
+#    yfinance 와 pandas 가 필요한데 둘이 100 MB 대이고, producer·live-cycle 은 쓰지
+#    않는다. 그래서 **별도 타깃**으로 뺀다 — 상주 서비스 이미지는 그대로 가볍게 둔다.
+#
+# 쓰는 쪽은 `infra/stock/compose.yaml` 이 `target: stock` 으로 지정한다.
+FROM base AS stock
+
+# ⚠️ 버전은 stock/requirements.txt 와 같이 움직여야 한다.
+#    yfinance 0.2.51 은 `.history()` 가 깨져 전 종목 0행이 조용히 나온다(README).
+RUN pip install --no-cache-dir \
+        yfinance==1.7.0 \
+        pandas==3.0.5
+
+COPY stock/ ./stock/
+
+
+# --- 기본 타깃 --------------------------------------------------------------
+#
+# 🔴 **이 스테이지가 마지막이어야 한다.** `target` 없이 빌드하면 도커는 **마지막
+#    스테이지**를 만든다. stock 이 마지막이면 producer·live-cycle 이미지에까지
+#    yfinance·pandas 가 딸려 들어간다. 순서를 바꾸지 말 것.
+FROM base AS runtime
