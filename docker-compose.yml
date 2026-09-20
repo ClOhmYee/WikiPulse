@@ -82,6 +82,15 @@ services:
       DATABASE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-wikipulse}
       DB_USER: ${POSTGRES_USER:-wikipulse}
       DB_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in your local .env}
+      # 매칭·검증·요약 워커 (명세 §6.3, §3.2 7번). 셋 다 기본 꺼짐이고 따로 켠다 —
+      # 스케줄러는 종목 임베딩 전량 적재 후, 검증은 PENDING 후보가 쌓인 뒤다.
+      # ⚠️ 여기서 전달하지 않으면 .env 에 값을 넣어도 컨테이너 안에 안 들어간다.
+      #    애플리케이션 기본값(false·빈 키)으로 조용히 떨어져서 "켰는데 아무 일도
+      #    안 일어난다"로 보인다. infra/service/compose.yaml 과 같은 목록이다.
+      LLM_GATEWAY_KEY: ${LLM_GATEWAY_KEY:-}
+      WIKIPULSE_MATCHING_SCHEDULER_ENABLED: ${WIKIPULSE_MATCHING_SCHEDULER_ENABLED:-false}
+      WIKIPULSE_MATCHING_VERIFICATION_ENABLED: ${WIKIPULSE_MATCHING_VERIFICATION_ENABLED:-false}
+      WIKIPULSE_MATCHING_SUMMARY_ENABLED: ${WIKIPULSE_MATCHING_SUMMARY_ENABLED:-false}
     ports:
       - "8080:8080"
 
