@@ -29,6 +29,23 @@ docker compose down -v                       # 정지 + 데이터 삭제 (스키
 | hdfs-namenode | 9870 | HDFS NameNode + WebHDFS 진입점 | `gdelt` |
 | hdfs-datanode | — | HDFS DataNode (단일) | `gdelt` |
 
+## 매칭·검증·요약 워커 (backend)
+
+셋 다 backend 안의 스케줄러이고 **기본 꺼짐**이다. `.env` 에 값을 넣으면
+compose 가 컨테이너로 전달한다 — 전달 목록은 `infra/service/compose.yaml`(EC2)과
+같다.
+
+| 변수 | 켜는 것 | 켜기 전 조건 |
+| --- | --- | --- |
+| `LLM_GATEWAY_KEY` | GATEWAY 게이트웨이 호출(임베딩·LLM) | 세 워커 중 하나라도 켜면 필수 |
+| `WIKIPULSE_MATCHING_SCHEDULER_ENABLED` | 후보 생성 폴러 | 종목 임베딩 **전량** 적재 후 |
+| `WIKIPULSE_MATCHING_VERIFICATION_ENABLED` | LLM 검증 워커 | `PENDING` 후보가 쌓인 뒤 |
+| `WIKIPULSE_MATCHING_SUMMARY_ENABLED` | 이슈 요약 writer·상태 전이 | 검증과 같은 키·모델을 재사용 |
+
+⚠️ **compose 가 전달하지 않으면 `.env` 에 넣어도 조용히 무시된다.** 애플리케이션
+기본값(`false`·빈 키)으로 떨어져서 "켰는데 아무 일도 안 일어난다"로 보인다. 워커를
+새로 만들면 `application.yml` 과 **양쪽 compose** 세 곳을 같이 고친다.
+
 ## GDELT 수집 (HDFS)
 
 `WP-32`. GDELT GKG 원본을 적재할 **개발용 단일노드 HDFS**다. `--profile
