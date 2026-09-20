@@ -11,7 +11,8 @@ Spark·DB 없이 테스트된다. 실 데이터 소스는 driver.py 가 배선�
         절대 편집수만으로 이미 급증 판정을 통과할 문서이고, 그래서 배경이 아니라
         사건 자체다. 이 모듈이 배선하는 경로는 여기까지다.
     비-씨드(`is_seed=false`) = 오래전 생성된 이웃 중 사건기간 편집 재급증
-        비율 >= 5 AND 절대 편집 >= 20 인 문서(WP-77). 사건 **이전부터 있던**
+        비율 >= 5 AND 사건 편집 >= 20 **AND 기준 편집 >= 5** 인 문서
+        (WP-77 + 기준 하한은 -145 실측 추가). 사건 **이전부터 있던**
         문서가 사건으로 재조명된 경우다(예: Mojtaba_Khamenei, 2009 생성).
         ~~이 모듈에 없다 — 재급증 입력 자체를 안 받는다~~ → **배선됨** (2026-09-20,
         WP-144). `Neighbor.resurgence` 로 받고 `_passes_resurgence` 가 판정한다.
@@ -84,10 +85,33 @@ CLICKSTREAM_FLOOR = 10
 #: 탈락: Saffir-Simpson 1.7 · Katrina 0.9 · Helene 0.3 — 배경·계절성은 비율에서 갈린다.
 DEFAULT_RESURGENCE_RATIO = 5.0
 
-#: 같은 게이트의 절대 하한. 🔴 비율 단독으로는 안 된다 — 표본 크기가 70배 달라도
-#: 비율은 동률이 나온다(Tampa 5.0배 10건 vs Ali_Khamenei 5.0배 700건). 10건짜리 비율은
-#: 편집 1~2건에 통째로 흔들린다. 이 프로젝트가 급증 임계에서 이미 겪은 형태다(§11).
+#: 같은 게이트의 **사건 쪽** 절대 하한. 🔴 비율 단독으로는 안 된다 — 표본 크기가 70배
+#: 달라도 비율은 동률이 나온다(Tampa 5.0배 10건 vs Ali_Khamenei 5.0배 700건). 10건짜리
+#: 비율은 편집 1~2건에 통째로 흔들린다. 이 프로젝트가 급증 임계에서 이미 겪은 형태다(§11).
 DEFAULT_RESURGENCE_MIN_EDITS = 20
+
+#: **기준 쪽** 절대 하한 (2026-09-20 실측 추가, WP-145).
+#: ~~`-77` 은 사건 쪽에만 하한을 걸었다~~ → 분모도 막아야 한다. 같은 버그의 반대쪽이다.
+#:
+#: 🔴 **기준이 작으면 비율이 편집 한두 건에 통째로 흔들려 문턱으로 쓸 수 없다.**
+#:    실측 통과 사례 `British philosophy`(사건 867·기준 1)는 기준이 1→5 로만 바뀌어도
+#:    867배에서 173배가 된다. 반면 `Ali_Khamenei`(기준 140)는 1건 증감에 4.96~5.04 다.
+#:    같은 "5배" 가 두 경우에 전혀 다른 신뢰도를 갖는다.
+#:    31일에 편집 1건인 문서는 **평소 수준이라 할 것이 없어** "재조명" 이 성립하지 않는다 —
+#:    정리 편집 한 번이 800배로 찍힌다. 실측에서 `British/German/American/French philosophy`
+#:    가 상위에 나란히 나왔는데 사건이 아니라 카테고리 일괄 편집이었다.
+#:
+#: 값이 5 인 근거: enwiki 2026-08-15 전수 판정(250만 제목)에서 하한별 통과가
+#: 0→6,313 · 5→718 · 10→207 이고, `-77` 정답 3건의 기준값이 7·54·140 이라
+#: **10 으로 올리면 IRGC(7)가 죽는다.** 5 가 근거로 잡을 수 있는 최대치다.
+#: ⚠️ 하루치 모집단에서 고른 값이다 — `-77` 처럼 여러 사건에서 검증하지 않았다.
+#:
+#: ~~기준 0 이면 절대 하한만으로 통과~~ → **폐기** (2026-09-20). 실측에서 기준 0 의
+#: 67.5% 가 기준기간 이전에도 편집 0 이었다 — "조용했다" 가 아니라 **"문서가 없었다"** 다.
+#: 0 < 5 라 이 하한이 그 자리를 대신한다. 라플라스 스무딩(`e/(b+k)`)은 검토 후 폐기 —
+#: `Ali_Khamenei`(정확히 5.0배)가 k=1 에서 이미 죽고, 새 문서는 `867/(0+5)=173배` 라
+#: 그대로 통과해 방향이 반대다(통과 중 새 문서 비율 46.6% → k=5 에서 53.9% 로 **증가**).
+DEFAULT_RESURGENCE_MIN_BASELINE = 5
 
 #: HOT(이 스냅샷에서 활발히 급증 중) 판정 임계. 씨드 급등도 최댓값 기준.
 #: detector 확정 점수(Milton 9.7)와 편집만 통과(3~4) 사이인 5.0.
@@ -272,16 +296,20 @@ def _passes_resurgence(
     *,
     min_ratio: float,
     min_edits: int,
+    min_baseline: int = DEFAULT_RESURGENCE_MIN_BASELINE,
 ) -> bool:
     """기존 문서가 사건으로 재조명됐는가 (WP-77 확정 규칙).
 
-    **재급증 비율 >= min_ratio AND 사건기간 절대 편집 >= min_edits.** 둘 다다.
+    **비율 >= min_ratio AND 사건 편집 >= min_edits AND 기준 편집 >= min_baseline.** 셋 다다.
 
-    ⚠️ **기준기간 편집이 0 이면 비율이 무한이라 절대 하한 하나만 남는다.** POC 표본의
-    `inf` 사례(Suez_Canal·Qasem_Soleimani 등)는 전부 절대량이 작아(<=17) 어차피
-    탈락했으므로, "0 에서 20건 이상"이 진짜 재조명인지 **측정된 적이 없다.** 통과시키는
-    쪽으로 정한 건 급증 판정이 같은 상황을 다루는 방식과 맞춘 것이다(§3.2: 기준 표본이
-    없거나 0 이면 절대량으로 판정). 운영에서 오탐이 모이면 여기가 먼저 의심할 자리다.
+    🔴 **기준 하한이 셋째 조건이다** (2026-09-20 추가). `-77` 은 분자만 막았다 —
+    분모가 작으면 비율이 편집 한두 건에 흔들려 문턱 자체가 무의미해진다. 근거 수치는
+    `DEFAULT_RESURGENCE_MIN_BASELINE` 주석에 있다.
+
+    ~~기준기간 편집이 0 이면 절대 하한만으로 통과시킨다~~ → **폐기** (2026-09-20).
+    "측정된 적 없는 판단" 이라고 적어 둔 자리였는데, 실측이 반증했다 — 기준 0 의
+    67.5% 가 그 이전에도 편집 0 이라 **애초에 없던 문서**였다. 0 은 이제 기준 하한에
+    걸려 자연히 탈락한다.
 
     🔴 **전년 동기는 보지 않는다.** 연도가 박힌 제목(`2024_Atlantic_hurricane_season`)은
     전년 대응 문서 제목이 아예 달라(`2023_...`) 같은 제목으로 1년 전을 조회하면
@@ -311,8 +339,8 @@ def _passes_resurgence(
         return False
     if resurgence.baseline_edits < 0 or resurgence.event_edits < 0:
         return False
-    if resurgence.baseline_edits == 0:
-        return True                      # 위 ⚠️ — 절대 하한만으로 통과시킨다
+    if resurgence.baseline_edits < min_baseline:
+        return False                     # 위 🔴 — 기준이 작으면 비율을 믿을 수 없다
     return (resurgence.event_edits / resurgence.baseline_edits) >= min_ratio
 
 
@@ -338,6 +366,7 @@ def _build_cluster(
     hot_threshold: float,
     resurgence_ratio: float,
     resurgence_min_edits: int,
+    resurgence_min_baseline: int,
 ) -> Cluster:
     key = issue_key_of(source, seed)
 
@@ -392,7 +421,8 @@ def _build_cluster(
             )
         elif _passes_resurgence(nb.resurgence, snapshot_ts,
                                 min_ratio=resurgence_ratio,
-                                min_edits=resurgence_min_edits):
+                                min_edits=resurgence_min_edits,
+                                min_baseline=resurgence_min_baseline):
             # 🔴 **비-씨드다** (WP-77). 사건 **이전부터 있던** 문서가 사건으로
             #    재조명된 경우다(예: Mojtaba_Khamenei, 2009 생성). 추가 씨드와 같은
             #    값으로 저장하면 화면도 API 도 "사건 자체인가, 사건이 끌어온 배경인가"를
@@ -472,6 +502,7 @@ def build_snapshot(
     new_window_hours: float = DEFAULT_NEW_WINDOW_HOURS,
     resurgence_ratio: float = DEFAULT_RESURGENCE_RATIO,
     resurgence_min_edits: int = DEFAULT_RESURGENCE_MIN_EDITS,
+    resurgence_min_baseline: int = DEFAULT_RESURGENCE_MIN_BASELINE,
 ) -> Snapshot:
     """한 시점의 클러스터·멤버·간선을 생산한다.
 
@@ -502,6 +533,7 @@ def build_snapshot(
             hot_threshold=hot_spike_threshold,
             resurgence_ratio=resurgence_ratio,
             resurgence_min_edits=resurgence_min_edits,
+            resurgence_min_baseline=resurgence_min_baseline,
         )
         for seed in seeds
     )

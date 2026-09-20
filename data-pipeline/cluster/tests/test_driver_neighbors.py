@@ -317,7 +317,8 @@ def test_사건기간은_스냅샷에서_끝난다():
 
 def test_사건_직후_스냅샷도_게이트를_통과한다():
     """위 버그의 회귀 테스트 — 실제로 판정까지 가는지 본다."""
-    days = {**_days(date(2026, 7, 11), 30, 1), **_days(date(2026, 8, 5), 6, 200)}
+    # 기준기간 31일에 매일 1건이면 기준 31 — 기준 하한(5)을 넘는다
+    days = {**_days(date(2026, 6, 10), 31, 1), **_days(date(2026, 8, 5), 6, 200)}
     spike = resurgence_for(days, date(2026, 8, 10), 30,
                            snapshot_date=date(2026, 8, 11))
 
@@ -474,3 +475,42 @@ def test_사건기간이_사건일을_못_담으면_판정하지_않는다():
     assert resurgence_for(days, date(2026, 8, 31), 30,
                           snapshot_date=date(2026, 9, 1),
                           coverage=(date(2026, 4, 1), date(2026, 9, 1))) is not None
+
+
+def test_기준기간에_없던_문서는_판정하지_않는다():
+    """🔴 2026-09-20 실측 — 기준 0 의 67.5% 는 '조용했다' 가 아니라 '없었다' 였다.
+
+    생성일 창이 ±30일이라 사건 31~61일 전에 생긴 문서만 이리로 샌다. 그 구멍을
+    생성일로 막는다 — driver 가 이미 들고 있는 값이라 추가 적재가 없다.
+    """
+    days = {**_days(date(2026, 7, 20), 40, 30)}
+
+    # 기준기간 시작(2026-06-11) 이후에 생긴 문서 — 잴 기준선이 없다
+    assert resurgence_for(days, date(2026, 8, 10), 30,
+                          snapshot_date=date(2026, 8, 11),
+                          created_at=datetime(2026, 7, 1, tzinfo=UTC)) is None
+    # 기준기간 전부터 있던 문서는 평소대로 판정한다
+    assert resurgence_for(days, date(2026, 8, 10), 30,
+                          snapshot_date=date(2026, 8, 11),
+                          created_at=datetime(2009, 1, 1, tzinfo=UTC)) is not None
+
+
+def test_새_문서는_탈락이_아니라_미상으로_센다(tmp_path):
+    """비-씨드(배경 재조명)가 아니라 추가 씨드 쪽 문서다 — 규칙 미달이 아니다."""
+    seed = _seed("2026 Iran war", event_date=date(2026, 3, 8))
+    refs = {"2026 Iran war": [NeighborRef(title="2026 Colombia earthquake",
+                                          n=500, directed=True)]}
+    # 생성일 창(±30일) 밖이지만 기준기간 안에 생긴 문서
+    created = {"2026 Colombia earthquake": datetime(2026, 1, 20, tzinfo=UTC)}
+    edits = _resurgence_index(tmp_path, {"2026 Colombia earthquake":
+                                         _days(date(2026, 2, 6), 31, 30)})
+
+    stats = NeighborStats()
+    neighbors_for_snapshot(
+        _FakeConn(), [seed], refs, created, "2026-02",
+        creation_window_days=DEFAULT_CREATION_WINDOW_DAYS, stats=stats,
+        snapshot_ts=datetime(2026, 3, 9, tzinfo=UTC),
+        edit_days_of_title=edit_days_for(edits, ["2026 Colombia earthquake"]))
+
+    assert stats.resurgence_missing == 1
+    assert stats.resurgence_rejected == 0

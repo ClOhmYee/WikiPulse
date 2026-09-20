@@ -436,6 +436,7 @@ def resurgence_for(
     window_days: int,
     *,
     snapshot_date: date,
+    created_at: datetime | None = None,
     coverage: tuple[date | None, date | None] = (None, None),
 ) -> EditResurgence | None:
     """한 이웃의 사건기간·기준기간 편집 수를 만든다 (WP-145).
@@ -490,6 +491,14 @@ def resurgence_for(
     baseline_end = event_start
     if first_day is not None and baseline_start < first_day:
         return None                      # 기준선이 잘린다 — 위 ⚠️ (오탐 방향)
+    # 🔴 **기준기간 내내 존재하지 않았으면 판정하지 않는다** (2026-09-20 실측).
+    #    문서가 그때 없었으면 기준 편집이 0 인데, 그건 "조용했다" 가 아니라
+    #    "없었다" 다. 실측에서 기준 0 인 3,546개 중 67.5% 가 그 이전에도 편집 0 —
+    #    사건 때문에 새로 생긴 문서였다(`2026 Colombia earthquake` 등).
+    #    그런 문서는 비-씨드(배경 재조명)가 아니라 추가 씨드 쪽이고, 생성일 창이
+    #    ±30일이라 31~61일 전에 생긴 것만 여기로 샌다. 그 구멍을 막는다.
+    if created_at is not None and created_at.date() >= baseline_start:
+        return None
 
     def _at(day: date) -> datetime:
         return datetime(day.year, day.month, day.day, tzinfo=timezone.utc)
@@ -565,6 +574,7 @@ def neighbors_for_snapshot(
                 spike = resurgence_for(edit_days_of_title.get(ref.title),
                                        seed.event_date, creation_window_days,
                                        snapshot_date=snapshot_ts.date(),
+                                       created_at=created,
                                        coverage=edit_coverage)
                 if spike is None:
                     stats.resurgence_missing += 1
