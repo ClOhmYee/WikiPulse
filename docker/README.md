@@ -87,6 +87,18 @@ gdelt` 로 namenode·datanode 가 뜬다. `db/migrations` 처럼 무언가 자�
 ## 검증 (2026-09-08, 이 스택으로 직접 확인)
 
 - postgres·kafka 헬스체크 통과. **스키마 17개 테이블 + pgvector 자동 적재.**
+  (2026-09-20 재확인 시점에는 21개 — V10 까지 누적된 결과다.)
+
+🔴 **마이그레이션은 번호를 채워서 복사한다** (WP-146, 2026-09-20).
+`/docker-entrypoint-initdb.d` 는 **알파벳 순**으로 실행하는데 `V10__` 이 `V1__` 보다
+앞선다. V10 이 생긴 뒤 깨끗한 볼륨으로 올리면 `relation "wiki_page" does not exist`
+로 죽었다 — 컨테이너가 죽은 채 healthcheck 만 `unhealthy` 라 원인이 바로 안 보인다.
+`docker/postgres/Dockerfile` 이 복사할 때 `V001__`·`V010__` 으로 바꾼다. 저장소
+파일명은 그대로다.
+
+⚠️ **적용 경로가 둘이고 정렬 규칙이 다르다.** `db/apply_migrations.py`(EC2)는 정수
+version 으로 정렬해 원래부터 문제가 없었다. 마이그레이션을 추가할 때 두 경로를
+같이 생각한다.
 - 백엔드 이미지 빌드(컨테이너 안 gradle bootJar) 후 실 PostgreSQL 에
   `ddl-auto=validate` 로 기동 성공 — 엔티티가 스키마와 정확히 맞는다.
 - 실제 HTTP: `/actuator/health` UP, `/api/issues` 빈 배열 → 시드 후 카드,
