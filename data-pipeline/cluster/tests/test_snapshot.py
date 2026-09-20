@@ -13,6 +13,7 @@ import pytest
 from cluster.score import SCORE_VERSION, size_score
 from cluster.snapshot import (
     DEFAULT_HOT_SPIKE_THRESHOLD,
+    EditResurgence,
     Neighbor,
     Seed,
     WikidataRelation,
@@ -330,3 +331,157 @@ def test_빈_스냅샷도_유효하다():
 def test_source는_live_replay만():
     with pytest.raises(ValueError):
         build_snapshot(_dt(2025, 6, 16), "prod", [], {})
+
+
+# ---------------------------------------------------------------- 비-씨드 재급증 (WP-144)
+
+def _resurgence(event_edits, baseline_edits,
+                event_start=_dt(2026, 3, 1), days=16):
+    """사건기간과 그 **직전 같은 길이** 기준기간. POC 표본의 Iran 구간을 본뜬다."""
+    span = timedelta(days=days)
+    return EditResurgence(
+        event_edits=event_edits,
+        baseline_edits=baseline_edits,
+        event_start=event_start,
+        event_end=event_start + span,
+        baseline_start=event_start - span,
+        baseline_end=event_start,
+    )
+
+
+def _old_neighbor(page_id, title, resurgence, n=500):
+    """2009년 생성 — 생성일 창은 확실히 떨어지는 배경 문서."""
+    return Neighbor(
+        page_id=page_id, wiki="enwiki", title=title,
+        clickstream_n=n, clickstream_month="2026-03",
+        created_at=_dt(2009, 1, 1), resurgence=resurgence,
+    )
+
+
+def _iran_snapshot(neighbors):
+    seed = _seed(title="2026 Iran war", event=date(2026, 3, 8))
+    return build_snapshot(_dt(2026, 4, 1), "live", [seed], {1: neighbors})
+
+
+def test_재조명_문서는_창밖이어도_비씨드로_편입된다():
+    """§11/-77 Mojtaba_Khamenei: 2009 생성이라 창 밖인데 사건기간 19.5배·1,053건."""
+    snap = _iran_snapshot([
+        _old_neighbor(2, "Mojtaba Khamenei", _resurgence(1053, 54)),
+    ])
+    members = {m.page_id: m for m in snap.clusters[0].members}
+
+    assert 2 in members, "재급증 게이트를 통과한 배경 문서는 편입돼야 한다"
+    assert members[2].is_seed is False, "사건 이전부터 있던 문서는 추가 씨드가 아니다"
+    assert members[1].is_seed is True, "루트 씨드는 그대로"
+
+
+def test_재조명_멤버는_판정_당시_편집수를_복사한다():
+    """시점 정합성 — 나중에 최신값으로 보충하면 미래 수치가 과거에 섞인다."""
+    r = _resurgence(1053, 54)
+    snap = _iran_snapshot([_old_neighbor(2, "Mojtaba Khamenei", r)])
+    member = next(m for m in snap.clusters[0].members if m.page_id == 2)
+
+    assert member.edit_count == 1053
+    assert member.edit_baseline == 54.0
+    assert member.window_start == r.event_start
+    assert member.window_end == r.event_end
+    assert member.completeness == "unavailable", "조회수 판정을 거친 문서가 아니다"
+
+
+def test_비율만_높고_절대량이_작으면_탈락한다():
+    """-77: Tampa(5.0배·10건)와 Ali_Khamenei(5.0배·700건)가 비율은 동률이다."""
+    snap = _iran_snapshot([
+        _old_neighbor(2, "Tampa, Florida", _resurgence(10, 2)),      # 5.0배지만 10건
+        _old_neighbor(3, "Ali Khamenei", _resurgence(700, 140)),     # 5.0배·700건
+    ])
+    member_ids = {m.page_id for m in snap.clusters[0].members}
+
+    assert 2 not in member_ids, "절대 편집 20건 미만은 비율이 통과해도 탈락"
+    assert 3 in member_ids
+
+
+def test_절대량이_커도_비율이_낮으면_배경이다():
+    """-77: 2024_Atlantic_hurricane_season 828건이지만 1.1배 — 계절성 배경."""
+    snap = _iran_snapshot([
+        _old_neighbor(2, "2024 Atlantic hurricane season", _resurgence(828, 753)),
+        _old_neighbor(3, "Hurricane Helene", _resurgence(459, 1530)),   # 0.3배
+    ])
+    member_ids = {m.page_id for m in snap.clusters[0].members}
+
+    assert member_ids == {1}, "비율이 5 미만이면 절대량과 무관하게 배경이다"
+
+
+def test_재급증_입력이_없으면_판정하지_않는다():
+    """측정 실패와 '측정했는데 미달'은 다르다 — 근거 없이 편입하지 않는다."""
+    snap = _iran_snapshot([_old_neighbor(2, "Choke point", None)])
+    assert {m.page_id for m in snap.clusters[0].members} == {1}
+
+
+def test_기준기간_편집이_0이면_절대하한만으로_통과한다():
+    """POC 표본에 없던 구간이다 — 급증 판정의 0 기준선 처리와 맞춘 선택."""
+    snap = _iran_snapshot([
+        _old_neighbor(2, "Rationale for the 2026 Iran war", _resurgence(25, 0)),
+        _old_neighbor(3, "Oil tanker", _resurgence(17, 0)),   # inf 지만 17건
+    ])
+    member_ids = {m.page_id for m in snap.clusters[0].members}
+
+    assert 2 in member_ids
+    assert 3 not in member_ids, "기준 0 이어도 절대 하한은 그대로 건다"
+
+
+def test_생성일_창을_통과하면_재급증을_보지_않고_추가씨드다():
+    """게이트 순서 — 뒤집히면 사건 때문에 새로 생긴 문서가 배경으로 기록된다."""
+    seed = _seed(title="2026 Iran war", event=date(2026, 3, 8))
+    new_doc = Neighbor(
+        page_id=2, wiki="enwiki", title="Kuwait in the 2026 Iran war",
+        clickstream_n=12, clickstream_month="2026-03",
+        created_at=_dt(2026, 3, 10),                 # 창 안
+        resurgence=_resurgence(1, 900),              # 재급증으론 확실히 탈락할 값
+    )
+    snap = build_snapshot(_dt(2026, 4, 1), "live", [seed], {1: [new_doc]})
+    member = next(m for m in snap.clusters[0].members if m.page_id == 2)
+
+    assert member.is_seed is True, "창을 통과했으면 재급증 값과 무관하게 추가 씨드다"
+    assert member.edit_count is None, "추가 씨드 경로는 지표를 재지 않는다"
+
+
+def test_스냅샷_이후_편집은_재급증_근거로_쓰지_않는다():
+    """사건기간이 스냅샷을 넘으면 과거 지도에 미래 편집이 섞인다."""
+    snap = _iran_snapshot([
+        _old_neighbor(2, "Mojtaba Khamenei",
+                      _resurgence(1053, 54, event_start=_dt(2026, 4, 1))),
+    ])
+    assert {m.page_id for m in snap.clusters[0].members} == {1}
+
+
+def test_기준기간이_사건기간과_겹치면_탈락한다():
+    """겹치면 기준선이 사건 자체로 오염돼 비율이 실제보다 낮게 나온다."""
+    overlapping = EditResurgence(
+        event_edits=1053, baseline_edits=54,
+        event_start=_dt(2026, 3, 1), event_end=_dt(2026, 3, 17),
+        baseline_start=_dt(2026, 2, 20), baseline_end=_dt(2026, 3, 8),  # 겹침
+    )
+    snap = _iran_snapshot([_old_neighbor(2, "Mojtaba Khamenei", overlapping)])
+    assert {m.page_id for m in snap.clusters[0].members} == {1}
+
+
+def test_두_구간_길이가_다르면_탈락한다():
+    """길이가 다르면 비율이 재급증이 아니라 길이 비를 재는 값이 된다."""
+    mismatched = EditResurgence(
+        event_edits=1053, baseline_edits=54,
+        event_start=_dt(2026, 3, 1), event_end=_dt(2026, 3, 17),   # 16일
+        baseline_start=_dt(2026, 2, 27), baseline_end=_dt(2026, 3, 1),  # 2일
+    )
+    snap = _iran_snapshot([_old_neighbor(2, "Mojtaba Khamenei", mismatched)])
+    assert {m.page_id for m in snap.clusters[0].members} == {1}
+
+
+def test_재조명_멤버도_clickstream_간선을_받는다():
+    snap = _iran_snapshot([
+        _old_neighbor(2, "Mojtaba Khamenei", _resurgence(1053, 54), n=777),
+    ])
+    edge = next(e for e in snap.clusters[0].edges if e.target_page_id == 2)
+
+    assert edge.kind == "clickstream"
+    assert edge.weight == 777.0
+    assert edge.evidence_month == "2026-03"
