@@ -84,10 +84,8 @@ Microsoft 0.32 가 §11(0.4·0.3)과 소수점까지 맞는다.
 
 있는 줄 알고 넘어가면 나중에 비싸게 드러난다.
 
-- **`load_cluster_members()` 의 SQL 은 실행된 적이 없다.** 실제 `cluster_member` 행으로
-  돌린 적이 없고, 위 멤버 목록은 손으로 만든 것이다.
-- **Spark 경로(`spark_vocabulary`)는 실행된 적이 없다.** 이번 검증은 단일 프로세스로
-  96개 zip 을 직접 읽었다. `binaryFiles` → `map` → `reduce` 배선은 미검증이다.
+- ~~**`load_cluster_members()` 의 SQL 은 실행된 적이 없다.**~~ → **해소** (§7).
+- ~~**Spark 경로(`spark_vocabulary`)는 실행된 적이 없다.**~~ → **해소** (§7).
 - **사건 하나뿐이다.** Hormuz·CrowdStrike 등 다른 유형(기업형·지정학형)에서 같은 기본값이
   통하는지 모른다. 특히 지역 축이 없는 이슈(기업 실적 등)는 테마 단독 술어가 되는데 그때
   얼마나 넓어지는지 안 쟀다.
@@ -101,3 +99,54 @@ docker run --rm -m 4g -v <repo>:/w -w /w/data-pipeline python:3.11-slim \
 ```
 
 gkg 테스트 **70개 통과** (신규 17개).
+
+## 7. 후속 — 실제 DB·Spark 관통 (2026-09-20, 같은 날 추가)
+
+§5 의 미검증 두 항목을 닫았다. 로컬 PostgreSQL 에 Milton 클러스터를 실제 행으로 심고
+(`issue_cluster` 1 + `cluster_member` 4), `docker/spark/Dockerfile` 이미지에서 드라이버를
+끝까지 돌렸다.
+
+```
+슬롯: 존재 96 / 결손 0
+술어 생성: 멤버 4건, 어휘 스캔 96/96 슬롯
+술어: 테마[HURRICANE] ∧ 지역[florida ∨ tampa]
+이슈 기사 12,910 / 코퍼스 160,838 / 기관 40건
+cluster_org_mention 에 40건 저장(cluster_id=1)
+```
+
+- **`load_cluster_members()`** — 손으로 만든 목록이 아니라 `cluster_member` ⋈ `wiki_page`
+  에서 4건을 읽어 술어를 만들었다. ✅
+- **`spark_vocabulary`** — Spark Stage 0(어휘)·Stage 1(집계) 두 패스가 각각 8 태스크로
+  돌았다. `binaryFiles` → `map` → `reduce` 배선 확인. ✅
+- **티커 조인** — 2026-09-20 적재한 종목 마스터 5,396건과 붙어 `DUK`(Duke Energy) 가
+  매칭됐다. §11 정답 중 하나다. ✅
+
+### 🔴 실행 명령이 틀려 있었다
+
+모듈 docstring 의 `spark-submit gkg/driver.py ...` 는 **동작하지 않는다.** 이 모듈은
+상대 임포트(`from .aliases import ...`)를 쓰는데 spark-submit 은 파일을 스크립트로
+실행해 패키지 컨텍스트가 없다 — `ImportError: attempted relative import with no known
+parent package`. `python -m gkg.driver` 로 고쳤다.
+
+⚠️ **이 명령은 한 번도 실행된 적이 없었다.** `tests/test_driver.py` 가 함수 단위만 덮고
+CLI 를 안 돌려서 틀린 채로 남아 있었다. 다른 모듈의 실행 예시도 같은 의심을 해야 한다.
+
+### ⚠️ 티커 오탐 1건
+
+40건 중 티커가 붙은 것은 2건인데 그중 하나가 오탐이다.
+
+| 티커 | 종목명 | 붙은 기관명 | 판정 |
+| --- | --- | --- | --- |
+| `DUK` | Duke Energy CORP | duke energy florida | 정답 (§11) |
+| `MIAX` | MIAMI INTERNATIONAL HOLDINGS | miami international | **오탐** |
+
+허리케인 맥락의 "miami international" 은 거의 확실히 **마이애미 국제공항**이지 옵션
+거래소가 아니다. `gkg/aliases.py` 가 `dodge`·`mcdonald` 를 블록리스트에 넣은 것과 같은
+유형이다. LLM 검증 단계(WP-68)가 거르도록 설계돼 있어 치명적이진 않지만,
+블록리스트 후보로 기록해 둔다.
+
+### 아직 남은 것
+
+- 사건 유형은 여전히 Milton 하나다.
+- EC2 에서는 돌리지 않았다 (로컬 PostgreSQL + 로컬 Spark 단일 노드).
+- 두 번째 스캔 비용은 이번에도 안 쟀다.
