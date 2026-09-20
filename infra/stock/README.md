@@ -65,12 +65,19 @@ docker exec -i postgres-postgres-1 psql -U wikipulse -d wikipulse -c \
 
 EC2 가 아니라 **로컬**에서 같은 이미지·같은 명령으로 돌린 값이다.
 
-| 단계 | 결과 |
-| --- | --- |
-| universe | **5,396종목** 적재 · CIK 매칭 5,347 (99%) |
-| | 거래소: NASDAQ 3,145 · NYSE 1,991 · NYSE American 260 |
+| 단계 | 결과 | 소요 |
+| --- | --- | --- |
+| universe | **5,396종목** 적재 · CIK 매칭 5,347 (99%) | 수 분 |
+| | 거래소: NASDAQ 3,145 · NYSE 1,991 · NYSE American 260 | |
+| summaries | **확보 5,311 · 없음 85** (1.6%) | 약 1시간 |
 
 2026-09-08 실측(5,389)보다 7종목 많다 — 상장·폐지에 따른 정상 변동이다.
+
+⚠️ **`summaries` 는 한 시간쯤 걸린다.** 종목마다 yfinance 왕복이라 그렇다. SSH 가 끊겨도
+살아남게 `nohup` 으로 분리 실행하는 편이 낫다.
+
+없음 85건은 전부 워런트(`.W`)·유닛(`.U`)·클래스주(`MOG.B`·`AKO.B`) 로, Yahoo 에 데이터가
+없는 것들이다 — 실패가 아니라 정상 결측이다(`data-pipeline/stock/README.md` 함정 절).
 
 ⚠️ `XOM` 의 이름이 `ExxonMobil Holdings Corp` 로 들어간다. SEC 원본 그대로이고 오류가
 아니다(`data-pipeline/stock/README.md` 함정 절).
