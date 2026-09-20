@@ -417,16 +417,23 @@ def test_재급증_입력이_없으면_판정하지_않는다():
     assert {m.page_id for m in snap.clusters[0].members} == {1}
 
 
-def test_기준기간_편집이_0이면_절대하한만으로_통과한다():
-    """POC 표본에 없던 구간이다 — 급증 판정의 0 기준선 처리와 맞춘 선택."""
+def test_기준기간_편집이_적으면_비율을_믿지_않는다():
+    """🔴 2026-09-20 실측으로 추가된 기준 하한 (WP-145).
+
+    ~~기준 0 이면 절대 하한만으로 통과~~ 는 폐기됐다 — 기준 0 의 67.5% 가 그 이전에도
+    편집 0 이라 **애초에 없던 문서**였다. 기준 1~2 도 비율이 편집 한두 건에 흔들려
+    쓸 수 없다(`British philosophy` 867/1 = 867배, 기준이 5 였으면 173배).
+    """
     snap = _iran_snapshot([
         _old_neighbor(2, "Rationale for the 2026 Iran war", _resurgence(25, 0)),
-        _old_neighbor(3, "Oil tanker", _resurgence(17, 0)),   # inf 지만 17건
+        _old_neighbor(3, "British philosophy", _resurgence(867, 1)),
+        _old_neighbor(4, "Islamic Revolutionary Guard Corps", _resurgence(47, 7)),
     ])
     member_ids = {m.page_id for m in snap.clusters[0].members}
 
-    assert 2 in member_ids
-    assert 3 not in member_ids, "기준 0 이어도 절대 하한은 그대로 건다"
+    assert 2 not in member_ids, "기준 0 은 '조용했다' 가 아니라 '없었다' 다"
+    assert 3 not in member_ids, "기준 1 짜리 867배는 믿을 수 없다"
+    assert 4 in member_ids, "-77 정답 IRGC(기준 7)는 살아야 한다 — 하한 10 은 이걸 죽인다"
 
 
 def test_생성일_창을_통과하면_재급증을_보지_않고_추가씨드다():

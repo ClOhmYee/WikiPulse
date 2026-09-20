@@ -14,13 +14,20 @@ import pytest
 
 from batch.clickstream import NeighborRef
 from batch.page_creation import write_index
+from batch.page_edit_daily import edit_days_for
+from batch.page_edit_daily import write_index as write_edit_index
 from cluster.driver import (
     MonthlyNeighborSource,
     NeighborStats,
     load_creation_dates,
     neighbors_for_snapshot,
+    resurgence_for,
 )
-from cluster.snapshot import DEFAULT_CREATION_WINDOW_DAYS, Seed
+from cluster.snapshot import (
+    DEFAULT_CREATION_WINDOW_DAYS,
+    Seed,
+    _passes_resurgence,
+)
 
 UTC = timezone.utc
 
@@ -269,3 +276,241 @@ class _FakeConn:
 @pytest.fixture
 def fake_conn():
     return _FakeConn()
+
+
+# ------------------------------------------------ 비-씨드 재급증 배선 (WP-145)
+
+def _resurgence_index(tmp_path, days_by_title):
+    """`batch/page_edit_daily` 적재본을 만든다."""
+    out = tmp_path / "edits"
+    write_edit_index(days_by_title, out, shard_records=1000)
+    return out
+
+
+def _days(start: date, n: int, per_day: int) -> dict:
+    return {start + timedelta(days=i): per_day for i in range(n)}
+
+
+def test_사건기간은_스냅샷에서_끝난다():
+    """🔴 미래로 열어 두면 실시간 판정이 통째로 죽는다 (2026-09-20).
+
+    ~~사건일 ±30일~~ 이면 사건기간 끝이 사건 31일 뒤라, 게이트의 시점 상한
+    (`event_end <= snapshot_ts`)에 걸려 사건 31일 전에는 아무것도 통과 못 했다.
+    """
+    days = {date(2026, 8, 10): 500}
+
+    # 사건 다음날 스냅샷 — 사건기간은 거기서 끊긴다
+    spike = resurgence_for(days, date(2026, 8, 10), 30,
+                           snapshot_date=date(2026, 8, 11))
+    assert spike.event_end == datetime(2026, 8, 11, tzinfo=UTC)
+    assert spike.event_start == datetime(2026, 7, 11, tzinfo=UTC)   # -30일
+    # 기준기간은 직전 같은 길이 — 사건기간이 짧아지면 같이 짧아진다
+    assert spike.baseline_end == spike.event_start
+    assert (spike.event_end - spike.event_start) == (
+        spike.baseline_end - spike.baseline_start)
+
+    # 시간이 지나면 창이 다 찬다 (+30일에서 멈춘다)
+    full = resurgence_for(days, date(2026, 8, 10), 30,
+                          snapshot_date=date(2026, 12, 1))
+    assert full.event_end == datetime(2026, 9, 10, tzinfo=UTC)
+
+
+def test_사건_직후_스냅샷도_게이트를_통과한다():
+    """위 버그의 회귀 테스트 — 실제로 판정까지 가는지 본다."""
+    # 기준기간 31일에 매일 1건이면 기준 31 — 기준 하한(5)을 넘는다
+    days = {**_days(date(2026, 6, 10), 31, 1), **_days(date(2026, 8, 5), 6, 200)}
+    spike = resurgence_for(days, date(2026, 8, 10), 30,
+                           snapshot_date=date(2026, 8, 11))
+
+    assert _passes_resurgence(spike, datetime(2026, 8, 11, tzinfo=UTC),
+                              min_ratio=5.0, min_edits=20)
+
+
+def test_편집_인덱스에_없으면_수치를_지어내지_않는다():
+    """0 으로 채우면 기준기간이 0 이 되어 덤프 구멍이 재급증으로 위장된다."""
+    assert resurgence_for(None, date(2026, 3, 8), 30,
+                          snapshot_date=date(2026, 4, 1)) is None
+
+
+def test_기준기간이_커버리지_시작보다_앞서면_판정하지_않는다():
+    """⚠️ 기준선이 잘리면 비율이 **부풀어** 배경 문서가 통과한다 — 오탐 방향이다."""
+    days = {date(2026, 8, 10): 500}
+
+    assert resurgence_for(days, date(2026, 8, 10), 30,
+                          snapshot_date=date(2026, 8, 11),
+                          coverage=(date(2026, 7, 1), date(2026, 9, 1))) is None
+    # 기준기간(06-11~07-11)이 커버리지 안이면 판정한다
+    assert resurgence_for(days, date(2026, 8, 10), 30,
+                          snapshot_date=date(2026, 8, 11),
+                          coverage=(date(2026, 4, 1), date(2026, 9, 1))) is not None
+
+
+def test_커버리지_끝이_스냅샷보다_이르면_거기서_끊는다():
+    """덤프가 스냅샷보다 뒤처질 때 — 없는 구간을 0 으로 세지 않는다."""
+    days = {date(2026, 8, 10): 500}
+    spike = resurgence_for(days, date(2026, 8, 10), 30,
+                           snapshot_date=date(2026, 12, 1),
+                           coverage=(date(2026, 1, 1), date(2026, 9, 1)))
+
+    assert spike.event_end == datetime(2026, 9, 2, tzinfo=UTC), "커버리지 끝 다음날"
+
+
+# ------------------------------------------------ driver 배선 (WP-145)
+
+def test_재조명_문서가_창밖이어도_이웃으로_살아남는다(tmp_path):
+    """Mojtaba_Khamenei 형 — 2009 생성이라 창 밖인데 사건기간 편집이 급증했다."""
+    seed = _seed("2026 Iran war", event_date=date(2026, 3, 8))
+    refs = {"2026 Iran war": [NeighborRef(title="Mojtaba Khamenei", n=500, directed=True)]}
+    created = {"Mojtaba Khamenei": datetime(2009, 1, 1, tzinfo=UTC)}
+    # 사건기간 [02-06, 03-09) 31일에 매일 20건, 직전 31일은 매일 1건 → 20배·620건
+    edits = _resurgence_index(tmp_path, {"Mojtaba Khamenei": {
+        **_days(date(2026, 1, 6), 31, 1),
+        **_days(date(2026, 2, 6), 31, 20),
+    }})
+
+    stats = NeighborStats()
+    out = neighbors_for_snapshot(
+        _FakeConn(), [seed], refs, created, "2026-02",
+        creation_window_days=DEFAULT_CREATION_WINDOW_DAYS, stats=stats,
+        # 🔴 사건 다음날 스냅샷 — 현실적인 시점이다. 먼 미래로 잡으면 게이트가
+        #    미래 구간을 보게 되어 버그를 못 잡는다(2026-09-20 에 실제로 놓쳤다).
+        snapshot_ts=datetime(2026, 3, 9, tzinfo=UTC),
+        edit_days_of_title=edit_days_for(edits, ["Mojtaba Khamenei"]))
+
+    assert stats.window_rejected == 1, "창은 떨어져야 한다 (2009 생성)"
+    assert stats.resurgence_passed == 1
+    neighbor = out[seed.page_id][0]
+    assert neighbor.title == "Mojtaba Khamenei"
+    assert neighbor.resurgence.event_edits == 31 * 20
+
+
+def test_배경_문서는_재급증에서도_탈락한다(tmp_path):
+    """Hurricane_Helene 형 — 이동량은 큰데 비율이 1 근처다."""
+    seed = _seed("2026 Iran war", event_date=date(2026, 3, 8))
+    refs = {"2026 Iran war": [NeighborRef(title="Choke point", n=11778, directed=True)]}
+    created = {"Choke point": datetime(2009, 1, 1, tzinfo=UTC)}
+    edits = _resurgence_index(tmp_path, {"Choke point": {
+        **_days(date(2026, 1, 6), 31, 10),
+        **_days(date(2026, 2, 6), 31, 11),   # 1.1배
+    }})
+
+    stats = NeighborStats()
+    out = neighbors_for_snapshot(
+        _FakeConn(), [seed], refs, created, "2026-02",
+        creation_window_days=DEFAULT_CREATION_WINDOW_DAYS, stats=stats,
+        snapshot_ts=datetime(2026, 3, 9, tzinfo=UTC),
+        edit_days_of_title=edit_days_for(edits, ["Choke point"]))
+
+    assert stats.resurgence_rejected == 1
+    assert out[seed.page_id] == [], "이동량이 커도 비율이 낮으면 배경이다"
+
+
+def test_편집_인덱스_구멍은_탈락과_따로_센다():
+    """⚠️ 합치면 덤프 구멍이 '규칙대로 걸렀다' 로 읽힌다."""
+    seed = _seed("2026 Iran war", event_date=date(2026, 3, 8))
+    refs = {"2026 Iran war": [NeighborRef(title="없는문서", n=100, directed=True)]}
+    created = {"없는문서": datetime(2009, 1, 1, tzinfo=UTC)}
+
+    stats = NeighborStats()
+    neighbors_for_snapshot(
+        _FakeConn(), [seed], refs, created, "2026-02",
+        creation_window_days=DEFAULT_CREATION_WINDOW_DAYS, stats=stats,
+        snapshot_ts=datetime(2026, 3, 9, tzinfo=UTC),
+        edit_days_of_title={})
+
+    assert stats.resurgence_missing == 1
+    assert stats.resurgence_rejected == 0
+
+
+def test_잘린_기준기간은_탈락이_아니라_미상으로_센다(tmp_path):
+    """덤프 경계가 '규칙대로 걸렀다' 로 읽히면 안 된다."""
+    seed = _seed("2026 Iran war", event_date=date(2026, 3, 8))
+    refs = {"2026 Iran war": [NeighborRef(title="Mojtaba Khamenei", n=500, directed=True)]}
+    created = {"Mojtaba Khamenei": datetime(2009, 1, 1, tzinfo=UTC)}
+    edits = _resurgence_index(tmp_path, {"Mojtaba Khamenei": _days(date(2026, 2, 6), 31, 50)})
+
+    stats = NeighborStats()
+    neighbors_for_snapshot(
+        _FakeConn(), [seed], refs, created, "2026-02",
+        creation_window_days=DEFAULT_CREATION_WINDOW_DAYS, stats=stats,
+        snapshot_ts=datetime(2026, 3, 9, tzinfo=UTC),
+        edit_days_of_title=edit_days_for(edits, ["Mojtaba Khamenei"]),
+        # 기준기간 [01-06, 02-06) 이 커버리지 시작(02-01)보다 앞선다
+        edit_coverage=(date(2026, 2, 1), date(2026, 3, 31)))
+
+    assert stats.resurgence_missing == 1
+    assert stats.resurgence_rejected == 0
+
+
+def test_편집_인덱스를_안_주면_옛_동작_그대로다():
+    """LIVE 처럼 월 덤프가 없는 구간은 씨드 전용으로 돈다 — 조용히 깨지지 않는다."""
+    seed = _seed("2026 Iran war", event_date=date(2026, 3, 8))
+    refs = {"2026 Iran war": [NeighborRef(title="Mojtaba Khamenei", n=500, directed=True)]}
+    created = {"Mojtaba Khamenei": datetime(2009, 1, 1, tzinfo=UTC)}
+
+    stats = NeighborStats()
+    out = neighbors_for_snapshot(
+        _FakeConn(), [seed], refs, created, "2026-02",
+        creation_window_days=DEFAULT_CREATION_WINDOW_DAYS, stats=stats)
+
+    assert stats.window_rejected == 1
+    assert stats.resurgence_missing == 0, "재급증 경로 자체를 안 돈다"
+    assert out[seed.page_id] == []
+
+
+def test_사건기간이_사건일을_못_담으면_판정하지_않는다():
+    """🔴 커버리지가 사건일보다 이르면 창이 **사건 전** 구간만 담는다.
+
+    그 비율은 "사건 때문에 들썩였나" 가 아니라 "사건 전에 들썩였나" 를 잰 값이라
+    통과가 나오든 탈락이 나오든 근거가 없다. 2026-09-20 에 replay 구간을 훑다가
+    2026-09 사건이 08-18~09-02 창으로 "통과" 하는 것을 보고 넣었다.
+    """
+    days = _days(date(2026, 7, 1), 90, 100)
+
+    # 커버리지가 09-01 에서 끝나는데 사건일은 09-17 — 사건 자체를 못 본다
+    assert resurgence_for(days, date(2026, 9, 17), 30,
+                          snapshot_date=date(2026, 9, 18),
+                          coverage=(date(2026, 4, 1), date(2026, 9, 1))) is None
+    # 사건일이 커버리지 안이면 판정한다
+    assert resurgence_for(days, date(2026, 8, 31), 30,
+                          snapshot_date=date(2026, 9, 1),
+                          coverage=(date(2026, 4, 1), date(2026, 9, 1))) is not None
+
+
+def test_기준기간에_없던_문서는_판정하지_않는다():
+    """🔴 2026-09-20 실측 — 기준 0 의 67.5% 는 '조용했다' 가 아니라 '없었다' 였다.
+
+    생성일 창이 ±30일이라 사건 31~61일 전에 생긴 문서만 이리로 샌다. 그 구멍을
+    생성일로 막는다 — driver 가 이미 들고 있는 값이라 추가 적재가 없다.
+    """
+    days = {**_days(date(2026, 7, 20), 40, 30)}
+
+    # 기준기간 시작(2026-06-11) 이후에 생긴 문서 — 잴 기준선이 없다
+    assert resurgence_for(days, date(2026, 8, 10), 30,
+                          snapshot_date=date(2026, 8, 11),
+                          created_at=datetime(2026, 7, 1, tzinfo=UTC)) is None
+    # 기준기간 전부터 있던 문서는 평소대로 판정한다
+    assert resurgence_for(days, date(2026, 8, 10), 30,
+                          snapshot_date=date(2026, 8, 11),
+                          created_at=datetime(2009, 1, 1, tzinfo=UTC)) is not None
+
+
+def test_새_문서는_탈락이_아니라_미상으로_센다(tmp_path):
+    """비-씨드(배경 재조명)가 아니라 추가 씨드 쪽 문서다 — 규칙 미달이 아니다."""
+    seed = _seed("2026 Iran war", event_date=date(2026, 3, 8))
+    refs = {"2026 Iran war": [NeighborRef(title="2026 Colombia earthquake",
+                                          n=500, directed=True)]}
+    # 생성일 창(±30일) 밖이지만 기준기간 안에 생긴 문서
+    created = {"2026 Colombia earthquake": datetime(2026, 1, 20, tzinfo=UTC)}
+    edits = _resurgence_index(tmp_path, {"2026 Colombia earthquake":
+                                         _days(date(2026, 2, 6), 31, 30)})
+
+    stats = NeighborStats()
+    neighbors_for_snapshot(
+        _FakeConn(), [seed], refs, created, "2026-02",
+        creation_window_days=DEFAULT_CREATION_WINDOW_DAYS, stats=stats,
+        snapshot_ts=datetime(2026, 3, 9, tzinfo=UTC),
+        edit_days_of_title=edit_days_for(edits, ["2026 Colombia earthquake"]))
+
+    assert stats.resurgence_missing == 1
+    assert stats.resurgence_rejected == 0
