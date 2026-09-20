@@ -72,7 +72,7 @@ import shutil
 import sys
 import time
 from collections.abc import Iterable, Iterator
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 from producer.normalize import ARTICLE_NAMESPACE, SkipEvent, canonical_title
@@ -201,6 +201,56 @@ def data_span(index: dict[str, dict[date, int]]) -> tuple[date | None, date | No
     return (min(days), max(days)) if days else (None, None)
 
 
+def _as_dirs(directories: str | Path | Iterable[str | Path]) -> list[Path]:
+    """한 개든 여러 개든 디렉터리 목록으로 만든다."""
+    if isinstance(directories, (str, Path)):
+        return [Path(directories)]
+    return [Path(d) for d in directories]
+
+
+class CoverageGap(ValueError):
+    """월별 적재본 사이에 빠진 구간이 있다. 조용히 합치면 안 된다."""
+
+
+def coverage_span(
+    directories: str | Path | Iterable[str | Path]
+) -> tuple[date | None, date | None]:
+    """적재본이 담은 `(첫 날짜, 마지막 날짜)`. 없으면 `(None, None)`.
+
+    🔴 **양끝이 다 필요하다.** 끝만 보면 사건기간이 잘리는 것은 막지만 기준기간이
+    잘리는 것은 못 막는다. 기준선이 과소 계수되면 비율이 **부풀어** 배경 문서가
+    재급증으로 통과한다 — 오탐 방향이라 더 위험하다.
+
+    옛 적재본에는 두 값이 없다. 그때는 None 을 주고 소비 쪽이 "구간을 모른다" 로
+    다루게 한다 — 날짜를 지어내지 않는다.
+    """
+    spans: list[tuple[date, date]] = []
+    for directory in _as_dirs(directories):
+        manifest = directory / MANIFEST_NAME
+        if not manifest.exists():
+            return (None, None)          # 하나라도 모르면 전체를 모르는 것이다
+        doc = json.loads(manifest.read_text(encoding="utf-8"))
+        first, last = doc.get("first_day"), doc.get("last_day")
+        if not first or not last:
+            return (None, None)
+        spans.append((date.fromisoformat(first), date.fromisoformat(last)))
+
+    if not spans:
+        return (None, None)
+    spans.sort()
+
+    # 🔴 **구멍을 조용히 덮지 않는다.** 04월과 06월만 있는데 (04-01, 06-30) 으로
+    #    답하면 5월이 통째로 비어 있는데도 "커버리지 안" 으로 통과해, 기준선이
+    #    과소 계수된 채 비율이 부풀어 배경 문서가 재급증으로 통과한다.
+    for (_, prev_last), (next_first, _) in zip(spans, spans[1:]):
+        if next_first - prev_last > timedelta(days=1):
+            raise CoverageGap(
+                f"편집 인덱스에 빠진 구간이 있다: {prev_last} 다음이 {next_first} 다. "
+                "그 달을 적재하거나 인덱스 목록에서 빼고 구간을 좁힌다.")
+
+    return (spans[0][0], spans[-1][1])
+
+
 def coverage_until(directory: str | Path) -> date | None:
     """적재본이 담은 **마지막 날짜**. 없으면 None.
 
@@ -219,17 +269,30 @@ def coverage_until(directory: str | Path) -> date | None:
 
 
 def edit_days_for(
-    directory: str | Path, titles: Iterable[str]
+    directories: str | Path | Iterable[str | Path], titles: Iterable[str]
 ) -> dict[str, dict[date, int]]:
     """찾는 제목들의 날짜별 편집 수만 골라 돌려준다. 인덱스를 한 번만 순회한다.
 
     구간이 **씨드마다 다를 때** 쓴다 — 사건일이 씨드마다 달라서 하나의 고정 구간으로
     미리 합칠 수 없다(`cluster/driver.py`). 고정 구간이면 `edit_counts_for` 가 낫다.
 
+    🔴 **디렉터리를 여러 개 받는다.** 적재는 월별로 쪼갠다 — 한 번에 여러 달을 훑으면
+    `scan` 이 그 전부를 메모리에 든다. enwiki 한 달이 제목 154만 개고(2026-07 실측),
+    6개월이면 RAM 이 모자란 장비에서 죽는다. 읽는 쪽은 후보 제목 수천 개만 들면
+    되므로 여기서 합치는 것이 맞다.
+
     ⚠️ 없는 제목은 키 자체가 없다 — `edit_counts_for` 와 같은 계약이다.
     """
     wanted = set(titles)
-    return {title: days for title, days in read_index(directory) if title in wanted}
+    merged: dict[str, dict[date, int]] = {}
+    for directory in _as_dirs(directories):
+        for title, days in read_index(directory):
+            if title not in wanted:
+                continue
+            # 월별 적재본이라 같은 제목이 여러 디렉터리에 나온다. 날짜가 겹치지
+            # 않으므로 갱신으로 합친다 — 겹치면 같은 값이라 결과가 같다.
+            merged.setdefault(title, {}).update(days)
+    return merged
 
 
 def edit_counts_for(

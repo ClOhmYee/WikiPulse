@@ -203,24 +203,81 @@ def test_실제_데이터_구간을_잰다():
     assert data_span({}) == (None, None)
 
 
-def test_매니페스트에서_커버리지_끝을_읽는다(tmp_path):
+def test_매니페스트에서_커버리지_양끝을_읽는다(tmp_path):
+    """🔴 끝만 보면 사건기간 잘림은 막지만 기준기간 잘림은 못 막는다 — 그쪽이 오탐이다."""
     from batch.ingest import MANIFEST_NAME
-    from batch.page_edit_daily import coverage_until
+    from batch.page_edit_daily import coverage_span
 
     out = tmp_path / "idx"
     out.mkdir()
     (out / MANIFEST_NAME).write_text(
-        json.dumps({"last_day": "2026-09-01"}), encoding="utf-8")
-    assert coverage_until(out) == date(2026, 9, 1)
+        json.dumps({"first_day": "2026-04-01", "last_day": "2026-09-01"}),
+        encoding="utf-8")
+    assert coverage_span(out) == (date(2026, 4, 1), date(2026, 9, 1))
 
 
 def test_옛_적재본은_커버리지를_지어내지_않는다(tmp_path):
-    """`last_day` 가 없으면 None — 날짜를 만들어내면 잘린 구간을 정상으로 오인한다."""
+    """날짜를 만들어내면 잘린 구간을 정상으로 오인한다."""
     from batch.ingest import MANIFEST_NAME
-    from batch.page_edit_daily import coverage_until
+    from batch.page_edit_daily import coverage_span
 
     out = tmp_path / "idx"
     out.mkdir()
     (out / MANIFEST_NAME).write_text(json.dumps({"titles": 3}), encoding="utf-8")
-    assert coverage_until(out) is None
-    assert coverage_until(tmp_path / "없는디렉터리") is None
+    assert coverage_span(out) == (None, None)
+    assert coverage_span(tmp_path / "없는디렉터리") == (None, None)
+
+
+# --- 월별 적재본 합치기 (WP-145) -------------------------------------
+
+def _manifest(out, first, last):
+    from batch.ingest import MANIFEST_NAME
+    (out / MANIFEST_NAME).write_text(
+        json.dumps({"first_day": first, "last_day": last}), encoding="utf-8")
+    return out
+
+
+def test_월별_적재본_여러_개를_합쳐_읽는다(tmp_path):
+    """적재는 월별로 쪼갠다 — 한 번에 여러 달을 훑으면 메모리가 터진다."""
+    from batch.page_edit_daily import edit_days_for
+
+    a = _written(tmp_path / "a", {"Ali Khamenei": {date(2026, 7, 5): 3}})
+    b = _written(tmp_path / "b", {"Ali Khamenei": {date(2026, 8, 9): 4},
+                                  "Choke point": {date(2026, 8, 1): 1}})
+    got = edit_days_for([a, b], ["Ali Khamenei"])
+
+    assert got == {"Ali Khamenei": {date(2026, 7, 5): 3, date(2026, 8, 9): 4}}
+
+
+def test_커버리지는_월별_적재본을_이어_잰다(tmp_path):
+    from batch.page_edit_daily import coverage_span
+
+    a = _manifest(_written(tmp_path / "a", {"A": {date(2026, 7, 1): 1}}),
+                  "2026-07-01", "2026-07-31")
+    b = _manifest(_written(tmp_path / "b", {"A": {date(2026, 8, 1): 1}}),
+                  "2026-08-01", "2026-08-31")
+
+    assert coverage_span([a, b]) == (date(2026, 7, 1), date(2026, 8, 31))
+
+
+def test_빠진_달이_있으면_막는다(tmp_path):
+    """🔴 조용히 덮으면 기준선이 과소 계수돼 비율이 부풀고 배경이 통과한다."""
+    from batch.page_edit_daily import CoverageGap, coverage_span
+
+    a = _manifest(_written(tmp_path / "a", {"A": {date(2026, 7, 1): 1}}),
+                  "2026-07-01", "2026-07-31")
+    c = _manifest(_written(tmp_path / "c", {"A": {date(2026, 9, 1): 1}}),
+                  "2026-09-01", "2026-09-01")
+
+    with pytest.raises(CoverageGap):
+        coverage_span([a, c])
+
+
+def test_매니페스트가_하나라도_없으면_커버리지를_모른다(tmp_path):
+    from batch.page_edit_daily import coverage_span
+
+    a = _manifest(_written(tmp_path / "a", {"A": {date(2026, 7, 1): 1}}),
+                  "2026-07-01", "2026-07-31")
+    b = _written(tmp_path / "b", {"A": {date(2026, 8, 1): 1}})   # 매니페스트 없음
+
+    assert coverage_span([a, b]) == (None, None)
