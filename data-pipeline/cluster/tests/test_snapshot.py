@@ -492,3 +492,17 @@ def test_재조명_멤버도_clickstream_간선을_받는다():
     assert edge.kind == "clickstream"
     assert edge.weight == 777.0
     assert edge.evidence_month == "2026-03"
+
+
+def test_cluster_label_is_the_seed_title():
+    """🔴 회귀 고정 — 루트 씨드 제목이 이슈 이름이다.
+
+    ~~`label=None`~~ 이라 계속 NULL 이었고, 파이프라인 어디에도 채우는 UPDATE 가
+    없는데 프론트 `PulseCluster.jsx` 는 `cluster.label` 로 제목을 그린다. 운영에
+    4,474 클러스터를 적재하고 나서야 **제목 없는 버블**로 드러났다
+    (2026-09-20, WP-149).
+    """
+    seed = _seed(title="Air India Flight 171")
+    snapshot = build_snapshot(_dt(2025, 6, 12, 13), "replay", [seed], {})
+    assert snapshot.clusters
+    assert snapshot.clusters[0].label == "Air India Flight 171"
