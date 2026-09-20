@@ -9,6 +9,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * 재사용 harness — WP-66 신뢰성 계층 측정용 가짜 업스트림.
@@ -50,6 +51,8 @@ final class FakeUpstream implements AutoCloseable {
     private final HttpServer server;
     private final ExecutorService executor;
     private final AtomicInteger requests = new AtomicInteger();
+    /** 마지막 요청 본문. 요청이 무엇을 실어 보냈는지 검사하는 테스트용 (WP-150). */
+    private final AtomicReference<String> lastRequestBody = new AtomicReference<>("");
     private final String okBody;
     private final long hangMillis;
     private volatile Mode mode = Mode.OK;
@@ -84,10 +87,18 @@ final class FakeUpstream implements AutoCloseable {
 
     void resetCount() {
         requests.set(0);
+        lastRequestBody.set("");
+    }
+
+    /** 마지막으로 받은 요청 본문 (WP-150). 아직 없으면 빈 문자열. */
+    String lastRequestBody() {
+        return lastRequestBody.get();
     }
 
     private void handle(HttpExchange ex) throws IOException {
         requests.incrementAndGet();
+        // 본문을 먼저 비워 읽는다 — HANG 모드에서도 클라이언트가 쓰기를 마치게 한다.
+        lastRequestBody.set(new String(ex.getRequestBody().readAllBytes(), StandardCharsets.UTF_8));
         try {
             switch (mode) {
                 case OK -> respond(ex, 200, okBody);
