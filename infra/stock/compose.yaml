@@ -68,6 +68,12 @@ services:
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:?Set POSTGRES_USER in .env}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}@postgres:5432/${POSTGRES_DB:-wikipulse}
       # 🔴 저장소에 넣지 않는다. 서버 .env 에만 둔다.
-      LLM_GATEWAY_API_KEY: ${LLM_GATEWAY_API_KEY:?Set LLM_GATEWAY_API_KEY in .env}
+      #
+      # ⚠️ **이름이 둘이다.** 저장소·서버 `.env` 는 전부 `LLM_GATEWAY_KEY` 인데
+      #    `stock/embed.py` 만 `LLM_GATEWAY_API_KEY` 를 읽는다. 여기서 이어 붙여 **`.env` 에는
+      #    `LLM_GATEWAY_KEY` 하나만** 적게 한다 — 키를 두 군데 적게 하면 한쪽이 반드시 빈다.
+      #    (2026-09-20 실측: 서버 `infra/service/.env` 의 `LLM_GATEWAY_KEY` 가 값 없이
+      #    이름만 있었다. 그래서 매칭 워커도 여태 못 돌았다.)
+      LLM_GATEWAY_API_KEY: ${LLM_GATEWAY_KEY:?Set LLM_GATEWAY_KEY in .env}
       LLM_GATEWAY_BASE_URL: ${LLM_GATEWAY_BASE_URL:-https://llm-gateway.example.com/api.openai.com/v1}
     command: ["python", "-m", "stock.embed"]

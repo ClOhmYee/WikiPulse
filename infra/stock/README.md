@@ -43,7 +43,7 @@ docker compose --profile stock run --rm embed        # 3. 임베딩 (크레딧 �
 대량 임베딩 호출 전에 사용하는 서비스의 잔액과 예산 상한을 확인한다.
 
 ```bash
-curl -s -H "Authorization: Bearer $LLM_GATEWAY_API_KEY" https://llm-gateway.example.com/key-info
+curl -s -H "Authorization: Bearer $LLM_GATEWAY_KEY" https://llm-gateway.example.com/key-info
 ```
 
 과거 실측은 **임베딩 502건에 100 남짓**이었다(2026-09-07). 5,400종목이면 그 10배 규모다.
@@ -82,4 +82,7 @@ EC2 가 아니라 **로컬**에서 같은 이미지·같은 명령으로 돌린 
 - `wikipulse-net` 네트워크가 external 이라 **먼저 떠 있어야 한다**(`infra/service` 가 만든다).
 - 빌드 컨텍스트가 `../../data-pipeline` 이라 **저장소 체크아웃이 서버에 있어야 한다.**
   `~/infra` 만 복사돼 있으면 빌드가 실패한다.
-- `embed` 는 `LLM_GATEWAY_API_KEY` 가 없으면 compose 가 기동 전에 막는다(`:?` 치환).
+- `embed` 는 `LLM_GATEWAY_KEY` 가 없으면 compose 가 기동 전에 막는다(`:?` 치환).
+- ⚠️ **2026-09-20 실측: 서버 `infra/service/.env` 의 `LLM_GATEWAY_KEY` 는 이름만 있고 값이 비어 있다.**
+  (`.env` 15번 줄이 `LLM_GATEWAY_KEY=` 9바이트, 백엔드 컨테이너에서도 길이 0). 매칭 워커가
+  여태 못 돈 이유이기도 하다. 적재 전에 값을 채워야 한다.
