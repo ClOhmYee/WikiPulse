@@ -954,7 +954,12 @@ def main(argv: list[str] | None = None) -> int:
         print(f"이웃 배선 집계: 씨드 {s.seeds:,} (덤프에 있던 씨드 {s.seeds_in_dump:,}) / "
               f"후보 {s.candidates:,} / 생성일 resolve {s.creation_resolved:,} "
               f"미상 {s.creation_missing:,} / 창 탈락 {s.window_rejected:,} / "
-              f"게이트 통과 {s.gate_passed:,} / page_id 해석 {s.page_resolved:,}")
+              f"창 통과(추가 씨드) {s.gate_passed:,} / page_id 해석 {s.page_resolved:,}")
+        # 재급증(비-씨드)은 창을 **떨어진** 후보에만 도는 별개 관문이라 따로 적는다.
+        # 안 찍으면 "창 통과 0" 만 보이고 비-씨드가 어디서 왔는지 알 수 없다.
+        print(f"  비-씨드 재급증: 통과 {s.resurgence_passed:,} / "
+              f"미달 {s.resurgence_rejected:,} / 미상 {s.resurgence_missing:,} "
+              f"(미상 = 편집 인덱스에 없거나 기준기간을 잴 수 없는 후보)")
 
     clusters = sum(s.cluster_count for s in snapshots)
     members = sum(len(c.members) for s in snapshots for c in s.clusters)
