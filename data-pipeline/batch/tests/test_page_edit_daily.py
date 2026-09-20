@@ -189,3 +189,38 @@ def test_뒤집힌_구간은_거부한다(tmp_path):
     out = _written(tmp_path, {"A": {date(2026, 3, 8): 2}})
     with pytest.raises(ValueError):
         edit_counts_for(out, ["A"], date(2026, 4, 1), date(2026, 3, 1))
+
+
+# --- 데이터 구간 (WP-145, 2026-09-20 실측) --------------------------
+
+def test_실제_데이터_구간을_잰다():
+    """🔴 요청한 range 가 아니라 **본 날짜**다. 마지막 달이 잘려도 range 로는 안 드러난다."""
+    from batch.page_edit_daily import data_span
+
+    index = {"A": {date(2026, 7, 5): 1, date(2026, 9, 1): 2},
+             "B": {date(2026, 8, 9): 3}}
+    assert data_span(index) == (date(2026, 7, 5), date(2026, 9, 1))
+    assert data_span({}) == (None, None)
+
+
+def test_매니페스트에서_커버리지_끝을_읽는다(tmp_path):
+    from batch.ingest import MANIFEST_NAME
+    from batch.page_edit_daily import coverage_until
+
+    out = tmp_path / "idx"
+    out.mkdir()
+    (out / MANIFEST_NAME).write_text(
+        json.dumps({"last_day": "2026-09-01"}), encoding="utf-8")
+    assert coverage_until(out) == date(2026, 9, 1)
+
+
+def test_옛_적재본은_커버리지를_지어내지_않는다(tmp_path):
+    """`last_day` 가 없으면 None — 날짜를 만들어내면 잘린 구간을 정상으로 오인한다."""
+    from batch.ingest import MANIFEST_NAME
+    from batch.page_edit_daily import coverage_until
+
+    out = tmp_path / "idx"
+    out.mkdir()
+    (out / MANIFEST_NAME).write_text(json.dumps({"titles": 3}), encoding="utf-8")
+    assert coverage_until(out) is None
+    assert coverage_until(tmp_path / "없는디렉터리") is None

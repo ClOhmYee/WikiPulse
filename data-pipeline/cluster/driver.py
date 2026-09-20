@@ -93,7 +93,7 @@ from batch.clickstream import (
     select_completed_month,
 )
 from batch.page_creation import creation_dates_for
-from batch.page_edit_daily import edit_days_for, sum_days
+from batch.page_edit_daily import coverage_until, edit_days_for, sum_days
 from spike.spike_sink import SPIKE_SOURCES
 
 from .snapshot import (
@@ -434,6 +434,8 @@ def resurgence_for(
     days: dict[date, int] | None,
     event_date: date,
     window_days: int,
+    *,
+    coverage_until: date | None = None,
 ) -> EditResurgence | None:
     """한 이웃의 사건기간·기준기간 편집 수를 만든다 (WP-145).
 
@@ -444,6 +446,9 @@ def resurgence_for(
     기준기간 = 그 **직전** 같은 길이 구간. 겹치지 않는다 — 겹치면 기준선이 사건
     자체로 오염돼 비율이 실제보다 낮게 나온다(`snapshot._passes_resurgence` 가
     한 번 더 막는다).
+
+    `coverage_until` 은 편집 인덱스가 담은 마지막 날짜다. 사건기간이 그 날짜를 넘으면
+    None 을 돌려준다 — 호출자가 "미상" 으로 세서 잘린 구간이 탈락으로 위장되지 않게 한다.
 
     ⚠️ `days` 가 None(편집 인덱스에 제목 없음)이면 **None 을 돌려준다.** 0 으로
     채우지 않는다 — 기준기간이 0 이 되면 비율이 무한대가 되어 덤프 구멍이
@@ -456,6 +461,13 @@ def resurgence_for(
         return None
 
     span = timedelta(days=window_days)
+    # 🔴 사건기간이 인덱스가 담은 마지막 날짜를 넘으면 **판정하지 않는다**
+    #    (2026-09-20 실측, WP-145). mediawiki_history 스냅샷의 마지막 달은
+    #    잘려 있다 — `2026-08` 스냅샷의 `2026-09` 파일은 09-01 하루치뿐이었다.
+    #    넘는데도 세면 잘린 구간의 편집이 0 으로 잡혀 진짜 재조명 문서가 "미달" 로
+    #    탈락한다. 놓치는 쪽으로, 에러 없이 틀린다.
+    if coverage_until is not None and (event_date + span) > coverage_until:
+        return None
     # 사건일 ±window_days 를 **포함** 하는 창이라 끝은 하루 더 간다(끝 제외 규칙).
     event_start = event_date - span
     event_end = event_date + span + timedelta(days=1)
@@ -487,6 +499,7 @@ def neighbors_for_snapshot(
     stats: NeighborStats,
     snapshot_ts: datetime | None = None,
     edit_days_of_title: dict[str, dict[date, int]] | None = None,
+    edit_coverage_until: date | None = None,
     resurgence_ratio: float = DEFAULT_RESURGENCE_RATIO,
     resurgence_min_edits: int = DEFAULT_RESURGENCE_MIN_EDITS,
 ) -> dict[int, list[Neighbor]]:
@@ -534,7 +547,8 @@ def neighbors_for_snapshot(
                     continue
                 # 2차 관문 — 오래전 문서가 사건으로 재조명됐는가 (WP-77).
                 spike = resurgence_for(edit_days_of_title.get(ref.title),
-                                       seed.event_date, creation_window_days)
+                                       seed.event_date, creation_window_days,
+                                       coverage_until=edit_coverage_until)
                 if spike is None:
                     stats.resurgence_missing += 1
                     continue
@@ -596,6 +610,10 @@ class MonthlyNeighborSource:
         # 주지 않으면 창 게이트만 돌아 추가 씨드만 나온다. 월 덤프가 늦게 공개돼
         # LIVE 최신 구간에는 아직 못 쓰기 때문에 필수로 두지 않는다.
         self.edit_index = Path(edit_index) if edit_index else None
+        # 적재본이 실제로 담은 마지막 날짜. 매니페스트에 없으면 None 이고, 그때는
+        # 경계를 모르는 채로 판정한다 — 옛 적재본은 다시 만드는 편이 낫다.
+        self.edit_coverage_until = (
+            coverage_until(self.edit_index) if self.edit_index else None)
         self.stats = NeighborStats()
         # (wiki, month) -> 씨드 제목 -> 이웃. 근거 월이 wiki 마다 다를 수 있어 키가 쌍이다.
         self._refs: dict[tuple[str, str], dict[str, list[NeighborRef]]] = {}
@@ -654,6 +672,8 @@ class MonthlyNeighborSource:
             # 창을 떨어질 후보가 대다수라 후보 전체를 한 번에 읽는다. 씨드마다
             # 사건일이 달라 고정 구간으로 미리 합칠 수 없어 날짜별 원장을 든다.
             self._edit_days = edit_days_for(self.edit_index, all_titles)
+            print(f"  편집 인덱스 데이터 끝: {self.edit_coverage_until or '미상'}"
+                  " (사건기간이 이 날짜를 넘으면 판정하지 않는다)")
             print(f"  편집 인덱스: 후보 제목 {len(all_titles):,}개 중 "
                   f"{len(self._edit_days):,}개 resolve "
                   f"({100.0 * len(self._edit_days) / len(all_titles):.1f}%)"
@@ -675,7 +695,8 @@ class MonthlyNeighborSource:
                 conn, wiki_seeds, self._refs.get((wiki, month), {}), self._created,
                 month, creation_window_days=self.creation_window_days,
                 stats=self.stats, snapshot_ts=snapshot_ts,
-                edit_days_of_title=self._edit_days if self.edit_index else None))
+                edit_days_of_title=self._edit_days if self.edit_index else None,
+                edit_coverage_until=self.edit_coverage_until))
         return out
 
 

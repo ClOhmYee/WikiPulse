@@ -31,14 +31,29 @@
     ⚠️ "다른 모듈과 통일" 하려는 정리가 이 신호를 죽인다. 바꾸기 전에 위 수치를 본다.
 
 🔴 **`event_entity == revision` 행만 센다.** `page_creation` 은 일부러 안 거르지만
-    (생성일은 page 행도 같은 값을 준다) 편집 수는 거르지 않으면 부풀려진다 —
-    덤프에서 편집이 아닌 행이 61% 다(`normalize_dump` 모듈 docstring).
+    (생성일은 page 행도 같은 값을 준다) 편집 수는 거르지 않으면 부풀려진다.
+    enwiki 2026-07 실측(2026-09-20): 617만 행 중 **102만(16.6%)** 이 revision 이 아니고,
+    추가로 161만이 ns0 밖이라 남는 편집이 354만이다.
+    ⚠️ `normalize_dump` docstring 의 "편집이 아닌 행이 61%" 와 다르다 — 그쪽은 다른
+    덤프 구간이거나 다른 세는 법(이 모듈은 event_entity 를 **먼저** 보므로 이 값이
+    non-revision 의 순수 비율이다)이다. 두 수치를 같은 것으로 놓고 한쪽을 고치지 말 것.
 
 ⚠️ **없는 제목은 "편집 0건" 이 아니라 "미상" 이다.** 덤프 구간 밖이거나 적재하지 않은
     달의 문서는 인덱스에 없다. `creation_dates_for` 와 같은 계약으로 **키 자체를
     만들지 않는다** — 소비하는 쪽이 둘을 구분해 커버리지를 보고해야 한다. 0 으로
     뭉개면 기준기간이 0 이 되어 비율이 무한대가 되고, 인덱스 구멍이 "재급증" 으로
     위장된다.
+
+🔴 **마지막 달은 잘려 있다 — 없는 것보다 위험하다** (2026-09-20 실측).
+    스냅샷 `2026-08` 의 `2026-09` 파일은 3 MB 뿐이고 **2026-09-01 하루치**(ns0 편집
+    24,378건)만 들어 있다. 다른 달은 500 MB 대다. 스냅샷을 뜨는 시점에 그 달이 막
+    시작했기 때문이다.
+
+    이걸 모르고 쓰면 사건기간이 데이터 끝을 넘는 문서에서 **편집 수가 과소 계수**되고,
+    그 결과가 "재급증 미달로 탈락" 과 구분되지 않는다 — 진짜 재조명 문서를 조용히
+    놓친다. 그래서 적재본에 실제 데이터 구간(`first_day`·`last_day`)을 남기고
+    `coverage_until` 로 읽을 수 있게 한다. 소비하는 쪽(`cluster/driver.py`)이
+    사건기간 끝이 그 날짜를 넘으면 판정하지 않고 **미상으로 센다.**
 
 ⚠️ **월 덤프는 공개가 늦다 — LIVE 에서는 아직 못 쓴다.** 사건기간이 최신 달이면
     덤프가 없어 재급증 판정이 통째로 미상이 된다. replay 구간에서 먼저 쓴다.
@@ -180,6 +195,29 @@ def read_index(directory: str | Path) -> Iterator[tuple[str, dict[date, int]]]:
                 yield rec["title"], days
 
 
+def data_span(index: dict[str, dict[date, int]]) -> tuple[date | None, date | None]:
+    """인덱스가 실제로 담은 첫·마지막 날짜. 요청한 range 와 다를 수 있다(위 🔴)."""
+    days = [day for per_day in index.values() for day in per_day]
+    return (min(days), max(days)) if days else (None, None)
+
+
+def coverage_until(directory: str | Path) -> date | None:
+    """적재본이 담은 **마지막 날짜**. 없으면 None.
+
+    🔴 소비하는 쪽은 사건기간 끝이 이 날짜를 넘으면 **판정하지 않는다.** 넘는데도
+    세면 잘린 구간의 편집이 0 으로 잡혀 진짜 재조명 문서가 "미달" 로 탈락한다 —
+    에러 없이 놓치는 쪽으로 틀린다(모듈 docstring 🔴).
+
+    옛 적재본에는 `last_day` 가 없다. 그때는 None 을 돌려주고, 소비 쪽이 "구간을
+    모른다" 로 다루게 한다 — 날짜를 지어내지 않는다.
+    """
+    manifest = Path(directory) / MANIFEST_NAME
+    if not manifest.exists():
+        return None
+    raw = json.loads(manifest.read_text(encoding="utf-8")).get("last_day")
+    return date.fromisoformat(raw) if raw else None
+
+
 def edit_days_for(
     directory: str | Path, titles: Iterable[str]
 ) -> dict[str, dict[date, int]]:
@@ -266,6 +304,7 @@ def main(argv: list[str] | None = None) -> int:
             return 2
         print(f"  {time_range}: 누적 제목 {len(index):,}개 (읽음 {counts.read:,})")
 
+    first, last = data_span(index)
     elapsed = time.monotonic() - started
     if args.dry_run:
         print(f"[dry-run] read={counts.read:,} titles={len(index):,} "
@@ -285,6 +324,10 @@ def main(argv: list[str] | None = None) -> int:
         json.dumps({"wiki": args.wiki, "snapshot": args.snapshot,
                     "ranges": args.ranges, "shards": shards,
                     "titles": len(index),
+                    # 🔴 **요청한 range 가 아니라 실제로 본 날짜다.** 마지막 달이
+                    #    잘려 있어도(위 🔴) range 목록만으로는 안 드러난다.
+                    "first_day": first.isoformat() if first else None,
+                    "last_day": last.isoformat() if last else None,
                     # 🔴 봇 포함이라는 사실을 적재본에 남긴다. 나중에 이 인덱스를
                     #    다른 집계와 비교할 때 규칙이 다르다는 걸 매니페스트만 보고
                     #    알 수 있어야 한다.
@@ -297,6 +340,13 @@ def main(argv: list[str] | None = None) -> int:
 
     print(f"적재 완료: {out_dir}  제목 {len(index):,}개  편집 {counts.written:,}건  "
           f"{elapsed:.1f}s")
+    print(f"  데이터 구간: {first} ~ {last}")
+    if last is not None and args.ranges:
+        # 마지막 range 의 달과 last_day 의 달이 같은데 날짜가 그 달 초면 잘린 것이다.
+        if last.isoformat()[:7] == args.ranges[-1] and last.day <= 7:
+            print(f"  🔴 마지막 달이 잘려 있다 — {args.ranges[-1]} 은 {last} 까지뿐이다. "
+                  "사건기간이 이 날짜를 넘는 문서는 판정하지 않는다(소비 쪽이 미상으로 센다).",
+                  file=sys.stderr)
     return 0
 
 

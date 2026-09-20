@@ -386,3 +386,42 @@ def test_편집_인덱스를_안_주면_옛_동작_그대로다(tmp_path):
     assert stats.window_rejected == 1
     assert stats.resurgence_missing == 0, "재급증 경로 자체를 안 돈다"
     assert out[seed.page_id] == []
+
+
+def test_사건기간이_데이터_끝을_넘으면_판정하지_않는다():
+    """🔴 2026-09-20 실측 — 스냅샷의 마지막 달은 잘려 있다.
+
+    `2026-08` 스냅샷의 `2026-09` 파일은 09-01 하루치뿐이었다(24,378건, 다른 달의
+    0.5%). 잘린 구간을 0 으로 세면 진짜 재조명 문서가 "미달" 로 탈락한다 —
+    놓치는 쪽으로, 에러 없이 틀린다.
+    """
+    days = {date(2026, 8, 20): 500}
+
+    # 사건일 +30일 = 09-19 로 데이터 끝(09-01)을 넘는다 → 판정 보류
+    assert resurgence_for(days, date(2026, 8, 20), 30,
+                          coverage_until=date(2026, 9, 1)) is None
+    # 끝을 안 넘으면 평소대로 판정한다
+    assert resurgence_for(days, date(2026, 7, 1), 30,
+                          coverage_until=date(2026, 9, 1)) is not None
+    # 경계를 모르면(옛 적재본) 판정한다 — 날짜를 지어내지 않는다
+    assert resurgence_for(days, date(2026, 8, 20), 30) is not None
+
+
+def test_잘린_구간은_탈락이_아니라_미상으로_센다(tmp_path):
+    """탈락으로 세면 덤프 경계가 '규칙대로 걸렀다' 로 읽힌다."""
+    seed = _seed("2026 Iran war", event_date=date(2026, 8, 20))
+    refs = {"2026 Iran war": [NeighborRef(title="Mojtaba Khamenei", n=500, directed=True)]}
+    created = {"Mojtaba Khamenei": datetime(2009, 1, 1, tzinfo=UTC)}
+    edits = _resurgence_index(tmp_path, {"Mojtaba Khamenei": _days(date(2026, 7, 1), 40, 50)})
+
+    stats = NeighborStats()
+    neighbors_for_snapshot(
+        _FakeConn(), [seed], refs, created, "2026-07",
+        creation_window_days=DEFAULT_CREATION_WINDOW_DAYS, stats=stats,
+        snapshot_ts=datetime(2026, 10, 1, tzinfo=UTC),
+        edit_days_of_title=edit_days_for(edits, ["Mojtaba Khamenei"]),
+        edit_coverage_until=date(2026, 9, 1))
+
+    assert stats.resurgence_missing == 1
+    assert stats.resurgence_rejected == 0
+    assert stats.resurgence_passed == 0
