@@ -11,6 +11,7 @@ EC2 두 대의 `~/infra/*` 를 저장소로 옮긴 것이다. **서버가 날아
     infra/spark    Master + Worker             (추가 EC2 = Master·Driver, 기본 EC2 = Worker)
     infra/hdfs     NameNode · DataNode          (추가 EC2 = NameNode, 둘 다 DataNode)
     infra/pipeline LIVE producer + edit-stream  (추가 EC2, 2026-09-18 배포)
+    infra/live-cycle 시간별 조회수·재판정 주기 (기본 EC2, WP-135)
 
 ## 🔴 비밀값은 안 들어온다
 
@@ -91,8 +92,13 @@ develop 의 코드를 그대로 실행하고 `docker compose up` 으로 같은 `
    ⚠️ 바꿀 대상에 `infra/pipeline` 의 `edit-stream` 도 포함된다. 2026-09-18 에
    배포한 그 driver 가 지금 Worker 와 같은 `apache/spark:3.5.3-python3` 을 쓰고 있어
    현재는 짝이 맞지만, Worker 만 3.11 로 올리면 그 순간 갈린다.
-2. **`live-cycle` 서비스** — 시간별 조회수 적재·재판정 주기(WP-135)가 EC2
-   compose 에 아직 없다. `docker-compose.yml` 의 같은 이름 서비스를 참고해 옮긴다.
+2. ~~**`live-cycle` 서비스** — EC2 compose 에 아직 없다~~ → `infra/live-cycle` 로
+   들어왔다 (2026-09-20). **아직 배포는 안 했다** — 절차와 canary 게이트는
+   `infra/live-cycle/README.md`.
+   🔴 옮기면서 안 것: 루트 `docker-compose.yml` 의 그 서비스는 **한 번도 뜬 적이
+   없었다.** `data-pipeline/Dockerfile` 이 `producer/` 만 복사해서
+   `python -m spike.live_cycle` 이 `ModuleNotFoundError` 로 즉사한다. 이미지를
+   직접 빌드해 확인했고 같은 커밋에서 `spike/`·`batch/`·`psycopg` 를 더했다.
 
 ## 로컬과 뭐가 다른가
 
