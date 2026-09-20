@@ -275,3 +275,45 @@ def test_rejection_records_which_axis_dropped_the_term():
 
     text = describe(result)
     assert "테마:florida" in text
+
+
+def test_relative_floor_drops_a_thin_term_in_a_large_corpus():
+    """🔴 회귀 고정 — 절대 하한만으로는 큰 코퍼스에서 잡음이 술어에 낀다.
+
+    하루치 실측(160,838 기사)에서 `florida` 가 테마 축에도 붙었는데 걸린 코드가
+    `TAX_WORLDREPTILES_FLORIDA_KINGSNAKE` 하나(19건) 였다 — 플로리다 왕뱀이다
+    (2026-09-20). 테마는 OR 이라 이런 게 끼면 술어가 넓어진다.
+    """
+    corpus = [
+        rec(f"hur-{i}", themes=("NATURAL_DISASTER_HURRICANE",),
+            locations=("florida, united states",))
+        for i in range(2000)
+    ] + [
+        rec(f"snake-{i}", themes=("TAX_WORLDREPTILES_FLORIDA_KINGSNAKE",),
+            locations=("florida, united states",))
+        for i in range(19)
+    ] + [
+        rec(f"noise-{i}", themes=("ECON_STOCKMARKET",),
+            locations=("california, united states",))
+        for i in range(18000)
+    ]
+    vocab = Vocabulary.from_records(corpus)
+    # 코퍼스 20,019 → 비례 하한 20. 왕뱀 코드의 19 건이 그 아래로 떨어진다.
+    assert vocab.n_docs == 20019
+
+    result = derive([Member("Hurricane Milton"), Member("Florida")], vocab)
+    assert result.predicate is not None
+    assert result.predicate.themes == ("HURRICANE",), "왕뱀 코드가 끼면 안 된다"
+
+    dropped = {(axis, term): why for axis, term, why in result.rejected}
+    assert "지지도 19" in dropped[("테마", "florida")]
+
+
+def test_absolute_floor_still_applies_to_a_small_corpus():
+    """작은 창에서는 비례 하한이 0 이 되므로 절대 하한이 받쳐야 한다."""
+    corpus = [rec(f"a-{i}", themes=("NATURAL_DISASTER_HURRICANE",)) for i in range(2)]
+    corpus += [rec(f"n-{i}", themes=("OTHER",)) for i in range(20)]
+    vocab = Vocabulary.from_records(corpus)
+
+    result = derive([Member("Hurricane Milton")], vocab)  # 지지도 2 < min_support 3
+    assert result.predicate is None

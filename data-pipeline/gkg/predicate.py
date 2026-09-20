@@ -193,6 +193,7 @@ def derive(
     max_themes: int = 2,
     max_locations: int = 3,
     min_support: int = 3,
+    min_support_ratio: float = 0.001,
     max_corpus_ratio: float = 0.5,
 ) -> Derivation:
     """클러스터 멤버에서 이슈 술어를 만든다.
@@ -204,8 +205,13 @@ def derive(
     거르는 순서와 이유:
 
     1. **관측 안 됨** — 코퍼스에 그 어휘가 없다. 남기면 이슈 기사 0건이 된다.
-    2. **지지도 < `min_support`** — 표본이 얇아 lift 가 튄다. `rank()` 의
-       `min_issue_count` 와 같은 성격이다.
+    2. **지지도 < max(`min_support`, `min_support_ratio` × 코퍼스)** — 표본이 얇아
+       lift 가 튄다. `rank()` 의 `min_issue_count` 와 같은 성격이다.
+
+       ⚠️ **절대 하한만으로는 큰 코퍼스에서 무의미하다.** 하루치 실측(160,838 기사)에서
+       `florida` 가 테마 축에도 붙었는데, 걸린 코드가 `TAX_WORLDREPTILES_FLORIDA_
+       KINGSNAKE` **하나(19건)** 였다 — 플로리다 왕뱀이다(2026-09-20). 테마는 OR 이라
+       이런 게 끼면 술어가 넓어진다. 비례 하한이 코퍼스 크기에 따라 같이 올라간다.
     3. **지지도 > `max_corpus_ratio` × 코퍼스** — 너무 일반적이다. 이슈 집합이
        코퍼스와 같아지면 lift 가 전부 1 로 수렴해 신호가 사라진다. `united`·`states`
        류는 STOPWORDS 로도 빠지지만, 사건마다 다른 일반어는 이 가드가 잡는다.
@@ -225,6 +231,7 @@ def derive(
         return Derivation(predicate=None, rejected=(("*", "*", "코퍼스가 비었다"),))
 
     ceiling = max_corpus_ratio * vocab.n_docs
+    floor = max(min_support, int(min_support_ratio * vocab.n_docs))
     # (축, 용어) 로 중복을 없앤다 — 멤버가 여럿이면 같은 용어가 여러 번 떨어진다.
     rejected: dict[tuple[str, str], str] = {}
 
@@ -236,8 +243,8 @@ def derive(
         if not hits:
             drop("코퍼스에 관측되지 않음")
             return None
-        if support < min_support:
-            drop(f"지지도 {support} < {min_support}")
+        if support < floor:
+            drop(f"지지도 {support} < {floor}")
             return None
         if support > ceiling:
             drop(f"너무 일반적 — 지지도 {support} > {ceiling:.0f}"
