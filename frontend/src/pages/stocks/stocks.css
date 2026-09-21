@@ -1068,3 +1068,63 @@
     transition: none;
   }
 }
+
+@media (min-width: 701px) {
+  .st-stock-browser {
+    margin-top: 18px;
+  }
+  .st-search,
+  .st-filter-select .wp-select,
+  .st-relation-select,
+  .st-saved-filter {
+    min-height: 40px;
+  }
+  .st-results-bar {
+    margin: 16px 0 8px;
+  }
+  .st-list-head {
+    padding-top: 10px;
+    padding-bottom: 10px;
+  }
+  .st-stock-row {
+    padding-top: 14px;
+    padding-bottom: 14px;
+  }
+  .st-stock-mark {
+    width: 38px;
+    height: 38px;
+    border-radius: 10px;
+  }
+  .st-data-note {
+    margin-top: 16px;
+  }
+  .st-stock-description {
+    margin: 14px 0 24px;
+    line-height: 1.7;
+  }
+  .st-detail-layout {
+    gap: 36px;
+    padding-top: 22px;
+  }
+  .st-timeline-event {
+    padding-bottom: 26px;
+  }
+  .st-event-title {
+    margin-top: 9px;
+  }
+  .st-event-summary {
+    margin: 8px 0;
+    line-height: 1.65;
+  }
+  .st-relationship {
+    margin-top: 14px;
+    padding: 12px 0 13px;
+  }
+  .st-price-panel {
+    padding: 18px;
+  }
+  .st-how-to-read,
+  .st-discover-more {
+    margin-top: 22px;
+  }
+}

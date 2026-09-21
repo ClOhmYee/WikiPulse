@@ -16,6 +16,7 @@ import {
 import { usePageData } from "../../data/hooks/PageData";
 import {
   metricLabel,
+  completenessDescription,
   timestampLabel as formatDate,
   sourceLabel,
 } from "./presentation.js";
@@ -28,12 +29,16 @@ import { Timeline, EventNews, Evidence } from "./EventSections";
 import EventDiscussion from "./EventDiscussion";
 import { wikipediaUrl } from "../../lib/wiki";
 import "../../styles/details.css";
-const tabs = [
+const exampleTabs = [
   { id: "overview", label: "이벤트 개요" },
   { id: "timeline", label: "타임라인" },
   { id: "news", label: "관련 소식" },
   { id: "evidence", label: "근거 문서" },
   { id: "discussion", label: "토론" },
+];
+const apiTabs = [
+  { id: "overview", label: "이벤트 개요" },
+  { id: "evidence", label: "근거 문서" },
 ];
 
 export default function EventPage({
@@ -86,6 +91,7 @@ export default function EventPage({
   const chartData =
     range === "7" ? (event.chart || []).slice(-7) : event.chart || [];
   const timeline = event.timeline || [];
+  const tabs = isExample ? exampleTabs : apiTabs;
 
   function selectTab(nextTab) {
     setTab(nextTab);
@@ -158,14 +164,16 @@ export default function EventPage({
           연관 주식
           <ArrowRight size={14} />
         </a>
-        <button
-          type="button"
-          className="wp-button"
-          onClick={() => selectTab("discussion")}
-        >
-          <MessageCircle size={16} />
-          토론 참여하기
-        </button>
+        {isExample && (
+          <button
+            type="button"
+            className="wp-button"
+            onClick={() => selectTab("discussion")}
+          >
+            <MessageCircle size={16} />
+            토론 참여하기
+          </button>
+        )}
       </div>
 
       <div className="dt-event-metrics" aria-label="이슈 데이터 요약">
@@ -341,8 +349,7 @@ export default function EventPage({
                         </strong>
                       </div>
                       <p className="wp-small">
-                        집계 구간 미제공 · 선택한 시점의 값인지 확인할 수
-                        없습니다.
+                        {completenessDescription(selected.completeness)}
                       </p>
                       <a
                         className="dt-text-link"
@@ -368,8 +375,8 @@ export default function EventPage({
                   <IssueState status={event.status} />
                 </div>
                 <p className="dt-interpretation-note">
-                  제공된 해석의 근거는 문서와 출처에서 확인하세요. AI 검증
-                  상태는 편집·조회수 신호의 충족 여부와 별개입니다.
+                  제공된 해석의 근거는 문서와 출처에서 확인하세요. 분석 상태는
+                  요약 생성 여부와 검증된 종목 연결 여부를 대신하지 않습니다.
                 </p>
                 {!event.insights?.length && (
                   <p className="data-availability">
@@ -395,24 +402,28 @@ export default function EventPage({
                   해석의 근거 문서 보기 <ArrowRight size={16} />
                 </button>
               </section>
-              <section className="dt-timeline-preview">
-                <div className="dt-section-heading">
-                  <h2>이벤트의 주요 순간</h2>
-                  <button
-                    type="button"
-                    className="dt-text-link"
-                    onClick={() => selectTab("timeline")}
-                  >
-                    타임라인 전체 <ArrowRight size={16} />
-                  </button>
-                </div>
-                <Timeline
-                  entries={timeline.slice(0, 3)}
-                  articles={articles}
-                  compact
-                />
-              </section>
-              <EventDiscussion key={event.id} event={event} />
+              {isExample && (
+                <>
+                  <section className="dt-timeline-preview">
+                    <div className="dt-section-heading">
+                      <h2>이벤트의 주요 순간</h2>
+                      <button
+                        type="button"
+                        className="dt-text-link"
+                        onClick={() => selectTab("timeline")}
+                      >
+                        타임라인 전체 <ArrowRight size={16} />
+                      </button>
+                    </div>
+                    <Timeline
+                      entries={timeline.slice(0, 3)}
+                      articles={articles}
+                      compact
+                    />
+                  </section>
+                  <EventDiscussion key={event.id} event={event} />
+                </>
+              )}
             </>
           )}
           {tab === "timeline" && (
@@ -455,26 +466,30 @@ export default function EventPage({
                 </span>
                 <ChevronRight size={17} />
               </button>
-              <button type="button" onClick={() => selectTab("news")}>
-                <Newspaper size={17} />
-                <span>
-                  <strong>
-                    {event.news?.length
-                      ? `${event.news.length}개의 관련 소식`
-                      : "관련 소식 미제공"}
-                  </strong>
-                  <small>문서 밖의 맥락 함께 읽기</small>
-                </span>
-                <ChevronRight size={17} />
-              </button>
-              <button type="button" onClick={() => selectTab("timeline")}>
-                <GitCompareArrows size={17} />
-                <span>
-                  <strong>시간순으로 비교</strong>
-                  <small>어떤 변화가 먼저였는지</small>
-                </span>
-                <ChevronRight size={17} />
-              </button>
+              {isExample && (
+                <>
+                  <button type="button" onClick={() => selectTab("news")}>
+                    <Newspaper size={17} />
+                    <span>
+                      <strong>
+                        {event.news?.length
+                          ? `${event.news.length}개의 관련 소식`
+                          : "관련 소식 미제공"}
+                      </strong>
+                      <small>문서 밖의 맥락 함께 읽기</small>
+                    </span>
+                    <ChevronRight size={17} />
+                  </button>
+                  <button type="button" onClick={() => selectTab("timeline")}>
+                    <GitCompareArrows size={17} />
+                    <span>
+                      <strong>시간순으로 비교</strong>
+                      <small>어떤 변화가 먼저였는지</small>
+                    </span>
+                    <ChevronRight size={17} />
+                  </button>
+                </>
+              )}
             </div>
           </section>
           <section className="dt-stock-preview">
@@ -485,7 +500,7 @@ export default function EventPage({
             <p className="dt-sidebar-intro">
               {isExample
                 ? "이벤트와 사업 영역이 연결된 종목 예시입니다."
-                : "이벤트와 사업 영역이 연결된 종목 데이터입니다."}
+                : "검증을 통과해 이 이벤트와 연결된 종목입니다."}
             </p>
             {relatedStocks.length ? (
               <div className="dt-stock-links">
@@ -520,9 +535,8 @@ export default function EventPage({
           <section className="dt-context-note">
             <h2>신호를 읽는 방법</h2>
             <p>
-              이슈는 편집 또는 조회수의 변화에서 포착됩니다. 급증 점수는 편집
-              배수나 사실의 정확도를 뜻하지 않습니다. 구체적인 탐지 경로가
-              제공되지 않은 경우에는 추정하지 않습니다.
+              이슈는 사람 편집이 발생한 뒤 조회수가 급증한 문서에서 포착됩니다.
+              급증 점수는 편집 배수나 사실의 정확도를 뜻하지 않습니다.
             </p>
             <div className="dt-keywords">
               {(event.keywords || []).map((keyword) => (

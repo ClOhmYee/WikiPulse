@@ -23,6 +23,7 @@ const issue = {
       title: "Strait of Hormuz",
       weight: 1,
       isSeed: true,
+      completeness: "pending",
     },
   ],
   relatedStocks: [],
@@ -64,6 +65,7 @@ test("Spring responses without meta, dataMode or nullable optional fields load n
   assert.equal(value.events[0].snapshotTs, issue.snapshotTs);
   assert.equal(value.events[0].startAt, null, "a snapshot is not a start date");
   assert.equal(value.entities[0].edits, null, "an omitted metric is not zero");
+  assert.equal(value.entities[0].completeness, "pending");
   assert.equal(
     value.events[0].pulse,
     null,

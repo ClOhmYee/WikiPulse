@@ -1408,3 +1408,77 @@
     transition-duration: 0.01ms !important;
   }
 }
+
+@media (min-width: 721px) {
+  .dt-back {
+    margin-bottom: 18px;
+  }
+  .dt-event-header {
+    gap: 24px;
+    padding-bottom: 20px;
+  }
+  .dt-event-header .dt-lede {
+    margin-bottom: 14px;
+    font-size: 15px;
+    line-height: 1.7;
+  }
+  .dt-report-actions {
+    margin-bottom: 16px;
+  }
+  .dt-event-metrics {
+    margin-bottom: 20px;
+  }
+  .dt-event-metrics > div {
+    gap: 6px;
+    margin: 14px 0;
+    padding: 0 20px;
+  }
+  .dt-event-metrics strong {
+    font-size: clamp(22px, 2vw, 28px);
+  }
+  .dt-tabs {
+    gap: 24px;
+    margin-bottom: 22px;
+  }
+  .dt-tabs > button {
+    min-height: 42px;
+    padding-bottom: 11px;
+  }
+  .dt-content-layout {
+    gap: 28px;
+  }
+  .dt-primary > section {
+    margin-bottom: 30px;
+  }
+  .dt-section-heading,
+  .dt-section-intro {
+    margin-bottom: 14px;
+  }
+  .dt-chart-frame {
+    padding: 14px 15px 10px;
+  }
+  .dt-interpretation {
+    padding: 18px 0;
+  }
+  .dt-interpretation-note {
+    margin-bottom: 16px;
+  }
+  .dt-sidebar {
+    padding-left: 20px;
+  }
+  .dt-sidebar > section {
+    margin-bottom: 24px;
+    padding-bottom: 20px;
+  }
+  .dt-sidebar .dt-sidebar-intro {
+    margin: 7px 0 12px;
+  }
+  .dt-evidence-row {
+    padding-top: 16px;
+    padding-bottom: 16px;
+  }
+  .dt-method {
+    margin-top: 20px;
+    padding: 18px;
+  }
+}

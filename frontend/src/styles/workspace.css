@@ -1806,6 +1806,88 @@
   }
 }
 
+/* Dense workspace rhythm. PulseMap keeps its dedicated spatial layout. */
+@media (min-width: 721px) {
+  .wp-page:not(.pulse-page) {
+    padding: 24px 28px 36px;
+  }
+  .wp-page:not(.pulse-page) > .wp-page-header {
+    margin-bottom: 18px;
+  }
+  .wp-page:not(.pulse-page) .wp-subtitle {
+    margin-top: 5px !important;
+    line-height: 1.65;
+  }
+  .explore-page .explore-toolbar {
+    margin-bottom: 10px;
+  }
+  .explore-page .data-filters {
+    gap: 8px 12px;
+    margin-block: 12px;
+  }
+  .explore-page .data-scope {
+    margin-block: 8px;
+  }
+  .explore-page .event-list-section {
+    margin-top: 20px;
+  }
+  .event-row {
+    gap: 18px;
+    padding: 16px 0;
+  }
+  .event-row__title {
+    margin: 4px 0;
+  }
+  .event-row__main > p {
+    line-height: 1.65;
+  }
+  .event-row__meta {
+    margin-top: 6px;
+  }
+  .saved-page .wp-tabs,
+  .saved-page .saved-search {
+    margin-bottom: 16px;
+  }
+  .saved-stock-list > article {
+    gap: 16px;
+    padding: 16px 0;
+  }
+  .saved-note {
+    margin-top: 16px !important;
+  }
+  .account-page__links {
+    gap: 8px;
+    margin-top: 16px;
+  }
+  .wp-empty {
+    min-height: 240px;
+    padding: 48px 24px;
+  }
+}
+
+@media (max-width: 720px) {
+  .wp-page:not(.pulse-page) {
+    padding-top: 22px;
+    padding-bottom: 32px;
+  }
+  .wp-page:not(.pulse-page) > .wp-page-header {
+    margin-bottom: 20px;
+  }
+  .wp-page:not(.pulse-page) .wp-subtitle {
+    margin-top: 5px !important;
+    line-height: 1.65;
+  }
+  .event-row,
+  .saved-stock-list > article {
+    padding-top: 16px;
+    padding-bottom: 16px;
+  }
+  .wp-empty {
+    min-height: 230px;
+    padding: 46px 20px;
+  }
+}
+
 /* Issue presentation is local to /issues. */
 .event-list[data-view="card"] {
   display: grid;
@@ -1817,7 +1899,7 @@
   grid-template-columns: 1fr 1fr auto;
   align-content: start;
   gap: 18px;
-  padding: 24px;
+  padding: 18px;
   border: 1px solid var(--wp-border);
   border-radius: 12px;
   background: var(--wp-surface);

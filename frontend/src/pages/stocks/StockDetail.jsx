@@ -275,15 +275,18 @@ function StockPriceSection({ symbol, from, markers, isExample }) {
   if (!points.length)
     return (
       <section className="wp-panel st-price-panel">
-        {heading(<span className="wp-tag">거래 없음</span>)}
+        {heading(<span className="wp-tag">데이터 미준비</span>)}
         <div className="data-availability">
-          <strong>선택 구간에 거래 데이터가 없습니다</strong>
-          <p>거래일 기준 일봉만 제공되며 휴장일은 보간하지 않습니다.</p>
+          <strong>가격 데이터가 아직 준비되지 않았습니다</strong>
+          <p>이 종목의 일봉이 적재되면 이슈 발생 시점과 함께 표시됩니다.</p>
         </div>
       </section>
     );
   return (
-    <section className="wp-panel st-price-panel" aria-labelledby="stock-price-title">
+    <section
+      className="wp-panel st-price-panel"
+      aria-labelledby="stock-price-title"
+    >
       <div className="st-price-title">
         <h2 id="stock-price-title">가격 흐름</h2>
         <span className="wp-muted">{points.length}거래일 · 종가(USD)</span>
