@@ -5,6 +5,9 @@ import { MAP_SCALE, DEFAULT_ZOOM } from "./useMapCamera.js";
 import DocumentLabels from "./DocumentLabels.jsx";
 import { overviewRadius, overviewTitle } from "./clusterOverview.js";
 
+// Keep text geometry stable; useMapView applies the live camera transforms.
+const camera = { zoom: DEFAULT_ZOOM, x: 0, y: 0 };
+
 function activate(action) {
   return (event) => {
     if (event.key === "Enter" || event.key === " ") {
@@ -20,7 +23,6 @@ export default memo(function PulseCluster({
   active,
   nodeId,
   emphasized,
-  camera,
   compact,
   viewport,
   marker,
@@ -142,16 +144,15 @@ export default memo(function PulseCluster({
             className="document-cluster__summary-title"
             textAnchor="middle"
             dominantBaseline="central"
-            fontSize={summary.fontSize}
+            fontSize={18}
+            transform={`scale(${summary.fontSize / 18})`}
             aria-hidden="true"
           >
             {[0, 1, 2].map((index) => (
               <tspan
                 key={index}
                 x="0"
-                y={
-                  (index - (summary.lines.length - 1) / 2) * summary.lineHeight
-                }
+                y={(index - (summary.lines.length - 1) / 2) * 18 * 1.3}
               >
                 {summary.lines[index] || ""}
               </tspan>

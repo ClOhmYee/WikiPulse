@@ -271,7 +271,6 @@ export default function PulseMap({
                   ? emphasized.pageId
                   : null
               }
-              camera={camera}
               compact={compact}
               viewport={viewport}
               marker={marker}

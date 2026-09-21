@@ -5,7 +5,7 @@ import { overviewRadius, overviewTitle } from "./clusterOverview.js";
 const OVERSCAN = 140;
 
 // Camera frames only touch transforms and the visible decoration layer.
-// React retains the full scene and publishes text layout at settled zooms.
+// React retains stable scene geometry, including when the camera settles.
 export default function useMapView(svgRef, scene, current, subscribe) {
   const view = useRef(null);
   const paint = useCallback((camera) => {
@@ -14,7 +14,8 @@ export default function useMapView(svgRef, scene, current, subscribe) {
     const { svg, world, width, height, clusters } = model;
     const scale = camera.zoom * MAP_SCALE;
     const overview = camera.zoom <= OVERVIEW_ZOOM;
-    svg.parentElement.dataset.overview = String(overview);
+    if (svg.parentElement.dataset.overview !== String(overview))
+      svg.parentElement.dataset.overview = String(overview);
     const titleUnit = (camera.zoom / DEFAULT_ZOOM) ** 0.35 / camera.zoom;
     const labelSize = model.labelBase / camera.zoom ** 0.8;
     const zoomChanged = model.zoom !== camera.zoom;
@@ -49,7 +50,8 @@ export default function useMapView(svgRef, scene, current, subscribe) {
         item.visible = visible;
       }
       if (!visible) continue;
-      if (item.overview !== overview) {
+      const modeChanged = item.overview !== overview;
+      if (modeChanged) {
         const button = element.querySelector(':scope > [role="button"]');
         if (overview && element.contains(document.activeElement))
           button.focus({ preventScroll: true });
@@ -59,35 +61,38 @@ export default function useMapView(svgRef, scene, current, subscribe) {
         );
         item.overview = overview;
       }
-      if (zoomChanged || entered) {
+      if (zoomChanged || entered || modeChanged) {
         if (overview) {
           const title = overviewTitle(cluster, camera.zoom);
-          item.summary.setAttribute("font-size", title.fontSize);
+          item.summary.setAttribute(
+            "transform",
+            `scale(${title.fontSize / 18})`,
+          );
           for (const [index, line] of [...item.summary.children].entries()) {
             const text = title.lines[index] || "";
             if (line.textContent !== text) line.textContent = text;
-            line.setAttribute(
-              "y",
-              (index - (title.lines.length - 1) / 2) * title.lineHeight,
-            );
+            const y = String((index - (title.lines.length - 1) / 2) * 18 * 1.3);
+            if (line.getAttribute("y") !== y) line.setAttribute("y", y);
           }
         }
-        heading.setAttribute(
-          "transform",
-          `translate(0 ${-cluster.radius}) scale(${titleUnit})`,
-        );
-        heading.dataset.scanY = String(
-          cluster.y - cluster.radius - item.titleOffset * titleUnit,
-        );
-        for (const label of item.labels) {
-          const ratio = Math.min(labelSize, label.cap) / label.base;
-          const transform =
-            Math.abs(ratio - 1) < 0.00001 ? "" : `scale(${ratio})`;
-          if (label.element.style.transform !== transform)
-            label.element.style.transform = transform;
+        if (!overview) {
+          heading.setAttribute(
+            "transform",
+            `translate(0 ${-cluster.radius}) scale(${titleUnit})`,
+          );
+          heading.dataset.scanY = String(
+            cluster.y - cluster.radius - item.titleOffset * titleUnit,
+          );
+          for (const label of item.labels) {
+            const ratio = Math.min(labelSize, label.cap) / label.base;
+            const transform =
+              Math.abs(ratio - 1) < 0.00001 ? "" : `scale(${ratio})`;
+            if (label.element.style.transform !== transform)
+              label.element.style.transform = transform;
+          }
         }
       }
-      if (item.callout) {
+      if (!overview && item.callout) {
         const {
           element: callout,
           x,
@@ -114,7 +119,8 @@ export default function useMapView(svgRef, scene, current, subscribe) {
       }
     }
     model.visibleKeys = visibleKeys;
-    svg.dataset.renderedClusters = String(visibleKeys.size);
+    if (svg.dataset.renderedClusters !== String(visibleKeys.size))
+      svg.dataset.renderedClusters = String(visibleKeys.size);
   }, []);
 
   useLayoutEffect(() => subscribe(paint), [subscribe, paint]);

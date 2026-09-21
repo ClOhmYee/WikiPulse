@@ -109,7 +109,9 @@ for (const mobile of [false, true]) {
             Math.hypot(
               Math.max(Math.abs(box.x), Math.abs(box.x + box.width)),
               Math.max(Math.abs(box.y), Math.abs(box.y + box.height)),
-            ) < radius
+            ) *
+              title.transform.baseVal.consolidate().matrix.a <
+            radius
           );
         }),
       );
