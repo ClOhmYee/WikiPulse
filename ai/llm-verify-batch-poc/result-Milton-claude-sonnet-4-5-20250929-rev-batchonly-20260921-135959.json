@@ -1,0 +1,166 @@
+{
+ "model": "claude-sonnet-4-5-20250929",
+ "reverse": true,
+ "batch_only": true,
+ "expected": {
+  "NEE": "strong",
+  "DUK": "strong",
+  "GNRC": "strong",
+  "HD": "weak",
+  "LOW": "weak",
+  "LEN": "weak",
+  "ETN": "weak",
+  "UAL": "strong",
+  "DIS": "weak",
+  "MNST": "reject",
+  "INTC": "reject",
+  "NKE": "reject",
+  "KO": "reject",
+  "PG": "reject",
+  "CRM": "reject"
+ },
+ "single": {},
+ "batch": {
+  "CRM": {
+   "ticker": "CRM",
+   "verified": false,
+   "match_path": null,
+   "confidence": null,
+   "rationale_en": null,
+   "rationale_ko": null,
+   "issue_class": "SECTOR_OR_REGION_EVENT"
+  },
+  "PG": {
+   "ticker": "PG",
+   "verified": true,
+   "match_path": "PRODUCT_INDUSTRY",
+   "confidence": "weak",
+   "rationale_en": "Consumer packaged goods companies typically experience increased demand for cleaning products, paper products, and personal care items in the aftermath of major hurricanes affecting populated regions.",
+   "rationale_ko": "대형 허리케인 이후 인구 밀집 지역에서는 청소용품, 종이 제품, 개인 위생용품에 대한 수요가 증가하는 경향이 있으며, 해당 기업은 이러한 제품군을 생산합니다.",
+   "issue_class": "SECTOR_OR_REGION_EVENT"
+  },
+  "KO": {
+   "ticker": "KO",
+   "verified": true,
+   "match_path": "PRODUCT_INDUSTRY",
+   "confidence": "weak",
+   "rationale_en": "Beverage distribution companies experience supply chain disruptions and increased demand for bottled water and non-perishable beverages following major hurricanes in their distribution regions.",
+   "rationale_ko": "주요 허리케인 발생 시 음료 유통망이 영향을 받으며, 생수 및 장기 보관 가능한 음료에 대한 수요가 증가합니다.",
+   "issue_class": "SECTOR_OR_REGION_EVENT"
+  },
+  "NKE": {
+   "ticker": "NKE",
+   "verified": false,
+   "match_path": null,
+   "confidence": null,
+   "rationale_en": null,
+   "rationale_ko": null,
+   "issue_class": "SECTOR_OR_REGION_EVENT"
+  },
+  "INTC": {
+   "ticker": "INTC",
+   "verified": false,
+   "match_path": null,
+   "confidence": null,
+   "rationale_en": null,
+   "rationale_ko": null,
+   "issue_class": "SECTOR_OR_REGION_EVENT"
+  },
+  "MNST": {
+   "ticker": "MNST",
+   "verified": true,
+   "match_path": "PRODUCT_INDUSTRY",
+   "confidence": "weak",
+   "rationale_en": "Beverage distribution companies experience supply chain disruptions and altered demand patterns following major hurricanes in their distribution regions.",
+   "rationale_ko": "주요 허리케인 발생 시 음료 유통망이 영향을 받으며 수요 패턴에 변화가 발생합니다.",
+   "issue_class": "SECTOR_OR_REGION_EVENT"
+  },
+  "DIS": {
+   "ticker": "DIS",
+   "verified": true,
+   "match_path": "REGION",
+   "confidence": "strong",
+   "rationale_en": "Disney operates Walt Disney World Resort and other theme parks in Florida, which were directly impacted by Hurricane Milton and required closure and recovery operations.",
+   "rationale_ko": "디즈니는 플로리다에 월트디즈니월드 리조트와 기타 테마파크를 운영하고 있으며, 허리케인 밀턴으로 인해 직접적인 영향을 받아 휴장 및 복구 작업이 필요했습니다.",
+   "issue_class": "SECTOR_OR_REGION_EVENT"
+  },
+  "UAL": {
+   "ticker": "UAL",
+   "verified": true,
+   "match_path": "REGION",
+   "confidence": "weak",
+   "rationale_en": "United Airlines operates significant flight routes to and from Florida airports, experiencing flight cancellations and operational disruptions during Hurricane Milton.",
+   "rationale_ko": "유나이티드항공은 플로리다 공항을 오가는 주요 노선을 운영하고 있어 허리케인 밀턴 기간 중 결항 및 운영 차질이 발생했습니다.",
+   "issue_class": "SECTOR_OR_REGION_EVENT"
+  },
+  "ETN": {
+   "ticker": "ETN",
+   "verified": false,
+   "match_path": null,
+   "confidence": null,
+   "rationale_en": null,
+   "rationale_ko": null,
+   "issue_class": "SECTOR_OR_REGION_EVENT"
+  },
+  "LEN": {
+   "ticker": "LEN",
+   "verified": true,
+   "match_path": "REGION",
+   "confidence": "strong",
+   "rationale_en": "Lennar is a homebuilder headquartered in Miami, Florida, with significant residential construction and development operations throughout Florida, directly affected by hurricane damage to properties and construction sites.",
+   "rationale_ko": "레너는 플로리다 마이애미에 본사를 둔 주택 건설업체로, 플로리다 전역에서 주택 건설 및 개발 사업을 영위하고 있어 허리케인으로 인한 부동산 및 건설 현장 피해에 직접적인 영향을 받았습니다.",
+   "issue_class": "SECTOR_OR_REGION_EVENT"
+  },
+  "LOW": {
+   "ticker": "LOW",
+   "verified": true,
+   "match_path": "PRODUCT_INDUSTRY",
+   "confidence": "strong",
+   "rationale_en": "Home improvement retailers experience surge in demand for repair materials, generators, plywood, and recovery supplies following major hurricane damage in their market areas.",
+   "rationale_ko": "대형 허리케인 피해 이후 수리 자재, 발전기, 합판, 복구 용품에 대한 수요가 급증하며 해당 기업은 홈 개선 소매업체로서 이러한 제품을 공급합니다.",
+   "issue_class": "SECTOR_OR_REGION_EVENT"
+  },
+  "HD": {
+   "ticker": "HD",
+   "verified": true,
+   "match_path": "PRODUCT_INDUSTRY",
+   "confidence": "strong",
+   "rationale_en": "Home improvement retailers experience surge in demand for repair materials, generators, plywood, and recovery supplies following major hurricane damage in their market areas.",
+   "rationale_ko": "대형 허리케인 피해 이후 수리 자재, 발전기, 합판, 복구 용품에 대한 수요가 급증하며 해당 기업은 홈 개선 소매업체로서 이러한 제품을 공급합니다.",
+   "issue_class": "SECTOR_OR_REGION_EVENT"
+  },
+  "GNRC": {
+   "ticker": "GNRC",
+   "verified": true,
+   "match_path": "PRODUCT_INDUSTRY",
+   "confidence": "strong",
+   "rationale_en": "Generac manufactures backup generators and power equipment that experience elevated demand during and after major hurricanes causing widespread power outages.",
+   "rationale_ko": "제너랙은 백업 발전기 및 전력 장비를 제조하는 기업으로, 대규모 정전을 유발하는 주요 허리케인 발생 시 및 이후 수요가 증가합니다.",
+   "issue_class": "SECTOR_OR_REGION_EVENT"
+  },
+  "DUK": {
+   "ticker": "DUK",
+   "verified": false,
+   "match_path": null,
+   "confidence": null,
+   "rationale_en": null,
+   "rationale_ko": null,
+   "issue_class": "SECTOR_OR_REGION_EVENT"
+  },
+  "NEE": {
+   "ticker": "NEE",
+   "verified": true,
+   "match_path": "REGION",
+   "confidence": "strong",
+   "rationale_en": "NextEra's FPL subsidiary provides electricity to approximately 6 million customer accounts on Florida's east and lower west coasts, directly affected by Hurricane Milton's damage to transmission and distribution infrastructure.",
+   "rationale_ko": "넥스트에라의 자회사 FPL은 플로리다 동부 및 서부 해안 지역의 약 600만 고객에게 전력을 공급하고 있으며, 허리케인 밀턴으로 인한 송배전 인프라 피해에 직접적인 영향을 받았습니다.",
+   "issue_class": "SECTOR_OR_REGION_EVENT"
+  }
+ },
+ "tokens": {
+  "single_in": 0,
+  "single_out": 0,
+  "batch_in": 7337,
+  "batch_out": 2046
+ }
+}

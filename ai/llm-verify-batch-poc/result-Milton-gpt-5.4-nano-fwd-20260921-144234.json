@@ -1,0 +1,288 @@
+{
+ "model": "gpt-5.4-nano",
+ "reverse": false,
+ "batch_only": false,
+ "expected": {
+  "NEE": "strong",
+  "DUK": "strong",
+  "GNRC": "strong",
+  "HD": "weak",
+  "LOW": "weak",
+  "LEN": "weak",
+  "ETN": "weak",
+  "UAL": "strong",
+  "DIS": "weak",
+  "MNST": "reject",
+  "INTC": "reject",
+  "NKE": "reject",
+  "KO": "reject",
+  "PG": "reject",
+  "CRM": "reject"
+ },
+ "single": {
+  "NEE": {
+   "issue_class": "SECTOR_OR_REGION_EVENT",
+   "verified": true,
+   "match_path": "REGION",
+   "confidence": "strong",
+   "rationale_en": "Hurricane Milton caused major destruction in Florida, and NextEra’s utility operations (via Florida Power & Light) are heavily exposed to Florida’s east and lower west coasts, where storm damage would directly disrupt power distribution and service.",
+   "rationale_ko": "허리케인 밀턴은 플로리다에 큰 피해를 일으켰고, NextEra는 FPL을 통해 플로리다의 동부 및 남서부 해안에 전력을 생산·전송·배전하며 집중 노출되어 있어, 폭풍 피해로 전력 공급과 서비스에 차질이 발생할 수 있습니다."
+  },
+  "DUK": {
+   "issue_class": "SECTOR_OR_REGION_EVENT",
+   "verified": true,
+   "match_path": "REGION",
+   "confidence": "strong",
+   "rationale_en": "Hurricane Milton caused major damage in Florida, and Duke Energy’s electric utility operations serve customers in Florida (Southeast U.S.), so the storm would directly impact its regional power distribution and generation activities.",
+   "rationale_ko": "허리케인 밀턴은 플로리다에 큰 피해를 입혔고, 듀크 에너지의 전력 유틸리티 사업은 미국 남동부(플로리다 포함)에서 고객에게 전기 전송·배전 및 판매를 수행하므로 해당 지역 전력 인프라 운영에 직접적인 영향을 준 것입니다."
+  },
+  "GNRC": {
+   "issue_class": "SECTOR_OR_REGION_EVENT",
+   "verified": true,
+   "match_path": "PRODUCT_INDUSTRY",
+   "confidence": "weak",
+   "rationale_en": "The hurricane disrupted electricity and power availability in Florida, which increases the demand for Generac’s backup power and generator products and services used during outages and recovery.",
+   "rationale_ko": "허리케인으로 플로리다에서 정전과 전력 공급 차질이 발생해, Generac의 비상 전원·발전기 등 정전 대응 제품과 서비스 수요가 증가할 수 있습니다."
+  },
+  "HD": {
+   "issue_class": "SECTOR_OR_REGION_EVENT",
+   "verified": true,
+   "match_path": "REGION",
+   "confidence": "weak",
+   "rationale_en": "Hurricane Milton caused widespread damage in west Florida, and Home Depot’s U.S. retail operations and sales in Florida would likely be exposed to the storm’s regional impact on demand and store/operations disruption.",
+   "rationale_ko": "허리케인 밀턴이 플로리다(서부 지역)에 큰 피해를 주면서, Home Depot의 플로리다 내 미국 소매 사업은 해당 지역의 충격으로 인한 매장·운영 차질 및 수요 변화에 노출됩니다."
+  },
+  "LOW": {
+   "issue_class": "SECTOR_OR_REGION_EVENT",
+   "verified": true,
+   "match_path": "REGION",
+   "confidence": "weak",
+   "rationale_en": "Hurricane Milton caused major destruction in Florida, and as a U.S. home improvement retailer selling repair and building materials Lowe's has operational exposure through its Florida retail presence and demand for storm-recovery supplies.",
+   "rationale_ko": "허리케인 밀턴이 플로리다에 큰 피해를 일으켜 복구 수요가 늘었으며, Lowe’s는 미국 내(플로리다 포함) 주택 수리·보수 및 건축 자재를 판매하는 소매업으로 지역 피해의 영향을 받을 수 있습니다.",
+   "verified_reasoning_note": null
+  },
+  "LEN": {
+   "issue_class": "SECTOR_OR_REGION_EVENT",
+   "verified": false,
+   "match_path": null,
+   "confidence": null,
+   "rationale_en": null,
+   "rationale_ko": null
+  },
+  "ETN": {
+   "issue_class": "SECTOR_OR_REGION_EVENT",
+   "verified": true,
+   "match_path": "REGION",
+   "confidence": "weak",
+   "rationale_en": "Hurricane Milton caused major destruction in Florida, and Eaton’s operations in the United States give it potential exposure to Florida-based power and industrial damage through its electrical and power reliability products.",
+   "rationale_ko": "허리케인 밀턴은 플로리다에 큰 피해를 일으켰으며, Eaton은 미국에서 전력·전기 신뢰성 관련 제품을 공급하는 사업을 영위해 플로리다 지역의 피해와 복구 영향에 노출될 수 있습니다."
+  },
+  "UAL": {
+   "issue_class": "SECTOR_OR_REGION_EVENT",
+   "verified": false,
+   "match_path": null,
+   "confidence": null,
+   "rationale_en": null,
+   "rationale_ko": null
+  },
+  "DIS": {
+   "issue_class": "SECTOR_OR_REGION_EVENT",
+   "verified": true,
+   "match_path": "REGION",
+   "confidence": "strong",
+   "rationale_en": "The hurricane caused major damage in west-coast Florida, and Disney’s business includes operating Walt Disney World Resort in Florida, creating direct operational exposure to that affected region.",
+   "rationale_ko": "허리케인 밀턴이 플로리다(서해안 포함)에서 큰 피해를 일으켜 복구와 운영에 영향을 줬으며, 디즈니는 플로리다 내(월트 디즈니 월드 리조트) 사업을 운영해 해당 지역 노출이 있습니다."
+  },
+  "MNST": {
+   "issue_class": "SECTOR_OR_REGION_EVENT",
+   "verified": true,
+   "match_path": "REGION",
+   "confidence": "weak",
+   "rationale_en": "Because Hurricane Milton devastated Florida, an energy-drink distributor with significant U.S. retail/grocery and convenience-store exposure including Florida would be indirectly affected by the regional disruption to consumer demand and distribution operations.",
+   "rationale_ko": "허리케인 밀턴이 플로리다를 강타해 피해와 유통 차질이 발생하면서, 플로리다를 포함한 미국의 리테일·편의점·식료품 유통망에 노출된 음료 판매 및 공급업체는 수요 변동과 물류 중단의 영향을 간접적으로 받을 수 있습니다."
+  },
+  "INTC": {
+   "issue_class": "SECTOR_OR_REGION_EVENT",
+   "verified": false,
+   "match_path": null,
+   "confidence": null,
+   "rationale_en": null,
+   "rationale_ko": null
+  },
+  "NKE": {
+   "issue_class": "SECTOR_OR_REGION_EVENT",
+   "verified": false,
+   "match_path": null,
+   "confidence": null,
+   "rationale_en": null,
+   "rationale_ko": null
+  },
+  "KO": {
+   "issue_class": "SECTOR_OR_REGION_EVENT",
+   "verified": true,
+   "match_path": "REGION",
+   "confidence": "weak",
+   "rationale_en": "Hurricane Milton caused major damage in Florida, and Coca-Cola has meaningful revenue and operations exposure in the state through its U.S. beverage business and distribution network.",
+   "rationale_ko": "허리케인 밀턴으로 플로리다에 큰 피해가 발생했으며, 코카콜라는 미국 내 음료 사업과 유통 네트워크를 통해 플로리다에 대한 매출·운영 노출이 있는 것으로 알려져 있어 영향 가능성이 있습니다."
+  },
+  "PG": {
+   "issue_class": "SECTOR_OR_REGION_EVENT",
+   "verified": false,
+   "match_path": null,
+   "confidence": null,
+   "rationale_en": null,
+   "rationale_ko": null
+  },
+  "CRM": {
+   "issue_class": "SECTOR_OR_REGION_EVENT",
+   "verified": false,
+   "match_path": null,
+   "confidence": null,
+   "rationale_en": null,
+   "rationale_ko": null
+  }
+ },
+ "batch": {
+  "NEE": {
+   "ticker": "NEE",
+   "verified": true,
+   "match_path": "REGION",
+   "confidence": "strong",
+   "rationale_en": "NextEra Energy operates Florida Power & Light, a major electric utility serving millions of customers in Florida, so Hurricane Milton directly risks disruptions to its Florida power grid and services.",
+   "rationale_ko": "NextEra Energy는 플로리다 전력회사(FPL)를 통해 수백만 명의 고객에게 전기를 공급하므로, 허리케인 밀턴이 플로리다 전력망과 서비스에 직접적인 영향을 줄 수 있습니다.",
+   "issue_class": "SECTOR_OR_REGION_EVENT"
+  },
+  "DUK": {
+   "ticker": "DUK",
+   "verified": false,
+   "match_path": null,
+   "confidence": null,
+   "rationale_en": null,
+   "rationale_ko": null,
+   "issue_class": "SECTOR_OR_REGION_EVENT"
+  },
+  "GNRC": {
+   "ticker": "GNRC",
+   "verified": false,
+   "match_path": null,
+   "confidence": null,
+   "rationale_en": null,
+   "rationale_ko": null,
+   "issue_class": "SECTOR_OR_REGION_EVENT"
+  },
+  "HD": {
+   "ticker": "HD",
+   "verified": false,
+   "match_path": null,
+   "confidence": null,
+   "rationale_en": null,
+   "rationale_ko": null,
+   "issue_class": "SECTOR_OR_REGION_EVENT"
+  },
+  "LOW": {
+   "ticker": "LOW",
+   "verified": false,
+   "match_path": null,
+   "confidence": null,
+   "rationale_en": null,
+   "rationale_ko": null,
+   "issue_class": "SECTOR_OR_REGION_EVENT"
+  },
+  "LEN": {
+   "ticker": "LEN",
+   "verified": false,
+   "match_path": null,
+   "confidence": null,
+   "rationale_en": null,
+   "rationale_ko": null,
+   "issue_class": "SECTOR_OR_REGION_EVENT"
+  },
+  "ETN": {
+   "ticker": "ETN",
+   "verified": false,
+   "match_path": null,
+   "confidence": null,
+   "rationale_en": null,
+   "rationale_ko": null,
+   "issue_class": "SECTOR_OR_REGION_EVENT"
+  },
+  "UAL": {
+   "ticker": "UAL",
+   "verified": false,
+   "match_path": null,
+   "confidence": null,
+   "rationale_en": null,
+   "rationale_ko": null,
+   "issue_class": "SECTOR_OR_REGION_EVENT"
+  },
+  "DIS": {
+   "ticker": "DIS",
+   "verified": true,
+   "match_path": "REGION",
+   "confidence": "weak",
+   "rationale_en": "The issue’s news context names Walt Disney World Resort, which has concentrated operations in Florida and could be disrupted by Hurricane Milton’s damage and recovery impacts.",
+   "rationale_ko": "이슈의 뉴스 공동언급에 월트 디즈니월드 리조트(Walt Disney World Resort)가 포함되어 있어, 플로리다 내 집중 운영 시설이 허리케인 밀턴의 피해 및 복구 영향으로 중단될 수 있습니다.",
+   "issue_class": "SECTOR_OR_REGION_EVENT"
+  },
+  "MNST": {
+   "ticker": "MNST",
+   "verified": false,
+   "match_path": null,
+   "confidence": null,
+   "rationale_en": null,
+   "rationale_ko": null,
+   "issue_class": "SECTOR_OR_REGION_EVENT"
+  },
+  "INTC": {
+   "ticker": "INTC",
+   "verified": false,
+   "match_path": null,
+   "confidence": null,
+   "rationale_en": null,
+   "rationale_ko": null,
+   "issue_class": "SECTOR_OR_REGION_EVENT"
+  },
+  "NKE": {
+   "ticker": "NKE",
+   "verified": false,
+   "match_path": null,
+   "confidence": null,
+   "rationale_en": null,
+   "rationale_ko": null,
+   "issue_class": "SECTOR_OR_REGION_EVENT"
+  },
+  "KO": {
+   "ticker": "KO",
+   "verified": false,
+   "match_path": null,
+   "confidence": null,
+   "rationale_en": null,
+   "rationale_ko": null,
+   "issue_class": "SECTOR_OR_REGION_EVENT"
+  },
+  "PG": {
+   "ticker": "PG",
+   "verified": false,
+   "match_path": null,
+   "confidence": null,
+   "rationale_en": null,
+   "rationale_ko": null,
+   "issue_class": "SECTOR_OR_REGION_EVENT"
+  },
+  "CRM": {
+   "ticker": "CRM",
+   "verified": false,
+   "match_path": null,
+   "confidence": null,
+   "rationale_en": null,
+   "rationale_ko": null,
+   "issue_class": "SECTOR_OR_REGION_EVENT"
+  }
+ },
+ "tokens": {
+  "single_in": 27548,
+  "single_out": 1747,
+  "batch_in": 6497,
+  "batch_out": 912
+ }
+}
