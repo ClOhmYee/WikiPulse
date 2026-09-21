@@ -60,19 +60,40 @@ sudo -u gitlab-runner docker ps >/dev/null && echo "docker OK"
 `ubuntu:ubuntu` 로 돌아간다. `chmod 0600` 도 그룹 읽기를 지운다. 둘 중 하나만 해도
 다음 배포가 첫 검사에서 죽는다.
 
+🔴 **`infra/edit-env.sh` 를 쓴다** (WP-178). 편집·권한 복구·러너 읽기 검증을
+한 덩어리로 묶는다. 사람이 세 단계를 기억하는 구조라 **네 번 터졌다.**
+
 ```bash
-# 🔴 .env 를 고친 뒤에는 항상 이 두 줄
+infra/edit-env.sh /home/deploy/infra/service/.env     WIKIPULSE_MATCHING_SUMMARY_ENABLED=true     WIKIPULSE_MATCHING_SUMMARY_SOURCE=replay
+```
+
+그룹이 이미 틀어진 파일도 이 스크립트를 거치면 바로잡힌다. 손으로 고쳐야 한다면
+아래 두 줄이 최소한이다.
+
+```bash
 sudo chgrp gitlab-runner /home/deploy/infra/service/.env
 sudo chmod 0640 /home/deploy/infra/service/.env
 ```
+
+### 왜 `sed -i` 가 문제인가 (2026-09-21 실측)
+
+```
+원본        -rw-r----- ubuntu gitlab-runner
+sed -i 뒤   -rw-r----- ubuntu ubuntu          ← 그룹이 날아간다
+cat > 뒤    -rw-r----- ubuntu gitlab-runner   ← 보존된다
+```
+
+`sed -i` 는 새 파일을 만들어 **교체**한다. `cat tmp > 파일` 은 **기존 inode 에 써 넣어서**
+소유권·권한이 남는다. `edit-env.sh` 가 쓰는 경로가 이쪽이다.
 
 ⚠️ **실제 그룹은 `gitlab-runner` 다.** 위 설정 절이 제안한 `wikipulse-deploy` 그룹은
 이 서버에 **존재하지 않는다**(2026-09-21 실측). `infra/db/.env` 도 `ubuntu:gitlab-runner
 0640` 이다 — 새 파일을 만들면 그쪽에 맞춘다.
 
 이 함정으로 죽은 파이프라인: #207183(2026-09-18) · #207748(2026-09-19) ·
-#210453(2026-09-21, `.env` 에 GATEWAY 키를 넣다가). 앞의 둘은 최초 설정 누락이었고
-세 번째는 **편집 뒤 복구 누락**이라 원인이 다르다 — 그래서 이 절을 따로 둔다.
+#210453(2026-09-21, `.env` 에 GATEWAY 키를 넣다가) · **#214248(2026-09-21, `-168` 머지 —
+앞선 세션이 `SUMMARY_ENABLED` 를 토글하면서 리셋)**. 앞의 둘은 최초 설정 누락이었고
+나머지는 **편집 뒤 복구 누락**이라 원인이 다르다 — 그래서 이 절을 따로 둔다.
 
 ⚠️ 이건 **CI 가 DB 소유자 비밀번호를 읽을 수 있게 된다**는 뜻이다. 그 러너는 이미
 develop 의 코드를 그대로 실행하고 `docker compose up` 으로 같은 `.env` 를 쓰므로 새
