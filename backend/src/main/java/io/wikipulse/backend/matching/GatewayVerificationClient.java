@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
 import io.github.resilience4j.ratelimiter.annotation.RateLimiter;
 import io.github.resilience4j.retry.annotation.Retry;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import org.slf4j.Logger;
@@ -15,14 +16,33 @@ import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
 
 /**
- * LLM 게이트웨이 경유 Anthropic Messages API 의 범용 전송 (WP-68·-119).
- * {@code {baseUrl}/api.anthropic.com/v1/messages}, 인증은 {@code x-api-key: {키}}.
- * 모델은 POC(ai/llm-verify-poc)에서 검증한 {@code claude-sonnet-4-5-20250929}(-45).
+ * LLM 게이트웨이 경유 LLM 전송 (WP-68·-119·-172).
+ *
+ * <p>🔴 <b>공급자가 둘이고 모델 이름으로 갈린다</b> (-172). {@code claude-} 로 시작하면 Anthropic
+ * Messages, 아니면 OpenAI Chat Completions 다. 두 API 는 <b>모양이 다르고, 틀리면 400 이 아니라
+ * 빈 본문이 와서 조용히 실패한다.</b>
+ *
+ * <table border="1">
+ *   <caption>공급자별 차이</caption>
+ *   <tr><th></th><th>Anthropic</th><th>OpenAI</th></tr>
+ *   <tr><td>경로</td><td>{@code /api.anthropic.com/v1/messages}</td>
+ *       <td>{@code /api.openai.com/v1/chat/completions}</td></tr>
+ *   <tr><td>인증</td><td>{@code x-api-key}</td><td>{@code Authorization: Bearer}</td></tr>
+ *   <tr><td>system</td><td>최상위 필드</td><td>메시지 배열 첫 항목</td></tr>
+ *   <tr><td>출력 상한</td><td>{@code max_tokens}</td><td>{@code max_completion_tokens}</td></tr>
+ *   <tr><td>본문</td><td>{@code content[0].text}</td><td>{@code choices[0].message.content}</td></tr>
+ *   <tr><td>사용량</td><td>{@code input_tokens}/{@code output_tokens}</td>
+ *       <td>{@code prompt_tokens}/{@code completion_tokens}</td></tr>
+ * </table>
+ *
+ * <p>검증 기본 모델은 {@code gpt-5.4-nano} 다 — 정답셋 3사례 36건에서 32건 정답·오탐 0 이고
+ * Sonnet 대비 9.8배 싸다({@code ai/llm-verify-batch-poc/RESULT.md}). 요약은 측정하지 않아
+ * {@code claude-sonnet-4-5-20250929} 로 남겨 뒀다.
  *
  * <p>{@link #complete}(system + messages → assistant 텍스트)는 도메인 중립이라
  * <b>LLM 검증({@link LlmVerifier}, -68)과 이슈 요약({@link IssueSummarizer}, -119)이 공유</b>한다.
- * 두 용도 모두 같은 gateway 신뢰성 계층·모델·max_tokens 를 탄다 — 요약이 새 신뢰성 계층·새 클라이언트를
- * 만들지 않는다는 -119 계약을 이 공유로 지킨다.
+ * 두 용도 모두 같은 gateway 신뢰성 계층을 타되 <b>모델과 max_tokens 는 각자 노브</b>를 쓴다 — 요약이
+ * 새 신뢰성 계층·새 클라이언트를 만들지 않는다는 -119 계약은 그대로다.
  *
  * <p>🔴 <b>-66 위에 얹는다 — 새 신뢰성 계층을 만들지 않는다.</b> named instance {@code gateway} 를
  * {@link GatewayEmbeddingClient} 와 <b>공유</b>한다(임베딩·LLM 공용 게이트웨이). 같은 RateLimiter(공유
@@ -78,6 +98,12 @@ public class GatewayVerificationClient {
 
     private static final Logger log = LoggerFactory.getLogger(GatewayVerificationClient.class);
 
+    /**
+     * OpenAI 경로 출력 상한 배수. nano 계열이 추론 토큰을 먼저 먹어 빠듯하면 본문이 비어 온다
+     * (에러 아님). POC 가 이 배수로 3사례 36건 파싱 실패 0 이었다.
+     */
+    private static final int OPENAI_OUTPUT_HEADROOM = 4;
+
     private final RestClient client;
     private final CandidateProperties.Gateway gateway;
 
@@ -120,7 +146,7 @@ public class GatewayVerificationClient {
     @CircuitBreaker(name = "gateway")
     @Retry(name = "gateway", fallbackMethod = "completeFallback")
     public String completeForSummary(String system, List<Map<String, String>> messages) {
-        return call(system, messages, gateway.getVerificationModel(), gateway.getSummaryMaxTokens());
+        return call(system, messages, gateway.getSummaryModel(), gateway.getSummaryMaxTokens());
     }
 
     /**
@@ -133,18 +159,20 @@ public class GatewayVerificationClient {
             throw new IllegalStateException(
                     "LLM_GATEWAY_KEY 가 비어 있다. GATEWAY 를 호출할 수 없다 (명세 §4, tech-spec 환경변수).");
         }
+        boolean anthropic = isAnthropic(model);
         JsonNode root;
         try {
-            root = client.post()
-                    .uri("/api.anthropic.com/v1/messages")
-                    .header("x-api-key", gateway.getApiKey())
-                    .header("anthropic-version", "2023-06-01")
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .body(Map.of(
-                            "model", model,
-                            "max_tokens", maxTokens,
-                            "system", system,
-                            "messages", messages))
+            RestClient.RequestBodySpec spec = client.post()
+                    .uri(anthropic ? "/api.anthropic.com/v1/messages"
+                                   : "/api.openai.com/v1/chat/completions")
+                    .contentType(MediaType.APPLICATION_JSON);
+            // 🔴 인증 헤더부터 다르다. Anthropic 은 x-api-key, OpenAI 는 Bearer.
+            spec = anthropic
+                    ? spec.header("x-api-key", gateway.getApiKey())
+                          .header("anthropic-version", "2023-06-01")
+                    : spec.header("Authorization", "Bearer " + gateway.getApiKey());
+            root = spec.body(anthropic ? anthropicBody(system, messages, model, maxTokens)
+                                       : openAiBody(system, messages, model, maxTokens))
                     .retrieve()
                     .body(JsonNode.class);
         } catch (RestClientException e) {
@@ -152,14 +180,54 @@ public class GatewayVerificationClient {
             throw UpstreamFailures.classify("GATEWAY", e, false); // 🔴 GATEWAY 429 = 하드(공유 예산 보호)
         }
 
-        logUsage(root, model);
+        logUsage(root, model, anthropic);
 
-        JsonNode text = root == null ? null : root.path("content").path(0).path("text");
+        JsonNode text = root == null ? null
+                : anthropic ? root.path("content").path(0).path("text")
+                            : root.path("choices").path(0).path("message").path("content");
         if (text == null || !text.isTextual() || text.asText().isBlank()) {
             // 200 인데 텍스트 없음 = 스키마 문제(−68 소관). 전송 taxonomy 아님 → 회로에 안 센다.
-            throw new IllegalStateException("GATEWAY 응답에 텍스트가 없다 (content[0].text 누락/빈 값)");
+            // ⚠️ OpenAI 쪽은 이게 실제로 잘 난다 — 아래 openAiBody 주석 참고.
+            throw new IllegalStateException(
+                    "GATEWAY 응답에 텍스트가 없다 (" + (anthropic ? "content[0].text"
+                                                        : "choices[0].message.content") + " 누락/빈 값)");
         }
         return text.asText();
+    }
+
+    /**
+     * 모델 이름으로 공급자를 가른다. 🔴 <b>설정값 하나로 경로가 갈리므로 오타가 곧 공급자
+     * 전환</b>이다 — {@code cluade-...} 같은 오타는 OpenAI 로 나가 400 을 받는다.
+     */
+    private static boolean isAnthropic(String model) {
+        return model != null && model.startsWith("claude");
+    }
+
+    private static Map<String, Object> anthropicBody(
+            String system, List<Map<String, String>> messages, String model, int maxTokens) {
+        return Map.of("model", model, "max_tokens", maxTokens,
+                "system", system, "messages", messages);
+    }
+
+    /**
+     * OpenAI Chat Completions 본문.
+     *
+     * <p>🔴 <b>모양이 Anthropic 과 다르다.</b> system 이 최상위 필드가 아니라 메시지 배열의 첫
+     * 항목이고, 출력 상한 키가 {@code max_completion_tokens} 다. 한쪽 모양으로 다른 쪽을 부르면
+     * 400 이 아니라 <b>빈 본문</b>이 와서 조용히 실패한다.
+     *
+     * <p>🔴 <b>출력 상한을 4배로 준다.</b> nano 계열은 추론 토큰을 먼저 먹어, 상한이 빠듯하면
+     * 추론만 하다 끝나 {@code message.content} 가 빈 문자열로 온다 — 에러가 아니다. POC 에서
+     * 같은 배수를 써서 3사례 36건 파싱 실패 0 이었다({@code ai/llm-verify-batch-poc}).
+     */
+    private static Map<String, Object> openAiBody(
+            String system, List<Map<String, String>> messages, String model, int maxTokens) {
+        List<Map<String, String>> withSystem = new ArrayList<>();
+        withSystem.add(Map.of("role", "system", "content", system));
+        withSystem.addAll(messages);
+        return Map.of("model", model,
+                "max_completion_tokens", maxTokens * OPENAI_OUTPUT_HEADROOM,
+                "messages", withSystem);
     }
 
     /**
@@ -174,15 +242,17 @@ public class GatewayVerificationClient {
      * ⚠️ 계속 0 이면 셋 중 하나다 — 시스템 프롬프트가 1,024 토큰 미만으로 줄었거나, GATEWAY 게이트웨이가
      * {@code cache_control} 을 안 넘기거나, TTL(5분)이 지났거나.
      */
-    private void logUsage(JsonNode root, String model) {
+    private void logUsage(JsonNode root, String model, boolean anthropic) {
         JsonNode usage = root == null ? null : root.path("usage");
         if (usage == null || usage.isMissingNode()) {
             return;
         }
+        // ⚠️ 사용량 키 이름도 공급자별로 다르다. 한쪽 이름으로 읽으면 전부 -1 로 찍혀
+        //    "사용량을 못 받았다"로 오해하게 된다.
         log.info("GATEWAY usage model={} in={} out={} cache_write={} cache_read={}",
                 model,
-                usage.path("input_tokens").asInt(-1),
-                usage.path("output_tokens").asInt(-1),
+                usage.path(anthropic ? "input_tokens" : "prompt_tokens").asInt(-1),
+                usage.path(anthropic ? "output_tokens" : "completion_tokens").asInt(-1),
                 usage.path("cache_creation_input_tokens").asInt(-1),
                 usage.path("cache_read_input_tokens").asInt(-1));
     }
