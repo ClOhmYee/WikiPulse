@@ -14,6 +14,7 @@
 | VAL-2026-09-18-LOCAL-04 | 2026-09-18 | 로컬 | 실제 하루 대표 이슈 `원본 → spike → cluster → AI → API` | PARTIAL — 수동 bridge 2개·시점 정합성 미통과 | [1일 E2E canary](2026-09-18-one-day-e2e-canary.md) |
 | VAL-2026-09-18-LOCAL-05 | 2026-09-18 | 로컬 | `other/pageviews` 시간별 덤프 경로·형식·지연·크기 실측 | 채택 | [시간별 조회수 소스 실측](2026-09-18-other-pageviews-measure.md) |
 | VAL-2026-09-18-LIVE-01 | 2026-09-18 | 데이터 EC2 | EventStreams → Kafka → 2-node Spark → HDFS checkpoint LIVE 1차 배포·재시작 복구 | PASS (재배포 `fae8bb7` 재검증 포함) | [LIVE 파이프라인 1차 배포 검증](2026-09-18-live-pipeline-phase1.md) |
+| VAL-2026-09-21-LOCAL-01 | 2026-09-21 | 로컬 | `mediawiki_history` 미공개 구간(2026-09-01 02:00~09-17)의 편집 소스 대안 | PASS — RecentChanges 채택, 2026-10-01 기한 있음 | [편집 소스 공백 대안 실측](2026-09-21-edit-source-gap.md) |
 
 ## 기록 규칙
 
