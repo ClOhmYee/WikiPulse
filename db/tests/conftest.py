@@ -17,8 +17,18 @@ psycopg = pytest.importorskip("psycopg", reason="psycopg 미설치 — 스키마
 
 # 이미 마이그레이션이 적재된 PostgreSQL 을 직접 쓰는 길(WP-168).
 #
-# ⚠️ pgserver 는 Windows 에서 `initdb` 가 실패해 픽스처 단계에서 전부 죽는다. 이 PC 에서는
-#    그래서 스키마 테스트를 한 줄도 못 돌렸다. DSN 을 주면 pgserver 를 건너뛴다:
+# ⚠️ pgserver 의 `initdb` 는 **경로에 ASCII 가 아닌 문자가 있으면** 죽는다. 픽스처 단계에서
+#    테스트가 전부 깨지므로 원인이 안 보인다. 실패 메시지는 이렇게 나온다 (2026-09-21 실측):
+#
+#      FATAL: invalid byte sequence for encoding "UTF8": 0xb9
+#
+#    0xb9 는 CP949 로 인코딩된 한글의 첫 바이트다. 데이터 디렉터리뿐 아니라 **pgserver 가
+#    설치된 경로**도 해당한다 — Windows 사용자명이 한글이면 홈 밑이 전부 걸리므로 venv·
+#    uv 캐시가 거기 있는 한 못 피한다. ASCII 경로(예: C:\pgtest)에 설치하면 그냥 된다.
+#    🔴 PostgreSQL 설치 여부와는 무관하다 — pgserver 는 바이너리를 번들로 들고 있다.
+#    ⚠️ `--locale=C` 로는 안 풀린다. 로케일 경고는 사라지지만 FATAL 은 그대로다.
+#
+#    DSN 을 주면 pgserver 를 건너뛴다:
 #
 #      docker compose up -d postgres
 #      WIKIPULSE_TEST_DSN=postgresql://wikipulse:wikipulse@localhost:5432/wikipulse pytest
