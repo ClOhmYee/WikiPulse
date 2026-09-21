@@ -37,7 +37,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from batch.pageview_hourly_ingest import ingest_hour
+from batch.pageview_hourly_ingest import ingest_hour, prune_cache
 
 from .candidate_store import CandidateStore
 from .recheck import RecheckSummary, recheck
@@ -76,13 +76,15 @@ class CycleSummary:
     hours_ingested: int = 0
     hours_pending: int = 0      # 아직 파일이 안 나옴(404)
     titles: int = 0
+    cache_pruned: int = 0
     recheck: RecheckSummary = field(default_factory=RecheckSummary)
     seconds: float = 0.0
 
     def format(self) -> str:
         return (f"시간 {self.hours_ingested}/{self.hours_due} 적재 "
                 f"(대기 {self.hours_pending}) · 문서 {self.titles:,} · "
-                f"{self.recheck.format()} · {self.seconds:.1f}s")
+                f"{self.recheck.format()} · 캐시 정리 {self.cache_pruned} · "
+                f"{self.seconds:.1f}s")
 
 
 def missing_views(conn, source: str, *, now: datetime,
@@ -130,6 +132,11 @@ def run_once(
             summary.hours_ingested += 1
 
     summary.recheck = recheck(conn, source=source, dry_run=dry_run)
+    if not dry_run:
+        # WP-171: 다 쓴 시간별 원본은 매 주기 끝에 정리한다.
+        # ingest_hour() 만 직접 부르므로 main() 안의 prune_cache 호출은 이 서비스에
+        # 안 걸린다 — 그래서 여기, 실제로 매 주기 도는 자리에 둔다.
+        summary.cache_pruned = prune_cache(cache_dir)
     summary.seconds = time.monotonic() - started
     return summary
 
