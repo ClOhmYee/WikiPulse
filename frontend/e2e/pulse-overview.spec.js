@@ -1,5 +1,74 @@
 import { test, expect } from "@playwright/test";
 
+test("cluster activation animates zoom and pan and reset cancels the flight", async ({
+  page,
+}) => {
+  await page.goto("/#/pulse");
+  const map = page.locator(".document-map");
+  const target = map.locator('.document-cluster[data-rank="1"]');
+  await expect(target).toBeVisible();
+  await expect(map).toHaveAttribute("data-overview", "true");
+  const before = await target.evaluate((element) => {
+    const map = element.closest(".document-map");
+    window.flightSamples = [];
+    window.flightObserver = new MutationObserver(() => {
+      const m = element.getScreenCTM();
+      window.flightSamples.push({
+        zoom: Number(map.dataset.zoom),
+        x: m.e,
+        y: m.f,
+      });
+    });
+    window.flightObserver.observe(map, {
+      attributes: true,
+      attributeFilter: ["data-zoom"],
+    });
+    const zoom = Number(map.dataset.zoom);
+    element
+      .querySelector(':scope > [role="button"]')
+      .dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    return { zoom, immediate: Number(map.dataset.zoom) };
+  });
+  expect(before.immediate).toBe(before.zoom);
+  await expect
+    .poll(() => map.getAttribute("data-zoom").then(Number))
+    .toBeCloseTo(1.219744, 5);
+  const frames = await page.evaluate(() => {
+    window.flightObserver.disconnect();
+    return window.flightSamples;
+  });
+  expect(new Set(frames.map((frame) => frame.zoom)).size).toBeGreaterThan(5);
+  expect(new Set(frames.map((frame) => frame.x)).size).toBeGreaterThan(5);
+  for (let i = 1; i < frames.length; i++) {
+    expect(frames[i].zoom).toBeGreaterThanOrEqual(frames[i - 1].zoom);
+    expect(frames[i].zoom).toBeLessThanOrEqual(1.219744 + 0.000001);
+  }
+  await expect
+    .poll(() =>
+      target.evaluate((element) => {
+        const p = new DOMPoint(0, 0).matrixTransform(element.getScreenCTM());
+        const box = element.ownerSVGElement.getBoundingClientRect();
+        return Math.hypot(
+          p.x - box.x - box.width / 2,
+          p.y - box.y - box.height / 2,
+        );
+      }),
+    )
+    .toBeLessThan(1);
+  await map.getByRole("button", { name: "지도 위치 초기화" }).click();
+  await target.evaluate((element) => {
+    element
+      .querySelector(':scope > [role="button"]')
+      .dispatchEvent(new MouseEvent("click", { bubbles: true }));
+  });
+  await expect
+    .poll(() => map.getAttribute("data-zoom").then(Number))
+    .toBeGreaterThan(before.zoom);
+  await map.getByRole("button", { name: "지도 위치 초기화" }).click();
+  await page.waitForTimeout(650);
+  await expect(map).toHaveAttribute("data-zoom", String(1 / 1.2));
+});
+
 for (const mobile of [false, true]) {
   test(`cluster overview restores detail on ${mobile ? "mobile" : "desktop"}`, async ({
     page,

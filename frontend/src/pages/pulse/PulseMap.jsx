@@ -45,7 +45,7 @@ export default function PulseMap({
   const svgRef = useRef(null),
     drag = useRef(null);
   const marker = useId().replaceAll(":", "");
-  const { camera, current, subscribe, move, stop, zoomBy } =
+  const { camera, current, subscribe, move, stop, zoomBy, animateTo } =
     useMapCamera(svgRef);
   const view = useMapView(svgRef, scene, current, subscribe);
   const reducedMotion = useNeonScan(svgRef, scene, scanEnabled, view);
@@ -68,9 +68,9 @@ export default function PulseMap({
         ),
       );
       setEmphasized(null);
-      move({ zoom, x: -cluster.x * zoom, y: -cluster.y * zoom });
+      animateTo({ zoom, x: -cluster.x * zoom, y: -cluster.y * zoom });
     },
-    [current, move, onSelect],
+    [current, animateTo, onSelect],
   );
   useLayoutEffect(() => {
     const svg = svgRef.current;

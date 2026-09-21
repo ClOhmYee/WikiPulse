@@ -49,16 +49,9 @@ export default function useMapCamera(svgRef) {
     [paint],
   );
 
-  const zoomBy = useCallback(
-    (factor, anchor) => {
-      const old = target.current;
-      const zoom = clampZoom(old.zoom * factor);
-      const ratio = zoom / old.zoom;
-      target.current = {
-        zoom,
-        x: anchor.x - (anchor.x - old.x) * ratio,
-        y: anchor.y - (anchor.y - old.y) * ratio,
-      };
+  const animateTo = useCallback(
+    (destination) => {
+      target.current = destination;
       if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
         move(target.current);
         return;
@@ -93,6 +86,20 @@ export default function useMapCamera(svgRef) {
     [move, paint],
   );
 
+  const zoomBy = useCallback(
+    (factor, anchor) => {
+      const old = target.current;
+      const zoom = clampZoom(old.zoom * factor);
+      const ratio = zoom / old.zoom;
+      animateTo({
+        zoom,
+        x: anchor.x - (anchor.x - old.x) * ratio,
+        y: anchor.y - (anchor.y - old.y) * ratio,
+      });
+    },
+    [animateTo],
+  );
+
   useEffect(() => {
     const svg = svgRef.current;
     const wheel = (event) => {
@@ -115,5 +122,5 @@ export default function useMapCamera(svgRef) {
     };
   }, [svgRef, zoomBy, stop]);
 
-  return { camera, current, subscribe, move, stop, zoomBy };
+  return { camera, current, subscribe, move, stop, zoomBy, animateTo };
 }
