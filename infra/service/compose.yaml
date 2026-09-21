@@ -28,4 +28,9 @@ services:
       WIKIPULSE_MATCHING_SCHEDULER_BATCHSIZE:    ${WIKIPULSE_MATCHING_SCHEDULER_BATCHSIZE:-20}
       WIKIPULSE_MATCHING_VERIFICATION_BATCHSIZE: ${WIKIPULSE_MATCHING_VERIFICATION_BATCHSIZE:-20}
       WIKIPULSE_MATCHING_SUMMARY_BATCHSIZE:      ${WIKIPULSE_MATCHING_SUMMARY_BATCHSIZE:-20}
+      # 🔴 요약의 실제 비용 상한 (WP-165). BATCHSIZE 는 한 폴 크기일 뿐이라
+      #    폴을 반복하면 미처리 전체를 훑는다 — 운영 4,474건 전수가 약 277,000 크레딧이다.
+      #    스냅샷별 pulse_score 상위 N 만 요약해 LLM 실호출을 스냅샷 수 × N 으로 묶는다.
+      #    0 = 무제한. ⚠️ 0 으로 두기 전에 운영 DB 로 예상 호출 수를 세어 본다.
+      WIKIPULSE_MATCHING_SUMMARY_TOPPERSNAPSHOT: ${WIKIPULSE_MATCHING_SUMMARY_TOPPERSNAPSHOT:-10}
     # 열면 8080 이 외부에 직접 노출되고, 도커 게시 포트는 ufw 로 막히지도 않는다.

@@ -144,8 +144,13 @@ public class IssueSummaryService {
         return new EnsureResult(true, false);
     }
 
-    /** issue_report.model 에 남길 모델 식별자. GATEWAY Anthropic 모델 + 프롬프트 버전. */
-    private String modelTag() {
+    /**
+     * issue_report.model 에 남길 모델 식별자. GATEWAY Anthropic 모델 + 프롬프트 버전.
+     *
+     * <p>워커도 쓴다 — 대상 선택에서 "이미 같은 model 요약이 있어 재사용 가능한가"를 보기
+     * 때문이다(WP-165). 같은 문자열을 두 곳에서 따로 조립하면 조용히 갈린다.
+     */
+    String modelTag() {
         return props.getGateway().getVerificationModel() + " (" + IssueSummarizer.PROMPT_VERSION + ")";
     }
 }

@@ -330,6 +330,17 @@ public class CandidateProperties {
         private String fixedDelay = "PT5M";
         /** 한 폴에서 처리할 클러스터 수 상한. */
         private int batchSize = 20;
+        /**
+         * 스냅샷 하나에서 요약할 클러스터 수 상한 ({@code pulse_score} 상위). 0 이면 무제한.
+         *
+         * <p>🔴 <b>{@link #batchSize} 는 비용 상한이 아니다.</b> 폴마다 대상을 새로 고르므로
+         * 반복하면 결국 미처리 클러스터 전체를 훑는다. 실제 상한은 이 값이고, LLM 실호출은
+         * 최대 {@code 스냅샷 수 × topPerSnapshot} 이다 (같은 issue_key 는 재사용이라 0).
+         *
+         * <p>상위 N 을 고르는 축이 화면 정렬과 같다 — 목록·버블맵이 모두
+         * {@code pulse_score DESC} 다. 즉 "보여주는 것만 요약한다".
+         */
+        private int topPerSnapshot = 10;
 
         public boolean isEnabled() {
             return enabled;
@@ -353,6 +364,14 @@ public class CandidateProperties {
 
         public void setBatchSize(int batchSize) {
             this.batchSize = batchSize;
+        }
+
+        public int getTopPerSnapshot() {
+            return topPerSnapshot;
+        }
+
+        public void setTopPerSnapshot(int topPerSnapshot) {
+            this.topPerSnapshot = topPerSnapshot;
         }
     }
 }
