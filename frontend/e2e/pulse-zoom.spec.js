@@ -5,7 +5,7 @@ import {
   snapshotAt,
 } from "../src/data/mock/fixtures/history.js";
 
-const minimum = 0.12 * 1.2 ** 2;
+const minimum = 0.12 * 1.2 ** 4;
 const maximum = (4 / 1.4 ** 3) * 1.2 ** 2;
 const initialZoom = 1 / 1.2;
 const zoom = (map) => map.getAttribute("data-zoom").then(Number);
