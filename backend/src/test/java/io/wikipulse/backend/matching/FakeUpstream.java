@@ -53,9 +53,15 @@ final class FakeUpstream implements AutoCloseable {
     private final AtomicInteger requests = new AtomicInteger();
     /** 마지막 요청 본문. 요청이 무엇을 실어 보냈는지 검사하는 테스트용 (WP-150). */
     private final AtomicReference<String> lastRequestBody = new AtomicReference<>("");
-    private final String okBody;
+    /** 🔴 가변이다 — 공급자별 응답 모양을 테스트마다 바꿔야 한다(WP-172). */
+    private volatile String okBody;
     private final long hangMillis;
     private volatile Mode mode = Mode.OK;
+
+    /** OK 응답 본문을 바꾼다. Anthropic/OpenAI 모양 전환용. */
+    void okBody(String body) {
+        this.okBody = body;
+    }
 
     FakeUpstream(String okBody, long hangMillis) throws IOException {
         this.okBody = okBody;

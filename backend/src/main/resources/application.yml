@@ -45,8 +45,15 @@ wikipulse:
       connect-timeout: 5s
       # read 는 게이트웨이 p99 지연을 덮게(페이로드는 항상 작다).
       read-timeout: 30s
-      # LLM 검증(WP-68) — POC 실측 모델을 못박음(-45). 임베딩과 같은 gateway 게이트웨이·신뢰성 계층.
-      verification-model: claude-sonnet-4-5-20250929
+      # LLM 검증(WP-68·-172). 🔴 이름이 claude- 로 시작하면 Anthropic, 아니면 OpenAI
+      #    경로로 나간다. 되돌리려면 claude-sonnet-4-5-20250929 을 넣는다.
+      #    ~~claude-sonnet-4-5-20250929~~ → gpt-5.4-nano (2026-09-21, -170 실측):
+      #    정답셋 3사례 36건에서 32건 정답·오탐 0, Sonnet 대비 9.8배 저렴(이슈당 1,317 → 134).
+      #    근거 ai/llm-verify-batch-poc/RESULT.md
+      verification-model: ${WIKIPULSE_MATCHING_GATEWAY_VERIFICATIONMODEL:gpt-5.4-nano}
+      # 이슈 요약(-119)은 검증과 모델을 분리한다 — 🔴 요약은 nano 로 재지 않았다.
+      #    한 노브를 공유하면 검증을 내리는 순간 요약 품질이 측정 없이 같이 바뀐다.
+      summary-model: ${WIKIPULSE_MATCHING_GATEWAY_SUMMARYMODEL:claude-sonnet-4-5-20250929}
       # 응답은 6필드 JSON. 한국어 rationale 절단 방지 마진(상한만 늘 뿐 짧은 응답엔 무영향).
       verification-max-tokens: 800
       # 이슈 요약(WP-119) 전용 상한. 검증과 분리해 한쪽 튜닝이 다른 쪽을 절단시키지 않게 한다.

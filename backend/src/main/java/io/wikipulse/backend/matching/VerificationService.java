@@ -96,10 +96,10 @@ public class VerificationService {
             // 호출만 막는다). issue_key 가 없는(V2 옛) 클러스터는 캐시를 못 써 아래로 내려간다.
             if (issueKey != null) {
                 Optional<VerificationRepository.Verdict> prior =
-                        repository.findPriorVerdict(clusterId, issueKey, c.ticker(), LlmVerifier.PROMPT_VERSION);
+                        repository.findPriorVerdict(clusterId, issueKey, c.ticker(), verifier.verdictVersion());
                 if (prior.isPresent()) {
                     repository.recordReused(
-                            clusterId, c.ticker(), prior.get(), issueKey, LlmVerifier.PROMPT_VERSION);
+                            clusterId, c.ticker(), prior.get(), issueKey, verifier.verdictVersion());
                     reused++;
                     log.debug("판정 재사용 cluster={} ticker={} verified={}",
                             clusterId, c.ticker(), prior.get().verified());
@@ -127,7 +127,7 @@ public class VerificationService {
                 continue;
             }
             VerificationResponse resp = result.get();
-            repository.recordDone(clusterId, c.ticker(), resp, issueKey, LlmVerifier.PROMPT_VERSION);
+            repository.recordDone(clusterId, c.ticker(), resp, issueKey, verifier.verdictVersion());
             if (resp.verified()) {
                 verified++;
                 // 🔴 rationale_en 은 저장하지 않고 감사 로그로만 남긴다(화면용은 rationale_ko).

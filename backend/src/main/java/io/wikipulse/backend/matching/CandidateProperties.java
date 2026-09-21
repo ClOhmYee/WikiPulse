@@ -119,11 +119,27 @@ public class CandidateProperties {
         private String baseUrl = "https://llm-gateway.example.com";
         private String embeddingModel = "text-embedding-3-small";
         /**
-         * LLM 검증(WP-68)에 쓰는 Anthropic 모델. POC(ai/llm-verify-poc)에서 검증한
-         * {@code claude-sonnet-4-5-20250929} 를 그대로 못박는다 — 프롬프트·판정 규칙이 이 모델로
-         * 실측됐다(-45 RESULT.md). 모델을 바꾸면 prompt_version 재검토가 필요하다.
+         * LLM 검증(WP-68)에 쓰는 모델. 🔴 이름이 {@code claude-} 로 시작하면 Anthropic,
+         * 아니면 OpenAI 경로로 나간다 ({@link GatewayVerificationClient}).
+         *
+         * <p>~~{@code claude-sonnet-4-5-20250929}~~ → <b>{@code gpt-5.4-nano}</b>
+         * (2026-09-21, WP-170·-172). 정답셋 3사례 36건에서 32건 정답·<b>오탐 0</b>이고
+         * Sonnet 대비 <b>9.8배</b> 싸다(이슈당 1,317 → 134 크레딧). 제일 걱정한 "경쟁사를 배경지식
+         * 만으로 통과시키는" 오탐도 안 났다 — CrowdStrike 이슈의 PANW·FTNT·AAL·UAL, PayPal 이슈의
+         * V·MA·ADYEY 를 전부 탈락시켰다. 근거: {@code ai/llm-verify-batch-poc/RESULT.md}.
+         *
+         * <p>⚠️ 프롬프트({@code verify_system_v1.txt})는 Sonnet 으로 실측된 계약이다(-45). 모델만
+         * 바꿨고 프롬프트는 안 건드렸다. 되돌리려면 이 값에 {@code claude-*} 를 넣으면 된다.
+         *
+         * <p>⚠️ 모델이 바뀌면 판정 재사용 키도 바뀐다 — {@link LlmVerifier#verdictVersion} 참고.
          */
-        private String verificationModel = "claude-sonnet-4-5-20250929";
+        private String verificationModel = "gpt-5.4-nano";
+        /**
+         * 이슈 요약(WP-119)에 쓰는 모델. 🔴 검증과 <b>분리</b>한다(-172) — 검증은 nano 로
+         * 실측했지만 <b>요약은 nano 로 재지 않았다.</b> 한 노브를 공유하면 검증을 내리는 순간
+         * 요약 품질이 측정 없이 같이 바뀐다.
+         */
+        private String summaryModel = "claude-sonnet-4-5-20250929";
         /**
          * 검증 응답 상한 토큰. 응답은 짧은 JSON 하나(6필드)다. POC 는 400 으로 실측했으나,
          * verified=true 는 rationale_en·rationale_ko 두 자유텍스트를 요구하고 한국어는 문자당
@@ -159,6 +175,14 @@ public class CandidateProperties {
 
         public void setEmbeddingModel(String embeddingModel) {
             this.embeddingModel = embeddingModel;
+        }
+
+        public String getSummaryModel() {
+            return summaryModel;
+        }
+
+        public void setSummaryModel(String summaryModel) {
+            this.summaryModel = summaryModel;
         }
 
         public String getVerificationModel() {

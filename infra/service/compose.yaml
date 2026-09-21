@@ -33,4 +33,9 @@ services:
       #    스냅샷별 pulse_score 상위 N 만 요약해 LLM 실호출을 스냅샷 수 × N 으로 묶는다.
       #    0 = 무제한. ⚠️ 0 으로 두기 전에 운영 DB 로 예상 호출 수를 세어 본다.
       WIKIPULSE_MATCHING_SUMMARY_TOPPERSNAPSHOT: ${WIKIPULSE_MATCHING_SUMMARY_TOPPERSNAPSHOT:-10}
+      # 🔴 이름이 claude- 로 시작하면 Anthropic, 아니면 OpenAI 경로다 (WP-172).
+      #    검증 기본값이 gpt-5.4-nano 로 바뀌었다 — Sonnet 대비 9.8배 싸고 정답셋에서 오탐 0.
+      #    되돌리려면 claude-sonnet-4-5-20250929 을 넣는다. 요약은 측정 안 해서 Sonnet 유지.
+      WIKIPULSE_MATCHING_GATEWAY_VERIFICATIONMODEL: ${WIKIPULSE_MATCHING_GATEWAY_VERIFICATIONMODEL:-gpt-5.4-nano}
+      WIKIPULSE_MATCHING_GATEWAY_SUMMARYMODEL:      ${WIKIPULSE_MATCHING_GATEWAY_SUMMARYMODEL:-claude-sonnet-4-5-20250929}
     # 열면 8080 이 외부에 직접 노출되고, 도커 게시 포트는 ufw 로 막히지도 않는다.

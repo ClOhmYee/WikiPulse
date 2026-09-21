@@ -151,6 +151,8 @@ public class IssueSummaryService {
      * 때문이다(WP-165). 같은 문자열을 두 곳에서 따로 조립하면 조용히 갈린다.
      */
     String modelTag() {
-        return props.getGateway().getVerificationModel() + " (" + IssueSummarizer.PROMPT_VERSION + ")";
+        // 🔴 요약 모델을 쓴다. -172 로 검증만 nano 로 내렸는데 여기서 검증 모델을 읽으면
+        //    요약 내용은 Sonnet 인데 태그만 nano 로 찍혀 재사용 키가 통째로 틀어진다.
+        return props.getGateway().getSummaryModel() + " (" + IssueSummarizer.PROMPT_VERSION + ")";
     }
 }
