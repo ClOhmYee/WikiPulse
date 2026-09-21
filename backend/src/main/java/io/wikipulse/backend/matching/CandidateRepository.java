@@ -30,16 +30,50 @@ public class CandidateRepository {
     /**
      * 후보가 아직 없는, 버려지지 않은 클러스터 id. 최근 스냅샷부터.
      * 재생성(갱신)은 {@code generateFor} 를 직접 불러서 한다 — 폴러는 신규만 집는다.
+     *
+     * <p>🔴 <b>{@code topPerSnapshot} 이 실제 비용 상한이다</b> (WP-176). 옛 조건은
+     * {@code NOT EXISTS cluster_stock} 뿐이라 상한이 {@code batchSize} 하나였는데, 폴마다 대상을
+     * 새로 고르므로 반복하면 미처리 클러스터 전체를 훑는다. 운영 4,474개를 다 돌면 후보마다
+     * 검증이 따라붙어 310k~620k 크레딧이다. ⚠️ 후보 생성 자체는 임베딩이라 싸다 —
+     * 이 상한이 묶는 것은 그 뒤의 <b>LLM 검증</b>이다.
+     *
+     * <p>순위는 <b>그 스냅샷의 전체 클러스터</b> 위에서 매긴다. 처리된 것을 뺀 나머지로 매기면
+     * 처리할수록 하위가 올라와 상한이 조용히 아래로 번진다({@link IssueSummaryRepository
+     * #clustersNeedingSummary} 와 같은 이유).
+     *
+     * <p>⚠️ 같은 {@code issue_key} 에 이미 {@code check_state='DONE'} 판정이 있으면 상한에서
+     * <b>면제</b>한다 — 검증이 {@code (issue_key, ticker, prompt_version)} 으로 재사용하므로
+     * LLM 호출이 0 이다. 면제하면 과거 스냅샷에도 종목이 붙어 시점 슬라이더가 완전해진다.
+     *
+     * <p>🔴 <b>요약 상한과 같은 축·같은 값을 쓴다.</b> 다르면 같은 화면에서 요약은 있는데
+     * 종목이 없거나 그 반대가 생긴다.
+     *
+     * @param topPerSnapshot 스냅샷당 {@code pulse_score} 상위 몇 개까지. 0 이하면 무제한
      */
-    public List<Long> pendingClusterIds(int limit) {
+    public List<Long> pendingClusterIds(int limit, int topPerSnapshot) {
         return jdbc.queryForList("""
-                SELECT c.id
-                  FROM issue_cluster c
-                 WHERE c.status <> 'DISCARDED'
-                   AND NOT EXISTS (SELECT 1 FROM cluster_stock cs WHERE cs.cluster_id = c.id)
-                 ORDER BY c.snapshot_ts DESC
+                WITH ranked AS (
+                    SELECT id, status, issue_key, snapshot_ts,
+                           row_number() OVER (PARTITION BY snapshot_ts
+                                              ORDER BY pulse_score DESC, id ASC) AS rnk
+                      FROM issue_cluster
+                )
+                SELECT r.id
+                  FROM ranked r
+                 WHERE r.status <> 'DISCARDED'
+                   AND NOT EXISTS (SELECT 1 FROM cluster_stock cs WHERE cs.cluster_id = r.id)
+                   AND (:top <= 0
+                        OR r.rnk <= :top
+                        OR EXISTS (SELECT 1
+                                     FROM cluster_stock cs2
+                                    WHERE cs2.issue_key IS NOT NULL
+                                      AND cs2.issue_key = r.issue_key
+                                      AND cs2.check_state = 'DONE'))
+                 ORDER BY r.snapshot_ts DESC
                  LIMIT :limit
-                """, new MapSqlParameterSource("limit", limit), Long.class);
+                """, new MapSqlParameterSource()
+                .addValue("limit", limit)
+                .addValue("top", topPerSnapshot), Long.class);
     }
 
     // 멤버 제목 조회(memberTitlesByPulse)는 ClusterIntroRepository.context 로 옮겼다
