@@ -15,6 +15,7 @@
 | VAL-2026-09-18-LOCAL-05 | 2026-09-18 | 로컬 | `other/pageviews` 시간별 덤프 경로·형식·지연·크기 실측 | 채택 | [시간별 조회수 소스 실측](2026-09-18-other-pageviews-measure.md) |
 | VAL-2026-09-18-LIVE-01 | 2026-09-18 | 데이터 EC2 | EventStreams → Kafka → 2-node Spark → HDFS checkpoint LIVE 1차 배포·재시작 복구 | PASS (재배포 `fae8bb7` 재검증 포함) | [LIVE 파이프라인 1차 배포 검증](2026-09-18-live-pipeline-phase1.md) |
 | VAL-2026-09-21-LOCAL-01 | 2026-09-21 | 로컬 | `mediawiki_history` 미공개 구간(2026-09-01 02:00~09-17)의 편집 소스 대안 | PASS — RecentChanges 채택, 2026-10-01 기한 있음 | [편집 소스 공백 대안 실측](2026-09-21-edit-source-gap.md) |
+| VAL-2026-09-21-PROD-01 | 2026-09-21 | 서비스 EC2 운영 | LIVE `SINK=spike` + `live-cycle` 최초 운영 상주 배포, 운영 DB 확정 3건 | PASS — 운영 첫 확정 건은 배포 직후라 미재확인 | [LIVE 파이프라인 운영 활성화](2026-09-21-live-pipeline-production-enable.md) |
 
 ## 기록 규칙
 
