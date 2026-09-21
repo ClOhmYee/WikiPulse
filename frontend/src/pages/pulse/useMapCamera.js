@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
-// Four original zoom steps up from the old minimum; three down from the maximum.
-export const MIN_ZOOM = 0.08 * 1.4 ** 4;
-export const MAX_ZOOM = 4 / 1.4 ** 3;
+export const MIN_ZOOM = 0.12 * 1.2 ** 4;
+export const OVERVIEW_ZOOM = 0.45 * 1.2 ** 5;
+export const MAX_ZOOM = (4 / 1.4 ** 3) * 1.2 ** 2;
 export const DEFAULT_ZOOM = 1 / 1.2;
 export const MAP_SCALE = 0.85;
 export const clampZoom = (zoom) => Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, zoom));
@@ -49,16 +49,9 @@ export default function useMapCamera(svgRef) {
     [paint],
   );
 
-  const zoomBy = useCallback(
-    (factor, anchor) => {
-      const old = target.current;
-      const zoom = clampZoom(old.zoom * factor);
-      const ratio = zoom / old.zoom;
-      target.current = {
-        zoom,
-        x: anchor.x - (anchor.x - old.x) * ratio,
-        y: anchor.y - (anchor.y - old.y) * ratio,
-      };
+  const animateTo = useCallback(
+    (destination) => {
+      target.current = destination;
       if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
         move(target.current);
         return;
@@ -93,6 +86,20 @@ export default function useMapCamera(svgRef) {
     [move, paint],
   );
 
+  const zoomBy = useCallback(
+    (factor, anchor) => {
+      const old = target.current;
+      const zoom = clampZoom(old.zoom * factor);
+      const ratio = zoom / old.zoom;
+      animateTo({
+        zoom,
+        x: anchor.x - (anchor.x - old.x) * ratio,
+        y: anchor.y - (anchor.y - old.y) * ratio,
+      });
+    },
+    [animateTo],
+  );
+
   useEffect(() => {
     const svg = svgRef.current;
     const wheel = (event) => {
@@ -115,5 +122,5 @@ export default function useMapCamera(svgRef) {
     };
   }, [svgRef, zoomBy, stop]);
 
-  return { camera, current, subscribe, move, stop, zoomBy };
+  return { camera, current, subscribe, move, stop, zoomBy, animateTo };
 }

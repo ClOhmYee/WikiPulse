@@ -97,7 +97,7 @@ export function createLayoutEngine() {
           placed.every(
             (other) =>
               Math.hypot(x - other.x, y - other.y) >=
-              cluster.radius + other.radius + 120,
+              cluster.radius + other.radius + 240,
           )
         )
           break;

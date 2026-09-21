@@ -1,11 +1,64 @@
 import { test, expect } from "@playwright/test";
 
+test("overview camera frames leave hidden detail geometry unchanged", async ({
+  page,
+}) => {
+  await page.goto("/#/pulse");
+  const map = page.locator(".document-map");
+  await map.locator(".document-cluster").first().waitFor();
+  await expect(map).toHaveAttribute("data-overview", "true");
+  await map.evaluate((element) => {
+    window.overviewWork = { mode: 0, detail: 0, font: 0 };
+    window.overviewObserver = new MutationObserver((records) => {
+      for (const record of records) {
+        if (
+          record.target === element &&
+          record.attributeName === "data-overview"
+        )
+          window.overviewWork.mode++;
+        if (
+          record.target.matches(
+            ".document-cluster__heading, .document-node-label__text",
+          ) &&
+          ["transform", "data-scan-y", "font-size"].includes(
+            record.attributeName,
+          )
+        )
+          window.overviewWork.detail++;
+        if (
+          record.target.matches(".document-cluster__summary-title") &&
+          record.attributeName === "font-size"
+        )
+          window.overviewWork.font++;
+      }
+    });
+    window.overviewObserver.observe(element, {
+      attributes: true,
+      subtree: true,
+    });
+  });
+  await map.getByRole("button", { name: "지도 확대", exact: true }).click();
+  await expect(map).toHaveAttribute("data-zoom", "1");
+  expect(await page.evaluate(() => window.overviewWork)).toEqual({
+    mode: 0,
+    detail: 0,
+    font: 0,
+  });
+  await map.getByRole("button", { name: "지도 확대", exact: true }).click();
+  await expect(map).toHaveAttribute("data-zoom", "1.2");
+  expect(await page.evaluate(() => window.overviewWork.mode)).toBe(1);
+  await expect(
+    map.locator('.document-cluster[data-rank="0"] .document-node').first(),
+  ).toBeVisible();
+  await page.evaluate(() => window.overviewObserver.disconnect());
+});
+
 test("zoom reuses title geometry and restores culled clusters without losing documents", async ({
   page,
 }) => {
   await page.goto("/#/pulse");
   const map = page.locator(".document-map");
-  await map.locator(".document-node").first().waitFor();
+  await map.locator(".document-cluster").first().waitFor();
   await map.locator(".document-map__controls button").last().click();
   const svg = map.locator(":scope > svg");
   const controls = map.locator(".document-map__controls button");
@@ -72,16 +125,20 @@ test("title glow follows the transformed box through zoom and clears on pause", 
 }) => {
   await page.goto("/#/pulse");
   const map = page.locator(".document-map");
-  await map.locator(".document-node").first().waitFor();
+  await map.locator(".document-cluster").first().waitFor();
   await map.locator(".document-map__controls button").last().click();
   const controls = map.locator(".document-map__controls button");
   const svg = map.locator(":scope > svg");
+  await controls.nth(2).click();
+  await expect(map).toHaveAttribute("data-zoom", "1");
+  await controls.nth(2).click();
+  await expect(map).toHaveAttribute("data-zoom", "1.2");
   const heading = map.locator(
     '.document-cluster[data-rank="0"] .document-cluster__heading',
   );
   const y = await heading.getAttribute("data-scan-y");
   await controls.nth(2).click();
-  await expect(map).toHaveAttribute("data-zoom", "1");
+  await expect(map).toHaveAttribute("data-zoom", "1.44");
   expect(await heading.getAttribute("data-scan-y")).not.toBe(y);
   await svg.focus();
   await page.keyboard.press("ArrowUp");
