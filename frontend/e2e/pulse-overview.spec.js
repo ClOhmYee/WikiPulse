@@ -12,13 +12,15 @@ for (const mobile of [false, true]) {
     await expect(center).toBeVisible();
     const nodeCount = await map.locator(".document-node").count();
     const out = page.getByRole("button", { name: "지도 축소", exact: true });
-    for (let i = 0; i < 4; i++) await out.click();
+    await out.click();
+    await expect(map).toHaveAttribute("data-overview", "false");
+    await out.click();
     await expect(map).toHaveAttribute("data-overview", "true");
     await expect(center.locator(".document-node").first()).toBeHidden();
     await map.screenshot({
       path: `../.impeccable/review/overview-${mobile ? "mobile" : "desktop"}.png`,
     });
-    for (let i = 0; i < 7; i++) await out.click();
+    for (let i = 0; i < 9; i++) await out.click();
     await expect(map).toHaveAttribute("data-zoom", "0.12");
     await expect(out).toBeDisabled();
     const fits = await map
