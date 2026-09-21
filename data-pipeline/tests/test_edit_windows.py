@@ -155,10 +155,30 @@ def test_live_pipeline_does_not_crash_when_planning_second_micro_batch(spark):
         .start()
     )
     try:
-        deadline = time.monotonic() + 30
+        # ⚠️ 이 상한은 "정상이면 이만큼 걸린다"가 아니라 "이만큼 넘으면 멈춘 것이다"다.
+        #    Spark JVM 기동 + 마이크로배치 두 번이라 러너 부하에 그대로 흔들린다.
+        #    ~~30초~~ → 180초 (WP-177). 30초는 여유가 2배뿐이었다 — 한가한
+        #    컨테이너에서 15초가 걸리니, 부하가 걸리면 그냥 넘는다.
+        #
+        # 🔴 이건 성능 테스트가 아니다. 잡으려는 회귀는 위의 EventTimeWatermark 개수와
+        #    "두 번째 마이크로배치가 계획 단계에서 터지지 않는다" 뿐이다. 상한을 조여도
+        #    잡는 버그가 늘지 않고, 성공한 실행이 빨갛게 뜨는 것만 늘어난다. 그러면
+        #    진짜 실패와 구분이 안 되고 다음에 정말 깨져도 무시하게 된다(-174 와 같은 교훈).
+        timeout = float(os.environ.get("WIKIPULSE_STREAM_TEST_TIMEOUT", "180"))
+        started = time.monotonic()
+        deadline = started + timeout
         while query.isActive and len(query.recentProgress) < 2:
             query.awaitTermination(0.2)
-            assert time.monotonic() < deadline, "second micro-batch did not finish"
+            # 쿼리가 죽었으면 느린 게 아니라 터진 것이다 — 원인을 그대로 보여준다.
+            failure = query.exception()
+            assert failure is None, f"streaming query failed: {failure}"
+            assert time.monotonic() < deadline, (
+                f"second micro-batch did not finish in {timeout:.0f}s "
+                f"(elapsed {time.monotonic() - started:.1f}s, "
+                f"progress {len(query.recentProgress)}/2). "
+                "러너가 느린 것이면 WIKIPULSE_STREAM_TEST_TIMEOUT 으로 늘린다."
+            )
+        assert query.exception() is None, f"streaming query failed: {query.exception()}"
         assert len(query.recentProgress) >= 2
     finally:
         query.stop()
