@@ -31,6 +31,7 @@ import gzip
 import json
 import shutil
 import sys
+import time
 import urllib.error
 from dataclasses import asdict
 from datetime import datetime, timedelta, timezone
@@ -52,6 +53,10 @@ VALUES (%s, %s, %s)
 ON CONFLICT (page_id, ts_hour) DO UPDATE SET views = EXCLUDED.views
 """
 
+#: 캐시 보존 시간. `live-cycle`의 `--max-hours`(기본 6)와 candidate 36시간 만료를
+#: 합쳐도 이 값을 넘지 않는다 — 그래서 이보다 오래된 캐시는 다시 읽힐 일이 없다.
+DEFAULT_CACHE_MAX_AGE_HOURS = 48
+
 
 def dump_url(ts_hour: str) -> str:
     """`2025-06-12T09:00:00` → /{YYYY}/{YYYY}-{MM}/pageviews-{YYYYMMDD}-{HH}0000.gz"""
@@ -60,6 +65,29 @@ def dump_url(ts_hour: str) -> str:
     hour = time_part[:2]
     return (f"{PAGEVIEW_HOURLY_BASE}/{year}/{year}-{month}/"
             f"pageviews-{year}{month}{day}-{hour}0000.gz")
+
+
+def prune_cache(cache_dir: Path, *, max_age_hours: int = DEFAULT_CACHE_MAX_AGE_HOURS,
+                 now: float | None = None) -> int:
+    """`max_age_hours` 보다 오래된 원본 캐시(`pageviews-*.gz`)를 지운다. 반환: 지운 개수.
+
+    `download()`가 남기는 캐시는 같은 시간을 다시 요청할 때 재다운로드를 피하려고
+    있다(그쪽 독스트링). 그 재사용 창을 넘긴 파일은 이미 `page_view_hourly`에
+    필요한 조각이 다 들어갔고 다시 읽힐 일이 없다 — LIVE 원본 정리 로직 부재
+    (`infra/live-cycle/README.md` "지우는 코드는 없다") 를 메운다.
+
+    ⚠️ `.partial` 로 끝나는 미완료 다운로드는 지우지 않는다 — 진행 중일 수 있다.
+    """
+    cutoff = (now if now is not None else time.time()) - max_age_hours * 3600
+    removed = 0
+    for dump in cache_dir.glob("pageviews-*.gz"):
+        try:
+            if dump.stat().st_mtime < cutoff:
+                dump.unlink()
+                removed += 1
+        except FileNotFoundError:
+            pass
+    return removed
 
 
 def read_lines(path: Path):
@@ -238,6 +266,10 @@ def main(argv: list[str] | None = None) -> int:
     finally:
         if conn is not None:
             conn.close()
+
+    removed = prune_cache(cache_dir)
+    if removed:
+        print(f"캐시 정리: {removed}개 삭제 ({DEFAULT_CACHE_MAX_AGE_HOURS}시간 초과)")
 
     print(f"요약: 적재 {tally['ok']} · 건너뜀 {tally['skip']} · 대기 {tally['pending']}")
     # 대기(아직 안 나온 시간)만 남은 것은 실패가 아니다 — 다음 실행에서 받는다.

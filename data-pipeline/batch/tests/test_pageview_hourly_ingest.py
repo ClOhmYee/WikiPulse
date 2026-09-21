@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import gzip
 import json
+import os
 import urllib.error
 from pathlib import Path
 
@@ -172,3 +173,40 @@ def test_main_latest는_과거_시간을_오름차순으로_준다(monkeypatch):
                         lambda ts, *a, **k: seen.append(ts) or "ok")
     assert ingest.main(["--latest", "3", "--dry-run"]) == 0
     assert len(seen) == 3 and seen == sorted(seen)
+
+
+# ---------------------------------------------------------------- 캐시 정리
+
+def test_prune_cache_오래된_것만_지운다(tmp_path):
+    old = tmp_path / "pageviews-20250601-000000.gz"
+    fresh = tmp_path / "pageviews-20250601-010000.gz"
+    old.write_bytes(b"old")
+    fresh.write_bytes(b"fresh")
+
+    now = 1_000_000.0
+    old_mtime = now - 49 * 3600  # 49시간 전 — 보존기한(48시간) 초과
+    fresh_mtime = now - 1 * 3600  # 1시간 전 — 보존기한 이내
+    os.utime(old, (old_mtime, old_mtime))
+    os.utime(fresh, (fresh_mtime, fresh_mtime))
+
+    removed = ingest.prune_cache(tmp_path, max_age_hours=48, now=now)
+
+    assert removed == 1
+    assert not old.exists()
+    assert fresh.exists()
+
+
+def test_prune_cache_partial_다운로드는_안_지운다(tmp_path):
+    partial = tmp_path / "pageviews-20250601-000000.gz.part"
+    partial.write_bytes(b"in-progress")
+    old_mtime = 1_000_000.0 - 49 * 3600
+    os.utime(partial, (old_mtime, old_mtime))
+
+    removed = ingest.prune_cache(tmp_path, max_age_hours=48, now=1_000_000.0)
+
+    assert removed == 0
+    assert partial.exists()
+
+
+def test_prune_cache_빈_디렉터리는_0(tmp_path):
+    assert ingest.prune_cache(tmp_path) == 0
