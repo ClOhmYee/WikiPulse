@@ -27,6 +27,12 @@ import org.springframework.stereotype.Component;
  * 스키마 변경(db 마이그레이션)과 LLM 검증 단계(WP-68)의 상태 전이 협의가 필요해
  * 후속 이슈로 분리한다. 그전까지 재생성은 {@link StockCandidateService#generateFor}를 직접
  * 호출해 한다.
+ *
+ * <p>🔴 <b>비용 상한은 {@code batchSize} 가 아니라 {@code top-per-snapshot} 이다</b>
+ * (WP-176). batchSize 는 한 폴의 크기일 뿐이라 폴을 반복하면 미처리 클러스터 전체를
+ * 훑는다. ⚠️ 후보 생성은 임베딩이라 싸지만, {@code verification.enabled} 가 켜져 있으면
+ * 후보가 생기는 즉시 <b>LLM 검증이 따라붙는다</b> — 거기가 비싼 쪽이다. 선택 규칙은
+ * {@link CandidateRepository#pendingClusterIds} 참고.
  */
 @Component
 @ConditionalOnProperty(prefix = "wikipulse.matching.scheduler", name = "enabled", havingValue = "true")
@@ -49,7 +55,9 @@ public class StockCandidateWorker {
 
     @Scheduled(fixedDelayString = "${wikipulse.matching.scheduler.fixed-delay:PT5M}")
     public void pollAndGenerate() {
-        List<Long> clusterIds = repository.pendingClusterIds(props.getScheduler().getBatchSize());
+        List<Long> clusterIds = repository.pendingClusterIds(
+                props.getScheduler().getBatchSize(),
+                props.getScheduler().getTopPerSnapshot());
         if (clusterIds.isEmpty()) {
             return;
         }

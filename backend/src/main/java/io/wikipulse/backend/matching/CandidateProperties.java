@@ -239,6 +239,22 @@ public class CandidateProperties {
      * 때리는 것을 막는다. 서비스 자체는 항상 살아 있어 다른 트리거(수동·검증 워커)로 부를 수 있다.
      */
     public static class Scheduler {
+        /**
+         * 스냅샷 하나에서 후보를 만들 클러스터 수 상한 ({@code pulse_score} 상위). 0 이면 무제한.
+         *
+         * <p>🔴 <b>{@code batchSize} 는 비용 상한이 아니다</b> (WP-176). 폴마다 대상을
+         * 새로 고르므로 반복하면 미처리 클러스터 전체를 훑는다 — 운영 4,474개를 다 돌면
+         * 후보 10~20개씩 검증이 따라붙어 310k~620k 크레딧이다.
+         *
+         * <p>⚠️ 후보 생성 자체는 싸다(임베딩 0.04/건). 이 상한의 실제 효과는 그 뒤 <b>검증</b>
+         * 호출 수를 묶는 것이다 — {@code VERIFICATION_ENABLED} 가 켜져 있으면 후보가 생기는
+         * 즉시 검증이 따라붙는다.
+         *
+         * <p>🔴 <b>요약 상한과 같은 값이어야 한다</b>({@link Summary#topPerSnapshot}). 다르면
+         * 같은 화면에서 요약은 있는데 종목이 없거나 그 반대가 생긴다.
+         */
+        private int topPerSnapshot = 10;
+
         private boolean enabled = false;
         /**
          * 폴 간격 (ISO-8601 Duration). ⚠️ 실제 바인딩은 {@code @Scheduled(fixedDelayString=...)}
@@ -263,6 +279,14 @@ public class CandidateProperties {
 
         public void setFixedDelay(String fixedDelay) {
             this.fixedDelay = fixedDelay;
+        }
+
+        public int getTopPerSnapshot() {
+            return topPerSnapshot;
+        }
+
+        public void setTopPerSnapshot(int topPerSnapshot) {
+            this.topPerSnapshot = topPerSnapshot;
         }
 
         public int getBatchSize() {
