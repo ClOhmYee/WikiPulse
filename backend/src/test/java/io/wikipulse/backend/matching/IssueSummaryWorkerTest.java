@@ -1,6 +1,7 @@
 package io.wikipulse.backend.matching;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -36,8 +37,9 @@ class IssueSummaryWorkerTest {
     void 대상_선택에_스냅샷_상한과_모델을_넘긴다() {
         props.getSummary().setBatchSize(7);
         props.getSummary().setTopPerSnapshot(3);
+        props.getSummary().setSource("replay");
         when(service.modelTag()).thenReturn("claude-x (summary_v1)");
-        when(repository.clustersNeedingSummary(anyInt(), anyInt(), anyString()))
+        when(repository.clustersNeedingSummary(anyInt(), anyInt(), anyString(), any()))
                 .thenReturn(List.of());
 
         worker().pollAndSummarize();
@@ -45,18 +47,23 @@ class IssueSummaryWorkerTest {
         ArgumentCaptor<Integer> limit = ArgumentCaptor.forClass(Integer.class);
         ArgumentCaptor<Integer> top = ArgumentCaptor.forClass(Integer.class);
         ArgumentCaptor<String> model = ArgumentCaptor.forClass(String.class);
-        verify(repository).clustersNeedingSummary(limit.capture(), top.capture(), model.capture());
+        ArgumentCaptor<String> source = ArgumentCaptor.forClass(String.class);
+        verify(repository).clustersNeedingSummary(
+                limit.capture(), top.capture(), model.capture(), source.capture());
         assertThat(limit.getValue()).isEqualTo(7);
         assertThat(top.getValue()).isEqualTo(3);
         // 🔴 서비스가 저장에 쓰는 것과 같은 model 이어야 한다. 따로 조립하면 조용히 갈려서
         //    재사용 면제가 영영 안 걸리고 매번 LLM 을 부른다.
         assertThat(model.getValue()).isEqualTo("claude-x (summary_v1)");
+        // 설정의 source 가 실제로 전달되는지 — 안 넘기면 폴러가 LIVE 부터 집어
+        // 과거 구간을 채우려던 의도가 조용히 무시된다(WP-168).
+        assertThat(source.getValue()).isEqualTo("replay");
     }
 
     @Test
     void 한_클러스터가_실패해도_나머지는_계속_처리된다() {
         when(service.modelTag()).thenReturn("m");
-        when(repository.clustersNeedingSummary(anyInt(), anyInt(), anyString()))
+        when(repository.clustersNeedingSummary(anyInt(), anyInt(), anyString(), any()))
                 .thenReturn(List.of(1L, 2L, 3L));
         when(service.processCluster(2L)).thenThrow(new RuntimeException("GATEWAY 오류"));
 
@@ -70,7 +77,7 @@ class IssueSummaryWorkerTest {
     @Test
     void 대상이_없으면_아무것도_하지_않는다() {
         when(service.modelTag()).thenReturn("m");
-        when(repository.clustersNeedingSummary(anyInt(), anyInt(), anyString()))
+        when(repository.clustersNeedingSummary(anyInt(), anyInt(), anyString(), any()))
                 .thenReturn(List.of());
 
         worker().pollAndSummarize();

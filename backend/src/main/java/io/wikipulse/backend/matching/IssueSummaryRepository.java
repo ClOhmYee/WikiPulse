@@ -158,16 +158,29 @@ public class IssueSummaryRepository {
      * 과거 스냅샷도 요약을 갖게 되어 시점 슬라이더에서 빈 요약이 사라진다 — 비용 증가 없이
      * 시점 정합성이 좋아진다.
      *
+     * <p>{@code source} 는 대상을 한 출처로 좁힌다(WP-168). 정렬이 {@code id DESC} 라
+     * 폴러는 <b>최근 생성분부터</b> 집는다 — LIVE 가 쌓이는 동안에는 과거 replay 구간에
+     * 영원히 닿지 못한다. 특정 구간을 먼저 채우려면 이 값으로 좁힌다. 순위는 좁힌 출처
+     * 안에서 매긴다({@link CandidateRepository#pendingClusterIds} 와 같은 이유 — 화면도
+     * {@code source} 로 거른다).
+     *
+     * <p>🔴 <b>후보 생성 쪽과 같은 값이어야 한다.</b> 한쪽만 좁히면 같은 화면에서 요약은
+     * 있는데 종목이 없거나 그 반대가 생긴다 — {@code topPerSnapshot} 과 같은 제약이다.
+     *
      * @param topPerSnapshot 스냅샷당 {@code pulse_score} 상위 몇 개까지. 0 이하면 무제한
      * @param model {@code issue_report.model} 동등성으로 재사용 가능 여부를 본다
+     * @param source {@code issue_cluster.source} 한정. {@code null}·빈 문자열이면 전체
      */
-    public List<Long> clustersNeedingSummary(int limit, int topPerSnapshot, String model) {
+    public List<Long> clustersNeedingSummary(int limit, int topPerSnapshot, String model,
+                                             String source) {
         return jdbc.queryForList("""
                 WITH ranked AS (
                     SELECT id, status, issue_key,
                            row_number() OVER (PARTITION BY snapshot_ts
                                               ORDER BY pulse_score DESC, id ASC) AS rnk
                       FROM issue_cluster
+                     WHERE CAST(:source AS text) IS NULL
+                        OR source = CAST(:source AS text)
                 )
                 SELECT id
                   FROM ranked
@@ -185,6 +198,8 @@ public class IssueSummaryRepository {
                 """, new MapSqlParameterSource()
                 .addValue("limit", limit)
                 .addValue("top", topPerSnapshot)
-                .addValue("model", model), Long.class);
+                .addValue("model", model)
+                .addValue("source", source == null || source.isBlank() ? null : source),
+                Long.class);
     }
 }

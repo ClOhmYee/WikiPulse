@@ -18,6 +18,8 @@ LLM 검증이 따라붙어 310k~620k 크레딧이다.
     - 같은 issue_key 에 DONE 판정이 있으면 상한과 무관하게 고른다 (검증 재사용 → LLM 0)
     - PENDING·FAILED 만 있으면 면제되지 않는다 (재사용할 판정이 아직 없다)
     - 0 이면 무제한 (옛 동작)
+    - source 로 대상을 한 출처로 좁힌다 (WP-168). NULL 이면 전체
+    - 순위는 좁힌 출처 **안에서** 매긴다 — 화면도 source 로 거르므로 축을 맞춰야 한다
 """
 
 from __future__ import annotations
@@ -35,6 +37,8 @@ WITH ranked AS (
            row_number() OVER (PARTITION BY snapshot_ts
                               ORDER BY pulse_score DESC, id ASC) AS rnk
       FROM issue_cluster
+     WHERE %(source)s::text IS NULL
+        OR source = %(source)s::text
 )
 SELECT r.id
   FROM ranked r
@@ -52,19 +56,20 @@ SELECT r.id
 """
 
 
-def _select(conn, top: int, limit: int = 100) -> list[int]:
+def _select(conn, top: int, limit: int = 100, source=None) -> list[int]:
     with conn.cursor() as cur:
-        cur.execute(_SELECT, {"top": top, "limit": limit})
+        cur.execute(_SELECT, {"top": top, "limit": limit, "source": source})
         return [row[0] for row in cur.fetchall()]
 
 
 def _cluster(conn, *, score: float, status: str = "DETECTED",
-             snapshot: str = "2026-09-01T00:00:00+00:00", issue_key=None) -> int:
+             snapshot: str = "2026-09-01T00:00:00+00:00", issue_key=None,
+             source: str = "live") -> int:
     rows = q(
         conn,
-        "INSERT INTO issue_cluster (snapshot_ts, pulse_score, status, issue_key) "
-        "VALUES (%s, %s, %s, %s) RETURNING id",
-        snapshot, score, status, issue_key,
+        "INSERT INTO issue_cluster (snapshot_ts, pulse_score, status, issue_key, source) "
+        "VALUES (%s, %s, %s, %s, %s) RETURNING id",
+        snapshot, score, status, issue_key, source,
     )
     return rows[0][0]
 
@@ -179,3 +184,30 @@ def test_limit_은_한_폴의_크기일_뿐이다(conn):
 
     assert len(picked) == 2
     assert set(picked) <= set(ids)
+
+
+def test_source_로_대상을_좁힌다(conn):
+    """🔴 정렬이 snapshot_ts DESC 라 LIVE 가 쌓이면 과거 replay 에 영원히 못 닿는다."""
+    live = _cluster(conn, score=9.0, source="live",
+                    snapshot="2026-09-21T00:00:00+00:00")
+    replay = _cluster(conn, score=9.0, source="replay",
+                      snapshot="2025-06-12T00:00:00+00:00")
+
+    assert _select(conn, top=0, source="replay") == [replay]
+    assert _select(conn, top=0, source="live") == [live]
+    assert set(_select(conn, top=0)) == {live, replay}
+
+
+def test_순위는_좁힌_출처_안에서_매긴다(conn):
+    """밖에서 매기면 다른 출처가 순위 자리를 먹어 상한보다 적게 뽑힌다.
+
+    같은 snapshot_ts 에 두 출처가 섞인 경우다. 화면도 source 로 거르므로
+    "보여주는 상위 N" 과 대상이 어긋나면 안 된다.
+    """
+    snap = "2026-09-21T00:00:00+00:00"
+    _cluster(conn, score=9.0, source="live", snapshot=snap)
+    _cluster(conn, score=8.0, source="live", snapshot=snap)
+    first = _cluster(conn, score=5.0, source="replay", snapshot=snap)
+    second = _cluster(conn, score=1.0, source="replay", snapshot=snap)
+
+    assert set(_select(conn, top=2, source="replay")) == {first, second}
