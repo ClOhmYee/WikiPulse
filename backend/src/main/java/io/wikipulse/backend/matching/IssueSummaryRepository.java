@@ -144,14 +144,47 @@ public class IssueSummaryRepository {
     /**
      * 요약·상태 전이가 더 필요한 클러스터 id. DISCARDED·CONFIRMED 는 뺀다(이미 종착·폐기).
      * 최근 스냅샷부터. 워커 폴러가 대상 클러스터를 고를 때 쓴다.
+     *
+     * <p>🔴 <b>{@code topPerSnapshot} 이 실제 비용 상한이다</b> (WP-165). 옛 조건은
+     * {@code status IN ('DETECTED','VERIFYING')} 뿐이라 상한이 batchSize 하나였는데, 폴마다
+     * 대상을 새로 고르므로 반복하면 미처리 클러스터 전체를 훑는다. 운영 4,474건 전수 처리가
+     * 약 277,000 크레딧이므로 실행 범위를 제한한다.
+     *
+     * <p>순위는 <b>그 스냅샷의 전체 클러스터</b> 위에서 매긴다. DETECTED·VERIFYING 만으로
+     * 매기면 상위가 CONFIRMED 로 빠질 때마다 하위가 올라와 상한이 조용히 새어 나간다.
+     *
+     * <p>⚠️ <b>재사용 가능한 클러스터는 상한에서 면제한다.</b> 같은 issue_key·같은 model 의
+     * 요약이 이미 있으면 {@link #findPriorSummary} 가 복사하므로 LLM 호출이 0 이다. 면제하면
+     * 과거 스냅샷도 요약을 갖게 되어 시점 슬라이더에서 빈 요약이 사라진다 — 비용 증가 없이
+     * 시점 정합성이 좋아진다.
+     *
+     * @param topPerSnapshot 스냅샷당 {@code pulse_score} 상위 몇 개까지. 0 이하면 무제한
+     * @param model {@code issue_report.model} 동등성으로 재사용 가능 여부를 본다
      */
-    public List<Long> clustersNeedingSummary(int limit) {
+    public List<Long> clustersNeedingSummary(int limit, int topPerSnapshot, String model) {
         return jdbc.queryForList("""
+                WITH ranked AS (
+                    SELECT id, status, issue_key,
+                           row_number() OVER (PARTITION BY snapshot_ts
+                                              ORDER BY pulse_score DESC, id ASC) AS rnk
+                      FROM issue_cluster
+                )
                 SELECT id
-                  FROM issue_cluster
+                  FROM ranked
                  WHERE status IN ('DETECTED', 'VERIFYING')
+                   AND (:top <= 0
+                        OR rnk <= :top
+                        OR EXISTS (SELECT 1
+                                     FROM issue_report r
+                                     JOIN issue_cluster c2 ON c2.id = r.cluster_id
+                                    WHERE c2.issue_key IS NOT NULL
+                                      AND c2.issue_key = ranked.issue_key
+                                      AND r.model = :model))
                  ORDER BY id DESC
                  LIMIT :limit
-                """, new MapSqlParameterSource("limit", limit), Long.class);
+                """, new MapSqlParameterSource()
+                .addValue("limit", limit)
+                .addValue("top", topPerSnapshot)
+                .addValue("model", model), Long.class);
     }
 }
