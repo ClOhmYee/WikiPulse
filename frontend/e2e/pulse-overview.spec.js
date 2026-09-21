@@ -12,6 +12,9 @@ for (const mobile of [false, true]) {
     await expect(center).toBeVisible();
     const nodeCount = await map.locator(".document-node").count();
     const out = page.getByRole("button", { name: "지도 축소", exact: true });
+    await expect(map).toHaveAttribute("data-overview", "true");
+    const zoomIn = page.getByRole("button", { name: "지도 확대", exact: true });
+    for (let i = 0; i < 3; i++) await zoomIn.click();
     await out.click();
     await expect(map).toHaveAttribute("data-overview", "false");
     await out.click();
@@ -20,7 +23,7 @@ for (const mobile of [false, true]) {
     await map.screenshot({
       path: `../.impeccable/review/overview-${mobile ? "mobile" : "desktop"}.png`,
     });
-    for (let i = 0; i < 9; i++) await out.click();
+    for (let i = 0; i < 12; i++) await out.click();
     await expect(map).toHaveAttribute("data-zoom", "0.12");
     await expect(out).toBeDisabled();
     const fits = await map
@@ -66,6 +69,7 @@ for (const mobile of [false, true]) {
     await expect(map.locator(".document-node")).toHaveCount(nodeCount);
     await page.getByRole("button", { name: "지도 위치 초기화" }).click();
     await expect(map).toHaveAttribute("data-zoom", String(1 / 1.2));
+    await expect(map).toHaveAttribute("data-overview", "true");
   });
 }
 
