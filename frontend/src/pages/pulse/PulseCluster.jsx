@@ -114,27 +114,50 @@ export default memo(function PulseCluster({
         onClick={() => onActivate(cluster)}
         onKeyDown={activate(() => onActivate(cluster))}
       >
-        <circle
-          className="document-cluster__summary-circle"
-          r={overviewRadius(cluster)}
-        />
-        <text
-          className="document-cluster__summary-title"
-          textAnchor="middle"
-          dominantBaseline="central"
-          fontSize={summary.fontSize}
-          aria-hidden="true"
+        <g
+          className="document-cluster__summary"
+          data-scan-x={cluster.x}
+          data-scan-y={cluster.y}
+          data-scan-mode="overview"
         >
-          {[0, 1, 2].map((index) => (
-            <tspan
-              key={index}
-              x="0"
-              y={(index - (summary.lines.length - 1) / 2) * summary.lineHeight}
-            >
-              {summary.lines[index] || ""}
-            </tspan>
-          ))}
-        </text>
+          <circle
+            className="document-node__halo"
+            r={overviewRadius(cluster) * 1.22}
+            fill={`url(#${marker}-${category}-halo)`}
+            aria-hidden="true"
+          />
+          <circle
+            className="document-cluster__summary-circle document-node__body"
+            r={overviewRadius(cluster)}
+            fill={`url(#${marker}-${category}-body)`}
+            vectorEffect="non-scaling-stroke"
+          />
+          <circle
+            className="document-node__echo"
+            r={overviewRadius(cluster) * 1.1}
+            vectorEffect="non-scaling-stroke"
+            aria-hidden="true"
+          />
+          <text
+            className="document-cluster__summary-title"
+            textAnchor="middle"
+            dominantBaseline="central"
+            fontSize={summary.fontSize}
+            aria-hidden="true"
+          >
+            {[0, 1, 2].map((index) => (
+              <tspan
+                key={index}
+                x="0"
+                y={
+                  (index - (summary.lines.length - 1) / 2) * summary.lineHeight
+                }
+              >
+                {summary.lines[index] || ""}
+              </tspan>
+            ))}
+          </text>
+        </g>
         <title>{cluster.label}</title>
         <circle className="document-cluster__boundary" r={cluster.radius} />
         <circle

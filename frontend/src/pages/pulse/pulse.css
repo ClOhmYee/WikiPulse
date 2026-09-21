@@ -603,26 +603,18 @@
     stroke-opacity 180ms ease-out,
     fill-opacity 180ms ease-out;
 }
-.document-cluster__summary-circle,
-.document-cluster__summary-title {
+.document-cluster__summary {
   display: none;
 }
 .document-map[data-overview="true"] .document-cluster > :not([role="button"]),
 .document-map[data-overview="true"]
   .document-cluster
   > [role="button"]
-  > :not(.document-cluster__summary-circle):not(
-    .document-cluster__summary-title
-  ):not(title) {
+  > :not(.document-cluster__summary):not(title) {
   display: none;
 }
-.document-map[data-overview="true"] .document-cluster__summary-circle {
+.document-map[data-overview="true"] .document-cluster__summary {
   display: block;
-  fill: #081428;
-  stroke: var(--cluster-color);
-  stroke-width: 1.5;
-  stroke-opacity: 0.75;
-  vector-effect: non-scaling-stroke;
 }
 .document-map[data-overview="true"] .document-cluster__summary-title {
   display: block;
@@ -633,11 +625,16 @@
 .document-map[data-overview="true"]
   .document-cluster
   > [role="button"]:hover
-  > circle,
+  .document-cluster__summary-circle,
+.document-map[data-overview="true"]
+  .document-cluster
+  > [role="button"]:focus-visible
+  .document-cluster__summary-circle,
 .document-map[data-overview="true"]
   .document-cluster[data-selected="true"]
   .document-cluster__summary-circle {
-  fill: color-mix(in srgb, var(--cluster-color) 18%, #081428);
+  stroke: #e5f6ff;
+  stroke-width: 2.5;
   stroke-opacity: 1;
 }
 .document-map[data-overview="true"] .document-map__legend {
