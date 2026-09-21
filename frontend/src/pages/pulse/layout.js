@@ -106,6 +106,11 @@ export function createLayoutEngine() {
       Object.assign(cluster, { x, y, rank });
       placed.push(cluster);
     }
+    // Spread the completed layout uniformly without changing circle sizes.
+    for (const cluster of placed) {
+      cluster.x *= 1.5;
+      cluster.y *= 1.5;
+    }
     const extent = Math.max(
       400,
       ...placed.map((v) => Math.hypot(v.x, v.y) + v.radius + 100),
