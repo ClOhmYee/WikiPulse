@@ -92,8 +92,8 @@ for (const mobile of [false, true]) {
     await map.screenshot({
       path: `../.impeccable/review/overview-${mobile ? "mobile" : "desktop"}.png`,
     });
-    for (let i = 0; i < 12; i++) await out.click();
-    await expect(map).toHaveAttribute("data-zoom", "0.12");
+    for (let i = 0; i < 10; i++) await out.click();
+    await expect(map).toHaveAttribute("data-zoom", String(0.12 * 1.2 ** 2));
     await expect(out).toBeDisabled();
     const fits = await map
       .locator(".document-cluster__summary-title")

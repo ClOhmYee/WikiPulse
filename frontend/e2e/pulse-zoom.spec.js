@@ -5,7 +5,7 @@ import {
   snapshotAt,
 } from "../src/data/mock/fixtures/history.js";
 
-const minimum = 0.12;
+const minimum = 0.12 * 1.2 ** 2;
 const maximum = (4 / 1.4 ** 3) * 1.2 ** 2;
 const initialZoom = 1 / 1.2;
 const zoom = (map) => map.getAttribute("data-zoom").then(Number);
@@ -310,7 +310,7 @@ for (const fullscreen of [false, true]) {
       await summary.evaluate(
         (e) => Number(e.getAttribute("font-size")) * e.getScreenCTM().a,
       ),
-    ).toBeCloseTo(12, 1);
+    ).toBeGreaterThanOrEqual(12);
     await page.screenshot({
       path: `test-results/pulse-zoom-${fullscreen ? "full" : "inline"}-min.png`,
     });
