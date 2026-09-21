@@ -7,7 +7,7 @@ import {
   Info,
   Search,
 } from "lucide-react";
-import { metricLabel } from "./presentation.js";
+import { completenessDescription, metricLabel } from "./presentation.js";
 import { EmptyState } from "../../components/ui/EmptyState";
 import { wikipediaUrl } from "../../lib/wiki";
 const newsTypes = [
@@ -202,8 +202,8 @@ export function Evidence({ articles, isExample }) {
           읽어보세요.
         </p>
         <p>
-          편집 수와 조회수의 집계 구간이 제공되지 않아 선택한 시점의 값인지
-          확인할 수 없습니다.
+          편집 수와 조회수는 각 문서가 이 스냅샷 판정에 사용한 고정값입니다.
+          최신 원시 값으로 바꾸지 않습니다.
         </p>
       </div>
       {articles.length ? (
@@ -222,6 +222,7 @@ export function Evidence({ articles, isExample }) {
               <div className="dt-evidence-copy">
                 <h3>{article.name}</h3>
                 <span>{article.title.replaceAll("_", " ")}</span>
+                <span>{completenessDescription(article.completeness)}</span>
                 <p>{article.description}</p>
               </div>
               <div className="dt-evidence-numbers">
@@ -249,9 +250,9 @@ export function Evidence({ articles, isExample }) {
           <Info size={18} />이 수치는 어떻게 읽나요?
         </h3>
         <p>
-          편집 수와 조회수의 집계 구간이 제공되지 않아 선택한 시점의 값인지
-          확인할 수 없습니다. 미제공은 0과 다르며, 관측값만으로 구체적인 탐지
-          경로나 AI 검증 결과를 추정하지 않습니다.
+          편집 수와 조회수는 선택한 스냅샷의 판정에 사용된 값으로 고정됩니다.
+          입력 대기나 원본 없음은 0과 다르며, 비어 있는 값으로 결과를 추정하지
+          않습니다.
         </p>
         <p>
           {isExample

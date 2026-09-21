@@ -12,6 +12,7 @@ const timestamp = (v) =>
   text(v) && /Z$/.test(v) && Number.isFinite(Date.parse(v));
 const status = (v) => ["DETECTED", "VERIFYING", "CONFIRMED"].includes(v);
 const source = (v) => ["live", "replay"].includes(v);
+const completeness = (v) => ["complete", "pending", "unavailable"].includes(v);
 
 export const issueCard = (v) =>
   object(v) &&
@@ -72,7 +73,8 @@ const member = (v) =>
   number(v.weight) &&
   typeof v.isSeed === "boolean" &&
   optionalNumber(v.editCount) &&
-  optionalNumber(v.views);
+  optionalNumber(v.views) &&
+  completeness(v.completeness);
 export const issueDetail = (v) =>
   object(v) &&
   id(v.id) &&

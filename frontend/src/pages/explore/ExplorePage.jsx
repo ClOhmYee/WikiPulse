@@ -94,10 +94,10 @@ export default function ExplorePage({
       )}
       <div className="data-filters">
         <label>
-          AI 검증 상태
+          분석 상태
           <select
             className="wp-select"
-            aria-label="AI 검증 상태"
+            aria-label="분석 상태"
             value={listParams.status || ""}
             onChange={(e) =>
               setListParams({ status: e.target.value || undefined })
@@ -141,7 +141,7 @@ export default function ExplorePage({
           <p>
             급증 점수는 편집량의 배수나 AI 검증의 확률이 아닙니다. 편집과
             조회수의 신호를 반영하며, 신규 문서와 기존 문서는 계산 방식이
-            다릅니다. AI 검증 상태는 별도로 확인하세요.
+            다릅니다. 분석 상태는 요약이나 종목 연결의 유무를 뜻하지 않습니다.
           </p>
         </div>
       )}

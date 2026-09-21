@@ -30,6 +30,8 @@ export async function serve(page, override) {
         body = await mockClient.getIssue(parts[1]);
       else if (parts[0] === "stocks" && parts.length === 1)
         body = await mockClient.listStocks(params);
+      else if (parts[0] === "stocks" && parts[2] === "prices")
+        body = { data: [] };
       else if (parts[0] === "stocks" && parts[2] === "issues")
         body = await mockClient.listStockIssues(parts[1]);
       else if (parts[0] === "stocks" && parts.length === 2)

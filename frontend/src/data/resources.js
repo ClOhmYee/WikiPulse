@@ -20,6 +20,7 @@ export function memberView(member, eventId) {
     edits: optionalNumber(member.editCount),
     views: optionalNumber(member.views),
     pageviews: optionalNumber(member.views),
+    completeness: member.completeness,
     editors: null,
     pulse: null,
     baseline: null,

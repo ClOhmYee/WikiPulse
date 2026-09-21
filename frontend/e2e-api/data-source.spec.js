@@ -19,7 +19,7 @@ test("HTTP lists request one page at a time and reset offset on filters", async 
   const snapshotTs = (await mockClient.listIssues()).meta.snapshotTs;
   expect(calls.at(-1).searchParams.get("snapshotTs")).toBe(snapshotTs);
   await page
-    .getByRole("combobox", { name: "AI 검증 상태", exact: true })
+    .getByRole("combobox", { name: "분석 상태", exact: true })
     .selectOption("CONFIRMED");
   await expect.poll(() => calls.at(-1).searchParams.get("offset")).toBe("0");
   expect(calls.at(-1).searchParams.get("status")).toBe("CONFIRMED");
@@ -67,6 +67,7 @@ test("nullable and omitted DTO fields retain zero and never invent charts or ver
               weight: 1,
               isSeed: true,
               views: 0,
+              completeness: "pending",
             },
           ],
           relatedStocks: [],
@@ -83,6 +84,9 @@ test("nullable and omitted DTO fields retain zero and never invent charts or ver
   );
   await expect(page.locator(".dt-network-detail")).toContainText("0회");
   await expect(page.locator(".dt-network-detail")).toContainText("미제공");
+  await expect(page.locator(".dt-network-detail")).toContainText(
+    "입력을 기다리는 중",
+  );
   await expect(page.getByText("시계열 미제공", { exact: true })).toBeVisible();
   await expect(page.locator(".dt-lede")).toContainText(
     "제공된 요약이 없습니다",
@@ -121,7 +125,9 @@ test("API detail and related stock paths use numeric IDs without loading mock bu
     .click();
   await expect(page.getByRole("heading", { level: 1 })).toHaveText(stock.name);
   await expect(
-    page.getByText("가격 자료 미제공", { exact: true }),
+    page.getByText("가격 데이터가 아직 준비되지 않았습니다", {
+      exact: true,
+    }),
   ).toBeVisible();
   expect(
     calls.some(
@@ -261,41 +267,19 @@ test("quick stock search ignores a slow prior response and only calls supported 
   ).toBe(true);
 });
 
-test("API local discussion starts empty, sends no writes, and isolates mock storage", async ({
+test("API detail exposes only server-backed report sections", async ({
   page,
 }) => {
-  await page.addInitScript(() =>
-    localStorage.setItem("wikipulse.savedStocks", JSON.stringify(["NVDA"])),
-  );
-  const writes = [];
-  page.on("request", (request) => {
-    if (request.method() !== "GET") writes.push(request.url());
-  });
   await serve(page);
   await page.goto(`/#/issues/${issue.id}`);
-  await page
-    .getByRole("button", { name: "토론 참여하기", exact: true })
-    .click();
-  const board = page.getByRole("region", { name: "이 사건에 대한 토론" });
-  await expect(board.locator(".dc-thread")).toHaveCount(0);
-  await board
-    .getByRole("textbox", { name: "내 의견 작성", exact: true })
-    .fill("API 응답을 읽으며 남긴 로컬 의견");
-  await board.getByRole("button", { name: "토론 등록", exact: true }).click();
-  await expect(board.locator(".dc-thread")).toHaveCount(1);
-  await page.reload();
-  await page
-    .getByRole("button", { name: "토론 참여하기", exact: true })
-    .click();
+  await expect(page.getByRole("tab")).toHaveCount(2);
+  await expect(page.getByRole("tab", { name: "이벤트 개요" })).toBeVisible();
+  await expect(page.getByRole("tab", { name: /^근거 문서/ })).toBeVisible();
+  await expect(page.getByRole("tab", { name: "타임라인" })).toHaveCount(0);
+  await expect(page.getByRole("tab", { name: "관련 소식" })).toHaveCount(0);
+  await expect(page.getByRole("tab", { name: "토론" })).toHaveCount(0);
   await expect(
-    page.getByText("API 응답을 읽으며 남긴 로컬 의견", { exact: true }),
-  ).toBeVisible();
-  const keys = await page.evaluate(() => Object.keys(localStorage));
-  expect(keys.some((key) => key.startsWith("wikipulse.api.discussion."))).toBe(
-    true,
-  );
-  expect(keys.some((key) => key.startsWith("wikipulse.discussion."))).toBe(
-    false,
-  );
-  expect(writes).toEqual([]);
+    page.getByRole("button", { name: "토론 참여하기", exact: true }),
+  ).toHaveCount(0);
+  await expect(page.getByRole("link", { name: /^연관 주식/ })).toBeVisible();
 });
