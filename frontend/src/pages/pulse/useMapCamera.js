@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 export const MIN_ZOOM = 0.12;
 export const OVERVIEW_ZOOM = 0.45 * 1.2 ** 5;
-export const MAX_ZOOM = 4 / 1.4 ** 3;
+export const MAX_ZOOM = (4 / 1.4 ** 3) * 1.2 ** 2;
 export const DEFAULT_ZOOM = 1 / 1.2;
 export const MAP_SCALE = 0.85;
 export const clampZoom = (zoom) => Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, zoom));
