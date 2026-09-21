@@ -603,6 +603,46 @@
     stroke-opacity 180ms ease-out,
     fill-opacity 180ms ease-out;
 }
+.document-cluster__summary-circle,
+.document-cluster__summary-title {
+  display: none;
+}
+.document-map[data-overview="true"] .document-cluster > :not([role="button"]),
+.document-map[data-overview="true"]
+  .document-cluster
+  > [role="button"]
+  > :not(.document-cluster__summary-circle):not(
+    .document-cluster__summary-title
+  ):not(title) {
+  display: none;
+}
+.document-map[data-overview="true"] .document-cluster__summary-circle {
+  display: block;
+  fill: #081428;
+  stroke: var(--cluster-color);
+  stroke-width: 1.5;
+  stroke-opacity: 0.75;
+  vector-effect: non-scaling-stroke;
+}
+.document-map[data-overview="true"] .document-cluster__summary-title {
+  display: block;
+  fill: #e2f1ff;
+  font-weight: 600;
+  pointer-events: none;
+}
+.document-map[data-overview="true"]
+  .document-cluster
+  > [role="button"]:hover
+  > circle,
+.document-map[data-overview="true"]
+  .document-cluster[data-selected="true"]
+  .document-cluster__summary-circle {
+  fill: color-mix(in srgb, var(--cluster-color) 18%, #081428);
+  stroke-opacity: 1;
+}
+.document-map[data-overview="true"] .document-map__legend {
+  visibility: hidden;
+}
 .document-cluster[data-selected="true"] .document-cluster__boundary {
   fill-opacity: 0.45;
   stroke-opacity: 0.9;
@@ -639,7 +679,10 @@
   cursor: pointer;
   outline: none;
 }
-.document-cluster [role="button"]:focus-visible > circle:first-child {
+.document-cluster [role="button"]:focus-visible > circle:first-child,
+.document-cluster
+  > [role="button"]:focus-visible
+  > .document-cluster__boundary {
   stroke: #e5f6ff;
   stroke-width: 3;
   stroke-opacity: 1;

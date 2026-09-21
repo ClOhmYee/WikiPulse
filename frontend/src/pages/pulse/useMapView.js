@@ -1,5 +1,6 @@
 import { useCallback, useLayoutEffect, useRef } from "react";
-import { DEFAULT_ZOOM, MAP_SCALE } from "./useMapCamera.js";
+import { DEFAULT_ZOOM, MAP_SCALE, OVERVIEW_ZOOM } from "./useMapCamera.js";
+import { overviewRadius, overviewTitle } from "./clusterOverview.js";
 
 const OVERSCAN = 140;
 
@@ -12,6 +13,8 @@ export default function useMapView(svgRef, scene, current, subscribe) {
     if (!model) return;
     const { svg, world, width, height, clusters } = model;
     const scale = camera.zoom * MAP_SCALE;
+    const overview = camera.zoom <= OVERVIEW_ZOOM;
+    svg.parentElement.dataset.overview = String(overview);
     const titleUnit = (camera.zoom / DEFAULT_ZOOM) ** 0.35 / camera.zoom;
     const labelSize = model.labelBase / camera.zoom ** 0.8;
     const zoomChanged = model.zoom !== camera.zoom;
@@ -28,7 +31,7 @@ export default function useMapView(svgRef, scene, current, subscribe) {
     for (const item of clusters) {
       const { cluster, element, heading } = item;
       const halfWidth = Math.max(
-        cluster.radius,
+        overview ? overviewRadius(cluster) : cluster.radius,
         (item.titleWidth * titleUnit) / 2,
       );
       const titleTop =
@@ -46,7 +49,29 @@ export default function useMapView(svgRef, scene, current, subscribe) {
         item.visible = visible;
       }
       if (!visible) continue;
+      if (item.overview !== overview) {
+        const button = element.querySelector(':scope > [role="button"]');
+        if (overview && element.contains(document.activeElement))
+          button.focus({ preventScroll: true });
+        button.setAttribute(
+          "aria-label",
+          `${cluster.label}, ${cluster.memberCount}개 문서${overview ? ", 클러스터 확대" : ""}`,
+        );
+        item.overview = overview;
+      }
       if (zoomChanged || entered) {
+        if (overview) {
+          const title = overviewTitle(cluster, camera.zoom);
+          item.summary.setAttribute("font-size", title.fontSize);
+          for (const [index, line] of [...item.summary.children].entries()) {
+            const text = title.lines[index] || "";
+            if (line.textContent !== text) line.textContent = text;
+            line.setAttribute(
+              "y",
+              (index - (title.lines.length - 1) / 2) * title.lineHeight,
+            );
+          }
+        }
         heading.setAttribute(
           "transform",
           `translate(0 ${-cluster.radius}) scale(${titleUnit})`,
@@ -116,6 +141,7 @@ export default function useMapView(svgRef, scene, current, subscribe) {
           cluster,
           element,
           heading,
+          summary: element.querySelector(".document-cluster__summary-title"),
           visible:
             element.dataset.rendered === undefined
               ? null

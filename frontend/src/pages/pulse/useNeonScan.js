@@ -77,6 +77,7 @@ export default function useNeonScan(svgRef, scene, enabled, view) {
         const candidates = fixed.slice(start, end).concat(titles);
         const nextLit = new Set();
         for (const target of candidates) {
+          if (svg.parentElement.dataset.overview === "true") continue;
           if (!view.current?.visibleKeys.has(target.clusterKey)) continue;
           // Title positions change with their damped zoom scale. Read the
           // updated world coordinates without restarting the scan cycle.

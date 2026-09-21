@@ -5,7 +5,7 @@ import {
   snapshotAt,
 } from "../src/data/mock/fixtures/history.js";
 
-const minimum = 0.08 * 1.4 ** 4;
+const minimum = 0.12;
 const maximum = 4 / 1.4 ** 3;
 const initialZoom = 1 / 1.2;
 const zoom = (map) => map.getAttribute("data-zoom").then(Number);
@@ -294,7 +294,7 @@ for (const fullscreen of [false, true]) {
       await page.evaluate(() => new Set(window.zoomSamples).size),
     ).toBeGreaterThan(3);
 
-    for (let i = 0; i < 5; i++) await page.mouse.wheel(0, 240);
+    for (let i = 0; i < 7; i++) await page.mouse.wheel(0, 240);
     await expect.poll(() => zoom(map)).toBe(minimum);
     await expect(
       map.getByRole("button", { name: "지도 축소", exact: true }),
@@ -302,22 +302,15 @@ for (const fullscreen of [false, true]) {
     await expect(map.locator(".document-node-label")).toHaveCount(
       await map.locator(".document-node").count(),
     );
-    const title = map.locator(".document-cluster__title").first();
-    const fontAtMinimum = await title.evaluate((e) =>
-      parseFloat(getComputedStyle(e).fontSize),
-    );
-    const screenSize = await title.evaluate(
-      (e) => parseFloat(getComputedStyle(e).fontSize) * e.getScreenCTM().a,
-    );
-    expect(screenSize).toBeGreaterThanOrEqual(11.9);
-    const titleBox = map.locator(".document-cluster__title-box").first();
-    // Compare the box body; its crisp 1px border deliberately does not scale.
-    const boxSize = () =>
-      titleBox.evaluate((e) => ({
-        width: e.width.baseVal.value * e.getScreenCTM().a,
-        height: e.height.baseVal.value * e.getScreenCTM().d,
-      }));
-    const boxAtMinimum = await boxSize();
+    await expect(map).toHaveAttribute("data-overview", "true");
+    await expect(map.locator(".document-node").first()).toBeHidden();
+    const summary = map.locator(".document-cluster__summary-title").first();
+    await expect(summary).toBeVisible();
+    expect(
+      await summary.evaluate(
+        (e) => Number(e.getAttribute("font-size")) * e.getScreenCTM().a,
+      ),
+    ).toBeCloseTo(12, 1);
     await page.screenshot({
       path: `test-results/pulse-zoom-${fullscreen ? "full" : "inline"}-min.png`,
     });
@@ -330,21 +323,9 @@ for (const fullscreen of [false, true]) {
     await expect(
       map.locator('.document-node[data-label-visible="false"]'),
     ).toHaveCount(0);
-    expect(
-      await title.evaluate((e) => parseFloat(getComputedStyle(e).fontSize)),
-    ).toBeCloseTo(fontAtMinimum, 3);
-    const screenSizeAtMaximum = await title.evaluate(
-      (e) => parseFloat(getComputedStyle(e).fontSize) * e.getScreenCTM().a,
-    );
-    const titleRatio = screenSizeAtMaximum / screenSize;
-    expect(titleRatio).toBeGreaterThan(1);
-    expect(titleRatio).toBeLessThan(maximum / minimum);
-    const boxAtMaximum = await boxSize();
-    expect(boxAtMaximum.width / boxAtMinimum.width).toBeCloseTo(titleRatio, 2);
-    expect(boxAtMaximum.height / boxAtMinimum.height).toBeCloseTo(
-      titleRatio,
-      2,
-    );
+    await expect(map).toHaveAttribute("data-overview", "false");
+    await expect(summary).toBeHidden();
+    await expect(map.locator(".document-cluster__title").first()).toBeVisible();
     await page.screenshot({
       path: `test-results/pulse-zoom-${fullscreen ? "full" : "inline"}-max.png`,
     });

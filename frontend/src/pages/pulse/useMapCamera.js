@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
-// Four original zoom steps up from the old minimum; three down from the maximum.
-export const MIN_ZOOM = 0.08 * 1.4 ** 4;
+export const MIN_ZOOM = 0.12;
+export const OVERVIEW_ZOOM = 0.45;
 export const MAX_ZOOM = 4 / 1.4 ** 3;
 export const DEFAULT_ZOOM = 1 / 1.2;
 export const MAP_SCALE = 0.85;

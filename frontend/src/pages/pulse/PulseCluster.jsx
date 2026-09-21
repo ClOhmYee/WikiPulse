@@ -3,6 +3,7 @@ import { isNewIssue } from "../../data/pulse/time.js";
 import { NEON_COLORS, neonColor } from "./neonTheme.js";
 import { MAP_SCALE, DEFAULT_ZOOM } from "./useMapCamera.js";
 import DocumentLabels from "./DocumentLabels.jsx";
+import { overviewRadius, overviewTitle } from "./clusterOverview.js";
 
 function activate(action) {
   return (event) => {
@@ -24,11 +25,12 @@ export default memo(function PulseCluster({
   viewport,
   marker,
   meta,
-  onSelect,
+  onActivate,
   onNodeSelect,
   onEmphasize,
   trackClusterOrbit,
 }) {
+  const summary = overviewTitle(cluster, camera.zoom);
   const titleUnit = (camera.zoom / DEFAULT_ZOOM) ** 0.35 / camera.zoom;
   const titleSize = compact ? 23 : 20;
   const labelSize = (compact ? 14 : 13) / camera.zoom ** 0.8;
@@ -109,9 +111,31 @@ export default memo(function PulseCluster({
         tabIndex="0"
         aria-label={`${cluster.label}, ${cluster.memberCount}개 문서`}
         aria-pressed={active}
-        onClick={() => onSelect(cluster.issueKey)}
-        onKeyDown={activate(() => onSelect(cluster.issueKey))}
+        onClick={() => onActivate(cluster)}
+        onKeyDown={activate(() => onActivate(cluster))}
       >
+        <circle
+          className="document-cluster__summary-circle"
+          r={overviewRadius(cluster)}
+        />
+        <text
+          className="document-cluster__summary-title"
+          textAnchor="middle"
+          dominantBaseline="central"
+          fontSize={summary.fontSize}
+          aria-hidden="true"
+        >
+          {[0, 1, 2].map((index) => (
+            <tspan
+              key={index}
+              x="0"
+              y={(index - (summary.lines.length - 1) / 2) * summary.lineHeight}
+            >
+              {summary.lines[index] || ""}
+            </tspan>
+          ))}
+        </text>
+        <title>{cluster.label}</title>
         <circle className="document-cluster__boundary" r={cluster.radius} />
         <circle
           className="document-cluster__field"
