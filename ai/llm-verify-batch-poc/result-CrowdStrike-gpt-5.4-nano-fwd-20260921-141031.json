@@ -1,0 +1,269 @@
+{
+ "model": "gpt-5.4-nano",
+ "reverse": false,
+ "batch_only": false,
+ "expected": {
+  "CRWD": "strong",
+  "DAL": "strong",
+  "MSFT": "weak",
+  "AAL": "reject",
+  "UAL": "reject",
+  "PANW": "reject",
+  "FTNT": "reject",
+  "KO": "reject",
+  "PG": "reject",
+  "NKE": "reject",
+  "SBUX": "reject",
+  "INTC": "reject",
+  "CRM": "reject",
+  "T": "reject"
+ },
+ "single": {
+  "CRWD": {
+   "issue_class": "SINGLE_COMPANY_EVENT",
+   "verified": true,
+   "match_path": "DIRECT_MENTION",
+   "confidence": "strong",
+   "rationale_en": "The issue describes CrowdStrike distributing a faulty Falcon Sensor update that caused widespread Windows IT outages, directly implicating CrowdStrike Holdings, Inc.",
+   "rationale_ko": "이 이슈는 CrowdStrike가 Falcon Sensor 보안 소프트웨어에 결함 있는 업데이트를 배포해 Windows PC에서 광범위한 장애가 발생했다고 설명하며, CrowdStrike Holdings, Inc.가 직접적으로 원인 당사자로 언급됩니다."
+  },
+  "DAL": {
+   "issue_class": "SECTOR_OR_REGION_EVENT",
+   "verified": false,
+   "match_path": null,
+   "confidence": null,
+   "rationale_en": null,
+   "rationale_ko": null
+  },
+  "MSFT": {
+   "issue_class": "SINGLE_COMPANY_EVENT",
+   "verified": true,
+   "match_path": "PRODUCT_INDUSTRY",
+   "confidence": "strong",
+   "rationale_en": "The faulty CrowdStrike Falcon Sensor update disrupted Microsoft Windows systems, causing widespread crashes and restart failures on Windows computers running the software.",
+   "rationale_ko": "크라우드스트라이크의 결함 있는 업데이트가 펄컨 센서가 설치된 마이크로소프트 윈도우 PC에서 광범위한 충돌과 재시작 실패를 일으켰습니다."
+  },
+  "AAL": {
+   "issue_class": "SINGLE_COMPANY_EVENT",
+   "verified": false,
+   "match_path": null,
+   "confidence": null,
+   "rationale_en": null,
+   "rationale_ko": null
+  },
+  "UAL": {
+   "issue_class": "SINGLE_COMPANY_EVENT",
+   "verified": false,
+   "match_path": null,
+   "confidence": null,
+   "rationale_en": null,
+   "rationale_ko": null
+  },
+  "PANW": {
+   "issue_class": "SINGLE_COMPANY_EVENT",
+   "verified": false,
+   "match_path": null,
+   "confidence": null,
+   "rationale_en": null,
+   "rationale_ko": null
+  },
+  "FTNT": {
+   "issue_class": "SINGLE_COMPANY_EVENT",
+   "verified": false,
+   "match_path": null,
+   "confidence": null,
+   "rationale_en": null,
+   "rationale_ko": null
+  },
+  "KO": {
+   "issue_class": "SINGLE_COMPANY_EVENT",
+   "verified": false,
+   "match_path": null,
+   "confidence": null,
+   "rationale_en": null,
+   "rationale_ko": null
+  },
+  "PG": {
+   "issue_class": "SINGLE_COMPANY_EVENT",
+   "verified": false,
+   "match_path": null,
+   "confidence": null,
+   "rationale_en": null,
+   "rationale_ko": null
+  },
+  "NKE": {
+   "issue_class": "SECTOR_OR_REGION_EVENT",
+   "verified": false,
+   "match_path": null,
+   "confidence": null,
+   "rationale_en": null,
+   "rationale_ko": null
+  },
+  "SBUX": {
+   "issue_class": "SINGLE_COMPANY_EVENT",
+   "verified": false,
+   "match_path": null,
+   "confidence": null,
+   "rationale_en": null,
+   "rationale_ko": null
+  },
+  "INTC": {
+   "issue_class": "SINGLE_COMPANY_EVENT",
+   "verified": false,
+   "match_path": null,
+   "confidence": null,
+   "rationale_en": null,
+   "rationale_ko": null
+  },
+  "CRM": {
+   "issue_class": "SINGLE_COMPANY_EVENT",
+   "verified": false,
+   "match_path": null,
+   "confidence": null,
+   "rationale_en": null,
+   "rationale_ko": null
+  },
+  "T": {
+   "issue_class": "SINGLE_COMPANY_EVENT",
+   "verified": false,
+   "match_path": null,
+   "confidence": null,
+   "rationale_en": null,
+   "rationale_ko": null
+  }
+ },
+ "batch": {
+  "CRWD": {
+   "ticker": "CRWD",
+   "verified": true,
+   "match_path": "DIRECT_MENTION",
+   "confidence": "strong",
+   "rationale_en": "The outage was caused by CrowdStrike distributing a faulty update to its Falcon Sensor software, making CrowdStrike the named party at the center of the event.",
+   "rationale_ko": "이번 장애는 CrowdStrike가 Falcon Sensor 보안 소프트웨어에 결함 있는 업데이트를 배포하면서 발생했기 때문에 CrowdStrike가 사건의 직접적인 당사자입니다.",
+   "issue_class": "SINGLE_COMPANY_EVENT"
+  },
+  "DAL": {
+   "ticker": "DAL",
+   "verified": false,
+   "match_path": null,
+   "confidence": null,
+   "rationale_en": null,
+   "rationale_ko": null,
+   "issue_class": "SINGLE_COMPANY_EVENT"
+  },
+  "MSFT": {
+   "ticker": "MSFT",
+   "verified": false,
+   "match_path": null,
+   "confidence": null,
+   "rationale_en": null,
+   "rationale_ko": null,
+   "issue_class": "SINGLE_COMPANY_EVENT"
+  },
+  "AAL": {
+   "ticker": "AAL",
+   "verified": false,
+   "match_path": null,
+   "confidence": null,
+   "rationale_en": null,
+   "rationale_ko": null,
+   "issue_class": "SINGLE_COMPANY_EVENT"
+  },
+  "UAL": {
+   "ticker": "UAL",
+   "verified": false,
+   "match_path": null,
+   "confidence": null,
+   "rationale_en": null,
+   "rationale_ko": null,
+   "issue_class": "SINGLE_COMPANY_EVENT"
+  },
+  "PANW": {
+   "ticker": "PANW",
+   "verified": false,
+   "match_path": null,
+   "confidence": null,
+   "rationale_en": null,
+   "rationale_ko": null,
+   "issue_class": "SINGLE_COMPANY_EVENT"
+  },
+  "FTNT": {
+   "ticker": "FTNT",
+   "verified": false,
+   "match_path": null,
+   "confidence": null,
+   "rationale_en": null,
+   "rationale_ko": null,
+   "issue_class": "SINGLE_COMPANY_EVENT"
+  },
+  "KO": {
+   "ticker": "KO",
+   "verified": false,
+   "match_path": null,
+   "confidence": null,
+   "rationale_en": null,
+   "rationale_ko": null,
+   "issue_class": "SINGLE_COMPANY_EVENT"
+  },
+  "PG": {
+   "ticker": "PG",
+   "verified": false,
+   "match_path": null,
+   "confidence": null,
+   "rationale_en": null,
+   "rationale_ko": null,
+   "issue_class": "SINGLE_COMPANY_EVENT"
+  },
+  "NKE": {
+   "ticker": "NKE",
+   "verified": false,
+   "match_path": null,
+   "confidence": null,
+   "rationale_en": null,
+   "rationale_ko": null,
+   "issue_class": "SINGLE_COMPANY_EVENT"
+  },
+  "SBUX": {
+   "ticker": "SBUX",
+   "verified": false,
+   "match_path": null,
+   "confidence": null,
+   "rationale_en": null,
+   "rationale_ko": null,
+   "issue_class": "SINGLE_COMPANY_EVENT"
+  },
+  "INTC": {
+   "ticker": "INTC",
+   "verified": false,
+   "match_path": null,
+   "confidence": null,
+   "rationale_en": null,
+   "rationale_ko": null,
+   "issue_class": "SINGLE_COMPANY_EVENT"
+  },
+  "CRM": {
+   "ticker": "CRM",
+   "verified": false,
+   "match_path": null,
+   "confidence": null,
+   "rationale_en": null,
+   "rationale_ko": null,
+   "issue_class": "SINGLE_COMPANY_EVENT"
+  },
+  "T": {
+   "ticker": "T",
+   "verified": false,
+   "match_path": null,
+   "confidence": null,
+   "rationale_en": null,
+   "rationale_ko": null,
+   "issue_class": "SINGLE_COMPANY_EVENT"
+  }
+ },
+ "tokens": {
+  "single_in": 21596,
+  "single_out": 903,
+  "batch_in": 5599,
+  "batch_out": 763
+ }
+}
