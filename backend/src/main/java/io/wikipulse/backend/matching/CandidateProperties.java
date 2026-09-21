@@ -255,6 +255,18 @@ public class CandidateProperties {
          */
         private int topPerSnapshot = 10;
 
+        /**
+         * 대상을 한 출처로 좁힌다 ({@code issue_cluster.source}: {@code live}·{@code replay}).
+         * 빈 값이면 전체 — 기본값이라 동작이 바뀌지 않는다.
+         *
+         * <p>폴러는 최근 스냅샷부터 집으므로 LIVE 가 쌓이는 동안 과거 replay 구간에는
+         * 닿지 못한다. 특정 구간을 먼저 채울 때 쓴다(WP-168).
+         *
+         * <p>🔴 <b>{@link Summary#source} 와 같은 값이어야 한다.</b> 한쪽만 좁히면 같은
+         * 화면에서 요약은 있는데 종목이 없거나 그 반대가 생긴다.
+         */
+        private String source = "";
+
         private boolean enabled = false;
         /**
          * 폴 간격 (ISO-8601 Duration). ⚠️ 실제 바인딩은 {@code @Scheduled(fixedDelayString=...)}
@@ -287,6 +299,14 @@ public class CandidateProperties {
 
         public void setTopPerSnapshot(int topPerSnapshot) {
             this.topPerSnapshot = topPerSnapshot;
+        }
+
+        public String getSource() {
+            return source;
+        }
+
+        public void setSource(String source) {
+            this.source = source;
         }
 
         public int getBatchSize() {
@@ -390,6 +410,12 @@ public class CandidateProperties {
          */
         private int topPerSnapshot = 10;
 
+        /**
+         * 대상을 한 출처로 좁힌다. 빈 값이면 전체(기본값).
+         * 🔴 <b>{@link Scheduler#source} 와 같은 값이어야 한다</b> — 근거는 거기 적었다.
+         */
+        private String source = "";
+
         public boolean isEnabled() {
             return enabled;
         }
@@ -420,6 +446,14 @@ public class CandidateProperties {
 
         public void setTopPerSnapshot(int topPerSnapshot) {
             this.topPerSnapshot = topPerSnapshot;
+        }
+
+        public String getSource() {
+            return source;
+        }
+
+        public void setSource(String source) {
+            this.source = source;
         }
     }
 }

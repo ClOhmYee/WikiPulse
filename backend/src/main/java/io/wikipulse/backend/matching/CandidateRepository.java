@@ -48,15 +48,27 @@ public class CandidateRepository {
      * <p>🔴 <b>요약 상한과 같은 축·같은 값을 쓴다.</b> 다르면 같은 화면에서 요약은 있는데
      * 종목이 없거나 그 반대가 생긴다.
      *
+     * <p>{@code source} 는 대상을 한 출처로 좁힌다(WP-168). 정렬이
+     * {@code snapshot_ts DESC} 라 폴러는 <b>가장 최근 스냅샷부터</b> 집는다 — LIVE 가 쌓이는
+     * 동안에는 과거 replay 구간에 영원히 닿지 못한다. 특정 구간을 먼저 채우려면 이 값으로
+     * 좁힌다. ⚠️ 비용 상한이 아니라 <b>대상 선택</b>이다. {@code topPerSnapshot} 과 함께 쓴다.
+     *
+     * <p>순위는 좁힌 출처 <b>안에서</b> 매긴다. 화면도 {@code source} 로 걸러 보여주므로
+     * (`/api/v1/issues?source=`) 축을 맞춰야 "보여주는 상위 N" 과 대상이 일치한다. 밖에서
+     * 매기면 다른 출처가 순위 자리를 먹어 상한보다 적게 뽑힌다.
+     *
      * @param topPerSnapshot 스냅샷당 {@code pulse_score} 상위 몇 개까지. 0 이하면 무제한
+     * @param source {@code issue_cluster.source} 한정. {@code null}·빈 문자열이면 전체
      */
-    public List<Long> pendingClusterIds(int limit, int topPerSnapshot) {
+    public List<Long> pendingClusterIds(int limit, int topPerSnapshot, String source) {
         return jdbc.queryForList("""
                 WITH ranked AS (
                     SELECT id, status, issue_key, snapshot_ts,
                            row_number() OVER (PARTITION BY snapshot_ts
                                               ORDER BY pulse_score DESC, id ASC) AS rnk
                       FROM issue_cluster
+                     WHERE CAST(:source AS text) IS NULL
+                        OR source = CAST(:source AS text)
                 )
                 SELECT r.id
                   FROM ranked r
@@ -73,7 +85,13 @@ public class CandidateRepository {
                  LIMIT :limit
                 """, new MapSqlParameterSource()
                 .addValue("limit", limit)
-                .addValue("top", topPerSnapshot), Long.class);
+                .addValue("top", topPerSnapshot)
+                .addValue("source", blankToNull(source)), Long.class);
+    }
+
+    /** 설정에서 온 빈 문자열을 "한정 없음"(NULL)으로 읽는다 — 미설정 환경변수가 빈 값이라서다. */
+    private static String blankToNull(String source) {
+        return source == null || source.isBlank() ? null : source;
     }
 
     // 멤버 제목 조회(memberTitlesByPulse)는 ClusterIntroRepository.context 로 옮겼다

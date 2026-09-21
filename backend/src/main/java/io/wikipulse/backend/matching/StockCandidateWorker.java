@@ -57,7 +57,8 @@ public class StockCandidateWorker {
     public void pollAndGenerate() {
         List<Long> clusterIds = repository.pendingClusterIds(
                 props.getScheduler().getBatchSize(),
-                props.getScheduler().getTopPerSnapshot());
+                props.getScheduler().getTopPerSnapshot(),
+                props.getScheduler().getSource());
         if (clusterIds.isEmpty()) {
             return;
         }

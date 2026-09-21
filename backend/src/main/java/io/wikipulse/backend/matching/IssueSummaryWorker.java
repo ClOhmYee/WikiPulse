@@ -46,7 +46,8 @@ public class IssueSummaryWorker {
         List<Long> clusterIds = repository.clustersNeedingSummary(
                 props.getSummary().getBatchSize(),
                 props.getSummary().getTopPerSnapshot(),
-                service.modelTag());
+                service.modelTag(),
+                props.getSummary().getSource());
         if (clusterIds.isEmpty()) {
             return;
         }

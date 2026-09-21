@@ -34,6 +34,8 @@ WITH ranked AS (
            row_number() OVER (PARTITION BY snapshot_ts
                               ORDER BY pulse_score DESC, id ASC) AS rnk
       FROM issue_cluster
+     WHERE %(source)s::text IS NULL
+        OR source = %(source)s::text
 )
 SELECT id
   FROM ranked
@@ -51,19 +53,22 @@ SELECT id
 """
 
 
-def _select(conn, top: int, limit: int = 100, model: str = MODEL) -> list[int]:
+def _select(conn, top: int, limit: int = 100, model: str = MODEL,
+            source=None) -> list[int]:
     with conn.cursor() as cur:
-        cur.execute(_SELECT, {"top": top, "limit": limit, "model": model})
+        cur.execute(_SELECT,
+                    {"top": top, "limit": limit, "model": model, "source": source})
         return [row[0] for row in cur.fetchall()]
 
 
 def _cluster(conn, *, score: float, status: str = "DETECTED",
-             snapshot: str = "2026-09-01T00:00:00+00:00", issue_key=None) -> int:
+             snapshot: str = "2026-09-01T00:00:00+00:00", issue_key=None,
+             source: str = "live") -> int:
     rows = q(
         conn,
-        "INSERT INTO issue_cluster (snapshot_ts, pulse_score, status, issue_key) "
-        "VALUES (%s, %s, %s, %s) RETURNING id",
-        snapshot, score, status, issue_key,
+        "INSERT INTO issue_cluster (snapshot_ts, pulse_score, status, issue_key, source) "
+        "VALUES (%s, %s, %s, %s, %s) RETURNING id",
+        snapshot, score, status, issue_key, source,
     )
     return rows[0][0]
 
@@ -170,3 +175,29 @@ def test_limit_은_한_폴의_크기일_뿐이다(conn):
     ids = sorted({_cluster(conn, score=float(9 - i)) for i in range(5)}, reverse=True)
 
     assert _select(conn, top=0, limit=2) == ids[:2]
+
+
+def test_source_로_대상을_좁힌다(conn):
+    """🔴 정렬이 id DESC 라 LIVE 가 쌓이면 과거 replay 에 영원히 못 닿는다.
+
+    ⚠️ 후보 생성 쪽과 **같은 값**을 써야 한다. 한쪽만 좁히면 같은 화면에서
+    요약은 있는데 종목이 없거나 그 반대가 생긴다.
+    """
+    replay = _cluster(conn, score=9.0, source="replay",
+                      snapshot="2025-06-12T00:00:00+00:00")
+    live = _cluster(conn, score=9.0, source="live",
+                    snapshot="2026-09-21T00:00:00+00:00")
+
+    assert _select(conn, top=0, source="replay") == [replay]
+    assert _select(conn, top=0, source="live") == [live]
+    assert set(_select(conn, top=0)) == {live, replay}
+
+
+def test_순위는_좁힌_출처_안에서_매긴다(conn):
+    snap = "2026-09-21T00:00:00+00:00"
+    _cluster(conn, score=9.0, source="live", snapshot=snap)
+    _cluster(conn, score=8.0, source="live", snapshot=snap)
+    first = _cluster(conn, score=5.0, source="replay", snapshot=snap)
+    second = _cluster(conn, score=1.0, source="replay", snapshot=snap)
+
+    assert set(_select(conn, top=2, source="replay")) == {first, second}
