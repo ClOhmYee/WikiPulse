@@ -57,7 +57,7 @@ production 코드가 두 단계를 관통해 PoC 5 결과를 그대로 내는지
 root 집합 exact match 와 분포 11개 항목·대표 사건 8건을 전부 본다. 어긋나면 종료 코드가 0이 아니다.
 
 ```bash
-python tools/cluster-preview/seed_asof_link_cache.py   # PoC 캐시 → V11 (1회)
+python tools/cluster-preview/seed_asof_link_cache.py   # PoC 캐시 → V12 (1회)
 python tools/cluster-preview/verify_core_regression.py
 ```
 

@@ -1,5 +1,10 @@
 -- as-of revision 아웃링크 캐시 (WP-186, CORE 클러스터링)
 --
+-- ⚠️ ~~V11~~ → V12 로 리넘버 (2026-09-22). develop 에 `V11__issue_summary_attempt.sql`
+--    이 먼저 머지돼 같은 번호가 둘이 됐다. `db/apply_migrations.py` 의 원장 키가
+--    정수 version 이라 두 파일이 같은 번호면 한쪽이 조용히 건너뛰어진다(WP-117
+--    이 V5 중복에서 겪은 것과 같은 형태). 머지 안 된 이쪽을 옮겼다.
+--
 -- CORE 는 "같은 스냅샷 root 끼리 판정 당시 revision 에 직접 링크가 있었는가" 로 묶는다.
 -- 그 링크는 `action=parse&oldid=<spike.max_rev_id>&prop=wikitext` 한 번으로 얻는데,
 -- 리플레이 한 판이 root 수만큼 요청을 낸다. 실측 기준 22,080 revision 이다 — 캐시가

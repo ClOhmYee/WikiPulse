@@ -13,7 +13,7 @@ PostgreSQL 에 저장한다. 버블맵 조회 API(WP-74)가 이 산출물을 읽
 | --- | --- | --- |
 | `root_selection.py` | **정본 1단계** — spike 후보 중 클러스터링에 넣을 root 선택 | `tests/test_root_selection.py` |
 | `rootgraph.py` | **정본 2단계(CORE)** — root 를 사건 component 로 묶는 순수 그래프 | `tests/test_rootgraph.py` |
-| `asof_links.py` | as-of revision 링크 추출·정규화·수집 + V11 캐시 | `tests/test_asof_links.py` |
+| `asof_links.py` | as-of revision 링크 추출·정규화·수집 + V12 캐시 | `tests/test_asof_links.py` |
 | `snapshot.py` | 순수 생산 로직 — CORE 결과 → Cluster/Member, legacy 게이트·간선·issue_key | `tests/test_snapshot_core.py` · `tests/test_snapshot.py` |
 | `score.py` | 공통 sizeScore 0~1 + `SCORE_VERSION` | (snapshot 테스트에 포함) |
 | `writer.py` | 스냅샷을 PostgreSQL 에 멱등 저장(재계산 호환) | `tests/test_writer.py`(pgserver 왕복) |
@@ -58,7 +58,7 @@ component 자체가 issue cluster, 그 안의 root 가 cluster_member (root-only
 - 채택하지 않은 것: common-neighbor expansion(PoC 7 B1~B4, precision 미달) ·
   Clickstream 을 membership 필수조건으로 · resurgence 를 CORE 생성 규칙으로.
 
-### 링크 캐시 (V11 `page_asof_links`)
+### 링크 캐시 (V12 `page_asof_links`)
 
 revision 단위라 만료가 없다. 대량 재계산 전에 미리 채운다.
 

@@ -844,7 +844,7 @@ def load_root_links(
 ) -> dict[int, set[str]]:
     """CORE 입력 — root 별 as-of strict 아웃링크 집합 (WP-186).
 
-    `spike.max_rev_id` 를 앵커로 `page_asof_links`(V11) 캐시를 먼저 보고, 없는 것만
+    `spike.max_rev_id` 를 앵커로 `page_asof_links`(V12) 캐시를 먼저 보고, 없는 것만
     받아 캐시에 넣는다. revision 단위 캐시라 만료가 없다.
 
     🔴 **`max_rev_id` 가 없는 root 는 결과에서 아예 뺀다.** 호출자가 빈 집합으로 읽어
@@ -1021,7 +1021,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     #    root 수만큼(실측 22,080) 요청을 낼 수 있어서, 실수로 켜지면 위키미디어를
     #    그만큼 때린다. 캐시가 비면 스냅샷이 통째로 singleton 이 되고 경고가 찍힌다.
     p.add_argument("--fetch-links", action="store_true",
-                   help="캐시에 없는 as-of 링크를 위키미디어에서 받아 V11 캐시에 넣는다 "
+                   help="캐시에 없는 as-of 링크를 위키미디어에서 받아 V12 캐시에 넣는다 "
                         "(기본: 캐시만 사용). CONTACT_EMAIL 이 필요하다")
     p.add_argument("--link-workers", type=int, default=4,
                    help="--fetch-links 동시 요청 수 (기본 4)")

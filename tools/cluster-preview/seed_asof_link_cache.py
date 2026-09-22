@@ -1,4 +1,4 @@
-"""PoC 가 이미 받아 둔 as-of 링크를 V11 캐시(`page_asof_links`)로 옮긴다. 1회성.
+"""PoC 가 이미 받아 둔 as-of 링크를 V12 캐시(`page_asof_links`)로 옮긴다. 1회성.
 
 왜 있나
     CORE 회귀를 돌리려면 root 22,080건의 as-of strict 링크가 필요하다. PoC 가 이미

@@ -81,7 +81,7 @@ def wikitext_links(wikitext: str) -> list[str]:
     return sorted(out)
 
 
-# --- 캐시 (V11 page_asof_links) ----------------------------------------------
+# --- 캐시 (V12 page_asof_links) ----------------------------------------------
 
 SELECT_LINKS_SQL = """
 SELECT rev_id, links, error FROM page_asof_links WHERE rev_id = ANY(%s)

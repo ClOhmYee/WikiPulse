@@ -1,9 +1,9 @@
 """CORE 정본 경로 DB 왕복 (WP-186). 진짜 PostgreSQL(pgserver).
 
-`spike` + `page_asof_links`(V11) → `cluster.driver.run` → `issue_cluster` 까지가
+`spike` + `page_asof_links`(V12) → `cluster.driver.run` → `issue_cluster` 까지가
 실제 스키마·제약을 통과하는지, 두 번 돌려도 안 늘어나는지 본다.
 
-`test_snapshot_core.py` 의 순수 검사는 계약 변환까지만 본다. "V11 캐시를 실제로 읽는가"·
+`test_snapshot_core.py` 의 순수 검사는 계약 변환까지만 본다. "V12 캐시를 실제로 읽는가"·
 "멱등한가"·"백엔드 질의가 읽는 형태인가" 는 실 DB 가 있어야 확인된다.
 """
 
