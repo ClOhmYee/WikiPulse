@@ -111,21 +111,31 @@ def read_shards(directory: str | Path) -> Iterator[ClickstreamRow]:
 
 
 def select_completed_month(
-    root: str | Path, wiki: str, snapshot_ts: datetime
+    root: str | Path, wiki: str, snapshot_ts: datetime,
+    *, allow_event_month: bool = False,
 ) -> tuple[str, Path]:
     """스냅샷 직전 월 이하에서 가장 최근의 검증 완료 적재본을 고른다.
 
     직전 월이 아직 공개·적재되지 않았으면 전전월 등 더 오래된 완료본으로 폴백한다.
     현재 월은 일부 기간만 포함하므로 사용하지 않는다. `_manifest.json`의 wiki/month가
     디렉터리와 일치하고 선언된 shard가 모두 있을 때만 완료본으로 인정한다.
+
+    `allow_event_month=True` 는 상한을 스냅샷 월까지 올린다 — 사후 QA·upper-bound
+    실험 전용 스위치다(WP-183). 🔴 **기본값을 바꾸지 않는다.** 사건 당월
+    덤프는 월이 끝나야 나오므로 운영 당시에는 없던 근거이고, 그 달 후반의 동시
+    열람이 달 초 스냅샷에 섞인다(future leakage). 이 경로로 만든 산출물은 제품
+    탐지 성능으로 인용하면 안 된다 — 명세 v0.3 §3.2 4번·§11.
     """
     if snapshot_ts.tzinfo is None:
         raise ValueError("snapshot_ts must be timezone-aware")
 
     snapshot_utc = snapshot_ts.astimezone(timezone.utc)
-    year, month = snapshot_utc.year, snapshot_utc.month - 1
-    if month == 0:
-        year, month = year - 1, 12
+    if allow_event_month:
+        year, month = snapshot_utc.year, snapshot_utc.month
+    else:
+        year, month = snapshot_utc.year, snapshot_utc.month - 1
+        if month == 0:
+            year, month = year - 1, 12
     preferred = f"{year:04d}-{month:02d}"
     base = Path(root) / wiki
     completed: list[tuple[str, Path]] = []

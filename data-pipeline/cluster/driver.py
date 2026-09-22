@@ -629,10 +629,14 @@ class MonthlyNeighborSource:
         *,
         creation_window_days: int = DEFAULT_CREATION_WINDOW_DAYS,
         edit_index: str | Path | Sequence[str | Path] | None = None,
+        allow_event_month: bool = False,
     ) -> None:
         self.shards_root = Path(shards_root)
         self.creation_index = Path(creation_index)
         self.creation_window_days = creation_window_days
+        # 🔴 사후 QA·upper-bound 전용. 기본은 완료 월 계약 그대로다 — 근거와 인용
+        # 금지 사항은 `batch.clickstream.select_completed_month` 를 본다 (-183).
+        self.allow_event_month = allow_event_month
         # 비-씨드 재급증 인덱스(`batch/page_edit_daily`, -145). **선택이다** —
         # 주지 않으면 창 게이트만 돌아 추가 씨드만 나온다. 월 덤프가 늦게 공개돼
         # LIVE 최신 구간에는 아직 못 쓰기 때문에 필수로 두지 않는다.
@@ -663,7 +667,9 @@ class MonthlyNeighborSource:
         """
         key = (wiki, snapshot_ts)
         if key not in self._month_of:
-            month, _path = select_completed_month(self.shards_root, wiki, snapshot_ts)
+            month, _path = select_completed_month(
+                self.shards_root, wiki, snapshot_ts,
+                allow_event_month=self.allow_event_month)
             self._month_of[key] = month
         return self._month_of[key]
 
@@ -814,9 +820,14 @@ def build_snapshot_at(
     seeds = load_seeds_from_spike(conn, snapshot_ts, source)
     if neighbors is None and neighbor_source is not None:
         neighbors = neighbor_source(conn, snapshot_ts, seeds)
+    # 🔴 **월 상한 스위치는 이웃 공급자에서 읽는다** — 따로 받으면 월을 고른 규칙과
+    # 그 월을 검사하는 이중 방어가 갈릴 수 있다. 갈린 상태는 에러 없이 이웃을 전부
+    # 탈락시켜 씨드 단독으로 보인다 (-183).
+    allow_event_month = bool(getattr(neighbor_source, "allow_event_month", False))
     return build_snapshot(
         snapshot_ts, source, seeds, neighbors or {},
         prior_first_detected=load_prior_first_detected(conn, source),
+        allow_event_month=allow_event_month,
     )
 
 
@@ -901,6 +912,14 @@ def build_arg_parser() -> argparse.ArgumentParser:
                         "멤버(WP-77)를 배선한다. 없으면 추가 씨드만. "
                         "적재가 월별로 쪼개지므로 **여러 번 줄 수 있다** — 빠진 달이 "
                         "있으면 기동 때 CoverageGap 으로 막는다")
+    # 🔴 **사후 QA·upper-bound 전용이고 기본은 꺼짐이다** (WP-183).
+    #    켜면 근거 월 상한이 스냅샷 월까지 올라간다 — 사건 당월 덤프는 월이 끝나야
+    #    공개되므로 운영 당시에는 없던 근거이고, 그 달 후반의 동시 열람이 달 초
+    #    스냅샷에 섞인다(future leakage). 이 경로로 만든 산출물을 제품 탐지 성능으로
+    #    인용하면 안 된다. 근거는 명세 v0.3 §3.2 4번·§11.
+    p.add_argument("--clickstream-allow-event-month", action="store_true",
+                   help="[실험] 근거 월 상한을 스냅샷 월까지 올린다. future leakage 가 "
+                        "있으므로 제품 성능 근거로 쓰지 않는다 (WP-183)")
     return p
 
 
@@ -936,9 +955,13 @@ def main(argv: list[str] | None = None) -> int:
         if args.clickstream_root:
             neighbor_source = MonthlyNeighborSource(
                 args.clickstream_root, args.creation_index,
-                edit_index=args.edit_index or None)
+                edit_index=args.edit_index or None,
+                allow_event_month=args.clickstream_allow_event_month)
             print(f"이웃 배선: clickstream={args.clickstream_root} "
                   "(근거 월은 select_completed_month 가 고른다)")
+            if args.clickstream_allow_event_month:
+                print("  🔴 [실험] 사건 당월 근거 허용 — future leakage 가 섞인다. "
+                      "제품 탐지 성능으로 인용하지 말 것 (WP-183)")
             print("  비-씨드 재급증: "
                   + (", ".join(args.edit_index) if args.edit_index
                      else "없음 — 추가 씨드만 배선한다"))

@@ -506,3 +506,38 @@ def test_cluster_label_is_the_seed_title():
     snapshot = build_snapshot(_dt(2025, 6, 12, 13), "replay", [seed], {})
     assert snapshot.clusters
     assert snapshot.clusters[0].label == "Air India Flight 171"
+
+
+def test_사건월_허용_스위치를_켜면_당월_근거가_통과한다():
+    """WP-183 — 사후 QA·upper-bound 전용. 기본은 계약대로 막힌다.
+
+    골든데이 재현: 2025-06-12 에 생긴 사건 문서는 6월 덤프에만 이웃으로 있다.
+    🔴 이 경로 산출물은 future leakage 가 섞여 제품 탐지 성능이 아니다.
+    """
+    seed = _seed()
+    neighbors = {1: [
+        Neighbor(page_id=2, wiki="enwiki", title="Air India Flight 171",
+                 clickstream_n=125962, clickstream_month="2025-06",
+                 created_at=_dt(2025, 6, 12)),
+    ]}
+
+    blocked = build_snapshot(_dt(2025, 6, 13), "replay", [seed], neighbors)
+    assert {m.page_id for m in blocked.clusters[0].members} == {1}
+
+    allowed = build_snapshot(_dt(2025, 6, 13), "replay", [seed], neighbors,
+                             allow_event_month=True)
+    assert {m.page_id for m in allowed.clusters[0].members} == {1, 2}
+
+
+def test_사건월을_허용해도_미래_월_근거는_막는다():
+    seed = _seed()
+    neighbors = {1: [
+        Neighbor(page_id=2, wiki="enwiki", title="Future evidence",
+                 clickstream_n=383, clickstream_month="2025-07",
+                 created_at=_dt(2025, 6, 12)),
+    ]}
+
+    cluster = build_snapshot(_dt(2025, 6, 13), "replay", [seed], neighbors,
+                             allow_event_month=True).clusters[0]
+
+    assert {m.page_id for m in cluster.members} == {1}

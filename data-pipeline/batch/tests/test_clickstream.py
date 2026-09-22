@@ -219,3 +219,29 @@ def test_사용할_완료월이_없으면_조용히_빈_이웃을_만들지_않�
     with pytest.raises(FileNotFoundError, match="검증 완료 Clickstream"):
         select_completed_month(
             tmp_path, "enwiki", datetime(2026, 9, 17, tzinfo=timezone.utc))
+
+
+def test_사건월_허용_스위치는_스냅샷_월까지_올린다(tmp_path):
+    """WP-183 — 사후 QA·upper-bound 전용 스위치.
+
+    골든데이(2025-06-12)처럼 사건 당월에 생긴 문서는 직전 월 덤프에 아예 없어
+    이웃이 한 건도 안 잡힌다. 그 상한을 실험용으로만 올린다.
+    """
+    _complete_month(tmp_path, "2025-05")
+    _complete_month(tmp_path, "2025-06")
+    snapshot = datetime(2025, 6, 13, tzinfo=timezone.utc)
+
+    assert select_completed_month(tmp_path, "enwiki", snapshot)[0] == "2025-05"
+    assert select_completed_month(
+        tmp_path, "enwiki", snapshot, allow_event_month=True)[0] == "2025-06"
+
+
+def test_사건월을_허용해도_미래_월은_고르지_않는다(tmp_path):
+    _complete_month(tmp_path, "2025-06")
+    _complete_month(tmp_path, "2025-07")  # 스냅샷 이후 — 켜도 통과하면 안 된다
+
+    month, _ = select_completed_month(
+        tmp_path, "enwiki", datetime(2025, 6, 13, tzinfo=timezone.utc),
+        allow_event_month=True)
+
+    assert month == "2025-06"

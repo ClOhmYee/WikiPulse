@@ -344,14 +344,24 @@ def _passes_resurgence(
     return (resurgence.event_edits / resurgence.baseline_edits) >= min_ratio
 
 
-def _is_completed_clickstream_month(clickstream_month: str, snapshot_date: date) -> bool:
-    """근거 월이 스냅샷 월보다 이전의 완료된 월인가."""
+def _is_completed_clickstream_month(
+    clickstream_month: str, snapshot_date: date,
+    *, allow_event_month: bool = False,
+) -> bool:
+    """근거 월이 스냅샷 월보다 이전의 완료된 월인가.
+
+    `allow_event_month=True` 는 스냅샷 월 자신까지 허용한다 — 사후 QA·upper-bound
+    실험 전용이다(WP-183). 🔴 미래 월은 이 스위치로도 통과하지 않는다.
+    기본값과 그 이유는 `batch.clickstream.select_completed_month` 를 본다.
+    """
     if len(clickstream_month) != 7 or clickstream_month[4] != "-":
         return False
     try:
         evidence_month = date.fromisoformat(f"{clickstream_month}-01")
     except ValueError:
         return False
+    if allow_event_month:
+        return evidence_month <= snapshot_date.replace(day=1)
     return evidence_month < snapshot_date.replace(day=1)
 
 
@@ -367,6 +377,7 @@ def _build_cluster(
     resurgence_ratio: float,
     resurgence_min_edits: int,
     resurgence_min_baseline: int,
+    allow_event_month: bool,
 ) -> Cluster:
     key = issue_key_of(source, seed)
 
@@ -401,7 +412,9 @@ def _build_cluster(
                       if nb.created_at is not None else None)
         if created_at is not None and created_at > snapshot_ts:
             continue                         # 스냅샷 이후 생성 — 과거 지도에 소급 금지
-        if not _is_completed_clickstream_month(nb.clickstream_month, snapshot_date):
+        if not _is_completed_clickstream_month(
+                nb.clickstream_month, snapshot_date,
+                allow_event_month=allow_event_month):
             continue                         # 당월·미래·잘못된 월 근거는 사용하지 않는다
 
         # 게이트 둘은 **순서가 있고 배타적이다.** 생성일 창이 먼저다 — 창을 통과한
@@ -511,6 +524,7 @@ def build_snapshot(
     resurgence_ratio: float = DEFAULT_RESURGENCE_RATIO,
     resurgence_min_edits: int = DEFAULT_RESURGENCE_MIN_EDITS,
     resurgence_min_baseline: int = DEFAULT_RESURGENCE_MIN_BASELINE,
+    allow_event_month: bool = False,
 ) -> Snapshot:
     """한 시점의 클러스터·멤버·간선을 생산한다.
 
@@ -542,6 +556,7 @@ def build_snapshot(
             resurgence_ratio=resurgence_ratio,
             resurgence_min_edits=resurgence_min_edits,
             resurgence_min_baseline=resurgence_min_baseline,
+            allow_event_month=allow_event_month,
         )
         for seed in seeds
     )
