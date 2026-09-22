@@ -115,32 +115,15 @@ test("server-backed stock filters search beyond the first page", async ({
   ).toBeDisabled();
 });
 
-test("saved issue and stock survive reload and remain removable", async ({
-  page,
-}) => {
+test("mock data cannot be saved to a real account", async ({ page }) => {
   await authenticate(page);
   await page.goto(`/#/issues/${issue.id}`);
   await page.getByRole("button", { name: "이벤트 저장", exact: true }).click();
-  await page.goto(`/#/stocks/${stock.ticker}`);
-  await page
-    .getByRole("button", {
-      name: `${stock.name} 관심 종목에 추가`,
-      exact: true,
-    })
-    .click();
-  await page.goto("/#/saved");
-  await page.reload();
-  await expect(page.locator(".event-row")).toHaveCount(1);
-  await page
-    .getByRole("button", { name: `${issue.label} 저장 해제`, exact: true })
-    .click();
-  await expect(page.locator(".event-row")).toHaveCount(0);
-  await page.getByRole("button", { name: /^관심 종목/ }).click();
-  await page
-    .getByRole("button", { name: `${stock.name} 관심 종목 해제`, exact: true })
-    .click();
   await expect(
-    page.getByRole("heading", { name: "궁금한 종목을 저장해 보세요" }),
+    page.getByText("예시 데이터는 계정 보관함에 저장할 수 없습니다."),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "이벤트 저장", exact: true }),
   ).toBeVisible();
 });
 

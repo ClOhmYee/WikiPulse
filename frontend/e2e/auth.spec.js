@@ -1,5 +1,21 @@
 import { test, expect } from "@playwright/test";
 
+test.beforeEach(async ({ page }) => {
+  await page.route("**/api/v1/me", (route) =>
+    route.fulfill({ status: 401, json: { error: { code: "UNAUTHORIZED" } } }),
+  );
+  await page.route("**/api/v1/auth/csrf", (route) =>
+    route.fulfill({
+      json: { data: { token: "csrf-fixture", headerName: "X-CSRF-TOKEN" } },
+    }),
+  );
+  await page.route("**/api/v1/auth/logout", (route) =>
+    route.fulfill({ status: 204 }),
+  );
+  await page.route("**/api/v1/me/saved-state", (route) =>
+    route.fulfill({ json: { data: { issueIds: [], tickers: [] } } }),
+  );
+});
 const member = {
   id: 7,
   displayName: "테스트 사용자",
@@ -57,7 +73,7 @@ test("server success gates menus, restores verified session and logout hides pri
   page,
 }) => {
   await page.route("**/api/v1/auth/login", (route) =>
-    route.fulfill({ json: { data: { token: "test-token", member } } }),
+    route.fulfill({ json: { data: { member } } }),
   );
   await page.route("**/api/v1/me", (route) =>
     route.fulfill({ json: { data: member } }),
@@ -144,9 +160,11 @@ test("unsupported and malformed auth never log in, private URLs remain gated", a
     .getByRole("dialog")
     .getByRole("button", { name: "로그인", exact: true })
     .click();
-  await expect(page.getByRole("alert")).toContainText("계정 서비스를 준비 중");
+  await expect(page.getByRole("alert")).toContainText(
+    "항목을 찾을 수 없습니다",
+  );
   await page.route("**/api/v1/auth/login", (route) =>
-    route.fulfill({ json: { data: { member } } }),
+    route.fulfill({ json: { data: {} } }),
   );
   await page
     .getByRole("dialog")

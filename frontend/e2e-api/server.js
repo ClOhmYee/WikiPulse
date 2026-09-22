@@ -6,6 +6,13 @@ export async function serve(page, override) {
   await page.route("**/api/v1/**", async (route) => {
     const url = new URL(route.request().url());
     calls.push(url);
+    if (url.pathname === "/api/v1/me") {
+      await route.fulfill({
+        status: 401,
+        json: { error: { code: "UNAUTHORIZED" } },
+      });
+      return;
+    }
     if (override && (await override({ route, url, calls }))) return;
     const parts = url.pathname
       .slice("/api/v1/".length)
