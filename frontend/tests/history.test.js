@@ -54,6 +54,8 @@ test("every daily cluster has a matching report, sums, article identities and va
       const report = resolveReport(cluster.id);
       assert(report, cluster.id);
       assert.equal(report.date, date);
+      assert.equal(report.summary, cluster.summary);
+      assert.ok(report.summary?.trim(), `${cluster.id}: issue summary missing`);
       assert.deepEqual(
         report.articleIds,
         cluster.nodes.map((n) => n.pageId),
@@ -101,6 +103,14 @@ test("historical map -> report -> stocks keeps the selected date and reverse rel
   ]) {
     const cluster = snapshotAt(date).data.clusters[0];
     const response = await mockClient.getIssue(cluster.id);
+    const memberIds = new Set(
+      response.data.members.map((member) => member.pageId),
+    );
+    assert(
+      response.data.report.sections.every((section) =>
+        section.evidenceIds.every((id) => memberIds.has(id)),
+      ),
+    );
     assert.equal(response.data.snapshotTs, timestamp(date));
     assert.equal(response.data.id, issueId(cluster.id));
     assert.deepEqual(

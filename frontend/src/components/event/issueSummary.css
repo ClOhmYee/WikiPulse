@@ -1,0 +1,41 @@
+.issue-summary {
+  padding: 24px 28px;
+  border: 1px solid var(--wp-border, #24313a);
+  border-radius: 12px;
+  background: var(--wp-raised, #101d25);
+  color: var(--paper, #f3f7f7);
+}
+.workspace .issue-summary h3 {
+  margin: 0 0 12px;
+  color: #dbb057;
+  font-size: 14px;
+  font-weight: 650;
+  line-height: 1.5;
+}
+.workspace .issue-summary p {
+  margin: 0;
+  color: inherit;
+  font-size: 16px;
+  line-height: 1.85;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+}
+.issue-summary--compact {
+  margin: 8px 0 20px;
+  padding: 16px;
+}
+.workspace .issue-summary--compact h3 {
+  font-size: 13px;
+}
+.workspace .issue-summary--compact p {
+  font-size: 14px;
+  line-height: 1.8;
+}
+@media (max-width: 600px) {
+  .issue-summary {
+    padding: 20px;
+  }
+  .issue-summary--compact {
+    padding: 16px;
+  }
+}

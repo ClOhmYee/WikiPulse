@@ -17,11 +17,25 @@ from cluster.snapshot import (
     Neighbor,
     Seed,
     WikidataRelation,
-    build_snapshot,
     issue_key_of,
 )
+from cluster.snapshot import build_snapshot as _build_snapshot
 
 UTC = timezone.utc
+
+
+def build_snapshot(*args, **kwargs):
+    """이 파일은 **legacy expansion 레이어**의 테스트다 (WP-161).
+
+    -161 에서 CORE 가 정본이 되며 `expansion` 기본값이 False 로 바뀌었다. 여기 검증은
+    전부 Clickstream 이웃 게이트(-51·-77·-115)에 대한 것이라 레이어를 켜고 돈다.
+    CORE 기본 경로는 `test_rootgraph.py`·`test_snapshot_core.py` 가 본다.
+
+    ⚠️ `root_links` 를 주지 않으므로 grouping 은 꺼진 채다 — root 1개 = 클러스터 1개인
+    -161 이전 구조 그대로이고, 그래서 아래 기대값이 그대로 유효하다.
+    """
+    kwargs.setdefault("expansion", True)
+    return _build_snapshot(*args, **kwargs)
 
 
 def _dt(y, m, d, h=0):

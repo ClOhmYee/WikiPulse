@@ -26,7 +26,11 @@ test("issue detail shows supported evidence and unavailable time series/news ins
   await page.goto(`/#/issues/${issue.id}`);
   await expect(page.getByRole("heading", { level: 1 })).toHaveText(issue.label);
   await expect(page.getByRole("tab").first()).toHaveText("리포트");
-  await expect(page.locator(".dt-report-section")).toHaveCount(4);
+  await expect(page.locator(".dt-report-prose > p")).toHaveCount(4);
+  await expect(page.locator(".issue-summary p")).toHaveText(issue.summary);
+  await expect(page.locator(".dt-report-sources a")).toHaveCount(
+    issue.members.length,
+  );
   await page.getByRole("tab").nth(1).click();
   await expect(page.getByText("시계열 미제공", { exact: true })).toBeVisible();
   await expect(page.locator(".dt-event-metrics")).not.toContainText("배");

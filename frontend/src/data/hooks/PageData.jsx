@@ -73,6 +73,8 @@ export function PageDataBoundary({
       ? result.previousData
       : null);
   const snapshotTs = resource === "explore" ? data?.meta.snapshotTs : undefined;
+  const sourceSnapshots =
+    resource === "explore" ? data?.meta.sourceSnapshots : undefined;
   const setListParams = useCallback(
     (update) => {
       setQueryState((current) => {
@@ -84,11 +86,16 @@ export function PageDataBoundary({
           typeof update === "function" ? update(previous) : update;
         return {
           routeIdentity,
-          params: nextListParams(previous, partial, snapshotTs),
+          params: nextListParams(
+            previous,
+            partial,
+            snapshotTs,
+            sourceSnapshots,
+          ),
         };
       });
     },
-    [routeIdentity, snapshotTs, resource],
+    [routeIdentity, snapshotTs, sourceSnapshots, resource],
   );
   const value = useMemo(
     () =>

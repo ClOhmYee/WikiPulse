@@ -27,6 +27,10 @@
 
 일반 목록 pagination은 `offset/limit/total/hasMore`, limit 범위는 1~100이다. 이슈 정렬은 pulseScore 내림차순·id 오름차순이다. 이슈 키워드·카테고리 검색은 지원하지 않는다. 종목 검색은 q·sector·exchange·hasIssues를 지원한다.
 
+이슈 탐색의 **모든 출처**는 `/issues/snapshots`에서 live·replay 각각의 최신 완료 스냅샷을 선택하고, 출처·시각·상태를 명시한 `/issues` 결과를 프론트에서 합친다. 서버의 출처 생략은 LIVE 우선 단일 스냅샷 조회이므로 전체 조회로 사용하지 않는다. 합친 결과에도 점수 내림차순·ID 오름차순과 전체 건수 기준 페이지네이션을 적용하며, 화면에 출처별 시각을 표시한다. 페이지 이동은 내부 `sourceSnapshots`에 두 시각을 고정하고, 필터 변경은 첫 페이지에서 최신 시각을 다시 선택한다. 이 내부 상태는 API 쿼리에 보내지 않는다.
+
+서버 정렬을 유지하기 위해 각 출처에서 최대 `offset + limit`개까지 읽고 전역 페이지를 자른다(요청당 최대 100개). 단일 출처만 있으면 서버 페이지를 그대로 사용한다. 깊은 페이지에서는 재조회량이 늘어나므로 데이터가 커질 경우 서버의 통합 페이지네이션으로 옮길 수 있다. 빈 완료 스냅샷은 이전의 비어 있지 않은 시점으로 대체하지 않으며, 한 출처의 요청 실패를 정상적인 부분 결과로 숨기지 않는다.
+
 ## null과 식별자
 
 `IssueDetail`, `IssueMember`, `StockDetail`, `RelatedStock`은 Java `NON_NULL` 때문에 값 없는 필드가 생략될 수 있다. 카드 label은 null일 수 있다. 지도 Node의 지표 필드는 필수지만 null 가능하다. 지도 label·firstDetectedAt·이전 데이터의 issueKey도 null 가능하다. 없는 수치를 0으로 바꾸지 않는다.

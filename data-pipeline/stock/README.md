@@ -70,6 +70,51 @@ python -m stock.prices --limit 20 --dry-run  # DB 안 건드리고 20종목만 �
   다시 계산돼, 5년 초기분과 매일 증분분의 기준이 어긋난다. raw 는 날짜별 값이
   안 변해 증분 append 와 정합하다. 분할일 차트 튐은 "참고 컨텍스트"라 허용한다.
 
+## EC2 운영 DB 적재 (주가) — WP-185
+
+`WP-147`(팀원 2, 완료)이 종목 마스터·설명·임베딩을 EC2 운영 DB에 올렸을 때
+**주가는 "범위 밖 — 필요하면 별건"으로 남겼다.** 그 별건이 **WP-185**다.
+운영에서 라이브 매칭·요약은 정상이었는데(검증 종목 155건 / 61 issue_key) `stock_price`
+만 0행이라 화면에 "가격 미제공"이 떴다. 아래로 채웠다.
+
+**대상 = 검증 티커 17개** — 배포 DB `cluster_stock.verified`에 등장하는 전 티커로 한정한다.
+전 종목(5천여) 5년치가 아니라, 실제로 이슈에 매칭돼 화면에 뜰 종목만 넣는다.
+
+```
+ACM, AERO, ALK, BA, CAAP, CPA, DAL, DJT, FUBO, FUN, GRSD, MANU, MMYT, OKLO, OPBK, WH, YTRA
+```
+
+코드 변경은 없다 — `stock.prices`가 이미 `--tickers`를 지원한다(위 절 참고). 코드는 EC2
+호스트에 바인드 마운트돼 있고(`/home/deploy/wikipulse-local-test/data-pipeline → /opt/app`,
+이미지 `wikipulse-spark-standalone:local`, python 3.11), `stock.prices`는 `DATABASE_URL` +
+`yfinance`만 있으면 된다(yfinance는 이미지에 없어 런타임 설치). postgres는
+`postgres_default` 네트워크에 있다.
+
+```bash
+# 로컬(Windows Git Bash)에서 SSH로 EC2에 붙어 일회성 컨테이너 실행.
+# pem 경로는 각자 로컬 경로로 바꾼다(개인 환경 — 저장소에 실경로를 박지 않는다).
+# DB 비밀번호는 컨테이너 env에서 서버 안에서만 읽어 DATABASE_URL로 넘긴다 — 저장소·로그에 안 남긴다.
+ssh -i <로컬 pem 경로>/example-account.pem ubuntu@service.example.com '
+PGPW=$(sudo docker inspect postgres-postgres-1 --format "{{range .Config.Env}}{{println .}}{{end}}" | grep "^POSTGRES_PASSWORD=" | cut -d= -f2-)
+sudo docker run --rm --network postgres_default \
+  -v /home/deploy/wikipulse-local-test/data-pipeline:/opt/app -w /opt/app \
+  -e DATABASE_URL="postgresql://wikipulse:$PGPW@postgres-postgres-1:5432/wikipulse" \
+  wikipulse-spark-standalone:local \
+  sh -c "pip install -q yfinance \"psycopg[binary]\" && python -m stock.prices --tickers ACM,AERO,ALK,BA,CAAP,CPA,DAL,DJT,FUBO,FUN,GRSD,MANU,MMYT,OKLO,OPBK,WH,YTRA --throttle 0.3"
+'
+```
+
+- 결과(2026-09-22 실행): `stock_price` **0행 → 20,276행**(17종목 × 5년 일봉, 실패 0).
+- 기본 period가 5y라 2025-06 데모 구간까지 커버된다. API가 조회 시 `from`/`to`로 창을 자른다.
+- **검증**: `GET /api/v1/stocks/BA/prices?from=2025-06-01&to=2025-06-20`가 실제 OHLCV를 반환.
+  시연 이슈 Air India Flight 171(id 13267) → BA(보잉)의 사고일 2025-06-12 전후 가격이 있다.
+- **행 수 확인(읽기 전용)**: 위 SSH로 `sudo docker exec postgres-postgres-1 psql -U wikipulse -d
+  wikipulse -c "SELECT count(*), count(DISTINCT ticker) FROM stock_price;"` → `20276 / 17`.
+- 🔴 **되돌리기**: 운영 DB에서 `TRUNCATE stock_price;` (이 테이블은 가격 전용, FK 참조 없음).
+- 🔴 재실행하려면 위를 그대로 다시 돌린다 — `ON CONFLICT` upsert라 중복 행은 안 생긴다.
+- ⚠️ 검증 티커는 이슈 매칭 결과에 따라 늘어난다. 새 종목이 매칭되면 위 `--tickers`에 추가해
+  다시 돌리거나, 전 종목 적재로 확장할지는 팀 결정이다(현재는 검증 티커 한정).
+
 ## 규모 (2026-09-08 실측)
 
 ```

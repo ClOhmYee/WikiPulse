@@ -1,5 +1,6 @@
 import { AlertCircle, Clock3, FileText, Sparkles } from "lucide-react";
 import { wikipediaUrl } from "../../lib/wiki";
+import { IssueSummary } from "./IssueSummary";
 import { timestampLabel } from "../../pages/event/presentation.js";
 
 const STATUS_COPY = {
@@ -20,12 +21,37 @@ const STATUS_COPY = {
   },
 };
 
-export function IssueReport({ report, articles = [] }) {
-  const status = report?.status || "insufficient_evidence";
+export function IssueReport({
+  report,
+  summary,
+  articles = [],
+  isExample = false,
+}) {
+  const paragraphs = (report?.sections || []).flatMap((section) =>
+    (section.body || "")
+      .split(/\n\s*\n/)
+      .map((text) => text.trim())
+      .filter(Boolean),
+  );
+  const status =
+    report?.status === "ready" && !paragraphs.length
+      ? "insufficient_evidence"
+      : report?.status || "insufficient_evidence";
   const isReady = status === "ready";
   const state = STATUS_COPY[status] || STATUS_COPY.insufficient_evidence;
   const StateIcon = state.icon;
-  const articleById = new Map(articles.map((article) => [article.id, article]));
+  const articleById = new Map(
+    articles.map((article) => [String(article.id), article]),
+  );
+  const evidence = [
+    ...new Set(
+      (report?.sections || []).flatMap((section) =>
+        (section.evidenceIds || []).map(String),
+      ),
+    ),
+  ]
+    .map((id) => articleById.get(id))
+    .filter(Boolean);
   return (
     <section className="dt-report" aria-labelledby="issue-report-title">
       <div className="dt-report-heading">
@@ -34,61 +60,42 @@ export function IssueReport({ report, articles = [] }) {
             <Sparkles size={20} aria-hidden="true" />
             리포트
           </h2>
-          <p>관측된 이슈와 출처 문서를 바탕으로 생성한 해석입니다.</p>
+          <p>
+            {isExample
+              ? "이슈의 배경과 주요 쟁점 · 예시 리포트"
+              : "이슈의 배경과 주요 쟁점"}
+          </p>
         </div>
-        <dl className="dt-report-meta" aria-label="리포트 정보">
-          <div>
-            <dt>기준 시각</dt>
-            <dd>{timestampLabel(report?.snapshotTs)}</dd>
-          </div>
-          <div>
-            <dt>생성 시각</dt>
-            <dd>{timestampLabel(report?.generatedAt)}</dd>
-          </div>
-          <div>
-            <dt>생성 정보</dt>
-            <dd>{report?.model || "미제공"}</dd>
-          </div>
-        </dl>
       </div>
+      <IssueSummary summary={summary} />
       {isReady ? (
-        <div className="dt-report-sections">
-          {report.sections.map((section) => (
-            <article className="dt-report-section" key={section.id}>
-              <h3>{section.title}</h3>
-              {section.body ? (
-                <p>{section.body}</p>
-              ) : (
-                <p className="dt-report-empty">
-                  이 항목에 제공된 해석이 없습니다.
-                </p>
-              )}
-              {section.evidenceIds?.length > 0 && (
-                <div
-                  className="dt-report-evidence"
-                  aria-label={`${section.title} 근거`}
-                >
-                  {section.evidenceIds.map((id) => {
-                    const article = articleById.get(String(id));
-                    return article ? (
-                      <a
-                        key={article.id}
-                        className="dt-evidence-chip"
-                        href={wikipediaUrl(article)}
-                        target="_blank"
-                        rel="noreferrer"
-                      >
-                        <FileText size={13} aria-hidden="true" />
-                        {article.name || article.title}
-                        <span className="dt-sr-only"> 원문 열기</span>
-                      </a>
-                    ) : null;
-                  })}
-                </div>
-              )}
-            </article>
-          ))}
-        </div>
+        <article className="dt-report-article" aria-label="리포트 본문">
+          <div className="dt-report-prose">
+            {paragraphs.map((paragraph, index) => (
+              <p key={index}>{paragraph}</p>
+            ))}
+          </div>
+          {evidence.length > 0 && (
+            <footer className="dt-report-sources">
+              <h3>참고 문서</h3>
+              <div className="dt-report-evidence">
+                {evidence.map((article) => (
+                  <a
+                    key={article.id}
+                    className="dt-evidence-chip"
+                    href={wikipediaUrl(article)}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    <FileText size={13} aria-hidden="true" />
+                    {article.name || article.title}
+                    <span className="dt-sr-only"> 원문 열기 (새 탭)</span>
+                  </a>
+                ))}
+              </div>
+            </footer>
+          )}
+        </article>
       ) : (
         <div
           className="dt-report-state"
@@ -101,6 +108,20 @@ export function IssueReport({ report, articles = [] }) {
           </div>
         </div>
       )}
+      <dl className="dt-report-meta" aria-label="리포트 정보">
+        <div>
+          <dt>기준 시각</dt>
+          <dd>{timestampLabel(report?.snapshotTs)}</dd>
+        </div>
+        <div>
+          <dt>생성 시각</dt>
+          <dd>{timestampLabel(report?.generatedAt)}</dd>
+        </div>
+        <div>
+          <dt>생성 정보</dt>
+          <dd>{report?.model || "미제공"}</dd>
+        </div>
+      </dl>
     </section>
   );
 }

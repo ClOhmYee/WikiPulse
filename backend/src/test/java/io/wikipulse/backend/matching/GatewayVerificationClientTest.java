@@ -19,6 +19,7 @@ import org.springframework.boot.autoconfigure.jdbc.DataSourceTransactionManagerA
 import org.springframework.boot.autoconfigure.orm.jpa.HibernateJpaAutoConfiguration;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
@@ -177,5 +178,23 @@ class GatewayVerificationClientTest {
     @EnableConfigurationProperties(CandidateProperties.class)
     @Import(GatewayVerificationClient.class)
     static class VerifyClientTestApp {
+
+        /**
+         * 이 테스트는 <b>전송 계층</b>을 잰다 — 예산은 범위 밖이다 (WP-191).
+         *
+         * <p>🔴 실 {@link LlmBudget} 을 쓰면 DataSource 가 필요한데 이 슬라이스는 DB
+         * 자동설정을 통째로 끈다. 예산을 무제한(0)으로 둔 스텁을 넣어 전송 동작만 남긴다.
+         * 예산 자체의 계약은 {@code db/tests/test_llm_budget_sql.py} 와
+         * {@link LlmBudgetWorkerTest} 가 본다.
+         */
+        @Bean
+        LlmBudget llmBudget() {
+            return new LlmBudget(null, new CandidateProperties()) {
+                @Override
+                public void consume(String kind) {
+                    // 무제한 — 전송 테스트를 예산이 막지 않게 한다.
+                }
+            };
+        }
     }
 }

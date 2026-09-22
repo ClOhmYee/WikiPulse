@@ -1,0 +1,52 @@
+{
+ "summary": {
+  "snapshots": 1104,
+  "roots_in": 22080,
+  "root_clusters_before": 22080,
+  "components_after": 19432,
+  "reduction_pct": 11.99,
+  "roots_absorbed": 4511,
+  "size_buckets": {
+   "1": 17569,
+   "2": 1461,
+   "3-4": 322,
+   "5-7": 57,
+   "8-12": 20,
+   "13+": 3
+  },
+  "singleton_pct": 90.41,
+  "avg": 1.136,
+  "median": 1.0,
+  "p90": 1,
+  "max": 16,
+  "edges_cut_focus": 385,
+  "edges_cut_D2": 132,
+  "components_hit_by_both": 6,
+  "giant_20plus": 0,
+  "focus_undecidable_roots": 31,
+  "per_snapshot_components": {
+   "min": 5,
+   "max": 20,
+   "avg": 17.6,
+   "median": 18.0,
+   "hist": {
+    "5": 1,
+    "7": 3,
+    "8": 1,
+    "9": 3,
+    "10": 3,
+    "11": 5,
+    "12": 5,
+    "13": 19,
+    "14": 28,
+    "15": 61,
+    "16": 109,
+    "17": 190,
+    "18": 285,
+    "19": 252,
+    "20": 139
+   }
+  }
+ },
+ "giants": []
+}

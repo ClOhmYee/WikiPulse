@@ -1,5 +1,6 @@
 import { DataError } from "./contracts.js";
 import { issueCategories } from "./categories.js";
+import { listExploreIssues } from "./explore.js";
 
 const unique = (items) => [
   ...new Map(items.map((item) => [item.id ?? item.symbol, item])).values(),
@@ -7,30 +8,20 @@ const unique = (items) => [
 const optionalNumber = (value) => (Number.isFinite(value) ? value : null);
 const availableText = (value) =>
   typeof value === "string" && value.trim() ? value : null;
-const reportSections = [
-  { id: "conclusion", title: "결론" },
-  { id: "change", title: "변화" },
-  { id: "context", title: "맥락" },
-  { id: "evidence", title: "근거" },
-];
 const reportView = (raw, snapshotTs) => {
   const source = raw.report;
-  const sectionsById = new Map(
-    (source?.sections || []).map((section) => [section.id, section]),
-  );
   return {
     status: source?.status || "insufficient_evidence",
     snapshotTs,
     generatedAt: source?.generatedAt ?? null,
     model: source?.model ?? raw.summaryModel ?? null,
-    sections: reportSections.map((section) => {
-      const value = sectionsById.get(section.id);
-      return {
-        ...section,
-        body: availableText(value?.body),
-        evidenceIds: value?.evidenceIds?.map(String) || [],
-      };
-    }),
+    // Preserve source order, including legacy sections; the reader displays
+    // their bodies as one article without imposing a fixed editorial outline.
+    sections: (source?.sections || []).map((section) => ({
+      ...section,
+      body: availableText(section.body),
+      evidenceIds: section.evidenceIds?.map(String) || [],
+    })),
   };
 };
 export function memberView(member, eventId) {
@@ -214,36 +205,10 @@ export async function loadPageData(client, resource, params = {}, options) {
         "snapshotTs",
         "status",
         "source",
+        "sourceSnapshots",
       ]);
-      if (query.source && !query.snapshotTs) {
-        const snapshots = await client.listSnapshots(
-          { source: query.source },
-          options,
-        );
-        const latest = snapshots.data.reduce(
-          (last, item) =>
-            !last || Date.parse(item.snapshotTs) > Date.parse(last.snapshotTs)
-              ? item
-              : last,
-          null,
-        );
-        if (!latest) {
-          snapshot.pagination = {
-            offset: query.offset || 0,
-            limit: query.limit || 20,
-            total: 0,
-            hasMore: false,
-          };
-          snapshot.meta = {
-            ...snapshot.meta,
-            source: query.source,
-            pagination: snapshot.pagination,
-          };
-          break;
-        }
-        query.snapshotTs = latest.snapshotTs;
-      }
-      const result = await client.listIssues(
+      const result = await listExploreIssues(
+        client,
         { offset: 0, limit: 20, ...query },
         options,
       );

@@ -82,7 +82,7 @@ test("Spring responses without meta, dataMode or nullable optional fields load n
   assert.equal(value.events[0].report.status, "insufficient_evidence");
   assert.deepEqual(
     value.events[0].report.sections.map((section) => section.id),
-    ["conclusion", "change", "context", "evidence"],
+    [],
   );
   assert.equal(value.meta.dataMode, "api");
 });
@@ -97,7 +97,7 @@ test("structured report states are accepted without inventing missing sections",
   assert.equal(value.events[0].report.sections[0].body, null);
   assert.deepEqual(
     value.events[0].report.sections.map((section) => section.id),
-    ["conclusion", "change", "context", "evidence"],
+    ["conclusion"],
   );
 });
 
@@ -184,7 +184,7 @@ test("mock filtering, raw response projection, stable legacy aliases and cancell
   assert.equal(legacy.data.report.status, "ready");
   assert.deepEqual(
     legacy.data.report.sections.map((section) => section.id),
-    ["conclusion", "change", "context", "evidence"],
+    ["article"],
   );
   assert.equal(legacy.data.relatedStocks.length <= 5, true);
   assert.deepEqual(

@@ -1,0 +1,57 @@
+# CORE_ONLY clustering preview 스택 (백엔드 + 프론트 + 5436 preview DB)
+#
+# 실제 서비스 코드를 그대로 띄우고 DB 만 preview 로 바꾼다. 애플리케이션 코드·UI 는
+# 손대지 않는다 — 바뀌는 것은 DATABASE_URL 과 포트뿐이다.
+#
+# 🔴 5434·5435 는 이 파일이 참조하지 않는다. DB 는 5436 preview 한 곳뿐이다.
+# preview PostgreSQL 은 이 compose 가 만들지 않는다. 이미 떠 있는
+# `wikipulse-cluster-preview-pg` 를 external network 로 붙여 쓴다.
+#
+#   docker compose -f tools/cluster-preview/compose.preview.yml up -d --build
+#   http://localhost:5176        프론트
+#   http://localhost:18080/api/v1/issues/snapshots   백엔드
+#
+# DB 를 baseline(root 1건 = 클러스터 1건, 22,080개)으로 되돌려 보고 싶으면
+# PREVIEW_SCHEMA=baseline 으로 올린다. 기본은 CORE_ONLY 가 들어간 public 이다.
+
+name: wikipulse-cluster-preview
+
+services:
+  backend:
+    build:
+      context: ../../backend
+    container_name: wikipulse-preview-backend
+    environment:
+      DATABASE_URL: >-
+        jdbc:postgresql://wikipulse-cluster-preview-pg:5432/wikipulse_cluster_preview?currentSchema=${PREVIEW_SCHEMA:-public}
+      DB_USER: replay
+      DB_PASSWORD: ${PREVIEW_DB_PASSWORD:?Set PREVIEW_DB_PASSWORD}
+      # 외부 호출 워커는 전부 끈다. 이 preview 는 clustering 결과만 본다 —
+      # 뉴스·요약·종목은 원본에 없고(0행) 만들지도 않는다.
+      WIKIPULSE_MATCHING_SCHEDULER_ENABLED: "false"
+      WIKIPULSE_MATCHING_VERIFICATION_ENABLED: "false"
+      WIKIPULSE_MATCHING_SUMMARY_ENABLED: "false"
+    ports:
+      - "18080:8080"
+    networks:
+      - preview
+
+  frontend:
+    build:
+      context: ../../frontend
+    container_name: wikipulse-preview-frontend
+    environment:
+      VITE_DATA_SOURCE: api
+      VITE_API_BASE_URL: /api/v1
+      VITE_API_PROXY_TARGET: http://backend:8080
+    ports:
+      - "5176:5174"
+    depends_on:
+      - backend
+    networks:
+      - preview
+
+networks:
+  preview:
+    name: wikipulse-preview-net
+    external: true

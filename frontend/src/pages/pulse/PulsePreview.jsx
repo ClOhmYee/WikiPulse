@@ -3,6 +3,7 @@ import { CategoryTag } from "../../components/ui/CategoryTag";
 import { getIssueCategory } from "../../data/categories.js";
 import { isNewIssue, kstTimestamp } from "../../data/pulse/time.js";
 import { IssueState } from "../../components/event/IssueState";
+import { IssueSummary } from "../../components/event/IssueSummary";
 export function SignalBadges({ cluster, meta }) {
   return (
     <span className="pulse-badges">
@@ -89,7 +90,7 @@ export default function PulsePreview({
           <SignalBadges cluster={cluster} meta={meta} />
           <IssueState status={cluster.status} />
           <h2>{cluster.label}</h2>
-          <p>{cluster.summary || "이 시점의 요약이 제공되지 않았습니다."}</p>
+          <IssueSummary summary={cluster.summary} compact />
           <dl className="pulse-metrics">
             <div>
               <dt>이슈 급증 점수</dt>
