@@ -4,6 +4,87 @@ import { serve } from "./server.js";
 const issue = (await mockClient.getIssue("iran-hormuz-2025")).data;
 const pause = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
+test("all sources includes replay confirmed issues alongside live detected issues", async ({
+  page,
+}) => {
+  const times = {
+    live: "2026-09-21T12:00:00Z",
+    replay: "2025-06-13T00:00:00Z",
+  };
+  const cards = Object.entries(times).map(([source, snapshotTs], i) => ({
+    id: 900 + i,
+    label: `${source} filter regression`,
+    source,
+    snapshotTs,
+    status: source === "live" ? "DETECTED" : "CONFIRMED",
+    pulseScore: 10 - i,
+    memberCount: 1,
+    stockCount: i,
+  }));
+  await serve(page, async ({ route, url }) => {
+    if (url.pathname === "/api/v1/issues/snapshots") {
+      await route.fulfill({
+        json: {
+          data: cards
+            .filter(
+              (card) =>
+                !url.searchParams.has("source") ||
+                card.source === url.searchParams.get("source"),
+            )
+            .map((card) => ({
+              source: card.source,
+              snapshotTs: card.snapshotTs,
+              clusterCount: 1,
+            })),
+        },
+      });
+      return true;
+    }
+    if (url.pathname !== "/api/v1/issues") return false;
+    const source = url.searchParams.get("source") || "live";
+    const status = url.searchParams.get("status");
+    const data = cards.filter(
+      (card) => card.source === source && (!status || card.status === status),
+    );
+    await route.fulfill({
+      json: {
+        data,
+        meta: {
+          snapshotTs: times[source],
+          pagination: {
+            offset: 0,
+            limit: Number(url.searchParams.get("limit")),
+            total: data.length,
+            hasMore: false,
+          },
+        },
+      },
+    });
+    return true;
+  });
+  await page.goto("/#/issues");
+  await expect(page.locator(".event-row")).toHaveCount(2);
+  await expect(page.locator(".explore-date")).toContainText("2026");
+  await expect(page.locator(".explore-date")).toContainText("2025");
+  const status = page.getByRole("combobox", { name: "분석 상태", exact: true });
+  const source = page.getByRole("combobox", {
+    name: "데이터 출처",
+    exact: true,
+  });
+  await status.selectOption("CONFIRMED");
+  await expect(page.locator(".event-row")).toHaveCount(1);
+  await expect(page.locator(".event-row")).toContainText(
+    "replay filter regression",
+  );
+  await source.selectOption("live");
+  await expect(page.locator(".event-row")).toHaveCount(0);
+  await source.selectOption("replay");
+  await expect(page.locator(".event-row")).toHaveCount(1);
+  await source.selectOption("");
+  await status.selectOption("");
+  await expect(page.locator(".event-row")).toHaveCount(2);
+});
+
 test("HTTP lists request one page at a time and reset offset on filters", async ({
   page,
 }) => {
@@ -23,7 +104,7 @@ test("HTTP lists request one page at a time and reset offset on filters", async 
     .selectOption("CONFIRMED");
   await expect.poll(() => calls.at(-1).searchParams.get("offset")).toBe("0");
   expect(calls.at(-1).searchParams.get("status")).toBe("CONFIRMED");
-  expect(calls.at(-1).searchParams.has("snapshotTs")).toBe(false);
+  expect(calls.at(-1).searchParams.get("snapshotTs")).toBe(snapshotTs);
   await page
     .getByRole("combobox", { name: "데이터 출처", exact: true })
     .selectOption("replay");

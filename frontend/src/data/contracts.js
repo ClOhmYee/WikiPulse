@@ -1,6 +1,7 @@
 /**
  * @typedef {{signal?: AbortSignal}} RequestOptions
  * @typedef {{offset?: number, limit?: number, snapshotTs?: string, status?: string, source?: string, q?: string, sector?: string, exchange?: string, hasIssues?: boolean}} ListParams
+ * @typedef {ListParams & {sourceSnapshots?: Record<string, string>}} ExploreParams Local page state; sourceSnapshots is never sent to the API.
  * @typedef {{offset: number, limit: number, total: number, hasMore: boolean}} Pagination
  * @template T
  * @typedef {{data: T, meta?: {snapshotTs?: string, pagination?: Pagination}}} DataResponse
