@@ -1,5 +1,6 @@
 import { DataError } from "./contracts.js";
 import { issueCategories } from "./categories.js";
+import { listExploreIssues } from "./explore.js";
 
 const unique = (items) => [
   ...new Map(items.map((item) => [item.id ?? item.symbol, item])).values(),
@@ -212,36 +213,10 @@ export async function loadPageData(client, resource, params = {}, options) {
         "snapshotTs",
         "status",
         "source",
+        "sourceSnapshots",
       ]);
-      if (query.source && !query.snapshotTs) {
-        const snapshots = await client.listSnapshots(
-          { source: query.source },
-          options,
-        );
-        const latest = snapshots.data.reduce(
-          (last, item) =>
-            !last || Date.parse(item.snapshotTs) > Date.parse(last.snapshotTs)
-              ? item
-              : last,
-          null,
-        );
-        if (!latest) {
-          snapshot.pagination = {
-            offset: query.offset || 0,
-            limit: query.limit || 20,
-            total: 0,
-            hasMore: false,
-          };
-          snapshot.meta = {
-            ...snapshot.meta,
-            source: query.source,
-            pagination: snapshot.pagination,
-          };
-          break;
-        }
-        query.snapshotTs = latest.snapshotTs;
-      }
-      const result = await client.listIssues(
+      const result = await listExploreIssues(
+        client,
         { offset: 0, limit: 20, ...query },
         options,
       );

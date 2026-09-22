@@ -4,7 +4,11 @@ import { usePageData } from "../../data/hooks/PageData";
 import { EventRow } from "../../components/event/EventRow";
 import { Pagination } from "../../components/event/IssueState";
 import { EmptyState } from "../../components/ui/EmptyState";
-import { ISSUE_STATUS_LABELS, timestampLabel } from "../event/presentation.js";
+import {
+  ISSUE_STATUS_LABELS,
+  sourceLabel,
+  timestampLabel,
+} from "../event/presentation.js";
 export default function ExplorePage({
   initialQuery = "",
   savedEvents,
@@ -42,7 +46,15 @@ export default function ExplorePage({
         </div>
         <div className="explore-date">
           <span>데이터 기준 시각</span>
-          <strong>{timestampLabel(meta.snapshotTs)}</strong>
+          {Object.keys(meta.sourceSnapshots || {}).length ? (
+            Object.entries(meta.sourceSnapshots).map(([source, snapshotTs]) => (
+              <strong key={source}>
+                {sourceLabel(source)} · {timestampLabel(snapshotTs)}
+              </strong>
+            ))
+          ) : (
+            <strong>{timestampLabel(meta.snapshotTs)}</strong>
+          )}
         </div>
       </div>
       <div className="explore-toolbar">
@@ -85,7 +97,8 @@ export default function ExplorePage({
       </div>
       <p className="data-scope" id="issue-search-scope">
         제목 검색은 현재 페이지에 표시된 이슈에서 찾습니다. 이슈는 급증 점수가
-        높은 순서로 표시됩니다.
+        높은 순서로 표시됩니다. 모든 출처는 실시간·과거 각각의 최신 데이터를
+        함께 표시합니다.
       </p>
       {loading && (
         <p role="status" className="data-scope">
