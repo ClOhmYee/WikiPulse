@@ -184,3 +184,25 @@ def test_같은_입력을_두_번_돌려도_같은_파라미터():
     first = build_rows(windows, as_of=date(2025, 6, 9))
     second = build_rows(windows, as_of=date(2025, 6, 9))
     assert first == second
+
+
+# --- window_start 타입 (WP-212) ---
+
+def test_window_start_는_문자열과_datetime_둘_다_받는다():
+    """-58 산출물은 문자열, DB 경로(baseline_from_views)는 datetime 을 준다."""
+    from datetime import datetime, timezone
+
+    from spike.baseline_rows import _day
+
+    assert _day("2026-09-20T14:00:00") == date(2026, 9, 20)
+    assert _day(datetime(2026, 9, 20, 14, tzinfo=timezone.utc)) == date(2026, 9, 20)
+
+
+def test_tz_aware_datetime_은_UTC_로_맞춘_뒤_날짜를_뗀다():
+    """⚠️ KST 09:00 은 UTC 로 전날 00:00 이다. 안 맞추면 슬롯이 하루 밀린다."""
+    from datetime import datetime, timedelta, timezone
+
+    from spike.baseline_rows import _day
+
+    kst = timezone(timedelta(hours=9))
+    assert _day(datetime(2026, 9, 21, 8, tzinfo=kst)) == date(2026, 9, 20)

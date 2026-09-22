@@ -40,7 +40,12 @@ from pathlib import Path
 
 from .ingest import MANIFEST_NAME, Counts, ShardWriter, download, env
 from .pageview import SchemaMismatch
-from .pageview_hourly import aggregate, filename_hour, ts_hour_from_filename
+from .pageview_hourly import (
+    aggregate,
+    filename_hour,
+    scan_titles,
+    ts_hour_from_filename,
+)
 
 PAGEVIEW_HOURLY_BASE = "https://dumps.wikimedia.org/other/pageviews"
 
@@ -136,6 +141,7 @@ def load_titles(path: Path | None) -> frozenset[str] | None:
 def ingest_hour(
     ts_hour: str, wiki: str, cache_dir: Path, out_root: Path, *,
     titles: frozenset[str] | None, shard_records: int, dry_run: bool, conn=None,
+    min_views: int | None = None,
 ) -> str:
     """한 시간을 적재한다. 반환: "ok" | "skip"(이미 적재) | "pending"(아직 안 나옴).
 
@@ -163,9 +169,18 @@ def ingest_hour(
         raise SchemaMismatch(
             f"파일명 시각({ts_hour_from_filename(dump.name)})이 요청({ts_hour})과 다르다")
 
+    # 🔴 하한을 주면 **한 번 더 읽어** 그 시간 상위 제목을 후보 집합에 더한다
+    #    (WP-212). 안 더하면 `titles` 필터에서 먼저 잘려 하한이 무의미해진다.
+    #    두 패스인 이유는 `scan_titles` 독스트링에 있다 — 메모리와 정확성 둘 다다.
+    scan = titles
+    if min_views is not None:
+        over = scan_titles(read_lines(dump), wiki, min_views=min_views)
+        scan = over if titles is None else (titles | over)
+
     counts = Counts()
     records = []
-    for rec in aggregate(read_lines(dump), wiki, ts_hour, titles=titles):
+    for rec in aggregate(read_lines(dump), wiki, ts_hour,
+                         titles=scan, min_views=min_views, candidates=titles):
         counts.read += 1
         records.append(rec)
 
