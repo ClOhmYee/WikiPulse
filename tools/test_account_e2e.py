@@ -16,7 +16,6 @@ import tempfile
 import time
 import urllib.error
 import urllib.request
-from urllib.parse import urlparse
 
 import pgserver
 import psycopg
@@ -75,7 +74,10 @@ def main():
                 "-l", str(server.log), "restart"],
                pgdata=server.pgdata, user=server.system_user, timeout=15)
         server.ensure_postgres_running()
-    dsn = server.get_uri()
+    # pgserver's Unix URI omits the port even when postmaster uses a custom one.
+    # Override both transport and port before the first migration connection.
+    pg_port = server.get_postmaster_info().port
+    dsn = psycopg.conninfo.make_conninfo(server.get_uri(), host="127.0.0.1", port=pg_port)
     migrations = sorted((ROOT / "db/migrations").glob("V*__*.sql"), key=lambda p: int(p.name.split("__")[0][1:]))
     with psycopg.connect(dsn, autocommit=True) as db:
         # Upgrade populated V14 schema; prove collision rejection leaves existing identities alone.
@@ -102,15 +104,14 @@ def main():
         db.execute("SET search_path=public")
         db.execute("INSERT INTO stock(ticker,name,exchange) VALUES ('T211','Account E2E Stock','NASDAQ')")
         cluster = db.execute("INSERT INTO issue_cluster(snapshot_ts,label,pulse_score,status,source) VALUES (now(),'Account E2E Issue',42,'CONFIRMED','live') RETURNING id").fetchone()[0]
-    uri = urlparse(dsn)
-    # Resolve the disposable cluster's port and user for JDBC.
+    # Resolve the same TCP connection's database and user for JDBC.
     with psycopg.connect(dsn) as db:
-        pg_port = db.execute("SHOW port").fetchone()[0]
+        assert int(db.execute("SHOW port").fetchone()[0]) == int(pg_port)
         pg_user = db.execute("SELECT current_user").fetchone()[0]
-    with psycopg.connect(dsn, host="127.0.0.1", port=pg_port) as db:
-        assert db.execute("SELECT 1").fetchone()[0] == 1
+        pg_database = db.execute("SELECT current_database()").fetchone()[0]
+    print(f"PostgreSQL TCP ready: 127.0.0.1:{pg_port}/{pg_database}", flush=True)
     backend_port = port()
-    env = dict(os.environ, DATABASE_URL=f"jdbc:postgresql://127.0.0.1:{pg_port}/{uri.path.lstrip('/') or 'postgres'}",
+    env = dict(os.environ, DATABASE_URL=f"jdbc:postgresql://127.0.0.1:{pg_port}/{pg_database}",
                DB_USER=pg_user, DB_PASSWORD="", SERVER_PORT=str(backend_port), SESSION_COOKIE_SECURE="false",
                WIKIPULSE_MATCHING_SCHEDULER_ENABLED="false", WIKIPULSE_MATCHING_SUMMARY_ENABLED="false",
                WIKIPULSE_MATCHING_VERIFICATION_ENABLED="false", SESSION_TIMEOUT="24h")
