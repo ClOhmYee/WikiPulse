@@ -119,7 +119,7 @@ ORDER BY s.embedding <=> :q     -- <=> 여야 HNSW 인덱스를 탄다
 LIMIT :k;
 ```
 
-**이슈 임베딩은 저장하지 않는다.** 후보 생성 시 계산해 쓰고 버린다. 같은 이슈의 LLM 판정을 반복하지 않도록 `cluster_stock`의 `(issue_key, ticker, prompt_version)` 기준으로 최근 완료 결과를 재사용한다(WP-49, `V6__cluster_stock_reuse.sql`). 재사용 판정이 존재해도 API는 시점별 `cluster_id`를 읽으므로 스냅샷과 결과를 연결해야 한다. 단 과거 조회에는 선택 시점까지 완료된 결과만 보여야 하며, 최신 결과를 모든 과거 `cluster_id`에 무조건 복사하면 미래 정보가 소급된다. 현재 요약·검증 재사용 조회는 원 결과의 스냅샷이 대상 `snapshot_ts` 이하인지 제한하지 않으므로 이 as-of 연결은 WP-120에서 보완한다.
+**이슈 임베딩은 저장하지 않는다.** 후보 생성 시 계산해 쓰고 버린다. 같은 이슈의 LLM 판정을 반복하지 않도록 `cluster_stock`의 `(issue_key, ticker, prompt_version)` 기준으로 완료 결과를 재사용한다(WP-49, `V6__cluster_stock_reuse.sql`). 재사용 판정이 존재해도 API는 시점별 `cluster_id`를 읽으므로 각 대상 행으로 복사한다. WP-208부터 요약·후보·검증 재사용은 원본 클러스터 `snapshot_ts <=` 대상 `snapshot_ts`만 허용하고, 가능한 원본 중 대상 시점에 가장 가까운 것을 고른다. `generated_at`·`verified_at`은 backfill 실행 시각이므로 event-time 상한으로 사용하지 않는다.
 
 ---
 
@@ -127,7 +127,7 @@ LIMIT :k;
 
 - **리플레이 스냅샷과 토론의 수명이 엮여 있다.** `comment_thread`가 `issue_cluster`에 CASCADE로 달려 있는데 클러스터는 재계산 대상이다. 다만 토론은 MVP 제외 기능이므로 이번 구현에서는 사용하지 않는다.
 - ~~**실제 문서 생성 시각 저장 위치 미정**~~ → `wiki_page.page_created_at TIMESTAMPTZ NULL`로 추가했다(WP-118, 2026-09-17). ~~리플레이 `page_creation_timestamp`~~ → `page_first_edit_timestamp` 우선, 결측 시 미래가 아닌 lifecycle 생성 시각으로 교정했다(2026-09-18). LIVE는 MediaWiki 최초 리비전 API를 쓰며 운영 스케줄링은 아직 연결되지 않았다.
-- **`issue_key` 결과의 as-of 연결** — 요약 writer·판정 재사용 자체는 WP-119와 기존 V6 컬럼으로 구현됐지만, `findPriorSummary`·`findPriorVerdict`가 대상 스냅샷 상한 없이 최근 결과를 고른다. 과거 backfill에 미래 결과가 섞이지 않도록 원 클러스터 `snapshot_ts <=` 대상 `snapshot_ts` 조건과 원 `generated_at`·`verified_at` 보존을 WP-120에서 보완한다.
+- ~~**`issue_key` 결과의 as-of 연결** — 대상 스냅샷 상한 없이 최근 결과를 골랐다.~~ → 요약·후보·검증 재사용과 비용 상한 면제 모두 원 클러스터 `snapshot_ts <=` 대상 `snapshot_ts`로 제한했다(WP-208). 허용된 원본 중 가장 가까운 과거 스냅샷을 선택한다.
 - **`page_edit_window` 보존 기간** — 정해지면 파티션·삭제 잡이 붙는다
 - **마이그레이션 도구** — 파일명만 Flyway 규칙(`V1__`)을 따랐다. Flyway/Liquibase 확정은 백엔드 합의 사항
 - **인증 컬럼** — 회원 기능이 MVP에서 제외되어 `member.password_hash`의 자체 로그인/OAuth 결정도 이번 범위에서 하지 않는다

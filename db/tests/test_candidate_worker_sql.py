@@ -47,7 +47,7 @@ def _new_cluster(conn, **cols) -> int:
 
 # CandidateRepository.replaceCandidates() 의 INSERT 문 그대로(자리표시자만 :name -> %s).
 # 파라미터 순서: cid, ticker, tier, similarity, gdelt_lift, issue_key(SELECT절),
-#              issue_key(WHERE절), ticker(WHERE절) — issue_key·ticker 는 두 번씩 쓰인다.
+#              target cid, issue_key(WHERE절), ticker(WHERE절).
 _UPSERT_CANDIDATE_SQL = """
     INSERT INTO cluster_stock
         (cluster_id, ticker, tier, similarity, gdelt_lift, verified,
@@ -62,13 +62,17 @@ _UPSERT_CANDIDATE_SQL = """
            prior.match_path, prior.confidence, prior.rationale, prior.verified_at
       FROM (SELECT 1) AS dual
       LEFT JOIN (
-          SELECT verified, prompt_version, check_state, attempt_count,
-                 match_path, confidence, rationale, verified_at
-            FROM cluster_stock
-           WHERE issue_key = CAST(%s AS text)
-             AND ticker = %s
-             AND check_state = 'DONE'
-           ORDER BY verified_at DESC NULLS LAST
+          SELECT cs.verified, cs.prompt_version, cs.check_state, cs.attempt_count,
+                 cs.match_path, cs.confidence, cs.rationale, cs.verified_at
+            FROM cluster_stock cs
+            JOIN issue_cluster source_cluster ON source_cluster.id = cs.cluster_id
+            JOIN issue_cluster target_cluster ON target_cluster.id = %s
+           WHERE cs.issue_key = CAST(%s AS text)
+             AND cs.ticker = %s
+             AND cs.check_state = 'DONE'
+             AND cs.cluster_id <> target_cluster.id
+             AND source_cluster.snapshot_ts <= target_cluster.snapshot_ts
+           ORDER BY source_cluster.snapshot_ts DESC, cs.verified_at DESC NULLS LAST
            LIMIT 1
       ) AS prior ON true
     ON CONFLICT (cluster_id, ticker) DO UPDATE
@@ -95,7 +99,7 @@ def _delete_stale(conn, cid, keep: tuple[str, ...]) -> None:
 
 def _upsert_candidate(conn, cid, ticker, tier, similarity, gdelt_lift, issue_key):
     x(conn, _UPSERT_CANDIDATE_SQL, cid, ticker, tier, similarity, gdelt_lift,
-      issue_key, issue_key, ticker)
+      issue_key, cid, issue_key, ticker)
 
 
 # ---------------------------------------------------------------- 인수조건 4: 멱등 upsert
@@ -182,6 +186,107 @@ def test_같은_이슈의_새_스냅샷_cluster_id가_이전_DONE_판정을_들�
         c2,
     )[0]
     assert row == (True, "DONE", "DIRECT_MENTION", "v1", 0.55)  # 판정은 이월, similarity 는 재계산값
+
+
+def test_미래_스냅샷_DONE_판정은_과거_후보에_복사하지_않는다(conn):
+    """WP-208: 과거 replay를 나중에 실행해도 미래 판정을 쓰지 않는다."""
+    x(conn, "INSERT INTO stock (ticker, name, exchange) VALUES ('SAFE', 'Safe', 'NASDAQ')")
+    target = _new_cluster(conn, issue_key="asof-k", snapshot_ts="'2026-09-01T00:00Z'")
+    future = _new_cluster(conn, issue_key="asof-k", snapshot_ts="'2026-09-02T00:00Z'")
+    _upsert_candidate(conn, future, "SAFE", "BOTH", 0.8, None, "asof-k")
+    x(
+        conn,
+        "UPDATE cluster_stock SET check_state='DONE', verified=true, prompt_version='v1', "
+        "verified_at='2026-09-02T01:00Z' WHERE cluster_id=%s AND ticker='SAFE'",
+        future,
+    )
+
+    _upsert_candidate(conn, target, "SAFE", "BOTH", 0.4, None, "asof-k")
+
+    assert q(
+        conn,
+        "SELECT verified, check_state, prompt_version FROM cluster_stock "
+        "WHERE cluster_id=%s AND ticker='SAFE'",
+        target,
+    )[0] == (False, "PENDING", None)
+
+
+def test_후보_복사는_처리시각보다_가장_가까운_과거_스냅샷을_우선한다(conn):
+    x(conn, "INSERT INTO stock (ticker, name, exchange) VALUES ('NEAR', 'Nearest', 'NYSE')")
+    old = _new_cluster(conn, issue_key="near-k", snapshot_ts="'2026-08-30T00:00Z'")
+    near = _new_cluster(conn, issue_key="near-k", snapshot_ts="'2026-08-31T00:00Z'")
+    target = _new_cluster(conn, issue_key="near-k", snapshot_ts="'2026-09-01T00:00Z'")
+    for cid, rationale, verified_at in (
+        (old, "오래된 스냅샷", "2026-09-05T00:00Z"),
+        (near, "가장 가까운 과거", "2026-09-01T00:00Z"),
+    ):
+        _upsert_candidate(conn, cid, "NEAR", "BOTH", 0.5, None, "near-k")
+        x(
+            conn,
+            "UPDATE cluster_stock SET check_state='DONE', verified=true, prompt_version='v1', "
+            "rationale=%s, verified_at=%s WHERE cluster_id=%s AND ticker='NEAR'",
+            rationale, verified_at, cid,
+        )
+
+    _upsert_candidate(conn, target, "NEAR", "BOTH", 0.6, None, "near-k")
+
+    assert q(
+        conn,
+        "SELECT rationale FROM cluster_stock WHERE cluster_id=%s AND ticker='NEAR'",
+        target,
+    )[0][0] == "가장 가까운 과거"
+
+
+_FIND_PRIOR_VERDICT = """
+    SELECT cs.verified, cs.match_path, cs.confidence, cs.rationale
+      FROM cluster_stock cs
+      JOIN issue_cluster source_cluster ON source_cluster.id = cs.cluster_id
+      JOIN issue_cluster target_cluster ON target_cluster.id = %s
+     WHERE cs.issue_key = %s AND cs.ticker = %s
+       AND cs.prompt_version = %s
+       AND cs.check_state = 'DONE'
+       AND cs.cluster_id <> target_cluster.id
+       AND source_cluster.snapshot_ts <= target_cluster.snapshot_ts
+     ORDER BY source_cluster.snapshot_ts DESC, cs.verified_at DESC NULLS LAST
+     LIMIT 1
+"""
+
+
+def test_검증_재사용도_미래_스냅샷을_제외한다(conn):
+    """VerificationRepository.findPriorVerdict에도 같은 as-of 상한이 필요하다."""
+    x(conn, "INSERT INTO stock (ticker, name, exchange) VALUES ('VF', 'Verdict Future', 'NYSE')")
+    target = _new_cluster(conn, issue_key="verdict-k", snapshot_ts="'2026-09-01T00:00Z'")
+    future = _new_cluster(conn, issue_key="verdict-k", snapshot_ts="'2026-09-02T00:00Z'")
+    x(
+        conn,
+        "INSERT INTO cluster_stock "
+        "(cluster_id,ticker,tier,verified,issue_key,prompt_version,check_state,verified_at) "
+        "VALUES (%s,'VF','BOTH',true,'verdict-k','v1','DONE','2026-09-02T01:00Z')",
+        future,
+    )
+
+    assert q(conn, _FIND_PRIOR_VERDICT, target, "verdict-k", "VF", "v1") == []
+
+
+def test_검증_재사용은_대상_이하_최신_스냅샷을_고른다(conn):
+    x(conn, "INSERT INTO stock (ticker, name, exchange) VALUES ('VN', 'Verdict Near', 'NYSE')")
+    old = _new_cluster(conn, issue_key="verdict-near", snapshot_ts="'2026-08-30T00:00Z'")
+    near = _new_cluster(conn, issue_key="verdict-near", snapshot_ts="'2026-08-31T00:00Z'")
+    target = _new_cluster(conn, issue_key="verdict-near", snapshot_ts="'2026-09-01T00:00Z'")
+    for cid, rationale, verified_at in (
+        (old, "오래된 판정", "2026-09-05T00:00Z"),
+        (near, "가장 가까운 과거 판정", "2026-09-01T00:00Z"),
+    ):
+        x(
+            conn,
+            "INSERT INTO cluster_stock "
+            "(cluster_id,ticker,tier,verified,issue_key,prompt_version,check_state,rationale,verified_at) "
+            "VALUES (%s,'VN','BOTH',true,'verdict-near','v1','DONE',%s,%s)",
+            cid, rationale, verified_at,
+        )
+
+    rows = q(conn, _FIND_PRIOR_VERDICT, target, "verdict-near", "VN", "v1")
+    assert rows[0][3] == "가장 가까운 과거 판정"
 
 
 def test_issue_key가_없으면_재사용_안_하고_PENDING으로_시작한다(conn):
