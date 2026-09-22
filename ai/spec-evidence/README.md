@@ -15,6 +15,7 @@
 | `gdelt_day_size_gaps.py` | GDELT GKG 하루 / GDELT 결손 | 2024-10-10 = 657 MB, 96/96 슬롯 존재. 결손 구간 이분 탐색으로 **2025-06-14 18:00~07-02 02:00 UTC로 확정**(15분 정밀도, 아래 함정) | 627 MB / 1.9 GB, 결손 2025-06-13~07-04 "전부"(2026-09-07, 표본 없이 어림잡은 경계) |
 | `wikidata_ticker_trap.py` | Wikidata 티커 | naive 43 · correct 15,890 · NYSE+NASDAQ 3,910 | 40 / 15,875 / 3,905 (2026-09-04) — 며칠 새 소수 추가된 정도, 함정 재현 확인 |
 | `wiki_link_graph_join.py` | 위키 링크 그래프 → 상장기업 | Hormuz 1405 중 2 · Milton 1219 중 3 · Iran 103,603 중 26 · Nvidia 2934 중 571 | Hormuz 1358 중 0 · Milton 1218 중 3 · Iran 4308 중 4 · Nvidia 507 (2026-09-04) — 아래 함정 참고, 방법론이 100% 같지 않다 |
+| `pageview_hourly_offset.py` | `other/pageviews` 시간별 덤프 (지연·시간 정렬) | `delay` 2026-09-21 재측정 **127~153분**(윈도우 끝 기준) · `align` Air India Flight 171 3구간 **차이 0**(시간별 = 일별 `agent=user` 같은 시간) | 1시간 5~19분(2026-09-18) — **파일명 시각을 윈도우 시작으로 읽은 값이라 틀렸다**, WP-127 |
 | `dump_sizes.py` | Wikimedia 덤프 | mediawiki_history 2025-06=515,334,641B·2024-10=596,614,108B(§11과 **바이트까지 일치**), clickstream 501MB, pageview_complete 590MB | 515,334,641B·596,614,108B (2026-09-10), clickstream 471MB (2026-09-04) |
 
 GDELT lift(Milton)와 임베딩 겹침은 이미 다른 poc가 재현 가능하게 갖고 있다 —
@@ -30,6 +31,8 @@ py -3 gdelt_day_size_gaps.py 20241010
 py -3 wikidata_ticker_trap.py
 py -3 wiki_link_graph_join.py "Hurricane Milton"
 py -3 dump_sizes.py
+py -3 pageview_hourly_offset.py delay
+py -3 pageview_hourly_offset.py align        # 덤프 568 MB + 55 MB×N 다운로드, 수십 분
 ```
 
 `edit_source_gap.py` 는 §11 행이 아니라 **WP-163 전용**이다. 실행법과

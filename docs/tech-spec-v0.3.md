@@ -195,7 +195,7 @@ docker compose run --rm spark            # 윈도우 집계 잡
 | 편집 윈도우 | 1시간 / 5분 슬라이드 (기본값) | 실데이터 붙은 뒤 튜닝 |
 | 이슈 1차 관문 | `enwiki` namespace 0에서 봇이 아닌 편집 **1건 이상** | 팀 결정 2026-09-17, WP-118 |
 | 조회수 2차·최종 관문 | 생성 28일 이상: 직전 28일 대비 z ≥ 3 **AND** 2배 이상 **AND** 100회 이상. 생성 28일 미만: 생성 이후 자료를 즉시 사용하며 통계 산출 불가/기준 0이면 100회 이상 | 명세 §3.2 |
-| 운영 조회수 소스 | `other/pageviews` 시간별 덤프. `pageview_complete` 일별 `agent=user`는 품질 검증용 병행 보존. AQS 일별 API는 LIVE 최종 관문에서 제외 | 약 1시간 지연을 받아들이고 품질 우선 |
+| 운영 조회수 소스 | `other/pageviews` 시간별 덤프. `pageview_complete` 일별 `agent=user`는 품질 검증용 병행 보존. AQS 일별 API는 LIVE 최종 관문에서 제외 | ~~약 1시간~~ → **약 2시간**(윈도우 끝 기준 125~153분 실측) 지연을 받아들이고 품질 우선 |
 | 처리 지연 목표 | 사건 발생 후 통상 1~2시간 이내 최종 노출, 시간별 원본 도착 후 내부 처리 15분 이내 | 지연 상한이 아니라 MVP 운영 목표. 미도착은 후보 대기 |
 | 조회수 기준선 | 생성 28일 이상은 직전 28일, 미만은 생성 시각부터 현재 직전까지 | `page_baseline`; 짧은 표본 구현은 WP-118 |
 | 문서 생성 기준 시각 | 리플레이: snapshot/month 전체를 보강한 뒤 `page_first_edit_timestamp` 우선, 결측이면 미래가 아닌 `page_creation_timestamp`. 현재 API backfill 금지. LIVE: MediaWiki 최초 리비전 시각(`prop=revisions`, `rvdir=newer`, `rvlimit=1`). `wiki_page.first_seen`으로 대체 금지 | 호환 컬럼 `wiki_page.page_created_at`·덤프/API 추출·멱등 sink와 실제 2025-06-12 로컬 E2E 완료. 당일 대기 73 → 월 전체 60, [전수 감사](validation/2026-09-18-creation-pending-audit.md). 운영 호출 스케줄링은 미연결 |
