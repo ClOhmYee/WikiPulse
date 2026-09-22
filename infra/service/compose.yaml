@@ -54,7 +54,7 @@ services:
       #    되돌리려면 claude-sonnet-4-5-20250929 을 넣는다. 요약은 측정 안 해서 Sonnet 유지.
       WIKIPULSE_MATCHING_GATEWAY_VERIFICATIONMODEL: ${WIKIPULSE_MATCHING_GATEWAY_VERIFICATIONMODEL:-gpt-5.4-nano}
       WIKIPULSE_MATCHING_GATEWAY_SUMMARYMODEL:      ${WIKIPULSE_MATCHING_GATEWAY_SUMMARYMODEL:-claude-sonnet-4-5-20250929}
-      # 문서 표시용 한국어 제목 채우기 워커 (WP-205, V15). 위 GATEWAY 워커들과 독립이다 —
+      # 문서 표시용 한국어 제목 채우기 워커 (WP-205, V20). 위 GATEWAY 워커들과 독립이다 —
       # 크레딧을 쓰지 않고(위키미디어 무료) GATEWAY 키도 필요 없다. 🔴 기본 꺼짐이며
       # **켜는 것이 곧 백필**이다: cluster_member 에 편입된 enwiki 문서 중 아직 조회 안 한
       # 것을 훑어 wiki_page.title_ko 를 채운다. 끄면 화면이 영문 제목으로 떨어질 뿐이다.

@@ -8,9 +8,9 @@ import org.springframework.jdbc.core.namedparam.SqlParameterSource;
 import org.springframework.stereotype.Repository;
 
 /**
- * 표시용 한국어 제목(`wiki_page.title_ko`)의 DB 접근 (V15).
+ * 표시용 한국어 제목(`wiki_page.title_ko`)의 DB 접근 (V20).
  *
- * <p>백엔드는 스키마를 소유하지 않는다. 이 SQL 의 실 DB 검증은 {@code db/tests/test_schema_v15.py}
+ * <p>백엔드는 스키마를 소유하지 않는다. 이 SQL 의 실 DB 검증은 {@code db/tests/test_schema_v20.py}
  * 몫이다({@code IssueSummaryRepository} 와 같은 관습).
  */
 @Repository

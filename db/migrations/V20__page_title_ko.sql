@@ -1,9 +1,20 @@
 -- 문서 표시용 한국어 제목 (WikiPulse ko 표시명)
 --
--- ⚠️ 번호. 조사 단계 기록은 "V11" 이었으나 그 사이 develop 에 V11~V14 가 머지됐다.
---    `db/apply_migrations.py` 의 원장 키가 정수 version 이라 같은 번호가 둘이면 한쪽이
---    조용히 건너뛰어진다(V5 중복 WP-117, V11 중복 V12 헤더 주석과 같은 형태).
---    머지 직전에 `ls db/migrations` 를 다시 보고 다음 번호를 쓴다.
+-- ⚠️ 번호가 V14 다음 V20 이다 — **비어 있는 V15~V19 는 의도한 간격이다.**
+--    ~~V11~~ → ~~V15~~ → V20 (2026-09-22). 조사 시점엔 V11 이 비어 있었고, 구현을 마칠
+--    무렵엔 develop 이 V14 까지 와서 V15 를 잡았다. 그런데 머지 직전에 다시 보니 미머지
+--    원격 브랜치 **셋**이 이미 V15 를 쓰고 있었다(-210·-211·-212). V16·V17 로 한 칸씩
+--    밀면 그 셋이 충돌을 푸는 과정에서 또 겹칠 수 있어, 멀찍이 떨어진 V20 을 잡았다.
+--
+--    🔴 같은 번호가 둘이면 한쪽이 **조용히** 건너뛰어진다 — `db/apply_migrations.py` 의
+--       원장 키가 정수 version 이고, `docker/postgres/Dockerfile` 은 initdb 알파벳 정렬을
+--       맞추려고 V%03d 로 패딩해 복사한다. 둘 다 간격에는 무관하지만 중복에는 취약하다.
+--       (V5 중복 WP-117, V11 중복 V12 헤더 주석이 같은 형태다.)
+--
+--    ⚠️ 새 마이그레이션을 더할 때는 `ls db/migrations` 뿐 아니라 **원격 브랜치까지** 본다.
+--       develop 만 보면 이 함정을 못 피한다:
+--         for b in $(git for-each-ref --format='%(refname:short)' refs/remotes/origin); do
+--             git ls-tree --name-only "$b" db/migrations/; done | sort -u
 --
 -- 무엇을 푸는가
 --   화면이 영문 raw title(`Hurricane Milton`)을 그대로 보여준다. 사용자에게는

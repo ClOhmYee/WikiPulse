@@ -60,7 +60,7 @@ spike → issue_cluster ─┬─ cluster_member   (어떤 문서가 묶였나)
 
 | 테이블 | PK | 밖으로 나가는 FK | 비고 |
 | --- | --- | --- | --- |
-| `wiki_page` | `id` (대리키) | — | 자연키는 `UNIQUE (wiki, title)`. EventStreams에 `page_id`가 없다. `first_seen`은 시스템 최초 관측, nullable `page_created_at`은 확인 가능한 최초 revision 시각. V15의 `title_ko`·`title_ko_checked_at`은 **표시 전용**이며 자연키가 아니다 — `title_ko IS NULL AND checked_at IS NOT NULL`이 "조회했고 ko 문서 없음"(음성 캐시)이다 |
+| `wiki_page` | `id` (대리키) | — | 자연키는 `UNIQUE (wiki, title)`. EventStreams에 `page_id`가 없다. `first_seen`은 시스템 최초 관측, nullable `page_created_at`은 확인 가능한 최초 revision 시각. V20의 `title_ko`·`title_ko_checked_at`은 **표시 전용**이며 자연키가 아니다 — `title_ko IS NULL AND checked_at IS NOT NULL`이 "조회했고 ko 문서 없음"(음성 캐시)이다 |
 | `page_edit_window` | `(page_id, window_start)` | `page_id` | 슬라이딩이라 편집 1건이 여러 행에 걸린다 |
 | `page_view_hourly` | `(page_id, ts_hour)` | `page_id` | |
 | `page_baseline` | `(page_id, hour_of_day)` | `page_id` | `hour_of_day` 0~23 (UTC 시). ~~`hour_of_week` 0~167~~ → 2026-09-15 (WP-84, `V3__baseline_hour_of_day.sql`). `view_stddev` 추가 — 2026-09-15 (WP-90, `V4__baseline_view_stddev.sql`). 조회수 z 의 유일한 입력이고, NULL 이면 조회수 단독 발동을 안 한다 |

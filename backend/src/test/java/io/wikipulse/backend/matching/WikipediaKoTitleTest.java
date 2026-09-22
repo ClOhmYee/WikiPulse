@@ -11,7 +11,7 @@ import java.util.stream.IntStream;
 import org.junit.jupiter.api.Test;
 
 /**
- * {@code prop=langlinks&lllang=ko} 응답 해석 (표시용 한국어 제목, V15).
+ * {@code prop=langlinks&lllang=ko} 응답 해석 (표시용 한국어 제목, V20).
  *
  * <p>여기 JSON 은 2026-09-22 에 실제 {@code en.wikipedia.org/w/api.php} 응답에서 뜬 모양 그대로다
  * ({@code formatversion=2} — {@code query.pages} 가 배열).

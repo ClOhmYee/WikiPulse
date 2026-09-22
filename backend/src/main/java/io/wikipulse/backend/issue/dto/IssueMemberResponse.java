@@ -13,7 +13,7 @@ import com.fasterxml.jackson.annotation.JsonInclude;
  * 안 채워졌으면 null 이고, 그 null 이 무슨 뜻인지는 completeness 가 말한다:
  * {@code complete}(판정 끝) / {@code pending}(입력 대기) / {@code unavailable}(원본 없음).
  *
- * <p>{@code titleKo} 는 표시 전용 ko.wikipedia 대응 제목이다(V15). ko 문서가 없으면 null 이고
+ * <p>{@code titleKo} 는 표시 전용 ko.wikipedia 대응 제목이다(V20). ko 문서가 없으면 null 이고
  * (실측상 절반이 그렇다) 화면은 {@code title} 로 떨어진다. 🔴 {@code title}(영문)을 대체하지
  * 않는다 — Wikipedia 링크·식별자가 그걸 쓴다. 펄스맵 {@code PulseMap.Node} 와 같은 어휘다.
  */
