@@ -1,5 +1,6 @@
 import sources from "./sources.json" with { type: "json" };
 import { topics } from "./topics.js";
+import { issueBriefs } from "./newsroom.js";
 
 export const HISTORY_START = "2025-09-01";
 export const DEMO_DATE = "2026-09-10";
@@ -178,12 +179,7 @@ export function clusterAt(episode, date) {
     id: date === episode.end ? episode.id : `${episode.id}~${date}`,
     issueKey: episode.topic.id,
     label: episode.topic.title,
-    summary: `${date} 시연: ${nodes
-      .slice(0, 3)
-      .map((n) => docs.get(n.pageId).name)
-      .join(
-        "·",
-      )} 등 ${nodes.length}개 문서의 합성 편집 신호를 ${episode.topic.focus} 주제로 묶었습니다.`,
+    summary: issueBriefs[episode.topic.id]?.summary || null,
     category: episode.topic.category,
     firstDetectedAt: timestamp(episode.start),
     hot: totals.pulse >= 6,
@@ -274,27 +270,9 @@ export function reportAt(episode, date = episode?.end) {
       model: "mock-authored",
       sections: [
         {
-          id: "conclusion",
-          title: "결론",
-          body: `${topic.focus} 주제에서 ${articleIds.length}개 문서의 동시 활동 신호가 관측되었습니다. 이는 사건 발생이나 인과관계를 확정하는 판단이 아니라, 함께 확인할 필요가 있는 문서 묶음입니다.`,
-          evidenceIds: articleIds.slice(0, 2),
-        },
-        {
-          id: "change",
-          title: "변화",
-          body: `클러스터의 합성 편집량은 ${metrics.edits.toLocaleString("ko-KR")}회이며, 기준량 ${metrics.baseline}회 대비 ${metrics.pulse}배로 집계되었습니다.`,
-          evidenceIds: [top.pageId],
-        },
-        {
-          id: "context",
-          title: "맥락",
-          body: `${cluster.nodes.map((n) => docs.get(n.pageId).name).join(" · ")} 문서를 함께 읽는 시연용 주제 묶음입니다. 자동 클러스터링의 실측 결과가 아니라 사람이 구성한 시나리오입니다.`,
-          evidenceIds: articleIds.slice(0, 3),
-        },
-        {
-          id: "evidence",
-          title: "근거",
-          body: "아래 원문 문서에서 각 문서의 수정 이력과 주제 내용을 직접 확인할 수 있습니다. 리포트는 제공된 근거를 넘어선 사실을 주장하지 않습니다.",
+          id: "article",
+          title: cluster.label,
+          body: (issueBriefs[topic.id]?.paragraphs || []).join("\n\n"),
           evidenceIds: articleIds,
         },
       ],

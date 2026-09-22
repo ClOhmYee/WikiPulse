@@ -124,10 +124,6 @@ export default function EventPage({
       <header className="dt-event-header">
         <div>
           <h1>{event.title}</h1>
-          <p className="dt-lede">
-            {event.summary ||
-              "이 시점에 제공된 요약이 없습니다. 아래 근거 문서에서 이슈의 구성을 확인하세요."}
-          </p>
           <div className="dt-meta">
             {event.category && (
               <CategoryTag category={getCategory(event.category)} />
@@ -391,7 +387,12 @@ export default function EventPage({
             </>
           )}
           {tab === "report" && (
-            <IssueReport report={event.report} articles={articles} />
+            <IssueReport
+              report={event.report}
+              summary={event.summary}
+              articles={articles}
+              isExample={isExample}
+            />
           )}
           {tab === "timeline" && (
             <section>
