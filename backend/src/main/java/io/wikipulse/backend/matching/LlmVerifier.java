@@ -38,11 +38,30 @@ public class LlmVerifier {
     private final GatewayVerificationClient client;
     private final ObjectMapper mapper;
     private final String systemPrompt;
+    private final CandidateProperties props;
 
-    public LlmVerifier(GatewayVerificationClient client, ObjectMapper mapper) {
+    public LlmVerifier(
+            GatewayVerificationClient client, ObjectMapper mapper, CandidateProperties props) {
         this.client = client;
         this.mapper = mapper;
+        this.props = props;
         this.systemPrompt = loadPrompt();
+    }
+
+    /**
+     * 판정 재사용 키에 쓸 버전 문자열 (WP-172).
+     *
+     * <p>🔴 <b>프롬프트 버전만으로는 부족하다.</b> 같은 프롬프트라도 모델이 다르면 다른 판정이
+     * 나온다 — 실측에서 Sonnet 은 Milton 노이즈 3개를 통과시켰고 nano 는 0개였다. 모델을 바꿨는데
+     * 버전이 그대로면 <b>옛 모델의 판정이 조용히 재사용</b>된다.
+     *
+     * <p>{@code issue_report.model} 이 모델+프롬프트버전을 한 문자열로 담는 것과 같은 방식이다
+     * ({@link IssueSummaryService} {@code modelTag}) — 새 컬럼·마이그레이션 없이 같은 의도를 이룬다.
+     *
+     * @return 예: {@code "v1+gpt-5.4-nano"}
+     */
+    String verdictVersion() {
+        return PROMPT_VERSION + "+" + props.getGateway().getVerificationModel();
     }
 
     /** 검증할 후보 한 건의 입력. issueText·gdeltContext 는 클러스터 단위로 한 번 만들어 공유된다. */

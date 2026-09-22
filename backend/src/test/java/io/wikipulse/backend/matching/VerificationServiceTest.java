@@ -43,6 +43,18 @@ class VerificationServiceTest {
 
     final CandidateProperties props = new CandidateProperties();
 
+    /**
+     * 판정 재사용 키. 🔴 프롬프트 버전 + <b>모델</b>이다 (-172) — 같은 프롬프트라도 모델이
+     * 다르면 판정이 달라지므로, 모델을 바꿨을 때 옛 판정이 재사용되면 안 된다.
+     */
+    static final String VER = "v1+gpt-5.4-nano";
+
+    @BeforeEach
+    void stubVerdictVersion() {
+        // lenient — 재사용 키를 안 쓰는 테스트도 있다.
+        lenient().when(verifier.verdictVersion()).thenReturn(VER);
+    }
+
     VerificationService service() {
         return new VerificationService(repository, issueText, verifier, props);
     }
@@ -85,8 +97,8 @@ class VerificationServiceTest {
         // 서비스가 repo 가 준 순서(BOTH 먼저)를 지켜 처리한다.
         InOrder order = inOrder(repository);
         order.verify(repository).recordDone(eq(1L), eq("NEE"), respCaptor.capture(),
-                eq("milton-2024-10"), eq("v1"));
-        order.verify(repository).recordDone(eq(1L), eq("MNST"), any(), eq("milton-2024-10"), eq("v1"));
+                eq("milton-2024-10"), eq(VER));
+        order.verify(repository).recordDone(eq(1L), eq("MNST"), any(), eq("milton-2024-10"), eq(VER));
         // 🔴 재사용 키(issue_key·prompt_version)와 rationale_ko 가 기록된다.
         assertThat(respCaptor.getValue().rationaleKo()).isEqualTo("한국어 근거");
     }
@@ -122,7 +134,7 @@ class VerificationServiceTest {
         VerificationService.Result r = service().verifyCluster(3L);
 
         assertThat(r.tier3Skipped()).isZero();
-        verify(repository).recordDone(eq(3L), eq("C"), any(), eq("milton-2024-10"), eq("v1"));
+        verify(repository).recordDone(eq(3L), eq("C"), any(), eq("milton-2024-10"), eq(VER));
     }
 
     @Test
@@ -188,7 +200,7 @@ class VerificationServiceTest {
         when(repository.pendingCandidates(10L))
                 .thenReturn(List.of(new PendingCandidate("NEE", CandidateTier.BOTH)));
         Verdict prior = new Verdict(true, "REGION", "strong", "복사된 한국어 근거");
-        when(repository.findPriorVerdict(10L, "milton-2024-10", "NEE", "v1"))
+        when(repository.findPriorVerdict(10L, "milton-2024-10", "NEE", VER))
                 .thenReturn(Optional.of(prior));
 
         VerificationService.Result r = service().verifyCluster(10L);
@@ -196,7 +208,7 @@ class VerificationServiceTest {
         // LLM 은 안 부른다 — 크레딧 0.
         verify(verifier, never()).verify(any());
         // 판정을 그대로 복사해 재사용 키와 함께 기록한다.
-        verify(repository).recordReused(10L, "NEE", prior, "milton-2024-10", "v1");
+        verify(repository).recordReused(10L, "NEE", prior, "milton-2024-10", VER);
         verify(repository, never()).recordDone(anyLong(), any(), any(), any(), any());
         // reused 는 별도 버킷 — verified/rejected 에는 안 잡힌다.
         assertThat(r.reused()).isEqualTo(1);
@@ -214,7 +226,7 @@ class VerificationServiceTest {
         VerificationService.Result r = service().verifyCluster(11L);
 
         // 현재 prompt_version 으로 캐시를 조회한 뒤, 미스라 LLM 을 부른다.
-        verify(repository).findPriorVerdict(11L, "milton-2024-10", "NEE", "v1");
+        verify(repository).findPriorVerdict(11L, "milton-2024-10", "NEE", VER);
         verify(verifier).verify(any());
         verify(repository, never()).recordReused(anyLong(), any(), any(), any(), any());
         assertThat(r.reused()).isZero();
@@ -224,14 +236,14 @@ class VerificationServiceTest {
     @Test
     void prompt_version은_캐시_조회_키에_들어간다() {
         // prompt_version 이 다른 이전 판정은 현재 버전 조회에서 미스가 된다(-49): 서비스는 항상
-        // 현재 PROMPT_VERSION 으로만 조회하므로, 조회 인자에 "v1" 이 들어가는지로 이 규칙을 본다.
+        // 조회 인자에 재사용 버전(VER)이 그대로 들어가는지로 이 규칙을 본다.
         when(repository.pendingCandidates(12L))
                 .thenReturn(List.of(new PendingCandidate("NEE", CandidateTier.BOTH)));
         when(verifier.verify(any())).thenReturn(Optional.of(pass()));
 
         service().verifyCluster(12L);
 
-        verify(repository).findPriorVerdict(eq(12L), eq("milton-2024-10"), eq("NEE"), eq("v1"));
+        verify(repository).findPriorVerdict(eq(12L), eq("milton-2024-10"), eq("NEE"), eq(VER));
     }
 
     @Test
@@ -256,13 +268,13 @@ class VerificationServiceTest {
         when(repository.pendingCandidates(15L))
                 .thenReturn(List.of(new PendingCandidate("XOM", CandidateTier.BOTH)));
         Verdict priorReject = new Verdict(false, null, null, null);
-        when(repository.findPriorVerdict(15L, "milton-2024-10", "XOM", "v1"))
+        when(repository.findPriorVerdict(15L, "milton-2024-10", "XOM", VER))
                 .thenReturn(Optional.of(priorReject));
 
         VerificationService.Result r = service().verifyCluster(15L);
 
         verify(verifier, never()).verify(any());
-        verify(repository).recordReused(15L, "XOM", priorReject, "milton-2024-10", "v1");
+        verify(repository).recordReused(15L, "XOM", priorReject, "milton-2024-10", VER);
         assertThat(r.reused()).isEqualTo(1);
         assertThat(r.verified()).isZero();
         assertThat(r.rejected()).isZero();
@@ -276,7 +288,7 @@ class VerificationServiceTest {
         when(repository.pendingCandidates(16L))
                 .thenReturn(List.of(new PendingCandidate("MU", CandidateTier.EMBEDDING_ONLY)));
         Verdict prior = new Verdict(true, "SUPPLY_CHAIN", "weak", "2차 효과 근거");
-        when(repository.findPriorVerdict(16L, "milton-2024-10", "MU", "v1"))
+        when(repository.findPriorVerdict(16L, "milton-2024-10", "MU", VER))
                 .thenReturn(Optional.of(prior));
         // 게이트가 켜진 상태(1·2등급 통과가 임계값 이상) — 그런데도 캐시 히트라 스킵되지 않는다.
         lenient().when(repository.verifiedPassCountTier12(16L)).thenReturn(2);
@@ -284,7 +296,7 @@ class VerificationServiceTest {
         VerificationService.Result r = service().verifyCluster(16L);
 
         verify(verifier, never()).verify(any());
-        verify(repository).recordReused(16L, "MU", prior, "milton-2024-10", "v1");
+        verify(repository).recordReused(16L, "MU", prior, "milton-2024-10", VER);
         assertThat(r.reused()).isEqualTo(1);
         assertThat(r.tier3Skipped()).isZero(); // 게이트에서 안 걸렸다 — 캐시가 앞이다.
     }
@@ -298,9 +310,9 @@ class VerificationServiceTest {
                 new PendingCandidate("B", CandidateTier.GDELT_ONLY),
                 new PendingCandidate("C", CandidateTier.EMBEDDING_ONLY)));
         Verdict pass = new Verdict(true, "REGION", "strong", "근거");
-        when(repository.findPriorVerdict(eq(14L), eq("milton-2024-10"), eq("A"), eq("v1")))
+        when(repository.findPriorVerdict(eq(14L), eq("milton-2024-10"), eq("A"), eq(VER)))
                 .thenReturn(Optional.of(pass));
-        when(repository.findPriorVerdict(eq(14L), eq("milton-2024-10"), eq("B"), eq("v1")))
+        when(repository.findPriorVerdict(eq(14L), eq("milton-2024-10"), eq("B"), eq(VER)))
                 .thenReturn(Optional.of(pass));
         // 재사용된 두 verified 행이 DONE 으로 남아 DB 카운트가 임계값(2)에 도달한 상태.
         when(repository.verifiedPassCountTier12(14L)).thenReturn(2);

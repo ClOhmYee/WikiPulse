@@ -17,6 +17,10 @@ import org.springframework.stereotype.Component;
  *
  * <p>클러스터 하나가 전송 실패로 터져도({@link UpstreamUnavailableException}) 나머지는 계속 돌도록
  * 개별로 감싼다 — 실패한 클러스터는 VERIFYING 으로 남아 다음 폴에서 재시도된다.
+ *
+ * <p>🔴 <b>비용 상한은 {@code batchSize} 가 아니라 {@code top-per-snapshot} 이다</b>
+ * (WP-165). batchSize 는 한 폴의 크기일 뿐이라 폴을 반복하면 미처리 클러스터 전체를
+ * 훑는다. 대상 선택 규칙은 {@link IssueSummaryRepository#clustersNeedingSummary} 참고.
  */
 @Component
 @ConditionalOnProperty(prefix = "wikipulse.matching.summary", name = "enabled", havingValue = "true")
@@ -39,7 +43,11 @@ public class IssueSummaryWorker {
 
     @Scheduled(fixedDelayString = "${wikipulse.matching.summary.fixed-delay:PT5M}")
     public void pollAndSummarize() {
-        List<Long> clusterIds = repository.clustersNeedingSummary(props.getSummary().getBatchSize());
+        List<Long> clusterIds = repository.clustersNeedingSummary(
+                props.getSummary().getBatchSize(),
+                props.getSummary().getTopPerSnapshot(),
+                service.modelTag(),
+                props.getSummary().getSource());
         if (clusterIds.isEmpty()) {
             return;
         }

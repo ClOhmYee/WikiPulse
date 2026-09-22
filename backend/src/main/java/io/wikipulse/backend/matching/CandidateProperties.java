@@ -119,11 +119,27 @@ public class CandidateProperties {
         private String baseUrl = "https://llm-gateway.example.com";
         private String embeddingModel = "text-embedding-3-small";
         /**
-         * LLM 검증(WP-68)에 쓰는 Anthropic 모델. POC(ai/llm-verify-poc)에서 검증한
-         * {@code claude-sonnet-4-5-20250929} 를 그대로 못박는다 — 프롬프트·판정 규칙이 이 모델로
-         * 실측됐다(-45 RESULT.md). 모델을 바꾸면 prompt_version 재검토가 필요하다.
+         * LLM 검증(WP-68)에 쓰는 모델. 🔴 이름이 {@code claude-} 로 시작하면 Anthropic,
+         * 아니면 OpenAI 경로로 나간다 ({@link GatewayVerificationClient}).
+         *
+         * <p>~~{@code claude-sonnet-4-5-20250929}~~ → <b>{@code gpt-5.4-nano}</b>
+         * (2026-09-21, WP-170·-172). 정답셋 3사례 36건에서 32건 정답·<b>오탐 0</b>이고
+         * Sonnet 대비 <b>9.8배</b> 싸다(이슈당 1,317 → 134 크레딧). 제일 걱정한 "경쟁사를 배경지식
+         * 만으로 통과시키는" 오탐도 안 났다 — CrowdStrike 이슈의 PANW·FTNT·AAL·UAL, PayPal 이슈의
+         * V·MA·ADYEY 를 전부 탈락시켰다. 근거: {@code ai/llm-verify-batch-poc/RESULT.md}.
+         *
+         * <p>⚠️ 프롬프트({@code verify_system_v1.txt})는 Sonnet 으로 실측된 계약이다(-45). 모델만
+         * 바꿨고 프롬프트는 안 건드렸다. 되돌리려면 이 값에 {@code claude-*} 를 넣으면 된다.
+         *
+         * <p>⚠️ 모델이 바뀌면 판정 재사용 키도 바뀐다 — {@link LlmVerifier#verdictVersion} 참고.
          */
-        private String verificationModel = "claude-sonnet-4-5-20250929";
+        private String verificationModel = "gpt-5.4-nano";
+        /**
+         * 이슈 요약(WP-119)에 쓰는 모델. 🔴 검증과 <b>분리</b>한다(-172) — 검증은 nano 로
+         * 실측했지만 <b>요약은 nano 로 재지 않았다.</b> 한 노브를 공유하면 검증을 내리는 순간
+         * 요약 품질이 측정 없이 같이 바뀐다.
+         */
+        private String summaryModel = "claude-sonnet-4-5-20250929";
         /**
          * 검증 응답 상한 토큰. 응답은 짧은 JSON 하나(6필드)다. POC 는 400 으로 실측했으나,
          * verified=true 는 rationale_en·rationale_ko 두 자유텍스트를 요구하고 한국어는 문자당
@@ -159,6 +175,14 @@ public class CandidateProperties {
 
         public void setEmbeddingModel(String embeddingModel) {
             this.embeddingModel = embeddingModel;
+        }
+
+        public String getSummaryModel() {
+            return summaryModel;
+        }
+
+        public void setSummaryModel(String summaryModel) {
+            this.summaryModel = summaryModel;
         }
 
         public String getVerificationModel() {
@@ -215,6 +239,34 @@ public class CandidateProperties {
      * 때리는 것을 막는다. 서비스 자체는 항상 살아 있어 다른 트리거(수동·검증 워커)로 부를 수 있다.
      */
     public static class Scheduler {
+        /**
+         * 스냅샷 하나에서 후보를 만들 클러스터 수 상한 ({@code pulse_score} 상위). 0 이면 무제한.
+         *
+         * <p>🔴 <b>{@code batchSize} 는 비용 상한이 아니다</b> (WP-176). 폴마다 대상을
+         * 새로 고르므로 반복하면 미처리 클러스터 전체를 훑는다 — 운영 4,474개를 다 돌면
+         * 후보 10~20개씩 검증이 따라붙어 310k~620k 크레딧이다.
+         *
+         * <p>⚠️ 후보 생성 자체는 싸다(임베딩 0.04/건). 이 상한의 실제 효과는 그 뒤 <b>검증</b>
+         * 호출 수를 묶는 것이다 — {@code VERIFICATION_ENABLED} 가 켜져 있으면 후보가 생기는
+         * 즉시 검증이 따라붙는다.
+         *
+         * <p>🔴 <b>요약 상한과 같은 값이어야 한다</b>({@link Summary#topPerSnapshot}). 다르면
+         * 같은 화면에서 요약은 있는데 종목이 없거나 그 반대가 생긴다.
+         */
+        private int topPerSnapshot = 10;
+
+        /**
+         * 대상을 한 출처로 좁힌다 ({@code issue_cluster.source}: {@code live}·{@code replay}).
+         * 빈 값이면 전체 — 기본값이라 동작이 바뀌지 않는다.
+         *
+         * <p>폴러는 최근 스냅샷부터 집으므로 LIVE 가 쌓이는 동안 과거 replay 구간에는
+         * 닿지 못한다. 특정 구간을 먼저 채울 때 쓴다(WP-168).
+         *
+         * <p>🔴 <b>{@link Summary#source} 와 같은 값이어야 한다.</b> 한쪽만 좁히면 같은
+         * 화면에서 요약은 있는데 종목이 없거나 그 반대가 생긴다.
+         */
+        private String source = "";
+
         private boolean enabled = false;
         /**
          * 폴 간격 (ISO-8601 Duration). ⚠️ 실제 바인딩은 {@code @Scheduled(fixedDelayString=...)}
@@ -239,6 +291,22 @@ public class CandidateProperties {
 
         public void setFixedDelay(String fixedDelay) {
             this.fixedDelay = fixedDelay;
+        }
+
+        public int getTopPerSnapshot() {
+            return topPerSnapshot;
+        }
+
+        public void setTopPerSnapshot(int topPerSnapshot) {
+            this.topPerSnapshot = topPerSnapshot;
+        }
+
+        public String getSource() {
+            return source;
+        }
+
+        public void setSource(String source) {
+            this.source = source;
         }
 
         public int getBatchSize() {
@@ -330,6 +398,23 @@ public class CandidateProperties {
         private String fixedDelay = "PT5M";
         /** 한 폴에서 처리할 클러스터 수 상한. */
         private int batchSize = 20;
+        /**
+         * 스냅샷 하나에서 요약할 클러스터 수 상한 ({@code pulse_score} 상위). 0 이면 무제한.
+         *
+         * <p>🔴 <b>{@link #batchSize} 는 비용 상한이 아니다.</b> 폴마다 대상을 새로 고르므로
+         * 반복하면 결국 미처리 클러스터 전체를 훑는다. 실제 상한은 이 값이고, LLM 실호출은
+         * 최대 {@code 스냅샷 수 × topPerSnapshot} 이다 (같은 issue_key 는 재사용이라 0).
+         *
+         * <p>상위 N 을 고르는 축이 화면 정렬과 같다 — 목록·버블맵이 모두
+         * {@code pulse_score DESC} 다. 즉 "보여주는 것만 요약한다".
+         */
+        private int topPerSnapshot = 10;
+
+        /**
+         * 대상을 한 출처로 좁힌다. 빈 값이면 전체(기본값).
+         * 🔴 <b>{@link Scheduler#source} 와 같은 값이어야 한다</b> — 근거는 거기 적었다.
+         */
+        private String source = "";
 
         public boolean isEnabled() {
             return enabled;
@@ -353,6 +438,22 @@ public class CandidateProperties {
 
         public void setBatchSize(int batchSize) {
             this.batchSize = batchSize;
+        }
+
+        public int getTopPerSnapshot() {
+            return topPerSnapshot;
+        }
+
+        public void setTopPerSnapshot(int topPerSnapshot) {
+            this.topPerSnapshot = topPerSnapshot;
+        }
+
+        public String getSource() {
+            return source;
+        }
+
+        public void setSource(String source) {
+            this.source = source;
         }
     }
 }

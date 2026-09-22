@@ -1,0 +1,143 @@
+{
+ "model": "gpt-5.4-nano",
+ "reverse": false,
+ "batch_only": false,
+ "expected": {
+  "PYPL": "strong",
+  "XYZ": "reject",
+  "V": "reject",
+  "MA": "reject",
+  "ADYEY": "reject",
+  "KO": "reject",
+  "NKE": "reject"
+ },
+ "single": {
+  "PYPL": {
+   "issue_class": "SINGLE_COMPANY_EVENT",
+   "verified": true,
+   "match_path": "DIRECT_MENTION",
+   "confidence": "strong",
+   "rationale_en": "The issue text is specifically about PayPal Holdings, Inc., describing its business and corporate history, so the candidate company is directly the subject of the issue.",
+   "rationale_ko": "해당 이슈는 PayPal Holdings, Inc. 자체를 대상으로 회사의 사업과 기업 이력 등을 설명하고 있어, 후보 회사가 이슈의 직접적인 당사자(주체)입니다."
+  },
+  "XYZ": {
+   "issue_class": "SINGLE_COMPANY_EVENT",
+   "verified": false,
+   "match_path": null,
+   "confidence": null,
+   "rationale_en": null,
+   "rationale_ko": null
+  },
+  "V": {
+   "issue_class": "SINGLE_COMPANY_EVENT",
+   "verified": false,
+   "match_path": null,
+   "confidence": null,
+   "rationale_en": null,
+   "rationale_ko": null
+  },
+  "MA": {
+   "issue_class": "SINGLE_COMPANY_EVENT",
+   "verified": false,
+   "match_path": null,
+   "confidence": null,
+   "rationale_en": null,
+   "rationale_ko": null
+  },
+  "ADYEY": {
+   "issue_class": "SINGLE_COMPANY_EVENT",
+   "verified": false,
+   "match_path": null,
+   "confidence": null,
+   "rationale_en": null,
+   "rationale_ko": null
+  },
+  "KO": {
+   "issue_class": "SINGLE_COMPANY_EVENT",
+   "verified": false,
+   "match_path": null,
+   "confidence": null,
+   "rationale_en": null,
+   "rationale_ko": null
+  },
+  "NKE": {
+   "issue_class": "SINGLE_COMPANY_EVENT",
+   "verified": false,
+   "match_path": null,
+   "confidence": null,
+   "rationale_en": null,
+   "rationale_ko": null
+  }
+ },
+ "batch": {
+  "PYPL": {
+   "ticker": "PYPL",
+   "verified": true,
+   "match_path": "DIRECT_MENTION",
+   "confidence": "strong",
+   "rationale_en": "The issue description is explicitly about PayPal Holdings, Inc. and details the company’s operations, history, and business model.",
+   "rationale_ko": "이 이슈 설명은 PayPal Holdings, Inc. 자체를 다루며 사업 내용과 연혁 등 회사 관련 정보가 직접적으로 포함돼 있습니다.",
+   "issue_class": "SINGLE_COMPANY_EVENT"
+  },
+  "XYZ": {
+   "ticker": "XYZ",
+   "verified": false,
+   "match_path": null,
+   "confidence": null,
+   "rationale_en": null,
+   "rationale_ko": null,
+   "issue_class": "SINGLE_COMPANY_EVENT"
+  },
+  "V": {
+   "ticker": "V",
+   "verified": false,
+   "match_path": null,
+   "confidence": null,
+   "rationale_en": null,
+   "rationale_ko": null,
+   "issue_class": "SINGLE_COMPANY_EVENT"
+  },
+  "MA": {
+   "ticker": "MA",
+   "verified": false,
+   "match_path": null,
+   "confidence": null,
+   "rationale_en": null,
+   "rationale_ko": null,
+   "issue_class": "SINGLE_COMPANY_EVENT"
+  },
+  "ADYEY": {
+   "ticker": "ADYEY",
+   "verified": false,
+   "match_path": null,
+   "confidence": null,
+   "rationale_en": null,
+   "rationale_ko": null,
+   "issue_class": "SINGLE_COMPANY_EVENT"
+  },
+  "KO": {
+   "ticker": "KO",
+   "verified": false,
+   "match_path": null,
+   "confidence": null,
+   "rationale_en": null,
+   "rationale_ko": null,
+   "issue_class": "SINGLE_COMPANY_EVENT"
+  },
+  "NKE": {
+   "ticker": "NKE",
+   "verified": false,
+   "match_path": null,
+   "confidence": null,
+   "rationale_en": null,
+   "rationale_ko": null,
+   "issue_class": "SINGLE_COMPANY_EVENT"
+  }
+ },
+ "tokens": {
+  "single_in": 10485,
+  "single_out": 447,
+  "batch_in": 3300,
+  "batch_out": 418
+ }
+}
