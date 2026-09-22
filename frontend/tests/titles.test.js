@@ -35,6 +35,27 @@ const mapOf = (cluster) => ({
   },
 });
 
+test("문서 표시명 3단: ko.wikipedia → Azure 번역 → 영문", () => {
+  const withBoth = node({ titleKoFallback: "기계 번역 호르무즈" });
+  // 🔴 정식 ko 제목이 있으면 기계 번역보다 먼저다 — 출처가 다르다.
+  assert.equal(documentTitle(withBoth), "호르무즈 해협");
+  // ko 가 없으면 번역이 쓰인다.
+  assert.equal(
+    documentTitle(node({ titleKo: null, titleKoFallback: "잭슨 다트" })),
+    "잭슨 다트",
+  );
+  // 둘 다 없으면 영문 원문.
+  assert.equal(
+    documentTitle(node({ titleKo: null, titleKoFallback: null })),
+    "Strait of Hormuz",
+  );
+  // 번역이 공백뿐이면 값이 아니다.
+  assert.equal(
+    documentTitle(node({ titleKo: null, titleKoFallback: "  " })),
+    "Strait of Hormuz",
+  );
+});
+
 test("문서 표시명은 ko 제목을 쓰고, 없으면 영문으로 떨어진다", () => {
   assert.equal(documentTitle(node()), "호르무즈 해협");
   assert.equal(documentTitle(node({ titleKo: null })), "Strait of Hormuz");
@@ -113,6 +134,67 @@ test("클러스터 표시명 우선순위: 한글 label → root ko → 영문 l
   // 5. 문서조차 없으면 안내문.
   assert.equal(clusterTitle({ label: null, nodes: [] }), "제목 미제공");
   assert.equal(clusterTitle({}), "제목 미제공");
+});
+
+test("클러스터 제목도 번역 폴백을 쓰되 정식 ko 제목이 먼저다", () => {
+  const root = (over) => ({
+    nodes: [{ pageId: "1", wiki: "enwiki", ...over }],
+  });
+  // 영문 label + 정식 ko 없음 + 번역 있음 → 번역이 영문 label 을 이긴다.
+  assert.equal(
+    clusterTitle({
+      label: "Jaxson Dart",
+      ...root({
+        title: "Jaxson Dart",
+        titleKo: null,
+        titleKoFallback: "잭슨 다트",
+      }),
+    }),
+    "잭슨 다트",
+  );
+  // 정식 ko 가 있으면 번역은 쓰이지 않는다.
+  assert.equal(
+    clusterTitle({
+      label: "September 21",
+      ...root({
+        title: "September 21",
+        titleKo: "9월 21일",
+        titleKoFallback: "구월 이십일일",
+      }),
+    }),
+    "9월 21일",
+  );
+  // 한글 label 은 여전히 최우선 — AI 제목이 붙으면 그게 이긴다.
+  assert.equal(
+    clusterTitle({
+      label: "다트 이적 이슈",
+      ...root({
+        title: "Jaxson Dart",
+        titleKo: null,
+        titleKoFallback: "잭슨 다트",
+      }),
+    }),
+    "다트 이적 이슈",
+  );
+  // 번역도 없으면 영문 label 로 돌아온다.
+  assert.equal(
+    clusterTitle({
+      label: "Carol Ferris",
+      ...root({ title: "Carol Ferris", titleKo: null, titleKoFallback: null }),
+    }),
+    "Carol Ferris",
+  );
+});
+
+test("검색 색인에 기계 번역도 들어간다", () => {
+  const haystack = searchableTitles(
+    node({ titleKo: null, titleKoFallback: "잭슨 다트" }),
+  );
+  assert.ok(
+    haystack.includes("잭슨 다트"),
+    "번역으로 보이면 번역으로도 찾아야 한다",
+  );
+  assert.ok(haystack.includes("Strait of Hormuz"), "영문 원문도 계속 색인한다");
 });
 
 test("지시받은 다섯 케이스", () => {
@@ -196,6 +278,25 @@ test("위키백과 링크는 한국어 표시명이 붙어도 영문 문서로 �
   assert.equal(
     wikipediaUrl(member),
     "https://en.wikipedia.org/wiki/Strait_of_Hormuz",
+  );
+
+  // 🔴 기계 번역만 있는 문서도 링크는 영문이어야 한다 — 번역은 실제 ko.wikipedia
+  //    문서 제목이 아니라서, 이 값으로 링크를 만들면 없는 문서로 보낸다.
+  const translated = memberView(
+    {
+      pageId: 902,
+      wiki: "enwiki",
+      title: "Jaxson Dart",
+      titleKo: null,
+      titleKoFallback: "잭슨 다트",
+    },
+    42,
+  );
+  assert.equal(translated.displayTitle, "잭슨 다트");
+  assert.equal(translated.title, "Jaxson Dart");
+  assert.equal(
+    wikipediaUrl(translated),
+    "https://en.wikipedia.org/wiki/Jaxson_Dart",
   );
 });
 

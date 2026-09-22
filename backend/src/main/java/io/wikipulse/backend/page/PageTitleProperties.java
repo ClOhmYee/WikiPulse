@@ -27,6 +27,82 @@ public class PageTitleProperties {
      */
     private int batchSize = 500;
 
+    private final Azure azure = new Azure();
+
+    public Azure getAzure() {
+        return azure;
+    }
+
+    /**
+     * 2단 폴백 — Azure Translator (en→ko). ko.wikipedia 에 대응 문서가 없는 문서만 대상이다.
+     *
+     * <p>🔴 키는 저장소에 넣지 않는다. {@code AZURE_TRANSLATOR_KEY} 환경변수로만 주입한다.
+     * 비어 있으면 번역 단계를 통째로 건너뛰고 영문으로 표시한다 — 기능이 깨지지 않는다.
+     */
+    public static class Azure {
+        /** 🔴 절대 기본값을 넣지 않는다. 빈 값 = 번역 끔. */
+        private String key = "";
+        private String endpoint = "https://api.cognitive.microsofttranslator.com";
+        /** 리소스 지역(예: koreacentral). 전역 엔드포인트에는 이 헤더가 필요하다. */
+        private String region = "";
+        /** 🔴 타임아웃 필수 — 소켓 hang 이 단일 스케줄러 스레드를 영구 정지시킨다. */
+        private Duration connectTimeout = Duration.ofSeconds(5);
+        private Duration readTimeout = Duration.ofSeconds(10);
+        /**
+         * 한 폴에서 번역할 문서 수 상한. F0 는 월 200만 자라 무제한으로 두지 않는다.
+         * 위키 조회(batch-size)와 별개 축이다 — 번역은 쿼터를 쓴다.
+         */
+        private int batchSize = 200;
+
+        public String getKey() {
+            return key;
+        }
+
+        public void setKey(String key) {
+            this.key = key;
+        }
+
+        public String getEndpoint() {
+            return endpoint;
+        }
+
+        public void setEndpoint(String endpoint) {
+            this.endpoint = endpoint;
+        }
+
+        public String getRegion() {
+            return region;
+        }
+
+        public void setRegion(String region) {
+            this.region = region;
+        }
+
+        public Duration getConnectTimeout() {
+            return connectTimeout;
+        }
+
+        public void setConnectTimeout(Duration connectTimeout) {
+            this.connectTimeout = connectTimeout;
+        }
+
+        public Duration getReadTimeout() {
+            return readTimeout;
+        }
+
+        public void setReadTimeout(Duration readTimeout) {
+            this.readTimeout = readTimeout;
+        }
+
+        public int getBatchSize() {
+            return batchSize;
+        }
+
+        public void setBatchSize(int batchSize) {
+            this.batchSize = batchSize;
+        }
+    }
+
     public boolean isEnabled() {
         return enabled;
     }

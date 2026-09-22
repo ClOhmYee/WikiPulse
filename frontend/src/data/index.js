@@ -10,8 +10,8 @@ export function presentPulseMap(result, dataMode, aliasFor) {
       clusters: result.data.clusters.map((cluster) => ({
         ...cluster,
         aliases: aliasFor ? [aliasFor(cluster.id)] : [],
-        // 서버가 준 title/titleKo 는 그대로 두고 표시용만 덧붙인다 — 위키 링크는 title 을
-        // 쓰고 검색 색인은 둘 다 본다.
+        // 서버가 준 title/titleKo/titleKoFallback 은 그대로 두고 표시용만 덧붙인다 —
+        // 위키 링크는 언제나 영문 title 을 쓰고, 검색 색인은 셋 다 본다.
         nodes: cluster.nodes.map((node) => ({
           ...node,
           displayTitle: documentTitle(node),

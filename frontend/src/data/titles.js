@@ -9,9 +9,15 @@
 const usable = (value) =>
   typeof value === "string" && value.trim() ? value.trim() : null;
 
-/** 문서 한 건의 표시 제목: ko 제목 → 영문 제목. */
+/**
+ * 문서 한 건의 표시 제목: ko.wikipedia 정식 제목 → Azure 기계 번역 → 영문 원문.
+ *
+ * 🔴 두 한국어 값은 출처가 다르다. `titleKo` 는 ko.wikipedia 의 실제 문서 제목이고,
+ *    `titleKoFallback` 은 기계 번역이라 정식 제목이 아니다 — 위키 링크는 어느 쪽도 쓰지
+ *    않고 언제나 영문 `title` 로 만든다(lib/wiki.js).
+ */
 export const documentTitle = (node) =>
-  usable(node?.titleKo) || node?.title || "";
+  usable(node?.titleKo) || usable(node?.titleKoFallback) || node?.title || "";
 
 // 한글이 한 글자라도 있으면 "사람에게 보여줄 한국어 문구"로 본다. 음절(가–힣)뿐 아니라
 // 자모 영역까지 포함한다 — "ㄱㄴ" 같은 조합 전 문자열도 한국어다.
@@ -26,11 +32,17 @@ export const hasHangul = (value) => HANGUL.test(usable(value) || "");
  * 클러스터의 표시 제목.
  *
  * <pre>
- *   1. label 에 한글이 있으면          label            (= AI 가 붙인 한국어 이슈 제목)
- *   2. 아니면 root/lead 문서의 titleKo  titleKo
- *   3. 아니면 label                     label            (영문이라도 버리지 않는다)
- *   4. 아니면 root/lead 문서의 title     title
- *   5. 아무것도 없으면                   "제목 미제공"
+ *   1. label 에 한글이 있으면          label             (= AI 가 붙인 한국어 이슈 제목)
+ *   2. 아니면 root 의 titleKo           titleKo           (ko.wikipedia 정식 제목)
+ *   3. 아니면 root 의 titleKoFallback   titleKoFallback   (Azure 기계 번역)
+ *   4. 아니면 label                     label             (영문이라도 버리지 않는다)
+ *   5. 아니면 root 의 title             title
+ *   6. 아무것도 없으면                   "제목 미제공"
+ *
+ * ⚠️ 3번이 4번보다 위인 것은 판단이다. 둘 다 같은 사건을 가리키는데 한쪽은 한국어,
+ *    한쪽은 영문이고, 이 기능의 목적이 "한국어로 보이게" 하는 것이다. 기계 번역이
+ *    어색할 수 있다는 점(마이그레이션 머리말의 실측 10건)은 감수한다 — 뒤집으려면
+ *    이 두 줄만 바꾸면 된다.
  * </pre>
  *
  * root/lead 는 `nodes[0]` 이다 — 조회가 `is_seed DESC, weight DESC` 로 정렬해 내려준다
@@ -50,9 +62,17 @@ export function clusterTitle(cluster) {
   const root = cluster?.nodes?.[0] || cluster?.members?.[0];
   const label = usable(cluster?.label);
   if (hasHangul(label)) return label;
-  return usable(root?.titleKo) || label || root?.title || "제목 미제공";
+  return (
+    usable(root?.titleKo) ||
+    usable(root?.titleKoFallback) ||
+    label ||
+    root?.title ||
+    "제목 미제공"
+  );
 }
 
 /** 검색 색인용. 한국어로 보이는 제목을 한국어로 검색할 수 있어야 한다. */
 export const searchableTitles = (node) =>
-  [node?.title, usable(node?.titleKo)].filter(Boolean).join(" ");
+  [node?.title, usable(node?.titleKo), usable(node?.titleKoFallback)]
+    .filter(Boolean)
+    .join(" ");

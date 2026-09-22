@@ -119,6 +119,12 @@ export function validateMap(body, requested = {}) {
         node.titleKo === undefined || nullable(id, node.titleKo),
         "titleKo",
       );
+      // 기계 번역 폴백. titleKo 와 같은 선택·nullable 계약이다.
+      requireContract(
+        node.titleKoFallback === undefined ||
+          nullable(id, node.titleKoFallback),
+        "titleKoFallback",
+      );
       requireContract(
         nullable((v) => number(v) && v <= 1, node.sizeScore) &&
           nullable(number, node.spikeScore),

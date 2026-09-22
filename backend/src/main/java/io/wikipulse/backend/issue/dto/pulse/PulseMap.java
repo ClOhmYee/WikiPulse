@@ -41,7 +41,8 @@ public final class PulseMap {
             String pageId,
             String wiki,
             String title,             // 🔴 영문 원문. 위키 링크·식별자가 이걸 쓴다 — 대체하지 않는다
-            String titleKo,           // nullable — ko 대응이 없으면 null, 화면이 title 로 떨어진다
+            String titleKo,           // nullable — ko.wikipedia 정식 제목. 없으면 null
+            String titleKoFallback,   // nullable — Azure 기계 번역. 🔴 위키 링크에 쓰지 않는다
             boolean isSeed,
             Integer editCount,        // 아래 수치는 모두 required+nullable — null 을 그대로 낸다
             Integer views,

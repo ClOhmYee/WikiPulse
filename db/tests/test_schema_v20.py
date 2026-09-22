@@ -160,6 +160,124 @@ def test_영문_제목은_그대로다(conn):
     assert q(conn, "SELECT title FROM wiki_page WHERE id = %s", pid)[0][0] == "Hurricane Milton"
 
 
+#: 번역 대상 질의(`PageTitleRepository.findTranslatePending`).
+#: 🔴 langlinks 를 **이미 끝낸** 문서만 — title_ko_checked_at IS NOT NULL 이 그 조건이다.
+TRANSLATE_PENDING_SQL = """
+SELECT DISTINCT p.id, p.title
+  FROM cluster_member cm
+  JOIN wiki_page p ON p.id = cm.page_id
+ WHERE p.wiki = %s
+   AND p.title_ko IS NULL
+   AND p.title_ko_checked_at IS NOT NULL
+   AND p.title_ko_fallback_checked_at IS NULL
+ ORDER BY p.id
+ LIMIT %s
+"""
+
+RECORD_TRANSLATION_SQL = """
+UPDATE wiki_page
+   SET title_ko_fallback = %s, title_ko_fallback_checked_at = now()
+ WHERE id = %s AND wiki = %s
+"""
+
+
+def test_번역_대상은_langlinks_를_끝낸_문서뿐이다(conn):
+    """🔴 순서가 계약이다. 위키가 답을 줄 수 있는 문서를 먼저 번역하면 쿼터도 낭비하고
+    나중에 정식 제목이 와도 이미 기계 번역이 붙어 있다."""
+    cid = _cluster(conn)
+    unchecked = _page(conn, "Not Yet Asked")        # langlinks 미조회
+    has_ko = _page(conn, "Hurricane Milton")        # 정식 ko 있음
+    needs = _page(conn, "Rishikanth")               # 조회했고 ko 없음 -> 번역 대상
+    for pid in (unchecked, has_ko, needs):
+        _member(conn, cid, pid)
+    x(conn, RECORD_SQL, "허리케인 밀턴", has_ko, "enwiki")
+    x(conn, RECORD_SQL, None, needs, "enwiki")
+
+    assert [r[1] for r in q(conn, TRANSLATE_PENDING_SQL, "enwiki", 100)] == ["Rishikanth"]
+
+
+def test_번역했고_결과_없음은_다시_대상이_되지_않는다(conn):
+    cid = _cluster(conn)
+    a, b = _page(conn, "A"), _page(conn, "B")
+    _member(conn, cid, a)
+    _member(conn, cid, b)
+    x(conn, RECORD_SQL, None, a, "enwiki")
+    x(conn, RECORD_SQL, None, b, "enwiki")
+    x(conn, RECORD_TRANSLATION_SQL, None, a, "enwiki")   # 번역했고 결과 없음
+
+    assert [r[1] for r in q(conn, TRANSLATE_PENDING_SQL, "enwiki", 100)] == ["B"]
+
+
+def test_번역_세_상태가_구분된다(conn):
+    cid = _cluster(conn)
+    never, absent, present = (_page(conn, n) for n in ("N", "빈결과", "번역됨"))
+    for pid in (never, absent, present):
+        _member(conn, cid, pid)
+        x(conn, RECORD_SQL, None, pid, "enwiki")
+    x(conn, RECORD_TRANSLATION_SQL, None, absent, "enwiki")
+    x(conn, RECORD_TRANSLATION_SQL, "잭슨 다트", present, "enwiki")
+
+    rows = dict(q(conn, "SELECT title, coalesce(title_ko_fallback,'(없음)') FROM wiki_page "
+                        "WHERE title_ko_fallback_checked_at IS NOT NULL ORDER BY 1"))
+    assert rows == {"빈결과": "(없음)", "번역됨": "잭슨 다트"}
+    assert q(conn, TRANSLATE_PENDING_SQL, "enwiki", 100)[0][1] == "N"
+
+
+def test_빈_번역은_저장되지_않는다(conn):
+    for blank in ("", "   "):
+        pid = _page(conn, "Blank Translation")
+        x(conn, RECORD_SQL, None, pid, "enwiki")
+        with pytest.raises(psycopg.errors.CheckViolation):
+            x(conn, RECORD_TRANSLATION_SQL, blank, pid, "enwiki")
+        conn.rollback()
+
+
+def test_번역만_있고_시도시각이_없으면_거부된다(conn):
+    pid = _page(conn, "Unchecked Translation")
+    with pytest.raises(psycopg.errors.CheckViolation):
+        x(conn, "UPDATE wiki_page SET title_ko_fallback = %s WHERE id = %s", "번역", pid)
+
+
+def test_번역이_영문과_정식ko_를_건드리지_않는다(conn):
+    """🔴 이 변경의 금지선. Azure 결과는 자기 컬럼에만 들어간다."""
+    pid = _page(conn, "Jaxson Dart")
+    x(conn, RECORD_SQL, None, pid, "enwiki")
+    x(conn, RECORD_TRANSLATION_SQL, "잭슨 다트", pid, "enwiki")
+
+    row = q(conn, "SELECT title, title_ko, title_ko_fallback FROM wiki_page WHERE id = %s", pid)[0]
+    assert row == ("Jaxson Dart", None, "잭슨 다트")
+
+
+def test_조회_질의가_세_제목을_함께_준다(conn):
+    """읽기 경로(findNodes/findMembers). 화면 우선순위는 title_ko > fallback > title 이다."""
+    cid = _cluster(conn)
+    ko_page = _page(conn, "Hurricane Milton")
+    tr_page = _page(conn, "Jaxson Dart")
+    en_page = _page(conn, "Rishikanth")
+    _member(conn, cid, ko_page, is_seed=True, weight=3.0)
+    _member(conn, cid, tr_page, weight=2.0)
+    _member(conn, cid, en_page, weight=1.0)
+    x(conn, RECORD_SQL, "허리케인 밀턴", ko_page, "enwiki")
+    x(conn, RECORD_SQL, None, tr_page, "enwiki")
+    x(conn, RECORD_TRANSLATION_SQL, "잭슨 다트", tr_page, "enwiki")
+    x(conn, RECORD_SQL, None, en_page, "enwiki")
+    x(conn, RECORD_TRANSLATION_SQL, None, en_page, "enwiki")
+
+    rows = q(conn, """
+        SELECT p.title, p.title_ko, p.title_ko_fallback
+          FROM cluster_member cm
+          JOIN wiki_page p ON p.id = cm.page_id
+         WHERE cm.cluster_id = %s
+         ORDER BY cm.is_seed DESC, cm.weight DESC
+        """, cid)
+
+    assert rows == [
+        ("Hurricane Milton", "허리케인 밀턴", None),   # 정식 ko
+        ("Jaxson Dart", None, "잭슨 다트"),            # 기계 번역
+        ("Rishikanth", None, None),                    # 영문 유지
+    ]
+
+
 def test_펄스맵_노드_질의가_영문과_한국어를_함께_준다(conn):
     """`PulseMapRepository.findNodes`. ko 없는 노드는 NULL 로 내려가 화면이 영문으로 떨어진다."""
     cid = _cluster(conn)

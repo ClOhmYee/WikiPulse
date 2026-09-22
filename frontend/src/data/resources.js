@@ -34,6 +34,7 @@ export function memberView(member, eventId) {
     // 🔴 title 은 영문 원문 그대로다 — wikipediaUrl(article) 이 이걸 쓴다(lib/wiki.js).
     title: member.title,
     titleKo: member.titleKo ?? null,
+    titleKoFallback: member.titleKoFallback ?? null,
     // 화면에 찍는 이름. ko 가 있으면 한국어, 없으면 영문. name 은 원래부터 표시용이라
     // (= member.title 이었다) 여기만 바꾸면 기존 문서 표시 지점이 전부 따라온다.
     displayTitle: documentTitle(member),

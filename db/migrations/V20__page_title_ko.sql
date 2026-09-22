@@ -66,3 +66,56 @@ COMMENT ON COLUMN wiki_page.title_ko_checked_at IS
 CREATE INDEX wiki_page_title_ko_pending_idx
     ON wiki_page (id)
     WHERE title_ko_checked_at IS NULL;
+
+-- =====================================================================
+-- 2단 폴백 — Azure Translator 기계 번역 표시명
+-- =====================================================================
+--
+-- 왜 컬럼을 더 두나 (title_ko 에 같이 안 넣는 이유)
+--   ko.wikipedia 에 대응 문서가 **없는 문서가 절반이 넘는다**. 운영 스냅샷
+--   2026-09-21T12:00:00Z 의 멤버 20건 중 ko 가 있는 건 8건뿐이었다. 나머지는
+--   인물·지역 문서라 앞으로도 안 생긴다.
+--
+--   🔴 그렇다고 번역 결과를 `title_ko` 에 넣으면 **두 가지가 한 컬럼에서 섞인다** —
+--      사람이 만든 정식 한국어 문서 제목과, 기계가 만든 표시용 문자열이다. 섞이면
+--      나중에 "이 값으로 ko.wikipedia 링크를 만들어도 되나"를 판별할 수 없다.
+--      실측된 번역 품질이 그 구분을 요구한다 (2026-09-22, 운영 제목 10건):
+--          Jaxson Dart                      -> 잭슨 다트                (좋음)
+--          Mark Wood (cricketer)            -> 마크 우드 (크리켓 선수)   (좋음)
+--          Thailand at the 2026 Asian Games -> 2026년 아시안 게임에서 태국 (어순 어색)
+--          List of Hindi film families      -> 힌디어 영화 가족 목록      (의미 흔들림)
+--      ko.wikipedia 의 정식 제목이 아니다. **표시·검색 전용**이다.
+--
+-- 상태 네 가지 (title_ko 와 같은 음성 캐시 규칙)
+--     fallback_checked_at IS NULL                              아직 번역 안 함
+--     fallback_checked_at IS NOT NULL AND title_ko_fallback IS NULL   번역했고 결과 없음
+--     title_ko_fallback 있음                                    번역 확보
+--   ⚠️ 전송 실패·키 미설정에는 checked_at 을 찍지 않는다 — 찍으면 Azure 가 잠깐 죽은
+--      사이 지나간 문서가 영구히 영문으로 굳는다. title_ko 와 같은 함정이다.
+--
+-- 호출 순서는 langlinks 가 먼저다. `title_ko` 가 있으면 번역 대상이 아니다 —
+-- 정식 제목이 있는데 기계 번역을 덧붙일 이유가 없고, F0 쿼터도 아낀다.
+
+ALTER TABLE wiki_page
+    ADD COLUMN title_ko_fallback            TEXT,
+    ADD COLUMN title_ko_fallback_checked_at TIMESTAMPTZ,
+    ADD CONSTRAINT wiki_page_title_ko_fallback_not_blank
+        CHECK (title_ko_fallback IS NULL OR btrim(title_ko_fallback) <> ''),
+    ADD CONSTRAINT wiki_page_title_ko_fallback_checked
+        CHECK (title_ko_fallback IS NULL OR title_ko_fallback_checked_at IS NOT NULL);
+
+COMMENT ON COLUMN wiki_page.title_ko_fallback IS
+    '표시 전용 기계 번역 제목(Azure Translator, en->ko). '
+    '🔴 ko.wikipedia 의 정식 제목이 아니다 — 이 값으로 위키 링크를 만들지 않는다. '
+    '🔴 title_ko 와 합치지 않는다. 표시 우선순위는 title_ko > title_ko_fallback > title.';
+
+COMMENT ON COLUMN wiki_page.title_ko_fallback_checked_at IS
+    '번역 호출에 성공한 시각. 결과가 있든 없든 찍는다(음성 캐시). '
+    '⚠️ 전송 실패·키 미설정에는 찍지 않는다 — 다음 폴에서 다시 시도해야 한다.';
+
+-- 번역 대상(= langlinks 를 끝냈고 ko 가 없으며 아직 번역 안 한 문서) 조회용.
+CREATE INDEX wiki_page_title_ko_fallback_pending_idx
+    ON wiki_page (id)
+    WHERE title_ko IS NULL
+      AND title_ko_checked_at IS NOT NULL
+      AND title_ko_fallback_checked_at IS NULL;

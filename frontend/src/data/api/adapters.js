@@ -89,6 +89,7 @@ const member = (v) =>
   text(v.title) &&
   // 표시 전용. ko 문서가 없으면 null 이거나 NON_NULL 직렬화로 필드가 빠진다.
   optionalText(v.titleKo) &&
+  optionalText(v.titleKoFallback) &&
   number(v.weight) &&
   typeof v.isSeed === "boolean" &&
   optionalNumber(v.editCount) &&

@@ -83,7 +83,7 @@ class IssueControllerTest {
     @Test
     void 상세는_members와_relatedStocks를_담는다() throws Exception {
         var member = new IssueMemberResponse(901, "enwiki", "Strait of Hormuz",
-                "호르무즈 해협", 1.0, true, 87, 12043, "complete");
+                "호르무즈 해협", null, 1.0, true, 87, 12043, "complete");
         var stock = new RelatedStockResponse("FANG", "Diamondback Energy", "NASDAQ",
                 "Energy", "BOTH", "SUPPLY_CHAIN", 0.28, 6.1, "호르무즈 …");
         when(service.detail(42L)).thenReturn(ApiResponse.of(new IssueDetailResponse(

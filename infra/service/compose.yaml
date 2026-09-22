@@ -63,4 +63,12 @@ services:
       #    51개부터는 잘림이 아니라 toomanyvalues 에러다(2026-09-22 실측).
       #    기본 500 이면 폴당 10 요청으로 resilience4j wikipedia RateLimiter(초당 10)와 같은 자릿수.
       WIKIPULSE_PAGETITLE_BATCHSIZE: ${WIKIPULSE_PAGETITLE_BATCHSIZE:-500}
+      # 2단 폴백 — Azure Translator (WP-205). ko.wikipedia 대응이 없는 문서만 번역한다.
+      # 🔴 키는 저장소에 없다. 서버 .env 에만 둔다. 비어 있으면 번역을 건너뛰고 영문 표시다.
+      # 🔴 번역 결과는 표시·검색 전용이며 ko.wikipedia 정식 제목이 아니다 — 위키 링크에 쓰지 않는다.
+      AZURE_TRANSLATOR_KEY:       ${AZURE_TRANSLATOR_KEY:-}
+      AZURE_TRANSLATOR_ENDPOINT:  ${AZURE_TRANSLATOR_ENDPOINT:-https://api.cognitive.microsofttranslator.com}
+      AZURE_TRANSLATOR_REGION:    ${AZURE_TRANSLATOR_REGION:-}
+      # F0 는 월 200만 자다. 한 폴에서 번역할 문서 수 상한 — 위키 조회와 별개 축이다.
+      AZURE_TRANSLATOR_BATCHSIZE: ${AZURE_TRANSLATOR_BATCHSIZE:-200}
     # 열면 8080 이 외부에 직접 노출되고, 도커 게시 포트는 ufw 로 막히지도 않는다.

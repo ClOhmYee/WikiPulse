@@ -32,7 +32,8 @@ public class PageTitleWorker {
     @Scheduled(fixedDelayString = "${wikipulse.page-title.fixed-delay:PT10M}")
     public void pollAndEnrich() {
         try {
-            service.enrich(props.getBatchSize());
+            // 1단 langlinks + 2단 Azure 번역. 번역 실패는 서비스가 안에서 흡수한다.
+            service.enrichAll(props.getBatchSize());
         } catch (RuntimeException e) {
             // 위키 전송 실패·기타 런타임 오류. 기록 안 된 문서는 미조회로 남아 다음 폴에서 재시도된다.
             log.error("ko 제목 조회 실패, 다음 폴에서 재시도", e);

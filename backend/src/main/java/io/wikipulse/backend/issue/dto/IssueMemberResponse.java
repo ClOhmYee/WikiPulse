@@ -23,6 +23,7 @@ public record IssueMemberResponse(
         String wiki,
         String title,
         String titleKo,
+        String titleKoFallback,
         double weight,
         boolean isSeed,
         Integer editCount,
@@ -34,6 +35,7 @@ public record IssueMemberResponse(
         String getWiki();
         String getTitle();
         String getTitleKo();
+        String getTitleKoFallback();
         double getWeight();
         boolean getIsSeed();
         Integer getEditCount();
@@ -43,7 +45,8 @@ public record IssueMemberResponse(
 
     public static IssueMemberResponse from(Projection p) {
         return new IssueMemberResponse(
-                p.getPageId(), p.getWiki(), p.getTitle(), p.getTitleKo(), p.getWeight(),
+                p.getPageId(), p.getWiki(), p.getTitle(), p.getTitleKo(),
+                p.getTitleKoFallback(), p.getWeight(),
                 p.getIsSeed(), p.getEditCount(), p.getViews(), p.getCompleteness());
     }
 }

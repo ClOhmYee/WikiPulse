@@ -11,9 +11,15 @@ import org.springframework.web.client.RestClientException;
  * <ul>
  *   <li>Wikipedia({@code retry429=true}): 429 = 전이성(예절 백오프 후 재시도).</li>
  *   <li>GATEWAY({@code retry429=false}): 429 = 하드(공유 예산 소진 신호일 수 있어 재시도가 예산을 더 태운다).</li>
+ *   <li>Azure Translator({@code retry429=false}): 429 = 하드. F0 는 쿼터 초과도 429 로 오므로
+ *       재시도하면 남은 월 쿼터를 더 태운다 — GATEWAY 와 같은 이유다.</li>
  * </ul>
+ *
+ * <p>⚠️ ~~package-private~~ → public (2026-09-23, WP-205). {@code page} 패키지의
+ *    Azure 클라이언트가 두 번째 게이트웨이로 붙었다. 분류 규칙을 복제하면 429 취급처럼
+ *    게이트웨이마다 갈리는 축이 두 벌로 갈라져 조용히 어긋난다 — 한 곳에 둔다.
  */
-final class UpstreamFailures {
+public final class UpstreamFailures {
 
     private UpstreamFailures() {
     }
@@ -21,9 +27,9 @@ final class UpstreamFailures {
     /**
      * @param gateway  로그용 게이트웨이 이름("GATEWAY"·"Wikipedia")
      * @param e        RestClient 가 던진 전송 예외
-     * @param retry429 429 를 전이성으로 볼지(Wikipedia) 하드로 볼지(GATEWAY)
+     * @param retry429 429 를 전이성으로 볼지(Wikipedia) 하드로 볼지(GATEWAY·Azure)
      */
-    static UpstreamTransportException classify(String gateway, RestClientException e, boolean retry429) {
+    public static UpstreamTransportException classify(String gateway, RestClientException e, boolean retry429) {
         if (e instanceof HttpStatusCodeException h) {
             int status = h.getStatusCode().value();
             if (status >= 500) {

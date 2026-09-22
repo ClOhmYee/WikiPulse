@@ -25,7 +25,10 @@ class PageTitleServiceTest {
 
     private final PageTitleRepository repository = mock(PageTitleRepository.class);
     private final WikipediaExtractClient wikipedia = mock(WikipediaExtractClient.class);
-    private final PageTitleService service = new PageTitleService(repository, wikipedia);
+    private final AzureTranslatorClient translator = mock(AzureTranslatorClient.class);
+    private final PageTitleProperties props = new PageTitleProperties();
+    private final PageTitleService service =
+            new PageTitleService(repository, wikipedia, translator, props);
 
     private static List<PendingPage> pages(int count) {
         return IntStream.rangeClosed(1, count)
@@ -107,5 +110,100 @@ class PageTitleServiceTest {
         List<Map<Long, String>> records = capturedRecords();
         assertThat(records).hasSize(1);            // 첫 청크만 기록됐다
         assertThat(records.get(0)).hasSize(50).containsEntry(1L, "첫 문서");
+    }
+
+    // ---- 2단 폴백 (Azure 번역) -------------------------------------------
+
+    @SuppressWarnings("unchecked")
+    private List<Map<Long, String>> capturedTranslations() {
+        ArgumentCaptor<Map<Long, String>> captor = ArgumentCaptor.forClass(Map.class);
+        verify(repository, org.mockito.Mockito.atLeastOnce()).recordTranslations(captor.capture());
+        return new ArrayList<>(captor.getAllValues());
+    }
+
+    @Test
+    void 키가_없으면_번역을_아예_시도하지_않는다() {
+        // 키 미설정은 장애가 아니라 "번역 끔"이다 — 조회 자체를 하지 않아야 한다.
+        when(translator.isConfigured()).thenReturn(false);
+
+        assertThat(service.translateMissing(200))
+                .isEqualTo(new PageTitleService.TranslationResult(0, 0));
+        verify(repository, never()).findTranslatePending(anyInt());
+        verify(translator, never()).translate(anyList());
+    }
+
+    @Test
+    void 번역이_안_나온_문서도_시도완료로_기록한다() {
+        // langlinks 쪽과 같은 음성 캐시. 안 찍으면 매 폴 같은 문서를 다시 번역한다.
+        when(translator.isConfigured()).thenReturn(true);
+        when(repository.findTranslatePending(anyInt())).thenReturn(List.of(
+                new PendingPage(1, "Jaxson Dart"),
+                new PendingPage(2, "Rishikanth")));
+        when(translator.translate(anyList())).thenReturn(Map.of("Jaxson Dart", "잭슨 다트"));
+
+        assertThat(service.translateMissing(200))
+                .isEqualTo(new PageTitleService.TranslationResult(2, 1));
+
+        Map<Long, String> recorded = capturedTranslations().get(0);
+        Map<Long, String> expected = new HashMap<>();
+        expected.put(1L, "잭슨 다트");
+        expected.put(2L, null);            // 번역했고 결과 없음
+        assertThat(recorded).isEqualTo(expected);
+    }
+
+    @Test
+    void 번역도_한_요청에_50개를_넘기지_않는다() {
+        when(translator.isConfigured()).thenReturn(true);
+        when(repository.findTranslatePending(anyInt())).thenReturn(pages(120));
+        when(translator.translate(anyList())).thenReturn(Map.of());
+
+        service.translateMissing(200);
+
+        ArgumentCaptor<List<String>> captor = ArgumentCaptor.forClass(List.class);
+        verify(translator, org.mockito.Mockito.times(3)).translate(captor.capture());
+        assertThat(captor.getAllValues().stream().map(List::size)).containsExactly(50, 50, 20);
+    }
+
+    @Test
+    void 번역_전송_실패는_기록하지_않고_전파한다() {
+        when(translator.isConfigured()).thenReturn(true);
+        when(repository.findTranslatePending(anyInt())).thenReturn(pages(10));
+        when(translator.translate(anyList()))
+                .thenThrow(new UpstreamUnavailableException("쿼터 소진", null));
+
+        assertThatThrownBy(() -> service.translateMissing(200))
+                .isInstanceOf(UpstreamUnavailableException.class);
+        verify(repository, never()).recordTranslations(org.mockito.ArgumentMatchers.anyMap());
+    }
+
+    @Test
+    void Azure_장애가_langlinks_단계를_막지_않는다() {
+        // 🔴 이 계약이 깨지면 Azure 가 죽은 동안 1단 폴백(정식 ko 제목)마저 안 채워진다.
+        when(repository.findPending(anyInt())).thenReturn(List.of(
+                new PendingPage(1, "Hurricane Milton")));
+        when(wikipedia.koTitles(anyList())).thenReturn(Map.of("Hurricane Milton", "허리케인 밀턴"));
+        when(translator.isConfigured()).thenReturn(true);
+        when(repository.findTranslatePending(anyInt())).thenReturn(pages(3));
+        when(translator.translate(anyList()))
+                .thenThrow(new UpstreamUnavailableException("회로 개방", null));
+
+        // 예외가 밖으로 새지 않는다.
+        assertThat(service.enrichAll(500)).isEqualTo(new PageTitleService.Result(1, 1));
+        // langlinks 결과는 기록됐다.
+        assertThat(capturedRecords().get(0)).containsEntry(1L, "허리케인 밀턴");
+        // 번역은 기록되지 않아 대상이 그대로 남는다 — 다음 폴이 이어받는다.
+        verify(repository, never()).recordTranslations(org.mockito.ArgumentMatchers.anyMap());
+    }
+
+    @Test
+    void 위키_실패는_전파해_워커가_재시도하게_한다() {
+        // 번역과 달리 1단 실패는 삼키지 않는다 — 워커 로그에 남고 다음 폴에서 다시 집힌다.
+        when(repository.findPending(anyInt())).thenReturn(pages(3));
+        when(wikipedia.koTitles(anyList()))
+                .thenThrow(new UpstreamUnavailableException("위키 타임아웃", null));
+
+        assertThatThrownBy(() -> service.enrichAll(500))
+                .isInstanceOf(UpstreamUnavailableException.class);
+        verify(translator, never()).translate(anyList());
     }
 }

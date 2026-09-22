@@ -59,6 +59,38 @@ public class PageTitleRepository {
              WHERE id = :id AND wiki = :wiki
             """;
 
+    /**
+     * 번역 대상: langlinks 를 <b>이미 끝냈고</b> ko 가 없으며 아직 번역하지 않은 문서.
+     *
+     * <p>🔴 순서가 계약이다 — langlinks 가 먼저다. {@code title_ko} 가 있으면 정식 제목이
+     * 있는 것이라 기계 번역을 덧붙이지 않는다(F0 쿼터도 아낀다).
+     * {@code title_ko_checked_at IS NOT NULL} 조건이 "아직 위키를 안 물어본 문서"를 제외한다 —
+     * 이게 없으면 위키가 답을 줄 수 있는 문서까지 번역해 버린다.
+     */
+    private static final String TRANSLATE_PENDING_SQL = """
+            SELECT DISTINCT p.id AS id, p.title AS title
+              FROM cluster_member cm
+              JOIN wiki_page p ON p.id = cm.page_id
+             WHERE p.wiki = :wiki
+               AND p.title_ko IS NULL
+               AND p.title_ko_checked_at IS NOT NULL
+               AND p.title_ko_fallback_checked_at IS NULL
+             ORDER BY p.id
+             LIMIT :limit
+            """;
+
+    /**
+     * 번역 결과 기록. langlinks 쪽과 같은 음성 캐시 규칙이다 — 결과가 없어도 찍는다.
+     *
+     * <p>⚠️ 전송 실패·키 미설정에는 부르지 않는다. 부르면 Azure 가 잠깐 죽은 사이 지나간
+     * 문서가 "번역 없음"으로 굳어 영구히 영문이 된다.
+     */
+    private static final String RECORD_TRANSLATION_SQL = """
+            UPDATE wiki_page
+               SET title_ko_fallback = :titleKoFallback, title_ko_fallback_checked_at = now()
+             WHERE id = :id AND wiki = :wiki
+            """;
+
     private final NamedParameterJdbcTemplate jdbc;
 
     public PageTitleRepository(NamedParameterJdbcTemplate jdbc) {
@@ -84,17 +116,38 @@ public class PageTitleRepository {
      * @return 실제로 갱신된 행 수
      */
     public int record(Map<Long, String> koByPageId) {
-        if (koByPageId.isEmpty()) {
+        return batchRecord(RECORD_SQL, "titleKo", koByPageId);
+    }
+
+    /** 번역 대상 문서. langlinks 를 끝냈고 ko 가 없는 것만. 최대 {@code limit} 건. */
+    public List<PendingPage> findTranslatePending(int limit) {
+        return jdbc.query(TRANSLATE_PENDING_SQL,
+                new MapSqlParameterSource().addValue("wiki", WIKI).addValue("limit", limit),
+                (rs, n) -> new PendingPage(rs.getLong("id"), rs.getString("title")));
+    }
+
+    /**
+     * 번역 결과를 한 번에 기록한다.
+     *
+     * @param translationByPageId 문서 id → 한국어 번역. <b>값이 null 이면 "번역했고 결과 없음"</b>
+     * @return 실제로 갱신된 행 수
+     */
+    public int recordTranslations(Map<Long, String> translationByPageId) {
+        return batchRecord(RECORD_TRANSLATION_SQL, "titleKoFallback", translationByPageId);
+    }
+
+    private int batchRecord(String sql, String valueParam, Map<Long, String> values) {
+        if (values.isEmpty()) {
             return 0;
         }
-        SqlParameterSource[] batch = koByPageId.entrySet().stream()
+        SqlParameterSource[] batch = values.entrySet().stream()
                 .map(e -> (SqlParameterSource) new MapSqlParameterSource()
                         .addValue("id", e.getKey())
-                        .addValue("titleKo", e.getValue())
+                        .addValue(valueParam, e.getValue())
                         .addValue("wiki", WIKI))
                 .toArray(SqlParameterSource[]::new);
         int updated = 0;
-        for (int rows : jdbc.batchUpdate(RECORD_SQL, batch)) {
+        for (int rows : jdbc.batchUpdate(sql, batch)) {
             updated += rows;
         }
         return updated;

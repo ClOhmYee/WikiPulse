@@ -35,10 +35,15 @@ public class PageTitleService {
 
     private final PageTitleRepository repository;
     private final WikipediaExtractClient wikipedia;
+    private final AzureTranslatorClient translator;
+    private final PageTitleProperties props;
 
-    public PageTitleService(PageTitleRepository repository, WikipediaExtractClient wikipedia) {
+    public PageTitleService(PageTitleRepository repository, WikipediaExtractClient wikipedia,
+                            AzureTranslatorClient translator, PageTitleProperties props) {
         this.repository = repository;
         this.wikipedia = wikipedia;
+        this.translator = translator;
+        this.props = props;
     }
 
     /**
@@ -50,8 +55,85 @@ public class PageTitleService {
         static final Result NOTHING = new Result(0, 0);
     }
 
+    /** 번역 단계 결과. {@code attempted} 는 번역을 시도해 기록까지 끝낸 수. */
+    public record TranslationResult(int attempted, int translated) {
+
+        static final TranslationResult NOTHING = new TranslationResult(0, 0);
+    }
+
     /**
-     * 미조회 문서를 최대 {@code limit} 건 채운다.
+     * 한 폴 전체 — 1단 langlinks, 2단 Azure 번역.
+     *
+     * <p>🔴 <b>두 단계를 따로 감싼다.</b> Azure 가 죽었다고 langlinks 까지 멈추면 1단 폴백마저
+     * 못 채운다. 번역 실패는 여기서 잡아 로그만 남기고, 위키 실패는 그대로 전파해 워커가
+     * 다음 폴에 재시도하게 한다.
+     */
+    public Result enrichAll(int limit) {
+        Result wiki = enrich(limit);
+        try {
+            translateMissing(props.getAzure().getBatchSize());
+        } catch (RuntimeException e) {
+            // 🔴 삼키는 것은 "이번 폴의 번역"뿐이다. 기록을 안 했으므로 대상은 그대로 남아
+            //    다음 폴에서 다시 집힌다. langlinks 결과는 이미 커밋돼 있다.
+            log.warn("Azure 번역 단계 실패 — langlinks 결과는 유지하고 다음 폴에서 재시도한다: {}",
+                    e.toString());
+        }
+        return wiki;
+    }
+
+    /**
+     * ko.wikipedia 대응이 없는 문서를 기계 번역해 2단 폴백을 채운다.
+     *
+     * <p>🔴 <b>langlinks 를 끝낸 문서만</b> 대상이다(질의 조건). 정식 제목이 있을 수 있는 문서를
+     * 먼저 번역해 버리면 쿼터를 낭비하고, 나중에 정식 제목이 와도 이미 번역이 붙어 있다.
+     *
+     * @throws io.wikipulse.backend.matching.UpstreamUnavailableException Azure 전송 실패 —
+     *         그 청크는 기록하지 않고 다음 폴에서 다시 집힌다
+     */
+    public TranslationResult translateMissing(int limit) {
+        if (!translator.isConfigured()) {
+            // 키가 없으면 조용히 건너뛴다 — 기능이 깨지는 게 아니라 영문으로 표시될 뿐이다.
+            log.debug("Azure 키 미설정 — 번역 단계 건너뜀 (영문 표시 유지)");
+            return TranslationResult.NOTHING;
+        }
+        List<PageTitleRepository.PendingPage> pending = repository.findTranslatePending(limit);
+        if (pending.isEmpty()) {
+            return TranslationResult.NOTHING;
+        }
+
+        int attempted = 0;
+        int translated = 0;
+        for (List<PageTitleRepository.PendingPage> chunk : chunked(pending)) {
+            Map<String, String> byTitle =
+                    translator.translate(chunk.stream().map(PageTitleRepository.PendingPage::title).toList());
+
+            // 🔴 번역이 안 나온 문서도 담는다 — null 이면 "번역했고 결과 없음"(음성 캐시)이다.
+            Map<Long, String> updates = new LinkedHashMap<>();
+            for (PageTitleRepository.PendingPage page : chunk) {
+                updates.put(page.id(), byTitle.get(page.title()));
+            }
+            repository.recordTranslations(updates);
+
+            attempted += chunk.size();
+            translated += byTitle.size();
+        }
+
+        log.info("Azure 번역 {}건 중 {}건 확보 (나머지는 영문 표시)", attempted, translated);
+        return new TranslationResult(attempted, translated);
+    }
+
+    private static List<List<PageTitleRepository.PendingPage>> chunked(
+            List<PageTitleRepository.PendingPage> pages) {
+        List<List<PageTitleRepository.PendingPage>> chunks = new java.util.ArrayList<>();
+        int size = AzureTranslatorClient.TEXTS_PER_REQUEST;
+        for (int from = 0; from < pages.size(); from += size) {
+            chunks.add(pages.subList(from, Math.min(from + size, pages.size())));
+        }
+        return chunks;
+    }
+
+    /**
+     * 미조회 문서를 최대 {@code limit} 건 채운다 (1단 langlinks 전용).
      *
      * @throws io.wikipulse.backend.matching.UpstreamUnavailableException 위키 전송 실패 —
      *         그 청크는 기록하지 않고 다음 폴에서 다시 집힌다
