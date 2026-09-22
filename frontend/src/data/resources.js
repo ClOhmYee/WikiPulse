@@ -7,30 +7,20 @@ const unique = (items) => [
 const optionalNumber = (value) => (Number.isFinite(value) ? value : null);
 const availableText = (value) =>
   typeof value === "string" && value.trim() ? value : null;
-const reportSections = [
-  { id: "conclusion", title: "결론" },
-  { id: "change", title: "변화" },
-  { id: "context", title: "맥락" },
-  { id: "evidence", title: "근거" },
-];
 const reportView = (raw, snapshotTs) => {
   const source = raw.report;
-  const sectionsById = new Map(
-    (source?.sections || []).map((section) => [section.id, section]),
-  );
   return {
     status: source?.status || "insufficient_evidence",
     snapshotTs,
     generatedAt: source?.generatedAt ?? null,
     model: source?.model ?? raw.summaryModel ?? null,
-    sections: reportSections.map((section) => {
-      const value = sectionsById.get(section.id);
-      return {
-        ...section,
-        body: availableText(value?.body),
-        evidenceIds: value?.evidenceIds?.map(String) || [],
-      };
-    }),
+    // Preserve source order, including legacy sections; the reader displays
+    // their bodies as one article without imposing a fixed editorial outline.
+    sections: (source?.sections || []).map((section) => ({
+      ...section,
+      body: availableText(section.body),
+      evidenceIds: section.evidenceIds?.map(String) || [],
+    })),
   };
 };
 export function memberView(member, eventId) {

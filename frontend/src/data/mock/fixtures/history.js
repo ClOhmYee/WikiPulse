@@ -1,5 +1,6 @@
 import sources from "./sources.json" with { type: "json" };
 import { topics } from "./topics.js";
+import { newsroomExamples } from "./newsroom.js";
 
 export const HISTORY_START = "2025-09-01";
 export const DEMO_DATE = "2026-09-10";
@@ -178,12 +179,14 @@ export function clusterAt(episode, date) {
     id: date === episode.end ? episode.id : `${episode.id}~${date}`,
     issueKey: episode.topic.id,
     label: episode.topic.title,
-    summary: `${date} 시연: ${nodes
-      .slice(0, 3)
-      .map((n) => docs.get(n.pageId).name)
-      .join(
-        "·",
-      )} 등 ${nodes.length}개 문서의 합성 편집 신호를 ${episode.topic.focus} 주제로 묶었습니다.`,
+    summary:
+      newsroomExamples[episode.topic.id]?.summary ||
+      `${date} 시연: ${nodes
+        .slice(0, 3)
+        .map((n) => docs.get(n.pageId).name)
+        .join(
+          "·",
+        )} 등 ${nodes.length}개 문서의 합성 편집 신호를 ${episode.topic.focus} 주제로 묶었습니다.`,
     category: episode.topic.category,
     firstDetectedAt: timestamp(episode.start),
     hot: totals.pulse >= 6,
@@ -274,27 +277,20 @@ export function reportAt(episode, date = episode?.end) {
       model: "mock-authored",
       sections: [
         {
-          id: "conclusion",
-          title: "결론",
-          body: `${topic.focus} 주제에서 ${articleIds.length}개 문서의 동시 활동 신호가 관측되었습니다. 이는 사건 발생이나 인과관계를 확정하는 판단이 아니라, 함께 확인할 필요가 있는 문서 묶음입니다.`,
-          evidenceIds: articleIds.slice(0, 2),
-        },
-        {
-          id: "change",
-          title: "변화",
-          body: `클러스터의 합성 편집량은 ${metrics.edits.toLocaleString("ko-KR")}회이며, 기준량 ${metrics.baseline}회 대비 ${metrics.pulse}배로 집계되었습니다.`,
-          evidenceIds: [top.pageId],
-        },
-        {
-          id: "context",
-          title: "맥락",
-          body: `${cluster.nodes.map((n) => docs.get(n.pageId).name).join(" · ")} 문서를 함께 읽는 시연용 주제 묶음입니다. 자동 클러스터링의 실측 결과가 아니라 사람이 구성한 시나리오입니다.`,
-          evidenceIds: articleIds.slice(0, 3),
-        },
-        {
-          id: "evidence",
-          title: "근거",
-          body: "아래 원문 문서에서 각 문서의 수정 이력과 주제 내용을 직접 확인할 수 있습니다. 리포트는 제공된 근거를 넘어선 사실을 주장하지 않습니다.",
+          id: "article",
+          title: cluster.label,
+          body: [
+            ...(newsroomExamples[topic.id]?.paragraphs || [
+              `${topic.focus} 주제를 따라 ${cluster.nodes
+                .slice(0, 3)
+                .map((node) => docs.get(node.pageId).name)
+                .join(
+                  ", ",
+                )} 문서를 함께 읽습니다. 서로 다른 문서에서 출발한 관심을 연결해 하나의 주제가 어떤 기술과 산업으로 이어지는지 살펴보는 시연입니다.`,
+              `연결된 ${topic.symbols.join(", ")} 종목은 기업의 사업 영역을 더 살펴볼 수 있는 후보입니다. 같은 문서 묶음에 포함되었다는 이유로 개별 기업의 실적이나 주가 영향을 판단하지 않습니다.`,
+            ]),
+            `${date} 기준 시연 화면에는 ${articleIds.length}개 문서가 포함되어 있습니다. 합성 편집량은 ${metrics.edits.toLocaleString("ko-KR")}회로, 기준량 ${metrics.baseline.toLocaleString("ko-KR")}회와 함께 문서 활동을 비교하는 예시로 표시됩니다. 이 수치와 문서 연결은 실제 사건 관측이나 자동 분석 결과가 아닙니다.`,
+          ].join("\n\n"),
           evidenceIds: articleIds,
         },
       ],

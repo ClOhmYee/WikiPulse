@@ -82,15 +82,16 @@ test("nullable and omitted DTO fields retain zero and never invent charts or ver
     "data-status",
     "VERIFYING",
   );
+  await expect(page.locator(".issue-summary p")).toHaveText(
+    "이 시점의 요약이 제공되지 않았습니다.",
+  );
+  await page.getByRole("tab", { name: "탐색", exact: true }).click();
   await expect(page.locator(".dt-network-detail")).toContainText("0회");
   await expect(page.locator(".dt-network-detail")).toContainText("미제공");
   await expect(page.locator(".dt-network-detail")).toContainText(
     "입력을 기다리는 중",
   );
   await expect(page.getByText("시계열 미제공", { exact: true })).toBeVisible();
-  await expect(page.locator(".dt-lede")).toContainText(
-    "제공된 요약이 없습니다",
-  );
 });
 
 test("API detail and related stock paths use numeric IDs without loading mock bundles", async ({

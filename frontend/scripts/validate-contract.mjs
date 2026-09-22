@@ -1,8 +1,10 @@
 import assert from "node:assert/strict";
 import { mockClient } from "../src/data/mock/client.js";
+import { issueDetail } from "../src/data/api/adapters.js";
 import { loadSchema } from "./contract-schema.mjs";
 
-// Validates the same eight raw DTOs used by HTTP and mock. No live server is called.
+// Validates implemented wire DTOs and the optional frontend report extension
+// separately. Report generation is not part of the implemented Spring contract.
 const { spec, validate } = loadSchema("../docs/openapi.yaml");
 const operations = Object.values(spec.paths).flatMap((path) =>
   Object.values(path).map((operation) => operation.operationId),
@@ -37,8 +39,16 @@ for (const [path, item] of Object.entries(spec.paths)) {
   }
 }
 let checked = 0;
+let frontendReportsChecked = 0;
 const check = (schema, body) => {
-  validate(schema, body);
+  let wireBody = body;
+  if (schema === "IssueDetailResponse" && "report" in body.data) {
+    assert(issueDetail(body.data), "Invalid frontend report extension");
+    frontendReportsChecked += 1;
+    wireBody = structuredClone(body);
+    delete wireBody.data.report;
+  }
+  validate(schema, wireBody);
   checked += 1;
   return body;
 };
@@ -139,6 +149,7 @@ console.log(
       routes: operations.length,
       schemas: Object.keys(spec.components.schemas).length,
       responses: checked,
+      frontendReportsChecked,
       issueCards: issues.length,
       stockCards: stocks.length,
       liveBackendCalled: false,
