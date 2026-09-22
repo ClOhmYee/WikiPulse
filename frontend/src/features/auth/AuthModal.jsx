@@ -11,6 +11,7 @@ export default function AuthModal({ initialMode = "login", onClose, onLogin }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
+  const [email, setEmail] = useState("");
   const signup = mode === "signup";
   useEffect(() => {
     const element = dialog.current;
@@ -43,6 +44,11 @@ export default function AuthModal({ initialMode = "login", onClose, onLogin }) {
       setError("닉네임을 입력해 주세요.");
       return;
     }
+    if (new window.TextEncoder().encode(values.password).length > 72) {
+      setError("비밀번호는 UTF-8 기준 72바이트 이내로 입력해 주세요.");
+      return;
+    }
+    setEmail(values.email.trim());
     setError("");
     setMessage("");
     setBusy(true);
@@ -143,6 +149,7 @@ export default function AuthModal({ initialMode = "login", onClose, onLogin }) {
             이메일
             <input
               ref={signup ? undefined : firstInput}
+              defaultValue={email}
               name="email"
               type="email"
               autoComplete="email"

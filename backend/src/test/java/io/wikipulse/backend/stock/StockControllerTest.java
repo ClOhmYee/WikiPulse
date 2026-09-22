@@ -26,6 +26,7 @@ import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
+@org.springframework.context.annotation.Import(io.wikipulse.backend.account.SecurityConfig.class)
 @WebMvcTest(StockController.class)
 class StockControllerTest {
 

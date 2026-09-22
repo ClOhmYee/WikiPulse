@@ -20,6 +20,7 @@ import org.springframework.test.web.servlet.MockMvc;
  * `/api/v1/nonexistent` 가 500 INTERNAL 이었다). 오타 하나가 서버 오류로 보이면 FE 는
  * 백엔드 로그부터 뒤진다 — 클라이언트 잘못과 서버 잘못은 갈라 줘야 디버깅 방향이 선다.
  */
+@org.springframework.context.annotation.Import(io.wikipulse.backend.account.SecurityConfig.class)
 @WebMvcTest(IssueController.class)
 class GlobalExceptionHandlerTest {
 
