@@ -112,6 +112,7 @@ def run_once(
     conn, *, source: str = "live", cache_dir: Path, out_root: Path,
     wiki: str = "enwiki", now: datetime | None = None,
     max_hours: int = DEFAULT_MAX_HOURS, dry_run: bool = False,
+    min_views: int | None = None,
 ) -> CycleSummary:
     """한 주기. 커넥션은 호출자가 연다 — 루프에서 재사용한다."""
     started = time.monotonic()
@@ -128,7 +129,7 @@ def run_once(
             continue
         status = ingest_hour(ts_hour, wiki, cache_dir, out_root,
                              titles=titles, shard_records=500_000,
-                             dry_run=False, conn=conn)
+                             dry_run=False, conn=conn, min_views=min_views)
         if status == "pending":
             # 아직 안 나왔다. 다음 주기가 다시 본다 — 실패가 아니다.
             summary.hours_pending += 1
@@ -170,6 +171,15 @@ def build_arg_parser() -> argparse.ArgumentParser:
                    help="--loop 일 때 주기(초). 기본 15분 — 파일이 매시 한 번 나오지만 "
                         "지연이 125~153분으로 흔들려서 더 자주 본다")
     p.add_argument("--dry-run", action="store_true", help="받을 것만 보여주고 아무것도 안 쓴다")
+    # 🔴 **기본 꺼짐.** 켜면 그 시간 상위 문서를 후보와 무관하게 적재한다
+    #    (WP-212) — `page_baseline` 을 만들 이력이 그래야 쌓인다.
+    #    ⚠️ 행이 는다: 하한 50 이면 시간당 약 17,400행, 28일 약 1,170만 행 (실측).
+    #    ⚠️ 덤프를 한 번 더 읽어 약 10초가 더 걸린다.
+    p.add_argument("--min-views", type=int,
+                   default=(int(os.environ["PAGEVIEW_MIN_VIEWS"])
+                            if os.environ.get("PAGEVIEW_MIN_VIEWS") else None),
+                   help="이 조회수 이상인 문서는 후보가 아니어도 적재한다 "
+                        "(WP-212, 기본 꺼짐)")
     return p
 
 
@@ -194,7 +204,8 @@ def main(argv: list[str] | None = None) -> int:
             try:
                 summary = run_once(conn, source=args.source, cache_dir=cache_dir,
                                    out_root=out_root, wiki=args.wiki,
-                                   max_hours=args.max_hours, dry_run=args.dry_run)
+                                   max_hours=args.max_hours, dry_run=args.dry_run,
+                                   min_views=args.min_views)
                 log.info("%s%s", "[dry-run] " if args.dry_run else "", summary.format())
             except Exception:
                 # 🔴 한 주기 실패가 다음 주기를 막지 않는다. 네트워크·404·DB 오류는
