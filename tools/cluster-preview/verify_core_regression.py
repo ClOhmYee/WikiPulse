@@ -1,18 +1,16 @@
-"""전체 1,104 스냅샷 CORE 회귀 — 프로덕션 코드로 PoC 5 분포가 재현되는지 (WP-186).
+"""전체 1,104 스냅샷 회귀 — **production 경로만** 써서 PoC 5 결과를 재현하는지 본다.
 
-무엇을 검사하나
-    `cluster.snapshot.build_snapshot`(프로덕션 함수)을 22,080 root 전부에 돌려
-    PoC 5 가 오프라인으로 낸 분포와 **정확히** 같은지 본다. 다르면 0 이 아닌 코드로 끝난다.
+검사하는 것은 두 단계 전부다 (WP-186).
 
-🔴 **root 집합은 `baseline.cluster_member` 에서 읽는다. `spike` 가 아니다.**
-    preview DB 의 `spike` 는 스냅샷당 51~393행인데 `issue_cluster` 는 정확히 20행이고,
-    한 문서가 하루에 두 번 root 가 되지 않는다(2026-09-22 실측). 두 테이블이 **서로 다른
-    실행의 산출물**이라는 뜻이다 — 지금 `cluster.driver` 에는 그런 상한·중복 제거가 없다.
-    PoC 5 가 측정한 것은 전자이므로 회귀도 전자로 잰다. root 선택 규칙은 이번 범위 밖이다
-    (detector·root selection 수정 금지).
+    1. ROOT SELECTION   `cluster.root_selection.load_selection` — spike → 시점당 20 root
+    2. CORE GROUPING    `cluster.driver.build_snapshot_at` → `cluster.snapshot.build_snapshot`
+                        → `cluster.rootgraph.core`
 
-    즉 이 스크립트가 보증하는 것은 **"같은 root 를 주면 같은 component 가 나온다"** 이지
-    "driver 를 그대로 돌리면 19,432 가 나온다" 가 아니다.
+🔴 **PoC 산출물을 결과로 읽어 통과시키지 않는다.** root 는 `spike` 에서 production
+selector 가 고르고, 클러스터는 production driver 가 만든다. PoC frozen root set 은
+**selector 가 같은 root 를 골랐는지 대조하는 oracle 로만** 쓴다.
+
+어긋나면 종료 코드가 0 이 아니다.
 
 사용
     python tools/cluster-preview/verify_core_regression.py
@@ -23,15 +21,20 @@ from __future__ import annotations
 import argparse
 import os
 import sys
-from collections import Counter
+from collections import Counter, defaultdict
+from datetime import timedelta
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)),
                                 "..", "..", "data-pipeline"))
 
 import psycopg                                             # noqa: E402
 
-from cluster import asof_links                             # noqa: E402
-from cluster.snapshot import Seed, build_snapshot          # noqa: E402
+from cluster.driver import build_snapshot_at, load_snapshot_times   # noqa: E402
+from cluster.root_selection import (                       # noqa: E402
+    DEFAULT_COOLDOWN_HOURS,
+    RootSelectionConfig,
+    load_selection,
+)
 
 DEFAULT_DSN = ""
     "PREVIEW_DSN",
@@ -67,15 +70,11 @@ CASES = [
      ["Clue (film)", "The Rocky Horror Picture Show"]),
 ]
 
-ROOTS_SQL = """
-SELECT ic.snapshot_ts, cm.page_id, w.title, cm.views, cm.spike_score,
-       cm.window_start, cm.window_end, cm.edit_count, cm.completeness, s.max_rev_id
+#: oracle — PoC 5 가 실제로 쓴 root. 비교 대상일 뿐 입력이 아니다.
+FROZEN_ROOTS_SQL = """
+SELECT ic.snapshot_ts, cm.page_id
   FROM baseline.issue_cluster ic
   JOIN baseline.cluster_member cm ON cm.cluster_id = ic.id AND cm.spike_score IS NOT NULL
-  JOIN wiki_page w ON w.id = cm.page_id
-  JOIN spike s ON s.page_id = cm.page_id AND s.detected_at = ic.snapshot_ts
-               AND s.source = ic.source
- ORDER BY ic.snapshot_ts, cm.spike_score DESC, cm.page_id
 """
 
 
@@ -91,50 +90,74 @@ def bucket(n: int) -> str:
     return "13+"
 
 
+def check_root_selection(conn, source: str) -> tuple[bool, set]:
+    """B. production selector 가 PoC frozen root set 과 같은 root 를 고르는가."""
+    config = RootSelectionConfig()
+    print(f"ROOT SELECTION  {config.describe()}")
+    selection = load_selection(conn, source, config)
+    frozen = {(ts, pid) for ts, pid in conn.execute(FROZEN_ROOTS_SQL)}
+
+    per_snapshot = Counter(ts for ts, _ in selection)
+    wrong_count = {ts: n for ts, n in per_snapshot.items() if n != 20}
+
+    last_seen: dict[int, list] = defaultdict(list)
+    for ts, pid in sorted(selection):
+        last_seen[pid].append(ts)
+    window = timedelta(hours=DEFAULT_COOLDOWN_HOURS)
+    violations = sum(1 for picks in last_seen.values()
+                     for a, b in zip(picks, picks[1:]) if b - a < window)
+
+    only_prod, only_poc = selection - frozen, frozen - selection
+    ok = (selection == frozen and not wrong_count and not violations)
+    print(f"  PoC frozen roots         : {len(frozen):,}")
+    print(f"  production selected roots: {len(selection):,}")
+    print(f"  exact (snapshot_ts, page_id) match: {selection == frozen}")
+    print(f"  mismatch production-only : {len(only_prod):,}")
+    print(f"  mismatch PoC-only        : {len(only_poc):,}")
+    print(f"  스냅샷당 20 위반          : {len(wrong_count):,}")
+    print(f"  24h 쿨다운 위반           : {violations:,}")
+    for ts, pid in sorted(only_prod)[:5]:
+        print(f"    prod-only  {ts} page {pid}")
+    for ts, pid in sorted(only_poc)[:5]:
+        print(f"    PoC-only   {ts} page {pid}")
+    return ok, selection
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--dsn", default=DEFAULT_DSN)
+    ap.add_argument("--source", default="replay")
     args = ap.parse_args()
 
     conn = psycopg.connect(args.dsn)
-    by_ts: dict[object, list[Seed]] = {}
-    for (ts, page_id, title, views, spike_score, window_start, window_end,
-         edit_count, completeness, max_rev_id) in conn.execute(ROOTS_SQL):
-        by_ts.setdefault(ts, []).append(Seed(
-            page_id=page_id, wiki="enwiki", title=title,
-            event_date=window_start.date(), spike_score=float(spike_score),
-            window_start=window_start, window_end=window_end,
-            edit_count=edit_count, views=views, completeness=completeness,
-            max_rev_id=max_rev_id))
-    roots = sum(len(v) for v in by_ts.values())
-    print(f"입력  스냅샷 {len(by_ts):,} · root {roots:,}")
+    roots_ok, selection = check_root_selection(conn, args.source)
 
-    all_revs = [s.max_rev_id for v in by_ts.values() for s in v if s.max_rev_id]
-    cache = asof_links.load_cached(conn, all_revs)
-    print(f"as-of 링크 캐시 보유 {len(cache):,}/{len(set(all_revs)):,} "
-          f"(미보유 root 는 singleton 이 된다)")
-    conn.close()
-
+    # ---- production driver 로 전 시점을 생산한다 (저장은 안 한다)
+    times = load_snapshot_times(conn, args.source)
+    print(f"\nCORE GROUPING   스냅샷 {len(times):,}")
     sizes: Counter[int] = Counter()
-    components = 0
+    roots = components = 0
     found: dict[str, tuple[int, set[str]]] = {}
-    for ts, seeds in by_ts.items():
-        root_links = {s.page_id: cache[s.max_rev_id]
-                      for s in seeds if s.max_rev_id in cache}
-        snapshot = build_snapshot(ts, "replay", seeds, root_links=root_links)
+    titles_by_id = {pid: title for pid, title in
+                    conn.execute("SELECT id, title FROM wiki_page")}
+    for i, ts in enumerate(times):
+        snapshot = build_snapshot_at(conn, ts, args.source, selection=selection)
         key = ts.strftime("%Y-%m-%d %H:%M")
-        titles = {s.page_id: s.title for s in seeds}
         for cluster in snapshot.clusters:
-            members = {titles[m.page_id] for m in cluster.members}
+            members = {titles_by_id[m.page_id] for m in cluster.members}
             sizes[len(members)] += 1
             components += 1
+            roots += len(members)
             for _name, case_ts, anchor, _n, _must in CASES:
                 if key == case_ts and anchor in members:
                     found[anchor] = (len(members), members)
+        if i and i % 200 == 0:
+            print(f"  {i}/{len(times)}", file=sys.stderr, flush=True)
+    conn.close()
 
     buckets = Counter(bucket(n) for n, c in sizes.items() for _ in range(c))
     actual = {
-        "snapshots": len(by_ts),
+        "snapshots": len(times),
         "roots": roots,
         "components": components,
         "buckets": {k: buckets.get(k, 0) for k in EXPECTED["buckets"]},
@@ -144,7 +167,7 @@ def main() -> int:
 
     print("\n분포 비교 (PoC 5 full-1104 대비)")
     print(f"{'항목':<16}{'기대':>10}{'실측':>10}   판정")
-    ok = True
+    ok = roots_ok
     flat_expected = {**{k: v for k, v in EXPECTED.items() if k != "buckets"},
                      **{f"size {k}": v for k, v in EXPECTED["buckets"].items()}}
     flat_actual = {**{k: v for k, v in actual.items() if k != "buckets"},
@@ -170,7 +193,7 @@ def main() -> int:
               + (f"  기대 {size}" if got_size != size else "")
               + (f"  빠진 멤버 {missing}" if missing else ""))
 
-    print("\n" + ("회귀 없음 — PoC 5 분포와 정확히 일치한다." if ok
+    print("\n" + ("회귀 없음 — production 경로가 PoC 5 결과를 그대로 낸다." if ok
                   else "🔴 회귀가 있다. 위 불일치 항목을 본다."))
     return 0 if ok else 1
 

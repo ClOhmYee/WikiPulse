@@ -11,7 +11,8 @@ PostgreSQL 에 저장한다. 버블맵 조회 API(WP-74)가 이 산출물을 읽
 
 | 파일 | 역할 | 테스트 |
 | --- | --- | --- |
-| `rootgraph.py` | **CORE 정본** — root 를 사건 component 로 묶는 순수 그래프 로직 | `tests/test_rootgraph.py` |
+| `root_selection.py` | **정본 1단계** — spike 후보 중 클러스터링에 넣을 root 선택 | `tests/test_root_selection.py` |
+| `rootgraph.py` | **정본 2단계(CORE)** — root 를 사건 component 로 묶는 순수 그래프 | `tests/test_rootgraph.py` |
 | `asof_links.py` | as-of revision 링크 추출·정규화·수집 + V11 캐시 | `tests/test_asof_links.py` |
 | `snapshot.py` | 순수 생산 로직 — CORE 결과 → Cluster/Member, legacy 게이트·간선·issue_key | `tests/test_snapshot_core.py` · `tests/test_snapshot.py` |
 | `score.py` | 공통 sizeScore 0~1 + `SCORE_VERSION` | (snapshot 테스트에 포함) |
@@ -22,16 +23,21 @@ PostgreSQL 에 저장한다. 버블맵 조회 API(WP-74)가 이 산출물을 읽
 pytest cluster/tests        # Docker 불필요(pgserver 번들 PostgreSQL)
 ```
 
-## 클러스터링 정본 — CORE (WP-186, 2026-09-22 확정)
+## 클러스터링 정본 (WP-186, 2026-09-22 확정) — **두 단계**
 
 ```
-같은 스냅샷의 spike root
-+ strict historical as-of direct Wikipedia link   (한 방향이라도)
-→ connected component
-→ sym focus τ=0.005
-→ D2 directional bridge 억제
-→ component 자체가 issue cluster, 그 안의 root 가 cluster_member
+spike 후보
+  ↓  1. ROOT SELECTION   root_selection.py   views DESC · 시점당 20 · 24h 쿨다운
+20 roots / snapshot
+  ↓  2. CORE GROUPING    rootgraph.py
+     strict historical as-of direct Wikipedia link (한 방향이라도)
+     → connected component → sym focus τ=0.005 → D2 directional bridge 억제
+component 자체가 issue cluster, 그 안의 root 가 cluster_member (root-only)
 ```
+
+🔴 **두 단계가 함께 정본이다.** ROOT SELECTION 없이 `spike` 전량을 CORE 에 넣으면
+2026-09-22 실측으로 component 146,988 · **max 63 · 20+ giant 59** 가 나온다.
+`giant 0` 은 두 단계가 함께 만드는 성질이다. 1단계 규칙은 `root_selection.py` 참고.
 
 고정 2개월 replay 실측 (`tools/cluster-preview/verify_core_regression.py` 가 매번 대조한다):
 
@@ -67,17 +73,14 @@ python -m cluster.driver --dsn ... --source replay --fetch-links --link-workers 
 ⚠️ 리플레이 한 판이 root 수만큼 요청을 낸다(실측 22,080). 그래서 `--fetch-links` 가
 **기본이 아니다** — 실수로 켜지면 위키미디어를 그만큼 때린다.
 
-### 🔴 root 집합이 두 벌이다 (2026-09-22 발견, 미해결)
+### ~~root 집합이 두 벌이다~~ → 해소 (2026-09-22)
 
-위 19,432 는 **`issue_cluster` 에 있던 22,080 root**(스냅샷당 정확히 20, 한 문서가 하루에
-두 번 root 가 되지 않음) 기준이다. 그런데 같은 DB 의 `spike` 는 스냅샷당 51~393행
-(전체 162,775)이고, `cluster/driver.py` 에는 그 상한도 일별 중복 제거도 **없다.**
-두 테이블이 서로 다른 실행의 산출물이라는 뜻이다.
-
-현재 `spike` 전량에 CORE 를 돌리면(링크 커버리지 13.5%인 상태에서도)
-**component 146,988 · max 63 · 20+ giant 59** 가 나온다. 즉 **giant 0 은 root 선택
-규칙에 딸린 성질이지 CORE 만의 성질이 아니다.** 프로덕션 root 선택을 확정하기 전까지
-이 수치를 MVP 분포로 인용하면 안 된다.
+~~`issue_cluster` 의 22,080 root 와 `spike` 의 162,775 행이 서로 다른 실행의 산출물이고,
+driver 에 상한도 중복 제거도 없다~~ → **ROOT SELECTION 이 그 자리다.** WP-137 이
+만들어 둔 `seed_selection.py` 가 바로 22,080 을 만든 코드였고, 그걸 `root_selection.py`
+로 가져와 기본 경로에 넣었다. 같은 DB 의 `spike` 에서 production selector 를 돌리면
+`(snapshot_ts, page_id)` 22,080 쌍이 PoC frozen set 과 **정확히 일치**한다
+(prod-only 0 · PoC-only 0 · 스냅샷당 20 위반 0 · 24h 쿨다운 위반 0).
 
 ## LEGACY 멤버 확장 게이트 — 기본 OFF (제품 계약: WP-51·77, 명세 §3.2 4번·§11)
 
@@ -130,7 +133,9 @@ python -m cluster.driver --dsn ... --source replay --fetch-links --link-workers 
 ```bash
 python -m cluster.driver --dsn "$DATABASE_URL" --source replay
 python -m cluster.driver --dsn "$DATABASE_URL" --source live
-python -m cluster.driver --dsn ... --source replay --no-root-grouping   # CORE 끔(비상용)
+python -m cluster.driver --dsn ... --source replay --no-root-grouping   # 2단계 끔(비상용)
+python -m cluster.driver --dsn ... --source replay     --root-limit-per-snapshot 20 --root-cooldown-hours 24   # 1단계 기본값(명시)
+python -m cluster.driver --dsn ... --source replay --root-limit-per-snapshot 0     --root-cooldown-hours 0                                  # 1단계 끔 — 🔴 giant 가 생긴다
 python -m cluster.driver --dsn ... --source replay --expansion     --clickstream-root ./data/clickstream --creation-index ./data/page-creation/...
 python -m cluster.driver --dsn ... --source replay --snapshot-ts 2024-10-07T14:00:00Z
 python -m cluster.driver --dsn ... --source live --dry-run

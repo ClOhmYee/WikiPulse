@@ -17,6 +17,7 @@ import pytest
 pytest.importorskip("psycopg")
 
 from cluster.driver import load_root_links, load_seeds_from_spike, run
+from cluster.root_selection import RootSelectionConfig, load_selection
 
 UTC = timezone.utc
 W1 = datetime(2026, 8, 25, 19, tzinfo=UTC)
@@ -184,6 +185,57 @@ def test_rerun_is_idempotent(conn, dolly):
 def test_no_root_grouping_falls_back_to_one_cluster_per_root(conn, dolly):
     run(conn, "replay", snapshot_times=[SNAP1], root_grouping=False)
     assert _one(conn, "SELECT count(*) FROM issue_cluster")[0] == 4
+
+
+# --- ROOT SELECTION 배선 -------------------------------------------------------
+
+def test_selection_filters_seeds_before_grouping(conn, dolly):
+    """production 경로는 spike 전량이 아니라 선택된 root 만 CORE 에 넣는다."""
+    seeds = load_seeds_from_spike(conn, SNAP1, "replay")
+    assert len(seeds) == 4
+    only_two = {(SNAP1, dolly["Dolly Parton"]), (SNAP1, dolly["Dollywood"])}
+    assert len(load_seeds_from_spike(conn, SNAP1, "replay", only_two)) == 2
+
+
+def test_selection_none_and_empty_set_differ(conn, dolly):
+    """🔴 None(컷 없음)과 빈 집합(아무것도 안 고름)이 섞이면 필터가 무력화된다."""
+    assert len(load_seeds_from_spike(conn, SNAP1, "replay", None)) == 4
+    assert len(load_seeds_from_spike(conn, SNAP1, "replay", set())) == 0
+
+
+def test_limit_and_cooldown_pick_by_views_across_snapshots(conn):
+    """views DESC 상한 + 24h 쿨다운이 DB 를 통해 실제로 걸린다."""
+    a, b, c = (_page(conn, "Alpha"), _page(conn, "Bravo"), _page(conn, "Charlie"))
+    # 첫 시점: Alpha(views 900) 가 뽑히고 Bravo(800) 는 상한에 밀린다.
+    _spike(conn, a, spike_score=1.0, views=900, max_rev_id=5001)
+    _spike(conn, b, spike_score=1.0, views=800, max_rev_id=5002)
+    # 다음 시점(+1h): Alpha 는 쿨다운 → 그 칸을 Charlie 가 채운다.
+    later = W1 + timedelta(hours=1)
+    _spike(conn, a, spike_score=1.0, views=950, max_rev_id=5003, window_start=later)
+    _spike(conn, c, spike_score=1.0, views=700, max_rev_id=5004, window_start=later)
+
+    selection = load_selection(
+        conn, "replay", RootSelectionConfig(limit_per_snapshot=1, cooldown_hours=24))
+    assert selection == {(SNAP1, a), (later + timedelta(hours=1), c)}
+
+
+def test_selection_carries_cooldown_across_incremental_runs(conn):
+    """🔴 LIVE 는 한 시점씩 돈다 — 앞 구간에서 뽑힌 문서가 쿨다운을 이어받아야 한다."""
+    a, b = _page(conn, "Alpha"), _page(conn, "Bravo")
+    _spike(conn, a, spike_score=1.0, views=900, max_rev_id=5101)
+    run(conn, "replay", snapshot_times=[SNAP1],
+        selection=load_selection(conn, "replay",
+                                 RootSelectionConfig(limit_per_snapshot=1)))
+    assert _one(conn, "SELECT count(*) FROM issue_cluster")[0] == 1
+
+    later = W1 + timedelta(hours=2)
+    _spike(conn, a, spike_score=1.0, views=990, max_rev_id=5102, window_start=later)
+    _spike(conn, b, spike_score=1.0, views=100, max_rev_id=5103, window_start=later)
+    selection = load_selection(
+        conn, "replay", RootSelectionConfig(limit_per_snapshot=1),
+        since=later + timedelta(hours=1))
+    # Alpha 는 2시간 전에 이미 뽑혔다 → 건너뛰고 Bravo 가 그 칸을 채운다.
+    assert selection == {(later + timedelta(hours=1), b)}
 
 
 def test_live_and_replay_share_the_same_contract(conn):

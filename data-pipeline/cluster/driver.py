@@ -97,6 +97,12 @@ from batch.page_edit_daily import coverage_span, edit_days_for, sum_days
 from spike.spike_sink import SPIKE_SOURCES
 
 from . import asof_links
+from .root_selection import (
+    DEFAULT_COOLDOWN_HOURS,
+    DEFAULT_LIMIT_PER_SNAPSHOT,
+    RootSelectionConfig,
+    load_selection,
+)
 from .snapshot import (
     DEFAULT_CREATION_WINDOW_DAYS,
     DEFAULT_RESURGENCE_MIN_EDITS,
@@ -178,6 +184,16 @@ SELECT DISTINCT p.wiki, p.title
    AND s.detected_at = ANY(%s)
 """
 
+#: 위와 같은데 `(detected_at, page_id)` 를 함께 준다 — ROOT SELECTION 이 그 쌍으로
+#: 선택 여부를 판단한다. DISTINCT 를 뺀 이유는 쌍이 키라서다.
+SELECT_SEED_TITLES_WITH_ID_SQL = """
+SELECT p.wiki, p.title, s.detected_at, s.page_id
+  FROM spike s
+  JOIN wiki_page p ON p.id = s.page_id
+ WHERE s.source = %s
+   AND s.detected_at = ANY(%s)
+"""
+
 #: 이웃 제목 → page_id. `cluster_member.page_id` 가 `wiki_page` 를 참조하므로
 #: 멤버가 되려면 행이 있어야 한다. 🔴 N+1 금지 — 후보를 한 번에 넘긴다.
 SELECT_PAGES_BY_TITLE_SQL = """
@@ -248,7 +264,10 @@ def require_spike_source(source: str) -> str:
     return source
 
 
-def load_seeds_from_spike(conn, snapshot_ts: datetime, source: str) -> list[Seed]:
+def load_seeds_from_spike(
+    conn, snapshot_ts: datetime, source: str,
+    selection: set[tuple[datetime, int]] | None = None,
+) -> list[Seed]:
     """`spike` + `wiki_page` 를 조인해 **이 출처·이 시점**의 씨드를 만든다.
 
     🔴 **`source` 는 필수다** (~~아예 받지 않는다, -99~~ → -102). 같은 `detected_at` 에
@@ -265,6 +284,12 @@ def load_seeds_from_spike(conn, snapshot_ts: datetime, source: str) -> list[Seed
     with conn.cursor() as cur:
         cur.execute(SELECT_SEEDS_SQL, (source, snapshot_ts))
         rows = cur.fetchall()
+
+    # ROOT SELECTION (WP-137 → -186 에서 MVP 정본 1단계). None 이면 컷이 꺼진
+    # 것이라 전부 통과한다 — 🔴 빈 집합(아무것도 안 고름)과 구분해야 한다.
+    # `not selection` 으로 쓰면 "컷을 켰는데 이 시점에 0개" 가 "컷 없음" 으로 뒤집힌다.
+    if selection is not None:
+        rows = [r for r in rows if (snapshot_ts, r[1]) in selection]
 
     seeds: list[Seed] = []
     for (_id, page_id, wiki, title, window_start, detected_at,
@@ -331,17 +356,29 @@ def load_prior_first_detected(conn, source: str) -> dict[str, datetime]:
 
 
 def load_seed_titles(
-    conn, source: str, snapshot_times: Sequence[datetime]
+    conn, source: str, snapshot_times: Sequence[datetime],
+    selection: set[tuple[datetime, int]] | None = None,
 ) -> dict[str, set[str]]:
-    """여러 시점의 씨드 제목을 wiki 별로 모은다. Clickstream 1회 순회용 입력."""
+    """여러 시점의 씨드 제목을 wiki 별로 모은다. Clickstream 1회 순회용 입력.
+
+    `selection` 을 주면 ROOT SELECTION 을 통과한 root 의 제목만 모은다 — 컷이 켜졌는데
+    여기서 안 거르면 **컷에서 빠진 문서의 이웃까지** 덤프에서 찾아 두고 쓰지 않는다
+    (낭비이고, 통계가 실제 root 수와 어긋나 보인다).
+    """
     require_spike_source(source)
     if not snapshot_times:
         return {}
     by_wiki: dict[str, set[str]] = {}
     with conn.cursor() as cur:
-        cur.execute(SELECT_SEED_TITLES_SQL, (source, list(snapshot_times)))
-        for wiki, title in cur.fetchall():
-            by_wiki.setdefault(wiki, set()).add(title)
+        if selection is None:
+            cur.execute(SELECT_SEED_TITLES_SQL, (source, list(snapshot_times)))
+            for wiki, title in cur.fetchall():
+                by_wiki.setdefault(wiki, set()).add(title)
+        else:
+            cur.execute(SELECT_SEED_TITLES_WITH_ID_SQL, (source, list(snapshot_times)))
+            for wiki, title, detected_at, page_id in cur.fetchall():
+                if (detected_at, page_id) in selection:
+                    by_wiki.setdefault(wiki, set()).add(title)
     return by_wiki
 
 
@@ -677,10 +714,14 @@ class MonthlyNeighborSource:
         """`clickstream_ingest` 출력 규칙: `{out}/{wiki}/{month}`."""
         return self.shards_root / wiki / month
 
-    def prepare(self, conn, source: str, snapshot_times: Sequence[datetime]) -> None:
-        """필요한 (wiki, 월) 을 한 번씩 읽고 생성 시각까지 붙인다."""
+    def prepare(self, conn, source: str, snapshot_times: Sequence[datetime],
+                selection: set[tuple[datetime, int]] | None = None) -> None:
+        """필요한 (wiki, 월) 을 한 번씩 읽고 생성 시각까지 붙인다.
+
+        `selection` 은 ROOT SELECTION 이 고른 root 다. 주면 그 root 의 이웃만 찾는다.
+        """
         # 어떤 wiki 가 있는지 먼저 안다 — 근거 월이 wiki 마다 다를 수 있다.
-        wikis = sorted(load_seed_titles(conn, source, list(snapshot_times)))
+        wikis = sorted(load_seed_titles(conn, source, list(snapshot_times), selection))
 
         # 🔴 **훑기 전에 전부 고른다.** 뒤에서 고르면 앞 월을 수천만 행 다 읽고 나서
         #    마지막 월에서 죽는다 — 실제로 61일 구간 끝의 경계 스냅샷 1개 때문에
@@ -693,7 +734,7 @@ class MonthlyNeighborSource:
 
         all_titles: set[str] = set()
         for (wiki, month), times in sorted(groups.items()):
-            titles = load_seed_titles(conn, source, times).get(wiki, set())
+            titles = load_seed_titles(conn, source, times, selection).get(wiki, set())
             found = neighbors_for(read_shards(self.shards_dir(wiki, month)), titles)
             month_refs: dict[str, list[NeighborRef]] = {}
             for seed_title, refs in found.items():
@@ -852,6 +893,7 @@ def build_snapshot_at(
     *,
     neighbors: dict[int, Sequence[Neighbor]] | None = None,
     neighbor_source=None,
+    selection: set[tuple[datetime, int]] | None = None,
     root_grouping: bool = True,
     expansion: bool = False,
     link_fetcher=None,
@@ -875,7 +917,7 @@ def build_snapshot_at(
     읽으면 같은 질의가 두 번 나가고, 두 결과가 갈릴 여지가 생긴다.
     """
     require_spike_source(source)
-    seeds = load_seeds_from_spike(conn, snapshot_ts, source)
+    seeds = load_seeds_from_spike(conn, snapshot_ts, source, selection)
     if expansion and neighbors is None and neighbor_source is not None:
         neighbors = neighbor_source(conn, snapshot_ts, seeds)
     root_links = (load_root_links(conn, seeds, fetcher=link_fetcher, log=log)
@@ -895,6 +937,7 @@ def run(
     snapshot_times: Sequence[datetime],
     dry_run: bool = False,
     neighbor_source=None,
+    selection: set[tuple[datetime, int]] | None = None,
     root_grouping: bool = True,
     expansion: bool = False,
     link_fetcher=None,
@@ -915,12 +958,12 @@ def run(
     require_spike_source(source)
     if expansion and neighbor_source is not None:
         # 월 덤프 순회는 여기서 한 번에 끝낸다 — 시점 루프 안에서 하면 월당 수천 번이다.
-        neighbor_source.prepare(conn, source, snapshot_times)
+        neighbor_source.prepare(conn, source, snapshot_times, selection)
     produced: list[Snapshot] = []
     for snapshot_ts in snapshot_times:
         snapshot = build_snapshot_at(
             conn, snapshot_ts, source, neighbor_source=neighbor_source,
-            root_grouping=root_grouping, expansion=expansion,
+            selection=selection, root_grouping=root_grouping, expansion=expansion,
             link_fetcher=link_fetcher, log=log)
         if not dry_run:
             # 멱등은 writer 계약 그대로 — (source, snapshot_ts) 단위 지우고 다시 넣는다.
@@ -957,6 +1000,17 @@ def build_arg_parser() -> argparse.ArgumentParser:
     p.add_argument("--since", type=_parse_ts, help="시점 범위 시작(포함)")
     p.add_argument("--until", type=_parse_ts, help="시점 범위 끝(포함)")
     p.add_argument("--dry-run", action="store_true", help="저장 없이 생산만")
+
+    # --- ROOT SELECTION (WP-137 → -186 에서 MVP 정본 1단계) -----------
+    # 🔴 **기본이 켜짐이다.** spike 전량을 클러스터링에 넣으면 CORE 가 giant 를 만든다
+    #    (2026-09-22 실측: 162,775 root → max 63 · 20+ giant 59).
+    p.add_argument("--root-limit-per-snapshot", type=int,
+                   default=DEFAULT_LIMIT_PER_SNAPSHOT,
+                   help=f"한 시점에 root 로 쓸 spike 수 상한, views DESC "
+                        f"(기본 {DEFAULT_LIMIT_PER_SNAPSHOT}). 0 이면 제한 없음")
+    p.add_argument("--root-cooldown-hours", type=int, default=DEFAULT_COOLDOWN_HOURS,
+                   help=f"같은 문서를 다시 root 로 고르기까지 비울 시간(되돌아보는 창, "
+                        f"기본 {DEFAULT_COOLDOWN_HOURS}). 0 이면 쿨다운 없음")
 
     # --- CORE (WP-186, MVP 정본) -------------------------------------
     # 🔴 **기본이 켜짐이다.** 이게 지금 제품 규칙이다.
@@ -1035,6 +1089,16 @@ def main(argv: list[str] | None = None) -> int:
         print(f"시점 {len(times)}개 ({times[0].isoformat()} ~ {times[-1].isoformat()}) "
               f"source={args.source}{' [dry-run]' if args.dry_run else ''}")
 
+        cut = RootSelectionConfig(
+            limit_per_snapshot=(args.root_limit_per_snapshot
+                                if args.root_limit_per_snapshot else None),
+            cooldown_hours=args.root_cooldown_hours)
+        selection = load_selection(conn, args.source, cut, args.since, args.until)
+        if selection is None:
+            print("ROOT SELECTION: 끔 — spike 전량이 클러스터링에 들어간다")
+        else:
+            print(f"ROOT SELECTION: {cut.describe()} → root {len(selection):,}개")
+
         link_fetcher = None
         if args.fetch_links:
             from batch.ingest import user_agent
@@ -1059,7 +1123,7 @@ def main(argv: list[str] | None = None) -> int:
 
         snapshots = run(conn, args.source, snapshot_times=times,
                         dry_run=args.dry_run, neighbor_source=neighbor_source,
-                        root_grouping=args.root_grouping, expansion=args.expansion,
+                        selection=selection, root_grouping=args.root_grouping, expansion=args.expansion,
                         link_fetcher=link_fetcher,
                         log=lambda m: print(m, file=sys.stderr, flush=True))
         if not args.dry_run:
