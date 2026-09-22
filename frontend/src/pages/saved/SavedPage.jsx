@@ -173,10 +173,7 @@ export default function SavedPage({
           }
         />
       )}
-      <p className="saved-note">
-        보관함은 이 브라우저에 저장됩니다. 예시 데이터와 서버 데이터의 보관함은
-        각각 보관합니다.
-      </p>
+      <p className="saved-note">보관함은 이 브라우저에 저장됩니다.</p>
     </div>
   );
 }

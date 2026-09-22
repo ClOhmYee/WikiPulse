@@ -1,8 +1,10 @@
 package io.wikipulse.backend.issue;
 
 import io.wikipulse.backend.issue.dto.IssueCardResponse;
+import io.wikipulse.backend.issue.dto.IssueRankingsResponse;
 import io.wikipulse.backend.issue.dto.IssueMemberResponse;
 import io.wikipulse.backend.stock.dto.RelatedStockResponse;
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -15,6 +17,31 @@ import org.springframework.data.repository.query.Param;
  * 가리켜야 해서 IssueCluster 를 재사용한다 — CRUD 는 쓰지 않는다.
  */
 public interface IssueQueryRepository extends JpaRepository<IssueCluster, Long> {
+
+    /** Peak per stable issue in the rolling window, linking to that exact snapshot. */
+    @Query(value = """
+            WITH ranked AS (
+                SELECT c.id, c.label, c.pulse_score, c.snapshot_ts,
+                       row_number() OVER (
+                           PARTITION BY COALESCE(NULLIF(c.issue_key, ''), 'id:' || c.id)
+                           ORDER BY c.pulse_score DESC, c.snapshot_ts DESC, c.id ASC
+                       ) AS occurrence
+                FROM issue_cluster c
+                WHERE c.snapshot_ts >= :from AND c.snapshot_ts <= :asOf
+                  AND c.status IN ('DETECTED', 'VERIFYING', 'CONFIRMED')
+                  AND EXISTS (
+                      SELECT 1 FROM cluster_snapshot s
+                      WHERE s.source = c.source AND s.snapshot_ts = c.snapshot_ts
+                  )
+            )
+            SELECT id, label, pulse_score AS pulseScore
+            FROM ranked WHERE occurrence = 1
+            ORDER BY pulse_score DESC, snapshot_ts DESC, id ASC
+            LIMIT 10
+            """, nativeQuery = true)
+    List<IssueRankingsResponse.Projection> findRankings(
+            @Param("from") Instant from,
+            @Param("asOf") Instant asOf);
 
     /**
      * 이슈 상세의 멤버 문서. weight 내림차순. API 명세 §2.

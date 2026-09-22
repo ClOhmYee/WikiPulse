@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { authenticate } from "./helpers/auth.js";
 import { mockClient } from "../src/data/mock/client.js";
 
 const issue = (await mockClient.getIssue("iran-hormuz-2025")).data;
@@ -79,7 +80,7 @@ test("issue -> verified related stocks -> stock -> issue retains identifiers and
     .click();
   await expect(page.getByRole("heading", { level: 1 })).toHaveText(stock.name);
   await expect(
-    page.getByText("데모 데이터에는 주가가 없습니다", { exact: true }),
+    page.getByText("주가 정보가 제공되지 않았습니다", { exact: true }),
   ).toBeVisible();
   await expect(page.locator(".st-detail-page .data-scope")).toContainText(
     "최대 50개",
@@ -117,6 +118,7 @@ test("server-backed stock filters search beyond the first page", async ({
 test("saved issue and stock survive reload and remain removable", async ({
   page,
 }) => {
+  await authenticate(page);
   await page.goto(`/#/issues/${issue.id}`);
   await page.getByRole("button", { name: "이벤트 저장", exact: true }).click();
   await page.goto(`/#/stocks/${stock.ticker}`);
@@ -166,6 +168,7 @@ test("quick stock search supports keyboard selection and empty recovery", async 
 test("compact pages keep the supported data within a 390px viewport", async ({
   page,
 }) => {
+  await authenticate(page);
   await page.setViewportSize({ width: 390, height: 844 });
   for (const route of [
     "/issues",

@@ -9,6 +9,7 @@ import {
   kstDate,
   kstTimestamp,
   snapshotKey,
+  timelineSnapshots,
 } from "../../data/pulse/time.js";
 import PulseMap from "./PulseMap";
 import PulseMapFrame from "./PulseMapFrame";
@@ -33,9 +34,11 @@ export default function PulsePage({ savedEvents, onToggleEvent, onSource }) {
   const returnScroll = useRef(null);
   const cameraState = useRef(null);
   const [category, setCategory] = useState("all");
-  const items = index.data?.data;
-  const latest =
-    items?.filter((v) => v.source === "live").at(-1) || items?.at(-1);
+  const items = useMemo(
+    () => timelineSnapshots(index.data?.data || []),
+    [index.data],
+  );
+  const latest = items.at(-1);
   const target =
     items?.find(
       (v) => requested && snapshotKey(v) === snapshotKey(requested),
@@ -103,8 +106,7 @@ export default function PulsePage({ savedEvents, onToggleEvent, onSource }) {
     }
     setExpanded((value) => !value);
   }
-  const sourceItems = items?.filter((v) => v.source === target?.source) || [];
-  const days = calendarDays(sourceItems);
+  const days = calendarDays(items);
   const categoryFilters = (
     <div
       className="wp-filter-chips pulse-filters"
@@ -127,7 +129,7 @@ export default function PulsePage({ savedEvents, onToggleEvent, onSource }) {
   const timeline = target && (
     <PulseTimeline
       compact
-      snapshots={sourceItems}
+      snapshots={items}
       selected={target}
       latest={latest}
       onSelect={selectTime}
@@ -188,7 +190,7 @@ export default function PulsePage({ savedEvents, onToggleEvent, onSource }) {
                 value={kstDate(target.snapshotTs)}
                 onChange={(e) =>
                   selectTime(
-                    sourceItems
+                    items
                       .filter((v) => kstDate(v.snapshotTs) === e.target.value)
                       .at(-1),
                   )
@@ -204,26 +206,6 @@ export default function PulsePage({ savedEvents, onToggleEvent, onSource }) {
                     {day.available ? "" : " · 데이터 없음"}
                   </option>
                 ))}
-              </select>
-            </label>
-            <label className="pulse-date">
-              데이터
-              <select
-                aria-label="스냅샷 출처"
-                value={target.source}
-                onChange={(e) =>
-                  selectTime(
-                    items.filter((v) => v.source === e.target.value).at(-1),
-                  )
-                }
-              >
-                {["live", "replay"]
-                  .filter((source) => items.some((v) => v.source === source))
-                  .map((source) => (
-                    <option key={source} value={source}>
-                      {source === "live" ? "실시간 수집" : "과거 재구성"}
-                    </option>
-                  ))}
               </select>
             </label>
           </div>

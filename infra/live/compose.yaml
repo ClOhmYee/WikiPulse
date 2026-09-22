@@ -113,11 +113,14 @@ services:
       - --out
       - /opt/app/data/live-pageview
 
-  # spike → 클러스터 스냅샷. cluster-loop.sh 가 주기를 돈다.
+  # spike → 클러스터 스냅샷. `data-pipeline/cluster-loop.sh` 가 주기를 돈다.
   #
-  # ⚠️ `--creation-index` 경로에 스냅샷 월(2026-08)이 박혀 있다. 달이 바뀌면 사람이
-  #    고쳐야 한다 — 안 고치면 조용히 옛 생성일로 판정한다.
-  # ⚠️ `--clickstream-root` 는 완료 월 규칙을 타므로 당월 덤프는 안 쓴다.
+  # ~~`--clickstream-root` + `--creation-index`~~ → 제거 (2026-09-22, WP-194).
+  #    -161 이후 그 인자는 `--expansion` 없이 주면 거부된다. 스크립트가 서버에만 있어
+  #    안 바뀌었고, 5분마다 exit 2 로 죽으며 LIVE 스냅샷이 21시간 멈춰 있었다.
+  #    스크립트는 이제 저장소가 정본이다.
+  # 🔴 `CLUSTER_FETCH_LINKS=1` 을 안 주면 as-of 링크 캐시가 비어 LIVE 클러스터가
+  #    전부 singleton 이 된다(간선 0). 켜면 CONTACT_EMAIL 이 필요하다.
   live-cluster:
     <<: *live-common
     container_name: wikipulse-live-cluster

@@ -5,10 +5,12 @@ import io.wikipulse.backend.common.ApiResponse;
 import io.wikipulse.backend.common.PageMeta;
 import io.wikipulse.backend.common.QueryParams;
 import io.wikipulse.backend.issue.dto.IssueCardResponse;
+import io.wikipulse.backend.issue.dto.IssueRankingsResponse;
 import io.wikipulse.backend.issue.dto.IssueDetailResponse;
 import io.wikipulse.backend.issue.dto.IssueMemberResponse;
 import io.wikipulse.backend.stock.dto.RelatedStockResponse;
 import java.time.Instant;
+import java.time.ZoneId;
 import java.util.List;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -27,6 +29,22 @@ public class IssueService {
                         IssueQueryRepository queryRepository) {
         this.clusterRepository = clusterRepository;
         this.queryRepository = queryRepository;
+    }
+
+    public ApiResponse<IssueRankingsResponse> rankings() {
+        return rankings(Instant.now());
+    }
+
+    ApiResponse<IssueRankingsResponse> rankings(Instant asOf) {
+        var local = asOf.atZone(ZoneId.of("Asia/Seoul"));
+        var monthFrom = local.minusDays(30).toInstant();
+        var yearFrom = local.minusYears(1).toInstant();
+        return ApiResponse.of(new IssueRankingsResponse(
+                asOf.toString(), monthFrom.toString(), yearFrom.toString(),
+                queryRepository.findRankings(monthFrom, asOf).stream()
+                        .map(IssueRankingsResponse.Entry::from).toList(),
+                queryRepository.findRankings(yearFrom, asOf).stream()
+                        .map(IssueRankingsResponse.Entry::from).toList()));
     }
 
     /** 이슈 피드 / 버블맵. 봉투 + pagination·snapshotTs meta. */

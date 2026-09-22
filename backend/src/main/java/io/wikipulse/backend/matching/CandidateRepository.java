@@ -78,9 +78,11 @@ public class CandidateRepository {
                         OR r.rnk <= :top
                         OR EXISTS (SELECT 1
                                      FROM cluster_stock cs2
+                                     JOIN issue_cluster c2 ON c2.id = cs2.cluster_id
                                     WHERE cs2.issue_key IS NOT NULL
                                       AND cs2.issue_key = r.issue_key
-                                      AND cs2.check_state = 'DONE'))
+                                      AND cs2.check_state = 'DONE'
+                                      AND c2.snapshot_ts <= r.snapshot_ts))
                  ORDER BY r.snapshot_ts DESC
                  LIMIT :limit
                 """, new MapSqlParameterSource()
@@ -169,8 +171,9 @@ public class CandidateRepository {
      *       DONE 판정이 있으면 그대로 들고 온다(WP-49) — {@code cluster_id} 는 스냅샷마다
      *       새로 생겨서(cluster/snapshot.py) 이 복사가 없으면 진행 중인 이슈가 재감지될 때마다
      *       LLM 을 다시 부른다. prompt_version 일치 여부는 검증 단계(WP-68)가 판단한다 —
-     *       여기서는 "가장 최근 DONE" 을 무조건 들고 오고, 프롬프트가 올라 재검증이 필요하면
-     *       검증 단계가 check_state 를 다시 PENDING 으로 돌린다.
+     *       여기서는 대상 이하의 가장 가까운 스냅샷에 있는 DONE 을 들고 오고, 프롬프트가 올라
+     *       재검증이 필요하면 검증 단계가 check_state 를 다시 PENDING 으로 돌린다. 미래 판정을
+     *       과거 replay 로 역복사하지 않는다(WP-208).
      * </ol>
      *
      * @return 적재(삽입·갱신)한 후보 수
@@ -218,14 +221,19 @@ public class CandidateRepository {
                        prior.match_path, prior.confidence, prior.rationale, prior.verified_at
                   FROM (SELECT 1) AS dual
                   LEFT JOIN (
-                      SELECT verified, prompt_version, check_state, attempt_count,
-                             match_path, confidence, rationale, verified_at
-                        FROM cluster_stock
-                       WHERE issue_key = CAST(:issueKey AS text)
-                         AND ticker = :ticker
-                         AND check_state = 'DONE'
-                       ORDER BY verified_at DESC NULLS LAST
-                       LIMIT 1
+                       SELECT cs.verified, cs.prompt_version, cs.check_state, cs.attempt_count,
+                              cs.match_path, cs.confidence, cs.rationale, cs.verified_at
+                         FROM cluster_stock cs
+                         JOIN issue_cluster source_cluster ON source_cluster.id = cs.cluster_id
+                         JOIN issue_cluster target_cluster ON target_cluster.id = :cid
+                        WHERE cs.issue_key = CAST(:issueKey AS text)
+                          AND cs.ticker = :ticker
+                          AND cs.check_state = 'DONE'
+                          AND cs.cluster_id <> :cid
+                          AND source_cluster.snapshot_ts <= target_cluster.snapshot_ts
+                        ORDER BY source_cluster.snapshot_ts DESC,
+                                 cs.verified_at DESC NULLS LAST
+                        LIMIT 1
                   ) AS prior ON true
                 ON CONFLICT (cluster_id, ticker) DO UPDATE
                    SET tier = EXCLUDED.tier,

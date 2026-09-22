@@ -6,11 +6,7 @@ import { IssueState } from "../../components/event/IssueState";
 import { TrendChart } from "../../components/charts/TrendChart";
 import { dataClient } from "../../data/index.js";
 import { useAsyncResource } from "../../data/hooks/useAsyncResource.js";
-import {
-  metricLabel,
-  timestampLabel,
-  sourceLabel,
-} from "../event/presentation.js";
+import { metricLabel, timestampLabel } from "../event/presentation.js";
 import { StockMark, SaveButton, MatchEvidence } from "./StockElements";
 export default function StockDetail({ symbol, savedStocks, onToggleStock }) {
   const { events, getStock, collectionLimit, isExample } = usePageData();
@@ -125,7 +121,6 @@ export default function StockDetail({ symbol, savedStocks, onToggleStock }) {
                       <time dateTime={event.snapshotTs || undefined}>
                         {timestampLabel(event.snapshotTs)}
                       </time>
-                      <span>{sourceLabel(event.source)}</span>
                     </div>
                     <div className="st-event-body">
                       <a
@@ -236,13 +231,10 @@ function StockPriceSection({ symbol, from, markers, isExample }) {
   if (isExample)
     return (
       <section className="wp-panel st-price-panel">
-        {heading(<span className="wp-tag">데모</span>)}
+        {heading(null)}
         <div className="data-availability">
-          <strong>데모 데이터에는 주가가 없습니다</strong>
-          <p>
-            시연용 데모에서는 실제 일봉을 제공하지 않습니다. API 데이터로
-            전환하면 이슈 발생 시점과 종가를 겹쳐 볼 수 있습니다.
-          </p>
+          <strong>주가 정보가 제공되지 않았습니다</strong>
+          <p>현재 이 종목의 일봉 정보를 확인할 수 없습니다.</p>
         </div>
       </section>
     );

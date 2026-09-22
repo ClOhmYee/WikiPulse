@@ -37,6 +37,20 @@ class IssueControllerTest {
     PulseMapService pulseMapService;
 
     @Test
+    void rankingRouteReturnsBothPeriodsWithoutUsingTheDetailRoute() throws Exception {
+        var entry = new io.wikipulse.backend.issue.dto.IssueRankingsResponse.Entry(42, "Peak issue", 9.5);
+        when(service.rankings()).thenReturn(ApiResponse.of(
+                new io.wikipulse.backend.issue.dto.IssueRankingsResponse(
+                        "2026-09-22T00:00:00Z", "2026-08-23T00:00:00Z", "2025-09-22T00:00:00Z",
+                        List.of(entry), List.of(entry))));
+        mvc.perform(get("/api/v1/issues/rankings"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.monthly[0].id").value(42))
+                .andExpect(jsonPath("$.data.yearly[0].pulseScore").value(9.5))
+                .andExpect(jsonPath("$.data.asOf").value("2026-09-22T00:00:00Z"));
+    }
+
+    @Test
     void 피드는_data_봉투와_pagination_meta로_준다() throws Exception {
         var card = new IssueCardResponse(42, "Strait of Hormuz tension", 8.4,
                 "CONFIRMED", "live", "2026-09-08T04:00:00Z", 5, 3);

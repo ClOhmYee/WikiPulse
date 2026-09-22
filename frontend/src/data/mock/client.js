@@ -10,6 +10,7 @@ import {
 import { DataError } from "../contracts.js";
 import { listSnapshots, getPulseMap } from "./pulse.js";
 import { issueId, legacyIssueId, pageId } from "./identity.js";
+import { rankingWindow, rankIssues } from "../rankings.js";
 
 const fail = (status, code) => {
   throw new DataError(
@@ -140,6 +141,27 @@ function stockCard(value) {
   };
 }
 const handlers = {
+  getIssueRankings(params = {}) {
+    query(params, []);
+    const window = rankingWindow(new Date().toISOString());
+    const rows = dates
+      .filter(
+        (date) =>
+          Date.parse(timestamp(date)) >= Date.parse(window.yearFrom) &&
+          Date.parse(timestamp(date)) <= Date.parse(window.asOf),
+      )
+      .flatMap((date) =>
+        snapshotAt(date).data.clusters.map((cluster) => ({
+          ...card(cluster, timestamp(date)),
+          issueKey: cluster.issueKey || cluster.id.split("~")[0],
+        })),
+      );
+    return envelope({
+      ...window,
+      monthly: rankIssues(rows, window.monthFrom, window.asOf),
+      yearly: rankIssues(rows, window.yearFrom, window.asOf),
+    });
+  },
   listSnapshots(params = {}) {
     query(params, ["from", "to", "source"]);
     return listSnapshots(params);

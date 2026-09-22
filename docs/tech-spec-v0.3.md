@@ -1,7 +1,8 @@
 # 기술 명세서 — WikiPulse (WikiPulse)
 
-- 버전: **v0.3 (2026-09-18 개정)**
+- 버전: **v0.3 (2026-09-22 정합성 갱신)**
 - v0.3 변경: 1일 실제 원본 E2E 결과와 historical 대표 텍스트·스냅샷 증거·상세 API의 시점 계약을 반영했다.
+- 2026-09-22 정합성 갱신: 운영 배포·DB V14·파이썬 런타임·HDFS/Kafka 상태를 재실측 값으로 교체했다.
 - 상위 문서: [requirements-v0.3.md](requirements-v0.3.md) — **왜 이 컴포넌트가 있는가는 §3.1이 정본이다.** 여기 다시 적지 않는다.
 - 이 문서가 다루는 것: **무엇이 어느 버전으로, 어느 서버 어느 포트에서, 어떻게 뜨는가.**
 - API는 [api-v0.3.md](api-v0.3.md), 데이터 모델은 [erd-v0.1.md](erd-v0.1.md).
@@ -33,7 +34,7 @@
 
 | | 버전 | 출처 |
 | --- | --- | --- |
-| Python | 일반 파이프라인 **3.11**, Spark 이미지 **3.8.10** | `data-pipeline/Dockerfile`은 `python:3.11-slim`로 고정. `apache/spark:3.5.3-python3`은 2026-09-17 실측 3.8.10이라 `psycopg 3.3.5` 설치 불가; 운영 `SINK=spike` 미해결 |
+| Python | 일반 파이프라인·서비스 Spark **3.11.16**, 추가 EC2 edit-stream **3.8.10** | 저장소의 일반 파이프라인은 `python:3.11-slim`, Spark는 `wikipulse-spark:py311` 자체 이미지다. 기본 EC2 `live-cycle`·Spark worker는 3.11.16, 추가 EC2의 공식 Spark 이미지 기반 edit-stream driver만 3.8.10이며 Spark worker는 3.11.16이다 (2026-09-22 실측). `SINK=spike` 경로는 기본 EC2의 3.11 이미지로 구성됐다 |
 | Kafka | **3.9.0** (`apache/kafka:3.9.0`) | `data-pipeline/docker-compose.yml` (저장소) — **로컬 개발용** |
 | Spark | **3.5.3** (`apache/spark:3.5.3-python3`) | 같은 파일 (저장소) — **로컬 개발용** |
 | Kafka 커넥터 | `spark-sql-kafka-0-10_2.12:3.5.3` | 같은 파일 |
@@ -46,13 +47,13 @@
 
 | | 버전 | 상태 |
 | --- | --- | --- |
-| PostgreSQL | **17.11** (`pgvector/pgvector:0.8.6-pg17-bookworm`) | 저장소의 누적 스키마는 **V1~V9**. 기본 EC2는 앱 사용자·V1~V6 테이블·pgvector 존재, health 정상까지 확인했다. ~~사용자 테이블 전부 0행~~ → 2025-06-12 canary 원시 신호 `page_edit_window` 72,632행·`page_view_hourly` 61,197행 적재, `spike` 0행 (2026-09-17 19:20 KST 정확 조회). Backend는 미배포이며 **V7~V9 적용과 WP-119·129 실행은 EC2에서 확인하지 않았다** |
+| PostgreSQL | **17.11** (`pgvector/pgvector:0.8.6-pg17-bookworm`) | 누적 스키마 **V1~V14**가 기본 EC2에 적용됐고 schema version 최댓값 14를 확인했다. Spring Backend가 이 DB에 연결되어 서비스 중이다 (2026-09-22 실측). 테이블별 현재 역할과 상태는 [ERD](erd-v0.1.md)가 정본이다 |
 | pgvector | **0.8.6**, 차원 **1536** 고정 | 같은 이미지 (2026-09-17 실측). `vector(1536)` — `text-embedding-3-small` 기준. 모델을 바꾸면 DDL도 바꿔야 한다 |
-| Hadoop / HDFS | **3.5.0** (`apache/hadoop:3.5.0`) | NameNode 1 + DataNode 2, 복제 2. 104 blocks 건강·누락 0. 저장 원본은 2024-10/2025-06 표본이며 고정 MVP 2개월은 없음 (2026-09-17 18:30 KST 실측) |
+| Hadoop / HDFS | **3.5.0** (`apache/hadoop:3.5.0`) | NameNode 1 + DataNode 2, 복제 2. `/wikipulse`는 논리 약 1.7 GiB·복제 포함 약 3.5 GiB이며 `mediawiki_history`와 `pageview_complete` 원본이 있다. 고정 MVP 2개월 원본은 아직 완성되지 않았다 (2026-09-22 실측) |
 | Spark (EC2) | **3.5.3** (`apache/spark:3.5.3-python3`) | Standalone 2노드, client 모드. 제한 2코어 작업에서 Worker 2대 참여·HDFS Parquet 20행 왕복 통과 (2026-09-17 18:26 KST) |
-| Kafka (EC2) | **3.9.0** (`apache/kafka:3.9.0`) | 추가 EC2 KRaft 단일 broker + controller. `wiki.edits` 3파티션, 실제 이벤트 0건 상태에서 smoke 1건 발행·읽기 통과 (2026-09-17 18:26 KST) |
+| Kafka (EC2) | **3.9.0** (`apache/kafka:3.9.0`) | 추가 EC2 KRaft 단일 broker + controller. `wiki.edits` 3파티션과 EventStreams producer·edit-stream 잡이 기동 상태다 (2026-09-22 실측) |
 | Redis | **채택 여부 미정** | CLAUDE.md 인프라 절에 이름만 있고 명세 §3.1 컴포넌트 표에는 없다. 지금 필요한 캐시가 무엇인지부터 정할 것 |
-| Nginx / Jenkins | Nginx **1.30.5** / Jenkins inactive | Nginx container가 80/443에서 동작하고 HTTPS 200이나 `nginx ok` placeholder뿐이다. Backend·Frontend 미배포, Jenkins 미사용 (2026-09-17 18:30 KST 실측) |
+| Nginx / 배포 | Nginx **1.30.5** / GitLab CI | Nginx·Frontend·Spring Backend가 기본 EC2에 배포됐다. HTTPS 루트와 snapshots·map·rankings·stocks API가 모두 200을 반환했다 (2026-09-22 실측). 현재 자동 배포 정본은 `.gitlab-ci.yml`이며 Jenkins는 배포 경로가 아니다 |
 
 ⚠️ **로컬 개발 스택의 Hadoop 은 3.4.1, EC2 는 3.5.0 이다** (2026-09-17 확인). 서로 다른 환경이라 그 자체로 불일치는 아니지만, 한쪽만 보고 다른 쪽을 "고치지" 말 것. 맞출지 여부는 결정된 바 없다. Kafka(3.9.0)·Spark(3.5.3)는 양쪽이 같다.
 
@@ -243,19 +244,19 @@ docker compose run --rm spark            # 윈도우 집계 잡
 - ~~리플레이 범위·MVP 원본 보존~~ → **2026-07-17~09-17 고정 2개월**, 실제 공통 파이프라인 재생·E2E 검증 완료 전 편집·시간별/일별 조회수·GDELT·Clickstream 원본 삭제 금지
 - ~~replay 대표 텍스트를 현재 Wikipedia 도입부로 읽음~~ → **`page_intro`에서 `snapshot_ts` 이하 마지막 revision을 읽도록 구현** (2026-09-18, WP-129, V8). 현재 도입부 폴백은 금지하며 EC2·실제 replay 재검증은 하지 않음
 - ~~spike 조회수·기준선이 `cluster_member`에 전달되지 않고 상세 API가 최신 원시 행을 읽음~~ → **판정 수치 전달·`completeness` 결정·상세 고정값 조회 구현** (2026-09-18, WP-129, V7). `max_rev_id`·`last_edit_ts` 감사 필드도 V9로 추가. 로컬 회귀 테스트만 완료하고 EC2에서는 검증하지 않음
-- ~~실시간 이슈 요약 writer·상태 전이 미구현~~ → **백엔드 구현 완료** (2026-09-18, WP-119). 워커 기본값은 꺼짐이며 실제 GATEWAY·EC2 실행은 하지 않음
+- ~~실시간 이슈 요약 writer·상태 전이 미구현~~ → **백엔드 구현·EC2 실제 GATEWAY 실행 완료** (WP-119). 현재 워커는 꺼져 있고 재클러스터링 뒤 `issue_report`는 0건 (2026-09-22)
 - ~~화면이 영문 raw title만 표시~~ → **ko.wikipedia 표시명 구현** (2026-09-22, WP-205, V15). `wiki_page.title_ko`를 `cluster_member` 편입 enwiki 문서에 한해 `prop=langlinks&lllang=ko`로 1회 조회(50개/요청)해 채우고, `title`(영문)은 그대로 둔다. LIVE·replay 공통. 워커 `wikipulse.page-title.enabled` 기본 꺼짐이라 켜기 전에는 전량 영문이며 EC2 실행은 0회임. 리다이렉트 제목은 ko를 붙이지 않고 영문 폴백(정밀 매핑은 후속)
 
 **남은 설계·검증**
 
 - 문서 최초 revision 시각의 LIVE 수집 배선(WP-118). 저장 필드는 구현 완료했으며 `first_seen`은 시스템 최초 관측 시각이라 대체할 수 없음
 - 시간별 조회수 원본 미도착 후보 보관·재평가와 원본 도착 후 15분 이내 처리 계측(WP-118)
-- Docker Compose에서 GATEWAY 키·후보 생성/검증 워커 설정 전달(WP-120). 2026-09-18 별도 canary DB에서는 수동 환경 주입으로 후보·LLM·API/Frontend proxy E2E를 통과했으나 root Compose 배선은 그대로임
-- 클러스터 → GKG 검색 술어·lift 자동 실행(WP-120). canary에서는 통제값으로 수동 연결함
-- 요약 worker를 운영 설정으로 활성화하고 실제 GATEWAY로 요약·`DETECTED → VERIFYING → CONFIRMED`를 검증(WP-119·120). writer 코드는 구현됐지만 worker 기본값은 꺼져 있고 EC2 실행은 0회임
-- 같은 `issue_key`의 요약·검증 결과를 재사용할 때 **원 결과 스냅샷이 대상 `snapshot_ts` 이하인지 제한하고 원 유효 시각을 보존**하는 저장·조회 방식(WP-119·120). 현재 `findPriorSummary`·`findPriorVerdict`는 대상 스냅샷 상한 없이 가장 최근 결과를 고르고, 요약 upsert는 `generated_at=now()`로 기록하므로 과거 backfill에 미래 결과가 섞일 수 있음. 이 순서 역전 회귀 테스트도 없음
+- ~~Docker Compose에서 GATEWAY 키·후보 생성/검증 워커 설정 전달~~ → **완료** (2026-09-20, WP-142)
+- 클러스터 → GKG 검색 술어는 구현됨(WP-148). GKG lift 집계 자동 실행은 남아 있음
+- 요약 worker의 실제 GATEWAY·상태 전이는 EC2에서 실행했다. 반복 거절 방지와 일일 호출 상한도 적용했지만 현재 워커는 운영 안전을 위해 꺼져 있음
+- ~~같은 `issue_key` 결과 재사용이 미래 스냅샷을 과거에 복사할 수 있었음~~ → 요약·후보·검증 재사용과 비용 상한 면제를 원본 `snapshot_ts <=` 대상 `snapshot_ts`로 제한하고 순서 역전 회귀 테스트를 추가함(WP-208). `generated_at`·`verified_at`은 backfill 처리 시각이라 event-time 상한으로 사용하지 않음
 - 2026-07-17~09-17 실제 원본 공통 리플레이로 1,112개 수작업 시드를 교체하고 이후 LIVE 누적까지 연결(WP-120)
-- 종목 상세 가격 API·FE 연결(WP-124). yfinance 적재기(WP-64)는 있으나 `/stocks/{ticker}/prices`와 로컬 가격 데이터는 없음
+- ~~종목 상세 가격 API·FE 연결~~ → **완료** (2026-09-18, WP-124). 시연 44종목 55,176행을 적재하고 차트·이슈 마커 E2E를 검증함
 
 **운영**
 

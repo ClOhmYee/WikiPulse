@@ -33,7 +33,7 @@ MODEL = "claude-x (summary_v1)"
 # IssueSummaryRepository.clustersNeedingSummary 의 SQL. 이름 파라미터만 %s 로 바꿨다.
 _SELECT = """
 WITH ranked AS (
-    SELECT id, status, issue_key,
+    SELECT id, status, issue_key, snapshot_ts,
            row_number() OVER (PARTITION BY snapshot_ts
                               ORDER BY pulse_score DESC, id ASC) AS rnk
       FROM issue_cluster
@@ -56,6 +56,7 @@ SELECT id
                      JOIN issue_cluster c2 ON c2.id = r.cluster_id
                     WHERE c2.issue_key IS NOT NULL
                       AND c2.issue_key = ranked.issue_key
+                      AND c2.snapshot_ts <= ranked.snapshot_ts
                       AND r.model = %(model)s))
  ORDER BY id DESC
  LIMIT %(limit)s
@@ -173,6 +174,18 @@ def test_model_이_다르면_면제되지_않는다(conn):
                    snapshot="2026-09-02T00:00:00+00:00")
     _report(conn, other, model="claude-x (summary_v0)")
     _cluster(conn, score=9.0, snapshot="2026-09-02T00:00:00+00:00")
+
+    assert low not in _select(conn, top=1)
+
+
+def test_미래_요약은_과거_클러스터를_상한에서_면제하지_않는다(conn):
+    """미래 요약은 과거 대상에서 재사용 불가이므로 LLM 0 비용으로 간주하면 안 된다."""
+    snap = "2026-09-01T00:00:00+00:00"
+    _cluster(conn, score=9.0, snapshot=snap)  # 과거 스냅샷 상한 1을 채운다.
+    low = _cluster(conn, score=0.1, issue_key="future-only", snapshot=snap)
+    future = _cluster(conn, score=9.0, issue_key="future-only",
+                      snapshot="2026-09-02T00:00:00+00:00")
+    _report(conn, future)
 
     assert low not in _select(conn, top=1)
 

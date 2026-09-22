@@ -2,6 +2,7 @@ package io.wikipulse.backend.issue;
 
 import io.wikipulse.backend.common.ApiResponse;
 import io.wikipulse.backend.issue.dto.IssueCardResponse;
+import io.wikipulse.backend.issue.dto.IssueRankingsResponse;
 import io.wikipulse.backend.issue.dto.IssueDetailResponse;
 import io.wikipulse.backend.issue.dto.pulse.PulseMap;
 import io.wikipulse.backend.issue.dto.pulse.SnapshotView;
@@ -73,6 +74,13 @@ public class IssueController {
     public ApiResponse<IssueDetailResponse> detail(@PathVariable Long id) {
         return service.detail(id);
     }
+
+    /** GET /api/v1/issues/rankings — rolling 30-day and one-year peaks. */
+    @GetMapping("/rankings")
+    public ApiResponse<IssueRankingsResponse> rankings() {
+        return service.rankings();
+    }
+
 
     /** GET /api/v1/issues/{id}/stocks — 전체 관련 종목 */
     @GetMapping("/{id}/stocks")

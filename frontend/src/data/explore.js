@@ -71,7 +71,12 @@ export async function listExploreIssues(client, params = {}, options) {
   const total = pages.reduce((sum, page) => sum + page.total, 0);
   const data = pages
     .flatMap((page) => page.data)
-    .sort((a, b) => b.pulseScore - a.pulseScore || Number(a.id) - Number(b.id))
+    .sort(
+      (a, b) =>
+        Date.parse(b.snapshotTs) - Date.parse(a.snapshotTs) ||
+        b.pulseScore - a.pulseScore ||
+        Number(a.id) - Number(b.id),
+    )
     .slice(offset, offset + limit);
   return {
     data,
