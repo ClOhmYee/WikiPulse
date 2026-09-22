@@ -1,0 +1,98 @@
+.auth-modal {
+  width: min(440px, calc(100% - 32px));
+  max-height: calc(100dvh - 32px);
+  margin: auto;
+  padding: 36px;
+  border: 1px solid var(--wp-border);
+  border-radius: 12px;
+  background: var(--wp-surface);
+  color: var(--paper);
+  overflow-y: auto;
+}
+.auth-modal::backdrop {
+  background: rgb(0 0 0 / 72%);
+}
+.auth-close {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+}
+.auth-modal h2 {
+  font-size: 26px;
+}
+.auth-modal #auth-description {
+  margin-top: 8px;
+  color: #afc0c8;
+}
+.auth-modal form {
+  margin-top: 28px;
+}
+.auth-modal fieldset {
+  display: grid;
+  gap: 18px;
+  border: 0;
+  padding: 0;
+  margin: 0;
+  min-width: 0;
+}
+.auth-modal label {
+  display: grid;
+  gap: 7px;
+  font-size: 13px;
+}
+.auth-modal input {
+  width: 100%;
+  min-height: 44px;
+  padding: 10px 12px;
+  border: 1px solid #5b707b;
+  border-radius: 6px;
+  background: #070e14;
+  font: inherit;
+}
+.auth-submit {
+  width: 100%;
+  margin-top: 24px;
+  min-height: 44px;
+  justify-content: center;
+}
+.auth-modal .auth-error,
+.auth-modal .auth-message {
+  margin-top: 16px;
+  font-size: 13px;
+}
+.auth-error {
+  color: #ffb4ab;
+}
+.auth-message {
+  color: #8fe0c8;
+}
+.auth-switch {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: 8px;
+  margin-top: 22px;
+  color: #afc0c8;
+  font-size: 13px;
+}
+.auth-switch button {
+  padding: 8px;
+  min-height: 44px;
+  border: 0;
+  background: none;
+  color: var(--paper);
+  font: inherit;
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+.workspace-login {
+  flex-shrink: 0;
+  min-height: 44px;
+  white-space: nowrap;
+}
+@media (max-width: 480px) {
+  .auth-modal {
+    padding: 32px 24px 24px;
+  }
+}

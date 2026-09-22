@@ -1,4 +1,4 @@
-import { ArrowRight, ChevronRight, CircleHelp, X } from "lucide-react";
+import { ArrowRight, ChevronRight, CircleHelp } from "lucide-react";
 import { Suspense } from "react";
 import { NAV_ITEMS } from "../navigation";
 import { PageBoundary, PageSkeleton } from "./PageBoundary";
@@ -7,14 +7,14 @@ export default function WorkspaceLayout({
   active,
   savedEvents,
   savedStocks,
-  help,
-  setHelp,
+  member,
+  onLogin,
+  onLogout,
   searchRef,
   mainRef,
   route,
   notice,
   children,
-  source,
 }) {
   return (
     <div className="workspace">
@@ -37,7 +37,9 @@ export default function WorkspaceLayout({
         </a>
         <div className="sidebar-subtitle">변화에서 맥락으로</div>
         <nav className="workspace-nav" aria-label="주 메뉴">
-          {NAV_ITEMS.map((item) => (
+          {NAV_ITEMS.filter(
+            (item) => member || !["saved", "mypage"].includes(item.key),
+          ).map((item) => (
             <a
               href={item.href}
               key={item.key}
@@ -74,10 +76,6 @@ export default function WorkspaceLayout({
             WikiPulse 소개
             <ArrowRight size={13} />
           </a>
-          <div className="sidebar-snapshot">
-            <span />
-            {source.label}
-          </div>
         </div>
       </aside>
       <div className="workspace-body">
@@ -98,33 +96,12 @@ export default function WorkspaceLayout({
           </div>
           <GlobalSearch searchRef={searchRef} />
           <button
-            className="workspace-demo"
-            aria-expanded={help}
-            onClick={() => setHelp(!help)}
+            className="wp-button workspace-login"
+            onClick={member ? onLogout : onLogin}
           >
-            <span />
-            {source.label}
-            <CircleHelp size={13} />
+            {member ? "로그아웃" : "로그인"}
           </button>
         </header>
-        {help && (
-          <div className="workspace-help">
-            <div>
-              <strong>데이터 및 브라우저 저장 안내</strong>
-              <p>
-                {source.description}
-                저장한 항목은 이 브라우저에서 다시 볼 수 있습니다.
-              </p>
-            </div>
-            <button
-              className="wp-icon-button"
-              aria-label="데이터 안내 닫기"
-              onClick={() => setHelp(false)}
-            >
-              <X size={17} />
-            </button>
-          </div>
-        )}
         <main id="workspace-content" ref={mainRef} tabIndex="-1">
           <PageBoundary key={route}>
             <Suspense fallback={<PageSkeleton />}>{children}</Suspense>
@@ -133,7 +110,6 @@ export default function WorkspaceLayout({
         <footer className="workspace-footer">
           <span>WIKIPULSE</span>
           <span>Track the signal. Understand the context.</span>
-          <span>{source.label}</span>
         </footer>
       </div>
       <div

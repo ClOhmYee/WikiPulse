@@ -4,15 +4,18 @@ import RouteContent from "./RouteContent";
 import WorkspaceLayout from "./layout/WorkspaceLayout";
 import { PageBoundary, PageSkeleton } from "./layout/PageBoundary";
 import { useBookmarks } from "../features/bookmarks/useBookmarks";
-import { describeSource } from "../data/contracts";
+import { useAuth } from "../features/auth/useAuth";
+import AuthModal from "../features/auth/AuthModal";
 import "../styles/workspace.css";
 const Onboarding = lazy(() => import("../pages/onboarding/OnboardingPage"));
 export default function App() {
   const [route, setRoute] = useState(readRoute);
-  const pathname = route.split("?")[0];
+  const requestedPath = route.split("?")[0];
+  const authRoute = ["/login", "/signup"].includes(requestedPath);
+  const pathname = authRoute ? "/pulse" : requestedPath;
   const bookmarks = useBookmarks();
-  const [help, setHelp] = useState(false);
-  const [meta, setMeta] = useState(null);
+  const auth = useAuth();
+  const [authMode, setAuthMode] = useState(null);
   const searchRef = useRef(null);
   const mainRef = useRef(null);
   const previousRoute = useRef(route);
@@ -35,6 +38,7 @@ export default function App() {
   }, [route, onboarding]);
   useEffect(() => {
     const key = (event) => {
+      if (document.querySelector("dialog[open]")) return;
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
         event.preventDefault();
         searchRef.current?.focus();
@@ -58,24 +62,38 @@ export default function App() {
       </PageBoundary>
     );
   const first = pathname.split("/")[1];
-  const active = ["login", "signup"].includes(first) ? "mypage" : first;
+  const active = first;
+  const mode = authMode || (authRoute ? requestedPath.slice(1) : null);
+  const closeAuth = () => {
+    setAuthMode(null);
+    if (authRoute) window.location.hash = "/pulse";
+  };
   return (
     <WorkspaceLayout
       {...bookmarks}
       active={active}
-      help={help}
-      setHelp={setHelp}
+      member={auth.member}
+      onLogin={() => setAuthMode("login")}
+      onLogout={auth.logout}
       searchRef={searchRef}
       mainRef={mainRef}
       route={route}
-      source={describeSource(meta)}
     >
       <RouteContent
         {...bookmarks}
         route={route}
         pathname={pathname}
-        onSource={setMeta}
+        member={auth.member}
+        onLogin={() => setAuthMode("login")}
       />
+      {mode && (
+        <AuthModal
+          key={mode}
+          initialMode={mode}
+          onClose={closeAuth}
+          onLogin={auth.login}
+        />
+      )}
     </WorkspaceLayout>
   );
 }

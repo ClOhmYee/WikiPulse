@@ -272,7 +272,7 @@ function DiscussionBoard({ event, isExample }) {
       <p className="dc-local-notice">
         <MessageSquare size={16} />
         <span>
-          이 브라우저에만 저장되는 데모 토론 · 다른 사용자에게 전송되지
+          이 브라우저에만 저장되는 토론 · 다른 사용자에게 전송되지
           않습니다.
         </span>
       </p>

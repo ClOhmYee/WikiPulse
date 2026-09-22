@@ -137,7 +137,7 @@ test("pulse uses the graph contract without downloading catalogue fixtures", asy
   ).toEqual(newKeys);
   await expect(page.locator(".pulse-cluster-list")).not.toContainText("HOT");
   await expect(
-    page.getByRole("button", { name: "API 데이터", exact: true }),
+    page.getByRole("button", { name: "로그인", exact: true }),
   ).toBeVisible();
   expect(calls.map((v) => v.pathname)).toEqual([
     "/api/v1/issues/snapshots",
