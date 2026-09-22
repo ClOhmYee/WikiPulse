@@ -64,6 +64,11 @@ public class GlobalExceptionHandler {
      * 자체적으로 찍은 `permission denied for table cluster_snapshot` 한 줄이 없었으면 원인을
      * 못 찾았을 것이다. 응답은 그대로 "internal error" 만 내보낸다.
      */
+    @ExceptionHandler(org.springframework.http.converter.HttpMessageNotReadableException.class)
+    public ResponseEntity<Object> handleUnreadable(Exception ex) {
+        return body(ApiException.Code.INVALID_QUERY, "invalid JSON body");
+    }
+
     @ExceptionHandler(Exception.class)
     public ResponseEntity<Object> handleUnexpected(Exception ex) {
         log.error("처리되지 않은 예외 — 500 으로 응답한다", ex);

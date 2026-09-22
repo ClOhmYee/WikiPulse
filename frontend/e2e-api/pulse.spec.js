@@ -137,12 +137,11 @@ test("pulse uses the graph contract without downloading catalogue fixtures", asy
   ).toEqual(newKeys);
   await expect(page.locator(".pulse-cluster-list")).not.toContainText("HOT");
   await expect(
-    page.getByRole("button", { name: "API 데이터", exact: true }),
+    page.getByRole("button", { name: "로그인", exact: true }),
   ).toBeVisible();
-  expect(calls.map((v) => v.pathname)).toEqual([
-    "/api/v1/issues/snapshots",
-    "/api/v1/issues/map",
-  ]);
+  expect(
+    calls.filter((v) => v.pathname !== "/api/v1/me").map((v) => v.pathname),
+  ).toEqual(["/api/v1/issues/snapshots", "/api/v1/issues/map"]);
   expect(scripts.some((v) => /data\/mock|fixtures\//.test(v))).toBe(false);
 });
 test("nullable graph labels and issue keys keep numeric detail navigation", async ({

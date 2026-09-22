@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { authenticate } from "./helpers/auth.js";
 import { mockClient } from "../src/data/mock/client.js";
 
 const issue = (await mockClient.getIssue("iran-hormuz-2025")).data;
@@ -79,7 +80,7 @@ test("issue -> verified related stocks -> stock -> issue retains identifiers and
     .click();
   await expect(page.getByRole("heading", { level: 1 })).toHaveText(stock.name);
   await expect(
-    page.getByText("데모 데이터에는 주가가 없습니다", { exact: true }),
+    page.getByText("주가 정보가 제공되지 않았습니다", { exact: true }),
   ).toBeVisible();
   await expect(page.locator(".st-detail-page .data-scope")).toContainText(
     "최대 50개",
@@ -114,31 +115,15 @@ test("server-backed stock filters search beyond the first page", async ({
   ).toBeDisabled();
 });
 
-test("saved issue and stock survive reload and remain removable", async ({
-  page,
-}) => {
+test("mock data cannot be saved to a real account", async ({ page }) => {
+  await authenticate(page);
   await page.goto(`/#/issues/${issue.id}`);
   await page.getByRole("button", { name: "이벤트 저장", exact: true }).click();
-  await page.goto(`/#/stocks/${stock.ticker}`);
-  await page
-    .getByRole("button", {
-      name: `${stock.name} 관심 종목에 추가`,
-      exact: true,
-    })
-    .click();
-  await page.goto("/#/saved");
-  await page.reload();
-  await expect(page.locator(".event-row")).toHaveCount(1);
-  await page
-    .getByRole("button", { name: `${issue.label} 저장 해제`, exact: true })
-    .click();
-  await expect(page.locator(".event-row")).toHaveCount(0);
-  await page.getByRole("button", { name: /^관심 종목/ }).click();
-  await page
-    .getByRole("button", { name: `${stock.name} 관심 종목 해제`, exact: true })
-    .click();
   await expect(
-    page.getByRole("heading", { name: "궁금한 종목을 저장해 보세요" }),
+    page.getByText("예시 데이터는 계정 보관함에 저장할 수 없습니다."),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "이벤트 저장", exact: true }),
   ).toBeVisible();
 });
 
@@ -166,6 +151,7 @@ test("quick stock search supports keyboard selection and empty recovery", async 
 test("compact pages keep the supported data within a 390px viewport", async ({
   page,
 }) => {
+  await authenticate(page);
   await page.setViewportSize({ width: 390, height: 844 });
   for (const route of [
     "/issues",

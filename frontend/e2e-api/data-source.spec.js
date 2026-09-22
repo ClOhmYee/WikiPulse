@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { authenticate } from "../e2e/helpers/auth.js";
 import { mockClient } from "../src/data/mock/client.js";
 import { serve } from "./server.js";
 const issue = (await mockClient.getIssue("iran-hormuz-2025")).data;
@@ -172,7 +173,7 @@ test("API detail and related stock paths use numeric IDs without loading mock bu
   await page.goto(`/#/issues/${issue.id}`);
   await expect(page.getByRole("heading", { level: 1 })).toHaveText(issue.label);
   await expect(
-    page.getByRole("button", { name: "API 데이터", exact: true }),
+    page.getByRole("button", { name: "로그인", exact: true }),
   ).toBeVisible();
   await page
     .locator(".dt-report-actions")
@@ -244,7 +245,7 @@ test("500, malformed responses and network failures expose retry instead of mock
   await expect(page.locator(".st-stock-row")).toHaveCount(20);
 });
 
-test("empty list and missing detail are different states and preserve API bookmarks", async ({
+test("empty list and missing detail differ; legacy local bookmarks stay untouched", async ({
   page,
 }) => {
   await page.addInitScript(() => {
@@ -258,6 +259,7 @@ test("empty list and missing detail are different states and preserve API bookma
     );
   });
   await serve(page);
+  await authenticate(page);
   await page.goto("/#/stocks");
   await page
     .getByRole("textbox", { name: "종목 검색", exact: true })
@@ -272,8 +274,10 @@ test("empty list and missing detail are different states and preserve API bookma
   ).toBeVisible();
   await page.goto("/#/saved");
   await expect(
-    page.getByRole("region", { name: "조회할 수 없는 저장 항목" }),
-  ).toContainText("missing");
+    page.getByRole("heading", {
+      name: "다음에 다시 보고 싶은 사건을 담아보세요",
+    }),
+  ).toBeVisible();
   await expect(page.locator(".event-row")).toHaveCount(0);
   expect(
     await page.evaluate(() =>

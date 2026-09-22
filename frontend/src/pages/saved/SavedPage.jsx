@@ -1,6 +1,9 @@
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import { ArrowRight, Bookmark, Search } from "lucide-react";
-import { usePageData } from "../../data/hooks/PageData";
+import { useAsyncResource } from "../../data/hooks/useAsyncResource";
+import { authRequest } from "../../features/auth/client";
+import { issueView, stockView } from "../../data/resources";
+import { Pagination } from "../../components/event/IssueState";
 import { EmptyState } from "../../components/ui/EmptyState";
 import { EventRow } from "../../components/event/EventRow";
 import "./saved.css";
@@ -10,28 +13,32 @@ export default function SavedPage({
   savedStocks,
   onToggleEvent,
   onToggleStock,
+  savedStatus,
+  reloadSaved,
 }) {
-  const {
-    events,
-    stocks,
-    getCategory,
-    missingSavedEvents = [],
-    missingSavedStocks = [],
-  } = usePageData();
   const [tab, setTab] = useState("events");
   const [query, setQuery] = useState("");
-  const matches = (value) =>
-    value.toLowerCase().includes(query.trim().toLowerCase());
-  const selectedEvents = events.filter(
-    (event) =>
-      savedEvents.includes(event.savedId || event.id) &&
-      matches(`${event.title} ${event.summary}`),
+  const [offset, setOffset] = useState(0);
+  const key = JSON.stringify({ tab, query, offset, savedEvents, savedStocks });
+  const load = useCallback(
+    async (signal) => {
+      const { tab, query, offset } = JSON.parse(key);
+      return authRequest(
+        `/me/${tab === "events" ? "bookmarks" : "watchlist"}?${new URLSearchParams({ q: query, offset, limit: 20 })}`,
+        { signal, envelope: true },
+      );
+    },
+    [key],
   );
-  const selectedStocks = stocks.filter(
-    (stock) =>
-      savedStocks.includes(stock.symbol) &&
-      matches(`${stock.symbol} ${stock.name}`),
-  );
+  const result = useAsyncResource(load, key);
+  const selectedEvents =
+    tab === "events"
+      ? (result.data?.data || []).map((value) => issueView(value))
+      : [];
+  const selectedStocks =
+    tab === "stocks"
+      ? (result.data?.data || []).map((value) => stockView(value))
+      : [];
   return (
     <div className="wp-page saved-page">
       <div className="wp-page-header">
@@ -49,18 +56,20 @@ export default function SavedPage({
           onClick={() => {
             setTab("events");
             setQuery("");
+            setOffset(0);
           }}
         >
-          저장한 사건 <span>{savedEvents.length}</span>
+          저장한 사건 <span>{savedStatus === "ready" ? savedEvents.length : "—"}</span>
         </button>
         <button
           aria-pressed={tab === "stocks"}
           onClick={() => {
             setTab("stocks");
             setQuery("");
+            setOffset(0);
           }}
         >
-          관심 종목 <span>{savedStocks.length}</span>
+          관심 종목 <span>{savedStatus === "ready" ? savedStocks.length : "—"}</span>
         </button>
       </div>
       <label className="wp-search saved-search">
@@ -69,40 +78,27 @@ export default function SavedPage({
           aria-label="보관함 검색"
           placeholder="보관함에서 검색"
           value={query}
-          onChange={(e) => setQuery(e.target.value)}
+          onChange={(e) => {
+            setQuery(e.target.value);
+            setOffset(0);
+          }}
         />
       </label>
-      {(tab === "events" ? missingSavedEvents : missingSavedStocks).length >
-        0 && (
-        <section
-          className="saved-unavailable"
-          aria-label="조회할 수 없는 저장 항목"
-        >
-          <p>
-            다음 저장 항목은 현재 조회할 수 없습니다. 보관함에서 직접 해제할 수
-            있어요.
-          </p>
-          {(tab === "events" ? missingSavedEvents : missingSavedStocks).map(
-            (id) => (
-              <button
-                key={id}
-                className="wp-button"
-                onClick={() =>
-                  tab === "events" ? onToggleEvent(id) : onToggleStock(id)
-                }
-              >
-                {id} 저장 해제
-              </button>
-            ),
-          )}
-        </section>
-      )}
-      {tab === "events" ? (
+      {result.loading ? (
+        <p role="status">보관함을 불러오고 있습니다.</p>
+      ) : result.error ? (
+        <div role="alert">
+          {result.error.message}{" "}
+          <button className="wp-button" onClick={result.reload}>
+            다시 시도
+          </button>
+        </div>
+      ) : tab === "events" ? (
         selectedEvents.length ? (
           <div className="event-list">
             {selectedEvents.map((event) => (
               <EventRow
-                category={getCategory(event.category)}
+                category={null}
                 key={event.id}
                 event={event}
                 saved
@@ -173,9 +169,18 @@ export default function SavedPage({
           }
         />
       )}
+      <Pagination
+        pagination={result.data?.meta?.pagination}
+        onChange={({ offset }) => setOffset(offset)}
+        loading={result.loading}
+      />
+      {savedStatus === "error" && (
+        <button className="wp-button" onClick={reloadSaved}>
+          저장 상태 다시 확인
+        </button>
+      )}
       <p className="saved-note">
-        보관함은 이 브라우저에 저장됩니다. 예시 데이터와 서버 데이터의 보관함은
-        각각 보관합니다.
+        계정에 저장되어 다른 기기에서도 이어서 확인할 수 있습니다.
       </p>
     </div>
   );

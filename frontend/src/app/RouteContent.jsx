@@ -16,7 +16,40 @@ export default function RouteContent({
   onToggleEvent,
   onToggleStock,
   onSource,
+  member,
+  onLogin,
+  authStatus,
+  savedStatus,
+  reloadSaved,
 }) {
+  if (
+    !member &&
+    authStatus !== "ready" &&
+    ["/saved", "/mypage"].includes(pathname)
+  )
+    return (
+      <div className="wp-page" role="status">
+        {authStatus === "loading"
+          ? "로그인 상태를 확인하고 있습니다."
+          : "로그인 상태를 확인하지 못했습니다. 다시 시도해 주세요."}
+      </div>
+    );
+  if (!member && ["/saved", "/mypage"].includes(pathname))
+    return (
+      <EmptyState
+        title="로그인이 필요합니다"
+        description="로그인하고 내 정보와 보관함을 확인해 보세요."
+        action={
+          <button
+            className="wp-button"
+            data-variant="primary"
+            onClick={onLogin}
+          >
+            로그인
+          </button>
+        }
+      />
+    );
   const parts = pathname.split("/").filter(Boolean);
   const separator = route.indexOf("?");
   const queryParams = new URLSearchParams(
@@ -56,8 +89,7 @@ export default function RouteContent({
         onToggleStock={onToggleStock}
       />
     );
-  else if (["/mypage", "/login", "/signup"].includes(pathname))
-    content = <AccountPage page={parts[0]} />;
+  else if (pathname === "/mypage") content = <AccountPage member={member} />;
   else if (parts[0] === "stocks" && parts.length <= 2)
     content = (
       <StocksPage
@@ -69,6 +101,8 @@ export default function RouteContent({
   else if (pathname === "/saved")
     content = (
       <SavedPage
+        savedStatus={savedStatus}
+        reloadSaved={reloadSaved}
         savedEvents={savedEvents}
         savedStocks={savedStocks}
         onToggleEvent={onToggleEvent}
@@ -99,9 +133,7 @@ export default function RouteContent({
             ? parts[1]
               ? "stock"
               : "stocks"
-            : pathname === "/saved"
-              ? "saved"
-              : null;
+            : null;
   return resource ? (
     <PageDataBoundary
       resource={resource}

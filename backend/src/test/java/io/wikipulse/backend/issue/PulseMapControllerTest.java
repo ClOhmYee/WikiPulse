@@ -23,6 +23,7 @@ import org.springframework.test.web.servlet.MockMvc;
  * 펄스맵 조회 API 계약 검증 (WP-74). DB 없이 웹 레이어만.
  * pulse-openapi.json 의 봉투·필드·오류·null 처리가 맞는지 본다.
  */
+@org.springframework.context.annotation.Import(io.wikipulse.backend.account.SecurityConfig.class)
 @WebMvcTest(IssueController.class)
 class PulseMapControllerTest {
 

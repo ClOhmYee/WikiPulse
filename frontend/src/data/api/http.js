@@ -15,7 +15,7 @@ export function createHttpClient(baseURL, fetcher = globalThis.fetch) {
     } catch (error) {
       if (signal?.aborted || error.name === "AbortError") throw error;
       throw new DataError(
-        "서버에 연결할 수 없습니다. 네트워크와 API 주소를 확인해 주세요.",
+        "서버에 연결할 수 없습니다. 네트워크를 확인하고 다시 시도해 주세요.",
       );
     }
     let body;

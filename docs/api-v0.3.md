@@ -285,22 +285,33 @@ DB `CHECK` 제약과 **같은 값을 그대로** 쓴다. 번역하지 않는다.
 
 ---
 
-## 5. 회원 · 관심종목 · 알림 · 토론 — MVP 제외·미구현
+## 5. 회원 · 보관함 / 알림 · 토론
 
-~~MVP 인증·관심종목·알림·토론 API~~ → **전부 MVP 범위에서 제외** (2026-09-17, WP-104). 아래는 v0.1 당시의 미래 기능 초안이며 현재 Spring 컨트롤러와 통합 OpenAPI에는 없다. 인증 방식·알림 수단·WebSocket 여부도 이번 MVP에서 결정하지 않는다.
+회원·보관함은 WP-211에서 구현했다. 과거 `{token, member}` 초안은 폐기하고
+**HttpOnly 쿠키 + PostgreSQL 서버 세션 + CSRF**를 사용한다.
+상세 요청·응답, 검증 규칙과 적용 순서는 [계정·보관함 계약](backend/ACCOUNT_BOOKMARKS.md)을 따른다.
 
 | endpoint | 하는 일 |
 | --- | --- |
-| `POST /api/v1/auth/signup` | `{email, password, displayName}` |
-| `POST /api/v1/auth/login` | → `{token, member}` |
+| `GET /api/v1/auth/csrf` | 변경 요청에 사용할 토큰·헤더 이름 |
+| `POST /api/v1/auth/signup` | `{email, password, displayName}` → 회원 정보, 201 |
+| `POST /api/v1/auth/login` | → `{member}`, 세션 쿠키 설정 |
+| `POST /api/v1/auth/logout` | 세션 무효화, 204 |
 | `GET /api/v1/me` | 내 정보 |
-| `GET /api/v1/me/watchlist` | 관심종목 목록 (종목 요약 + `addedAt`) |
-| `PUT /api/v1/me/watchlist/{ticker}` | 추가 (멱등) |
-| `DELETE /api/v1/me/watchlist/{ticker}` | 해제 |
+| `GET /api/v1/me/saved-state` | 이슈 ID·종목 티커 목록 |
+| `GET /api/v1/me/bookmarks` | 저장한 스냅샷 카드, 검색·페이지네이션 |
+| `PUT / DELETE /api/v1/me/bookmarks/{clusterId}` | 이슈 저장·해제, 멱등 204 |
+| `GET /api/v1/me/watchlist` | 관심종목 카드, 검색·페이지네이션 |
+| `PUT / DELETE /api/v1/me/watchlist/{ticker}` | 종목 저장·해제, 멱등 204 |
+
+### 알림 — 미래 계약·미구현
+
+알림과 아래 토론은 여전히 MVP 제외다. 다음은 구현된 API가 아닌 미래 초안이다.
+
+| endpoint | 하는 일 |
+| --- | --- |
 | `GET /api/v1/me/notifications` | 쿼리 `unreadOnly`. `{id, body, issue, stock, readAt, createdAt}` |
 | `PATCH /api/v1/me/notifications/{id}` | `{"readAt": "…"}` 읽음 처리 |
-
-`PUT`으로 관심종목을 넣는 이유: 같은 종목을 두 번 눌러도 409가 아니라 200이어야 한다. `watchlist` PK가 `(member_id, ticker)`라 서버도 중복을 만들 수 없다.
 
 알림의 `issue`·`stock`은 `null`일 수 있다 — 상장폐지·클러스터 삭제 시 FK가 `SET NULL`이고 **알림 본문은 남긴다**.
 
