@@ -6,11 +6,7 @@ import { IssueState } from "../../components/event/IssueState";
 import { TrendChart } from "../../components/charts/TrendChart";
 import { dataClient } from "../../data/index.js";
 import { useAsyncResource } from "../../data/hooks/useAsyncResource.js";
-import {
-  metricLabel,
-  timestampLabel,
-  sourceLabel,
-} from "../event/presentation.js";
+import { metricLabel, timestampLabel } from "../event/presentation.js";
 import { StockMark, SaveButton, MatchEvidence } from "./StockElements";
 export default function StockDetail({ symbol, savedStocks, onToggleStock }) {
   const { events, getStock, collectionLimit, isExample } = usePageData();
@@ -125,7 +121,6 @@ export default function StockDetail({ symbol, savedStocks, onToggleStock }) {
                       <time dateTime={event.snapshotTs || undefined}>
                         {timestampLabel(event.snapshotTs)}
                       </time>
-                      <span>{sourceLabel(event.source)}</span>
                     </div>
                     <div className="st-event-body">
                       <a

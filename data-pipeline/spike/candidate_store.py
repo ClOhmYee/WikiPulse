@@ -43,21 +43,64 @@ DELETE FROM spike_candidate
 #: 조회수가 **이미 들어온** 대기만 가져온다. 아직 없는 것은 다음 실행에서 본다.
 #: `page_view_hourly` 는 (page_id, ts_hour) 가 키라 윈도우 시작 정각과 1:1 로 붙는다.
 #: 🔴 정각 윈도우만 붙는다 — 아래 `due()` 독스트링 참고.
+#:
+#: 🔴 **`JOIN page_view_hourly` 하나로는 안 된다** (WP-199). 위키미디어 덤프는
+#:    조회수 0 인 문서를 **아예 싣지 않는다.** 그래서 행이 없는 것이 두 가지를 뜻한다:
+#:      (1) 그 시간 원본이 아직 안 왔다     → 대기 유지가 맞다
+#:      (2) 원본은 왔는데 그 문서가 0회였다 → 폐기가 맞다
+#:    옛 SQL 은 (1)로만 해석해 0회 문서가 영영 대기로 남았고, 재판정이 가장 오래된
+#:    시간부터 도는 구조라 **큐가 맨 앞에서 막혔다.** 2026-09-22 에 0회 문서 500건이
+#:    뒤의 53,982건을 굶겼다.
+#:
+#:    그래서 적재 원장(`page_view_hourly_ingest`, V14)을 같이 본다. 그 시간이 원장에
+#:    있으면 도착한 것이고, 행이 없으면 **조회수 0** 으로 판정한다.
+#:
+#: ⚠️ `COALESCE(v.views, 0)` 의 0 은 추측이 아니라 **관측**이다 — 덤프에 없다는 것이
+#:    0회라는 뜻이다. 원장에 없는 시간은 애초에 이 질의에 안 걸리므로 0 이 지어내는
+#:    값이 되는 경우는 없다.
 SELECT_DUE_SQL = """
 SELECT c.source, c.page_id, p.wiki, p.title,
        c.window_start, c.window_end, c.edit_count, c.editor_count,
-       c.max_rev_id, c.last_edit_ts, v.views
+       c.max_rev_id, c.last_edit_ts, COALESCE(v.views, 0) AS views
   FROM spike_candidate c
   JOIN wiki_page p ON p.id = c.page_id
-  JOIN page_view_hourly v ON v.page_id = c.page_id AND v.ts_hour = c.window_start
+  JOIN page_view_hourly_ingest g
+       ON g.wiki = p.wiki AND g.ts_hour = c.window_start
+  LEFT JOIN page_view_hourly v
+       ON v.page_id = c.page_id AND v.ts_hour = c.window_start
  WHERE c.source = %s
  ORDER BY c.window_start
  LIMIT %s
 """
 
+#: 🔴 **만료 기준은 벽시계 단독이 아니다** (WP-202). 위 상수 주석의 전제
+#:    ("하루가 넘도록 조회수가 없었다면 그 시간 파일은 이미 나왔다")는 **상류가 돌고
+#:    있을 때만 참이다.** 멈추면 파일이 안 나온 것인데 "안 들어있었다" 로 읽고 버린다.
+#:
+#:    2026-09-21 에 위키미디어 조회수 집계가 통째로 멈췄고(WP-200) 후보
+#:    54,043건이 판정도 못 한 채 만료될 참이었다. 8월 선례는 복구까지 4일이었다.
+#:
+#:    그래서 적재 원장(V14)으로 전제를 직접 검사한다 — **상류가 이 후보의 시간을
+#:    지나갔을 때만** 버린다.
+#:
+#:      상류 정지        원장이 안 늘어 아무것도 안 버린다. 쌓이지만 그게 사실이다
+#:      그 시간만 결손   뒤 시간이 들어와 원장이 넘어가므로 36시간 뒤 정상 만료
+#:      상류 복귀        원장 행 하나만 들어와도 그보다 오래된 후보 전부가 다시
+#:                       만료 대상이 된다 (`>=` 라서). 백로그가 저절로 풀린다
+#:
+#: ⚠️ **원장이 비면 아무것도 안 버린다.** 배포 직후가 그렇다. 첫 적재 한 번으로
+#:    해소되지만, 상류가 오래 멈춰 있으면 그동안 무한정 쌓인다. 지금은 "판정 가능한
+#:    걸 버리는 것보다 쌓이는 게 낫다" 로 둔다 — 상한이 필요하면 별건이다.
 EXPIRE_SQL = """
-DELETE FROM spike_candidate
- WHERE source = %s AND first_seen_at < %s
+DELETE FROM spike_candidate c
+ USING wiki_page p
+ WHERE p.id = c.page_id
+   AND c.source = %s
+   AND c.first_seen_at < %s
+   AND EXISTS (SELECT 1
+                 FROM page_view_hourly_ingest g
+                WHERE g.wiki = p.wiki
+                  AND g.ts_hour >= c.window_start)
 """
 
 BUMP_RECHECK_SQL = """
@@ -137,7 +180,11 @@ class CandidateStore:
                         (self._source, page_id, require_utc(window_start, "window_start")))
 
     def due(self, limit: int = 1_000) -> Iterator[DueCandidate]:
-        """조회수가 **이미 들어온** 대기를 오래된 것부터 준다.
+        """조회수 원본이 **이미 도착한** 시간의 대기를 오래된 것부터 준다.
+
+        🔴 "조회수 행이 있는" 이 아니라 "그 시간 원본이 도착한" 이다
+        (WP-199). 덤프가 0회 문서를 안 실어서 둘이 다르다 — 원본은 왔는데
+        그 문서만 행이 없으면 `views=0` 으로 준다. 적재 원장(V14)이 그 구분을 준다.
 
         🔴 **정각 윈도우만 붙는다.** 조회수는 시간 버킷(`page_view_hourly.ts_hour`)이라
         윈도우 시작이 정각이어야 1:1 로 대응한다. LIVE 기본 슬라이드는 5분이라 한 시간에
@@ -170,6 +217,10 @@ class CandidateStore:
 
         조회수가 영영 안 오는 문서가 있다(삭제·이동, 또는 후보 필터 밖). 안 버리면
         매 실행에서 같은 행을 다시 조회한다.
+
+        🔴 **시간만으로는 안 버린다** (WP-202). 상류가 그 시간을 지나간 증거
+        (적재 원장 V14)가 같이 있어야 한다 — 상류가 멈춘 것과 그 문서가 없었던 것은
+        다른 사실이다. 근거는 `EXPIRE_SQL` 주석.
         """
         cutoff = require_utc(now, "now") - timedelta(hours=hours)
         with self._conn.cursor() as cur:

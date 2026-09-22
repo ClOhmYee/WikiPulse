@@ -48,9 +48,11 @@ SELECT r.id
         OR r.rnk <= %(top)s
         OR EXISTS (SELECT 1
                      FROM cluster_stock cs2
+                     JOIN issue_cluster c2 ON c2.id = cs2.cluster_id
                     WHERE cs2.issue_key IS NOT NULL
                       AND cs2.issue_key = r.issue_key
-                      AND cs2.check_state = 'DONE'))
+                      AND cs2.check_state = 'DONE'
+                      AND c2.snapshot_ts <= r.snapshot_ts))
  ORDER BY r.snapshot_ts DESC
  LIMIT %(limit)s
 """
@@ -160,6 +162,18 @@ def test_PENDING_만_있으면_면제되지_않는다(conn):
     low = _cluster(conn, score=0.1, issue_key="k-2",
                    snapshot="2026-09-02T00:00:00+00:00")
     _cluster(conn, score=9.0, snapshot="2026-09-02T00:00:00+00:00")
+
+    assert low not in _select(conn, top=1)
+
+
+def test_미래_DONE_판정은_과거_클러스터를_상한에서_면제하지_않는다(conn):
+    """재사용 불가능한 미래 판정을 공짜 캐시로 세면 실제 LLM 비용이 상한 밖으로 샌다."""
+    snap = "2026-09-01T00:00:00+00:00"
+    _cluster(conn, score=9.0, snapshot=snap)  # 과거 스냅샷 상한 1을 채운다.
+    low = _cluster(conn, score=0.1, issue_key="future-only", snapshot=snap)
+    future = _cluster(conn, score=9.0, issue_key="future-only",
+                      snapshot="2026-09-02T00:00:00+00:00")
+    _candidate(conn, future, "FUT", state="DONE", issue_key="future-only")
 
     assert low not in _select(conn, top=1)
 

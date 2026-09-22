@@ -107,10 +107,12 @@ public class IssueSummaryRepository {
     /**
      * 같은 issue_key 의 다른 스냅샷에서 이미 만든 요약을 찾는다 (WP-119 요약 재사용).
      * GATEWAY 재호출을 아끼려고 복사한다 — 🔴 행을 공유하지 않고 복사한다. 각 스냅샷(cluster_id)이
-     * 자기 issue_report 행을 가져 generated_at 이 그 스냅샷의 유효 시각이 되므로, 과거 조회가
-     * 미래 요약을 소급 노출하지 않는다(§3.2 8번 as-of).
+     * 자기 issue_report 행을 갖는다. 재사용 원본도 {@code source.snapshot_ts <= target.snapshot_ts}
+     * 로 제한해, 과거를 나중에 재생할 때 미래 스냅샷 요약이 역복사되지 않게 한다
+     * (WP-208, §3.2 8번 as-of).
      *
-     * <p>여러 스냅샷에 요약이 걸쳐 있으면 generated_at 최신 1행. 현재 cluster_id 자신은 제외한다.
+     * <p>허용된 원본이 여러 개면 대상 시점 이하의 가장 가까운 스냅샷을 고르고, 같은 시점 안에서는
+     * {@code generated_at} 최신 1행을 쓴다. 현재 cluster_id 자신은 제외한다.
      *
      * <p>🔴 {@code model} 이 일치하는 요약만 재사용한다 — model 문자열에 프롬프트 버전이 박혀 있어
      * (예: {@code "claude-... (summary_v1)"}), 프롬프트·모델을 올리면 이전 요약이 재사용되지 않고
@@ -123,11 +125,13 @@ public class IssueSummaryRepository {
         List<PriorSummary> rows = jdbc.query("""
                 SELECT r.summary, r.model
                   FROM issue_report r
-                  JOIN issue_cluster c ON c.id = r.cluster_id
-                 WHERE c.issue_key = :issueKey
-                   AND r.cluster_id <> :cid
-                   AND r.model = :model
-                 ORDER BY r.generated_at DESC
+                  JOIN issue_cluster source_cluster ON source_cluster.id = r.cluster_id
+                  JOIN issue_cluster target_cluster ON target_cluster.id = :cid
+                 WHERE source_cluster.issue_key = :issueKey
+                    AND r.cluster_id <> :cid
+                    AND r.model = :model
+                    AND source_cluster.snapshot_ts <= target_cluster.snapshot_ts
+                 ORDER BY source_cluster.snapshot_ts DESC, r.generated_at DESC
                  LIMIT 1
                 """, new MapSqlParameterSource()
                 .addValue("cid", clusterId)
@@ -206,7 +210,7 @@ public class IssueSummaryRepository {
                                              String source, int maxAttempts) {
         return jdbc.queryForList("""
                 WITH ranked AS (
-                    SELECT id, status, issue_key,
+                    SELECT id, status, issue_key, snapshot_ts,
                            row_number() OVER (PARTITION BY snapshot_ts
                                               ORDER BY pulse_score DESC, id ASC) AS rnk
                       FROM issue_cluster
@@ -234,6 +238,7 @@ public class IssueSummaryRepository {
                                      JOIN issue_cluster c2 ON c2.id = r.cluster_id
                                     WHERE c2.issue_key IS NOT NULL
                                       AND c2.issue_key = ranked.issue_key
+                                      AND c2.snapshot_ts <= ranked.snapshot_ts
                                       AND r.model = :model))
                  ORDER BY id DESC
                  LIMIT :limit

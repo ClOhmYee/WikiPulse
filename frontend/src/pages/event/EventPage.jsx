@@ -17,7 +17,6 @@ import {
   metricLabel,
   completenessDescription,
   timestampLabel as formatDate,
-  sourceLabel,
 } from "./presentation.js";
 import { IssueState } from "../../components/event/IssueState";
 import { ArticleNetwork } from "../../components/entity/ArticleNetwork";
@@ -132,7 +131,6 @@ export default function EventPage({
               {formatDate(event.snapshotTs)} 기준
             </time>
             <IssueState status={event.status} />
-            <span>{sourceLabel(event.source)}</span>
           </div>
         </div>
         <button

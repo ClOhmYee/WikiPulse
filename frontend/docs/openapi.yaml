@@ -3,13 +3,34 @@ info:
   title: WikiPulse implemented read APIs
   version: 1.0.0-backend
   description: >-
-    Nine GET routes verified against Spring controllers and DTOs (eight at f3c0160, 2026-09-15, WP-95/-97; /stocks/{ticker}/prices added 2026-09-18, WP-124).
+    Ten GET routes verified against Spring controllers and DTOs (eight at f3c0160, 2026-09-15, WP-95/-97; /stocks/{ticker}/prices added 2026-09-18, WP-124; /issues/rankings added 2026-09-22, WP-198).
     This replaces the 0.2.0 frontend proposal. Unimplemented APIs and contract decisions are documented in
     docs/frontend/API_DECISIONS.md. Mock uses these wire shapes; this document is not evidence of a live
     deployment.
 servers:
   - url: /api/v1
 paths:
+  /issues/rankings:
+    get:
+      operationId: getIssueRankings
+      description: >-
+        Rolling 30-day and one-calendar-year rankings ending at server time (Asia/Seoul).
+        Completed snapshots only; discard DISCARDED issues. Deduplicate by issue_key,
+        retain the highest score (ties: latest snapshot, then lowest id), and return ten
+        entries per window. Each id links to the snapshot that supplied its score.
+      responses:
+        "200":
+          description: Rankings; either list can be empty.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IssueRankingsResponse"
+        "500":
+          description: Internal error.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
   /issues:
     get:
       operationId: listIssues
@@ -418,6 +439,49 @@ paths:
                 $ref: "#/components/schemas/Error"
 components:
   schemas:
+    IssueRankingsResponse:
+      type: object
+      additionalProperties: false
+      required: [data]
+      properties:
+        data:
+          type: object
+          additionalProperties: false
+          required: [asOf, monthFrom, yearFrom, monthly, yearly]
+          properties:
+            asOf:
+              type: string
+              format: date-time
+            monthFrom:
+              type: string
+              format: date-time
+            yearFrom:
+              type: string
+              format: date-time
+            monthly:
+              type: array
+              maxItems: 10
+              items:
+                $ref: "#/components/schemas/IssueRankingEntry"
+            yearly:
+              type: array
+              maxItems: 10
+              items:
+                $ref: "#/components/schemas/IssueRankingEntry"
+    IssueRankingEntry:
+      type: object
+      additionalProperties: false
+      required: [id, pulseScore]
+      properties:
+        id:
+          type: integer
+          minimum: 1
+        label:
+          type: string
+          nullable: true
+        pulseScore:
+          type: number
+          minimum: 0
     Snapshot:
       type: object
       required:

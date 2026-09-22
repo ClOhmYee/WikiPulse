@@ -75,11 +75,13 @@ _CONFIRM = "UPDATE issue_cluster SET status = 'CONFIRMED' WHERE id = %s AND stat
 _FIND_PRIOR = """
     SELECT r.summary, r.model
       FROM issue_report r
-      JOIN issue_cluster c ON c.id = r.cluster_id
-     WHERE c.issue_key = %s
-       AND r.cluster_id <> %s
+      JOIN issue_cluster source_cluster ON source_cluster.id = r.cluster_id
+      JOIN issue_cluster target_cluster ON target_cluster.id = %s
+     WHERE source_cluster.issue_key = %s
+       AND r.cluster_id <> target_cluster.id
        AND r.model = %s
-     ORDER BY r.generated_at DESC
+       AND source_cluster.snapshot_ts <= target_cluster.snapshot_ts
+     ORDER BY source_cluster.snapshot_ts DESC, r.generated_at DESC
      LIMIT 1
 """
 
@@ -174,7 +176,7 @@ def test_find_prior_summary_returns_other_snapshot(conn):
     new = _new_cluster(conn, issue_key="iran-2026-08", snapshot_ts="2026-09-01T00:00:00+00:00")
     _upsert(conn, old, "이전 스냅샷 요약", "model-x")
 
-    rows = q(conn, _FIND_PRIOR, "iran-2026-08", new, "model-x")
+    rows = q(conn, _FIND_PRIOR, new, "iran-2026-08", "model-x")
     assert rows == [("이전 스냅샷 요약", "model-x")]
 
 
@@ -182,18 +184,28 @@ def test_find_prior_summary_excludes_self(conn):
     cid = _new_cluster(conn, issue_key="iran-2026-08")
     _upsert(conn, cid, "자기 요약", "m")
     # 자기 행뿐이면 재사용원이 없다(cluster_id <> self).
-    assert q(conn, _FIND_PRIOR, "iran-2026-08", cid, "m") == []
+    assert q(conn, _FIND_PRIOR, cid, "iran-2026-08", "m") == []
 
 
 def test_find_prior_summary_picks_latest(conn):
-    # 재사용 조회는 generated_at DESC 로 최신 요약 1행을 고른다(스냅샷 시각과 무관).
-    a = _new_cluster(conn, issue_key="k")
-    b = _new_cluster(conn, issue_key="k")
-    target = _new_cluster(conn, issue_key="k")
-    _insert_report_at(conn, a, "오래된 요약", "m", "2026-08-31T00:00:00+00:00")
-    _insert_report_at(conn, b, "최신 요약", "m", "2026-09-01T00:00:00+00:00")
+    # 처리시각(generated_at)이 아니라 대상 이하의 가장 가까운 스냅샷이 우선이다.
+    a = _new_cluster(conn, issue_key="k", snapshot_ts="2026-08-30T00:00:00+00:00")
+    b = _new_cluster(conn, issue_key="k", snapshot_ts="2026-08-31T00:00:00+00:00")
+    target = _new_cluster(conn, issue_key="k", snapshot_ts="2026-09-01T00:00:00+00:00")
+    # 더 오래된 스냅샷 a를 나중에 처리해 generated_at은 오히려 더 최신으로 만든다.
+    _insert_report_at(conn, a, "오래된 스냅샷 요약", "m", "2026-09-05T00:00:00+00:00")
+    _insert_report_at(conn, b, "가장 가까운 과거 요약", "m", "2026-09-01T00:00:00+00:00")
 
-    assert q(conn, _FIND_PRIOR, "k", target, "m")[0] == ("최신 요약", "m")
+    assert q(conn, _FIND_PRIOR, target, "k", "m")[0] == ("가장 가까운 과거 요약", "m")
+
+
+def test_find_prior_summary_does_not_reuse_future_snapshot(conn):
+    """WP-208: 나중 스냅샷 요약이 과거 재생으로 역복사되면 안 된다."""
+    target = _new_cluster(conn, issue_key="k", snapshot_ts="2026-09-01T00:00:00+00:00")
+    future = _new_cluster(conn, issue_key="k", snapshot_ts="2026-09-02T00:00:00+00:00")
+    _insert_report_at(conn, future, "미래 요약", "m", "2026-09-02T01:00:00+00:00")
+
+    assert q(conn, _FIND_PRIOR, target, "k", "m") == []
 
 
 def test_find_prior_summary_scoped_by_issue_key(conn):
@@ -201,7 +213,7 @@ def test_find_prior_summary_scoped_by_issue_key(conn):
     target = _new_cluster(conn, issue_key="my-issue")
     _upsert(conn, other, "다른 이슈 요약", "m")
     # 다른 issue_key 의 요약은 재사용 안 된다.
-    assert q(conn, _FIND_PRIOR, "my-issue", target, "m") == []
+    assert q(conn, _FIND_PRIOR, target, "my-issue", "m") == []
 
 
 def test_find_prior_summary_scoped_by_model(conn):
@@ -210,9 +222,9 @@ def test_find_prior_summary_scoped_by_model(conn):
     target = _new_cluster(conn, issue_key="k")
     _upsert(conn, old, "옛 프롬프트 요약", "claude-x (summary_v1)")
     # 현재 모델이 summary_v2 면 v1 요약은 재사용 대상이 아니다.
-    assert q(conn, _FIND_PRIOR, "k", target, "claude-x (summary_v2)") == []
+    assert q(conn, _FIND_PRIOR, target, "k", "claude-x (summary_v2)") == []
     # 같은 model 이면 재사용된다.
-    assert q(conn, _FIND_PRIOR, "k", target, "claude-x (summary_v1)")[0] == (
+    assert q(conn, _FIND_PRIOR, target, "k", "claude-x (summary_v1)")[0] == (
         "옛 프롬프트 요약", "claude-x (summary_v1)")
 
 

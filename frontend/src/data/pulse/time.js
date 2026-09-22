@@ -42,3 +42,15 @@ export function calendarDays(items) {
     },
   );
 }
+
+// One selectable snapshot per instant; prefer live when both pipelines overlap.
+export function timelineSnapshots(items) {
+  const byTime = new Map();
+  for (const item of items) {
+    const time = Date.parse(item.snapshotTs);
+    if (!byTime.has(time) || item.source === "live") byTime.set(time, item);
+  }
+  return [...byTime.values()].sort(
+    (a, b) => Date.parse(a.snapshotTs) - Date.parse(b.snapshotTs),
+  );
+}

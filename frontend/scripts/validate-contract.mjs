@@ -13,6 +13,7 @@ assert.deepEqual(
   [...operations].sort(),
   [
     "listIssues",
+    "getIssueRankings",
     "getIssue",
     "listIssueStocks",
     "listStocks",
@@ -71,6 +72,7 @@ async function collect(method, schema) {
   return rows;
 }
 const issues = await collect("listIssues", "IssueListResponse");
+check("IssueRankingsResponse", await mockClient.getIssueRankings());
 for (const issue of issues) {
   const detail = check(
     "IssueDetailResponse",

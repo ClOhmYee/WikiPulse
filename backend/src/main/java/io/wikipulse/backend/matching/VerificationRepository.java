@@ -144,8 +144,10 @@ public class VerificationRepository {
      * 생겨 매번 캐시 미스한다(V6 마이그레이션 주석). issue_key 로 스냅샷을 가로질러 찾는다.
      * V6 부분 인덱스 {@code (issue_key, ticker, prompt_version) WHERE check_state='DONE'} 를 탄다.
      *
-     * <p>여러 스냅샷에 DONE 이 걸쳐 있으면 verified_at 최신 1행. 🔴 현재 처리 중인 cluster_id 행
-     * 자신은 세지 않는다({@code cluster_id <> :cid}) — PK 가 (cluster_id, ticker) 라 자기 행은
+     * <p>여러 스냅샷에 DONE 이 걸쳐 있으면 대상 시점 이하의 가장 가까운 스냅샷을 고르고,
+     * 같은 시점 안에서는 {@code verified_at} 최신 1행을 쓴다. 미래 판정을 과거 replay 로
+     * 역복사하지 않는다(WP-208). 🔴 현재 처리 중인 cluster_id 행 자신은 세지 않는다
+     * ({@code cluster_id <> :cid}) — PK 가 (cluster_id, ticker) 라 자기 행은
      * 하나뿐이고 지금 PENDING 이라 check_state='DONE' 필터로 이미 빠지지만, 의도를 명시한다.
      *
      * <p>⚠️ issue_cluster.status 로 재사용원을 거르지 않는다 — DISCARDED 스냅샷의 판정도 재사용한다.
@@ -158,13 +160,17 @@ public class VerificationRepository {
     public Optional<Verdict> findPriorVerdict(
             long clusterId, String issueKey, String ticker, String promptVersion) {
         List<Verdict> rows = jdbc.query("""
-                SELECT verified, match_path, confidence, rationale
-                  FROM cluster_stock
-                 WHERE issue_key = :issueKey AND ticker = :ticker
-                   AND prompt_version = :promptVersion
-                   AND check_state = 'DONE'
-                   AND cluster_id <> :cid
-                 ORDER BY verified_at DESC NULLS LAST
+                SELECT cs.verified, cs.match_path, cs.confidence, cs.rationale
+                  FROM cluster_stock cs
+                  JOIN issue_cluster source_cluster ON source_cluster.id = cs.cluster_id
+                  JOIN issue_cluster target_cluster ON target_cluster.id = :cid
+                 WHERE cs.issue_key = :issueKey AND cs.ticker = :ticker
+                   AND cs.prompt_version = :promptVersion
+                   AND cs.check_state = 'DONE'
+                   AND cs.cluster_id <> :cid
+                   AND source_cluster.snapshot_ts <= target_cluster.snapshot_ts
+                 ORDER BY source_cluster.snapshot_ts DESC,
+                          cs.verified_at DESC NULLS LAST
                  LIMIT 1
                 """, new MapSqlParameterSource()
                 .addValue("cid", clusterId)
