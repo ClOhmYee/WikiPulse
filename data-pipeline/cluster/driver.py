@@ -115,7 +115,7 @@ from .snapshot import (
     _passes_resurgence,
     _within_creation_window,
 )
-from .writer import persist_snapshot
+from .writer import DownstreamDataWouldBeDeleted, downstream_counts, persist_snapshot
 
 #: Clickstream 근거 월은 **`batch.clickstream.select_completed_month` 하나가 고른다**
 #: (2026-09-18, -115 + develop 머지).
@@ -941,6 +941,7 @@ def run(
     root_grouping: bool = True,
     expansion: bool = False,
     link_fetcher=None,
+    allow_downstream_delete: bool = False,
     log=None,
 ) -> list[Snapshot]:
     """시점들을 순서대로 생산하고 저장한다. 커밋은 호출자 책임.
@@ -960,15 +961,32 @@ def run(
         # 월 덤프 순회는 여기서 한 번에 끝낸다 — 시점 루프 안에서 하면 월당 수천 번이다.
         neighbor_source.prepare(conn, source, snapshot_times, selection)
     produced: list[Snapshot] = []
+    cascade_at_risk: dict[str, int] = {}
     for snapshot_ts in snapshot_times:
         snapshot = build_snapshot_at(
             conn, snapshot_ts, source, neighbor_source=neighbor_source,
             selection=selection, root_grouping=root_grouping, expansion=expansion,
             link_fetcher=link_fetcher, log=log)
-        if not dry_run:
+
+        if dry_run:
+            # 🔴 dry-run 은 **아무것도 쓰지 않는다.** 대신 재저장이 무엇을 지우게 될지
+            #    센다 — 운영에 걸기 전에 이 숫자를 먼저 보라고 두는 출구다.
+            at_risk = {t: n for t, n in
+                       downstream_counts(conn, snapshot_ts, source).items() if n}
+            if at_risk and log:
+                log(f"  [dry-run] {snapshot_ts.isoformat()} 재저장 시 삭제: "
+                    f"클러스터 {snapshot.cluster_count} · "
+                    + ", ".join(f"{t} {n:,}" for t, n in sorted(at_risk.items())))
+            for table, n in at_risk.items():
+                cascade_at_risk[table] = cascade_at_risk.get(table, 0) + n
+        else:
             # 멱등은 writer 계약 그대로 — (source, snapshot_ts) 단위 지우고 다시 넣는다.
-            persist_snapshot(conn, snapshot)
+            persist_snapshot(conn, snapshot,
+                             allow_downstream_delete=allow_downstream_delete)
         produced.append(snapshot)
+    if dry_run and cascade_at_risk and log:
+        log("[dry-run] 합계 — 실제 실행 시 CASCADE 로 삭제될 행: "
+            + ", ".join(f"{t} {n:,}" for t, n in sorted(cascade_at_risk.items())))
     return produced
 
 
@@ -999,7 +1017,15 @@ def build_arg_parser() -> argparse.ArgumentParser:
                    help="이 시점 하나만 생산한다. 없으면 spike.detected_at 고유값 전부")
     p.add_argument("--since", type=_parse_ts, help="시점 범위 시작(포함)")
     p.add_argument("--until", type=_parse_ts, help="시점 범위 끝(포함)")
-    p.add_argument("--dry-run", action="store_true", help="저장 없이 생산만")
+    p.add_argument("--dry-run", action="store_true",
+                   help="저장 없이 생산만. 재저장 시 CASCADE 로 지워질 downstream 행 수를 "
+                        "함께 센다 — 운영에 걸기 전에 이걸 먼저 본다")
+    # 🔴 **기본이 꺼짐이다** (WP-161). 재저장은 그 스냅샷에 붙은 요약·종목
+    #    후보·GDELT 기관명·토론을 CASCADE 로 함께 지운다. GATEWAY 크레딧과 GDELT 호출로
+    #    만든 것이라 되돌리려면 돈과 시간이 든다.
+    p.add_argument("--allow-downstream-delete", action="store_true",
+                   help="downstream(요약·종목·GKG 기관명·토론)이 있어도 재저장을 진행한다. "
+                        "🔴 CASCADE 로 함께 지워진다. 기본은 중단")
 
     # --- ROOT SELECTION (WP-137 → -161 에서 MVP 정본 1단계) -----------
     # 🔴 **기본이 켜짐이다.** spike 전량을 클러스터링에 넣으면 CORE 가 giant 를 만든다
@@ -1121,11 +1147,23 @@ def main(argv: list[str] | None = None) -> int:
                   + (", ".join(args.edit_index) if args.edit_index
                      else "없음 — 추가 씨드만 배선한다"))
 
-        snapshots = run(conn, args.source, snapshot_times=times,
-                        dry_run=args.dry_run, neighbor_source=neighbor_source,
-                        selection=selection, root_grouping=args.root_grouping, expansion=args.expansion,
-                        link_fetcher=link_fetcher,
-                        log=lambda m: print(m, file=sys.stderr, flush=True))
+        try:
+            snapshots = run(
+                conn, args.source, snapshot_times=times,
+                dry_run=args.dry_run, neighbor_source=neighbor_source,
+                selection=selection,
+                allow_downstream_delete=args.allow_downstream_delete,
+                root_grouping=args.root_grouping, expansion=args.expansion,
+                link_fetcher=link_fetcher,
+                log=lambda m: print(m, file=sys.stderr, flush=True))
+        except DownstreamDataWouldBeDeleted as exc:
+            # 🔴 스택트레이스로 끝내지 않는다 — 운영에서 이 한 줄로 판단해야 한다.
+            #    이미 저장된 앞 시점도 되돌린다: 절반만 지워진 상태가 제일 나쁘다.
+            conn.rollback()
+            print("\n중단: " + str(exc), file=sys.stderr)
+            print("먼저 --dry-run 으로 삭제 예정 규모를 확인한다. "
+                  "이번 실행은 아무것도 커밋하지 않았다.", file=sys.stderr)
+            return 3
         if not args.dry_run:
             conn.commit()
 

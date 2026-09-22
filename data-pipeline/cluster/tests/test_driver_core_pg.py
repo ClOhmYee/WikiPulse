@@ -17,6 +17,7 @@ import pytest
 pytest.importorskip("psycopg")
 
 from cluster.driver import load_root_links, load_seeds_from_spike, run
+from cluster.writer import DownstreamDataWouldBeDeleted, downstream_counts
 from cluster.root_selection import RootSelectionConfig, load_selection
 
 UTC = timezone.utc
@@ -258,3 +259,93 @@ def test_live_and_replay_share_the_same_contract(conn):
                       " JOIN issue_cluster c ON c.id = m.cluster_id"
                       " JOIN spike s ON s.page_id = m.page_id"
                       "   AND s.detected_at = c.snapshot_ts AND s.source = c.source")[0] == 4
+
+
+# --- 운영 replay 보호장치 (WP-161) -------------------------------------
+
+def _summary(conn, cluster_id, text="요약"):
+    with conn.cursor() as cur:
+        cur.execute("INSERT INTO issue_report (cluster_id, summary, model)"
+                    " VALUES (%s, %s, 'test-model')", (cluster_id, text))
+
+
+def _stock(conn, cluster_id, ticker="AAPL"):
+    with conn.cursor() as cur:
+        cur.execute("INSERT INTO stock (ticker, name, exchange)"
+                    " VALUES (%s, 'Test Co', 'NASDAQ')"
+                    " ON CONFLICT (ticker) DO NOTHING", (ticker,))
+        cur.execute("INSERT INTO cluster_stock (cluster_id, ticker, tier, similarity)"
+                    " VALUES (%s, %s, 'BOTH', 0.5)", (cluster_id, ticker))
+
+
+def test_downstream_counts_sees_cascade_targets(conn, dolly):
+    run(conn, "replay", snapshot_times=[SNAP1])
+    cid = _one(conn, "SELECT id FROM issue_cluster ORDER BY pulse_score DESC LIMIT 1")[0]
+    _summary(conn, cid)
+    _stock(conn, cid)
+
+    counts = downstream_counts(conn, SNAP1, "replay")
+    assert counts["issue_report"] == 1
+    assert counts["cluster_stock"] == 1
+    # 0 인 테이블도 키로 나온다 — "조회했고 없었다" 와 "조회조차 안 했다" 는 다르다.
+    assert counts["cluster_org_mention"] == 0
+    assert "issue_summary_attempt" in counts        # develop V11
+
+
+def test_rerun_aborts_when_downstream_exists(conn, dolly):
+    """🔴 기본 동작은 중단이다. GATEWAY·GDELT 로 만든 데이터를 조용히 지우지 않는다."""
+    run(conn, "replay", snapshot_times=[SNAP1])
+    cid = _one(conn, "SELECT id FROM issue_cluster ORDER BY pulse_score DESC LIMIT 1")[0]
+    _summary(conn, cid)
+
+    with pytest.raises(DownstreamDataWouldBeDeleted) as caught:
+        run(conn, "replay", snapshot_times=[SNAP1])
+    assert caught.value.counts["issue_report"] == 1
+    assert "issue_report 1" in str(caught.value)
+    # 막혔으니 아무것도 안 지워졌다.
+    assert _one(conn, "SELECT count(*) FROM issue_report")[0] == 1
+    assert _one(conn, "SELECT count(*) FROM issue_cluster")[0] == 2
+
+
+def test_rerun_proceeds_only_with_explicit_flag(conn, dolly):
+    run(conn, "replay", snapshot_times=[SNAP1])
+    cid = _one(conn, "SELECT id FROM issue_cluster ORDER BY pulse_score DESC LIMIT 1")[0]
+    _summary(conn, cid)
+    _stock(conn, cid)
+
+    run(conn, "replay", snapshot_times=[SNAP1], allow_downstream_delete=True)
+    # 명시했으므로 CASCADE 로 지워진 것이 정상이다.
+    assert _one(conn, "SELECT count(*) FROM issue_report")[0] == 0
+    assert _one(conn, "SELECT count(*) FROM cluster_stock")[0] == 0
+    assert _one(conn, "SELECT count(*) FROM issue_cluster")[0] == 2
+
+
+def test_rerun_without_downstream_needs_no_flag(conn, dolly):
+    """downstream 이 없으면 가드가 길을 막지 않는다 — 평소 재계산은 그대로 돈다."""
+    run(conn, "replay", snapshot_times=[SNAP1])
+    run(conn, "replay", snapshot_times=[SNAP1])
+    assert _one(conn, "SELECT count(*) FROM issue_cluster")[0] == 2
+
+
+def test_dry_run_writes_nothing_and_reports_cascade(conn, dolly):
+    """🔴 dry-run 은 DB 에 한 줄도 안 쓴다. 삭제 예정 규모만 센다."""
+    run(conn, "replay", snapshot_times=[SNAP1])
+    cid = _one(conn, "SELECT id FROM issue_cluster ORDER BY pulse_score DESC LIMIT 1")[0]
+    _summary(conn, cid)
+    before = _all(conn, "SELECT id, label, pulse_score FROM issue_cluster ORDER BY id")
+
+    logged: list[str] = []
+    run(conn, "replay", snapshot_times=[SNAP1], dry_run=True, log=logged.append)
+
+    assert _all(conn, "SELECT id, label, pulse_score FROM issue_cluster ORDER BY id") == before
+    assert _one(conn, "SELECT count(*) FROM issue_report")[0] == 1
+    assert any("issue_report 1" in line for line in logged)
+    assert any("[dry-run] 합계" in line for line in logged)
+
+
+def test_dry_run_is_allowed_even_with_downstream(conn, dolly):
+    """dry-run 은 삭제를 안 하므로 가드에 걸리지 않는다 — 확인 경로가 막히면 안 된다."""
+    run(conn, "replay", snapshot_times=[SNAP1])
+    cid = _one(conn, "SELECT id FROM issue_cluster ORDER BY pulse_score DESC LIMIT 1")[0]
+    _summary(conn, cid)
+    run(conn, "replay", snapshot_times=[SNAP1], dry_run=True)   # 예외 없이 끝난다

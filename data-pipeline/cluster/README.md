@@ -16,12 +16,41 @@ PostgreSQL 에 저장한다. 버블맵 조회 API(WP-74)가 이 산출물을 읽
 | `asof_links.py` | as-of revision 링크 추출·정규화·수집 + V12 캐시 | `tests/test_asof_links.py` |
 | `snapshot.py` | 순수 생산 로직 — CORE 결과 → Cluster/Member, legacy 게이트·간선·issue_key | `tests/test_snapshot_core.py` · `tests/test_snapshot.py` |
 | `score.py` | 공통 sizeScore 0~1 + `SCORE_VERSION` | (snapshot 테스트에 포함) |
-| `writer.py` | 스냅샷을 PostgreSQL 에 멱등 저장(재계산 호환) | `tests/test_writer.py`(pgserver 왕복) |
+| `writer.py` | 스냅샷을 PostgreSQL 에 멱등 저장 + **downstream CASCADE 가드** | `tests/test_writer.py`(pgserver 왕복) |
 | `driver.py` | 실 데이터 소스 배선 + CLI — **씨드 경로 배선됨**(아래) | `tests/test_driver_seeds.py` · `tests/test_driver_pg.py` · `tests/test_driver.py` |
 
 ```
 pytest cluster/tests        # Docker 불필요(pgserver 번들 PostgreSQL)
 ```
+
+## 🔴 운영 재실행 보호장치 (WP-161)
+
+`persist_snapshot` 은 같은 `(source, snapshot_ts)` 를 다시 저장할 때 기존
+`issue_cluster` 를 지우는데, 그 DELETE 가 **CASCADE 로 downstream 까지 끌고 간다.**
+
+| 테이블 | 재생성 비용 |
+| --- | --- |
+| `issue_report` | GATEWAY 요약 호출 |
+| `cluster_stock` | 임베딩 + GDELT + LLM 검증 |
+| `cluster_org_mention` | GDELT GKG 집계 |
+| `issue_summary_attempt` | (develop V11) |
+| `comment_thread` | 사용자 입력 — 복구 불가 |
+
+그래서 downstream 이 **하나라도 있으면 기본은 중단**이다.
+
+```bash
+# 1) 무엇이 지워질지 먼저 본다. DB 에 한 줄도 쓰지 않는다.
+python -m cluster.driver --dsn ... --source replay --dry-run
+
+# 2) 지워도 된다고 판단했을 때만
+python -m cluster.driver --dsn ... --source replay --allow-downstream-delete
+```
+
+플래그 없이 downstream 이 있으면 `DownstreamDataWouldBeDeleted` 로 **종료 코드 3**,
+그때까지의 저장도 전부 롤백한다 — 절반만 지워진 상태가 제일 나쁘다.
+
+⚠️ `cluster_member`·`cluster_edge` 도 CASCADE 지만 가드 대상이 아니다. 그건 이 스냅샷의
+산출물 자체라 바로 다시 만들어진다. `notification` 은 `ON DELETE SET NULL` 이라 안 지워진다.
 
 ## 클러스터링 정본 (WP-161, 2026-09-22 확정) — **두 단계**
 
