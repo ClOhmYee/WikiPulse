@@ -174,6 +174,12 @@ def ingest_hour(
 
     if conn is not None:
         written = load_to_db(conn, records)
+        # 🔴 **적재했다는 사실을 남긴다** (WP-199). 이게 없으면 조회수 0 인
+        #    문서와 아직 안 온 시간이 구분되지 않는다 — 덤프가 0회 문서를 아예 안
+        #    싣기 때문에 둘 다 "page_view_hourly 에 행 없음" 으로 보인다.
+        #    ⚠️ written 이 0 이어도 기록한다. LIVE 는 대기 목록의 문서만 받으므로
+        #    그 시간 후보가 전부 0회면 0행이 정상이다.
+        record_ingest(conn, wiki, ts_hour, written)
         print(f"DB 적재 {ts_hour}: {written:,}행")
 
     staging = out_dir.with_name(out_dir.name + ".partial")
@@ -196,6 +202,27 @@ def ingest_hour(
         encoding="utf-8")
     print(f"적재 {ts_hour}: 문서 {counts.written:,} · 조회수 {sum(r.views for r in records):,}")
     return "ok"
+
+
+#: 적재 원장 upsert (V14). 재적재하면 행 수·시각만 갱신한다.
+RECORD_INGEST_SQL = """
+INSERT INTO page_view_hourly_ingest (wiki, ts_hour, rows, ingested_at)
+VALUES (%s, %s, %s, now())
+ON CONFLICT (wiki, ts_hour) DO UPDATE
+   SET rows = EXCLUDED.rows, ingested_at = EXCLUDED.ingested_at
+"""
+
+
+def record_ingest(conn, wiki: str, ts_hour: str, rows: int) -> None:
+    """이 (wiki, 시간) 을 실제로 받아 적재했다고 남긴다 (WP-199).
+
+    🔴 **행 수가 아니라 행의 존재가 신호다.** `rows=0` 도 "도착했고, 그 시간 후보가
+    전부 0회였다" 는 완전한 사실이다. 읽는 쪽이 `rows > 0` 을 조건으로 쓰면 그
+    경우를 미도착으로 오인한다 — 지금 고치려는 버그와 같은 형태다.
+    """
+    with conn.cursor() as cur:
+        cur.execute(RECORD_INGEST_SQL, (wiki, ts_hour, rows))
+    conn.commit()
 
 
 def load_to_db(conn, records) -> int:
