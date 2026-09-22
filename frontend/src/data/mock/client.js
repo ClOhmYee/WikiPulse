@@ -198,6 +198,7 @@ const handlers = {
           isSeed: node.isSeed,
           editCount: node.editCount,
           views: node.views,
+          completeness: node.completeness,
         }))
         .sort(
           (a, b) => Number(b.isSeed) - Number(a.isSeed) || b.weight - a.weight,

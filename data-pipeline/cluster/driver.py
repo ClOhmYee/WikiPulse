@@ -17,6 +17,8 @@
     ✅ 이전 first_detected_at: `issue_cluster` 의 issue_key 별 min → `load_prior_first_detected`
     ✅ Clickstream 이웃(추가 씨드): `MonthlyNeighborSource` → `--clickstream-root` (-115)
     ✅ 문서 생성 시각(UTC): `batch/page_creation` 인덱스 → `--creation-index` (-115)
+    ✅ 날짜별 편집 수(봇 포함): `batch/page_edit_daily` 인덱스 → `--edit-index` (-145).
+       **선택이다** — 주면 비-씨드 재급증 멤버가 붙고, 안 주면 추가 씨드만 나온다.
     ✅ 이웃 제목 → page_id: `load_pages_by_title` (-115). 없는 문서는 등록한다
     ⛔ Wikidata 점선 간선: 선택 사항. 없으면 안 그린다.
 
@@ -81,7 +83,7 @@ import os
 import sys
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field as dataclass_field
-from datetime import datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 from batch.clickstream import (
@@ -91,14 +93,19 @@ from batch.clickstream import (
     select_completed_month,
 )
 from batch.page_creation import creation_dates_for
+from batch.page_edit_daily import coverage_span, edit_days_for, sum_days
 from spike.spike_sink import SPIKE_SOURCES
 
 from .snapshot import (
     DEFAULT_CREATION_WINDOW_DAYS,
+    DEFAULT_RESURGENCE_MIN_EDITS,
+    DEFAULT_RESURGENCE_RATIO,
+    EditResurgence,
     Neighbor,
     Seed,
     Snapshot,
     build_snapshot,
+    _passes_resurgence,
     _within_creation_window,
 )
 from .writer import persist_snapshot
@@ -346,6 +353,13 @@ class NeighborStats:
     creation_resolved: int = 0
     creation_missing: int = 0
     window_rejected: int = 0      # 생성일은 알지만 창 밖
+    # 창을 떨어진 뒤 재급증(비-씨드) 게이트에서 갈린 수 (WP-145).
+    # 🔴 `resurgence_missing` 을 `resurgence_rejected` 와 합치지 않는다 —
+    #    위 🔴 와 같은 이유다. 편집 인덱스에 제목이 없는 것과, 세어 보고 미달인
+    #    것은 다른 사실이다. 합치면 덤프 구멍이 "규칙대로 걸렀다" 로 읽힌다.
+    resurgence_missing: int = 0   # 편집 인덱스에 제목 없음
+    resurgence_rejected: int = 0  # 수치는 있는데 게이트 미달
+    resurgence_passed: int = 0
     gate_passed: int = 0
     page_resolved: int = 0
     months: dict[str, int] = dataclass_field(default_factory=dict)
@@ -357,6 +371,9 @@ class NeighborStats:
         self.creation_resolved += other.creation_resolved
         self.creation_missing += other.creation_missing
         self.window_rejected += other.window_rejected
+        self.resurgence_missing += other.resurgence_missing
+        self.resurgence_rejected += other.resurgence_rejected
+        self.resurgence_passed += other.resurgence_passed
         self.gate_passed += other.gate_passed
         self.page_resolved += other.page_resolved
         for month, count in other.months.items():
@@ -381,12 +398,18 @@ def build_neighbor_inputs(
     month: str,
     page_of_title: dict[str, tuple[int, str]],
     created_of_page: dict[int, datetime | None],
+    resurgence_of_title: dict[str, EditResurgence] | None = None,
 ) -> list[Neighbor]:
     """NeighborRef 를 cluster.snapshot.Neighbor 로 변환한다.
 
     page_of_title: 이웃 제목 → (page_id, wiki)   — wiki_page 조회(미배선)
     created_of_page: page_id → 생성 시각(UTC)      — `batch/page_creation` (-115)
+    resurgence_of_title: 제목 → 재급증 수치 — `batch/page_edit_daily` (-145)
     두 소스가 아직 없으면 그 이웃은 건너뛴다(생성 시각 미상은 게이트가 어차피 탈락시킨다).
+
+    재급증 수치는 **창을 떨어진 뒤 2차 관문을 통과한 이웃에만** 있다. 창을 통과한
+    추가 씨드에는 없고, 없는 것이 정상이다 — `snapshot.py` 가 창을 먼저 보므로
+    그 경로에서는 읽히지 않는다.
     """
     out: list[Neighbor] = []
     for ref in refs:
@@ -402,8 +425,92 @@ def build_neighbor_inputs(
             clickstream_month=month,
             created_at=created_of_page.get(page_id),
             directed=ref.directed,
+            resurgence=(resurgence_of_title or {}).get(ref.title),
         ))
     return out
+
+
+def resurgence_for(
+    days: dict[date, int] | None,
+    event_date: date,
+    window_days: int,
+    *,
+    snapshot_date: date,
+    created_at: datetime | None = None,
+    coverage: tuple[date | None, date | None] = (None, None),
+) -> EditResurgence | None:
+    """한 이웃의 사건기간·기준기간 편집 수를 만든다 (WP-145).
+
+    🔴 **사건기간은 스냅샷에서 끝난다. 미래로 열어 두지 않는다.**
+        ~~사건일 ±window_days~~ → **[사건일-window_days, 관측 가능한 끝)** 로 정정
+        (2026-09-20, 사용자 지적으로 발견). 앞의 방식은 사건기간 끝이 사건 31일
+        뒤라, 게이트의 시점 상한(`event_end <= snapshot_ts`)에 걸려 **사건 31일이
+        지나기 전에는 어떤 스냅샷도 통과하지 못했다.** 실시간 판정이 통째로 죽는다.
+        내 단위 테스트는 `snapshot_ts` 를 먼 미래로 잡아 둬서 이걸 못 잡았다 —
+        실수를 그대로 검증하는 테스트였다.
+
+    관측 가능한 끝 = `min(사건일+window_days+1, 스냅샷 날짜, 커버리지 끝+1)`.
+    셋 중 가장 이른 것이다. 스냅샷이 사건 직후면 짧고, 시간이 지나면 창이 다 찬다.
+
+    기준기간 = 사건기간 **직전** 같은 길이. 길이를 사건기간에서 받아 계산하므로
+    스냅샷이 일러 사건기간이 짧아지면 기준기간도 같이 짧아진다 — "지금까지 본
+    만큼" 과 "그 직전 같은 만큼" 을 비교하는 것이 -77 의 취지다.
+
+    ⚠️ **기준기간이 커버리지 시작보다 앞서면 판정하지 않는다.** 기준선이 과소
+        계수되면 비율이 **부풀어** 배경 문서가 재급증으로 통과한다 — 사건기간이
+        잘릴 때와 반대로, 틀리는 방향이 오탐이라 더 위험하다.
+
+    ⚠️ `days` 가 None(편집 인덱스에 제목 없음)이면 None 을 돌려준다. 0 으로 채우지
+        않는다 — 기준기간이 0 이면 비율이 무한대가 되어 덤프 구멍이 "재급증" 으로
+        위장된다(`batch/page_edit_daily` 모듈 ⚠️).
+
+    날짜 경계는 `[start, end)` 다. 반환 datetime 은 자정 UTC 다.
+    """
+    if days is None:
+        return None
+
+    first_day, last_day = coverage
+    span = timedelta(days=window_days)
+
+    event_start = event_date - span
+    ends = [event_date + span + timedelta(days=1), snapshot_date]
+    if last_day is not None:
+        ends.append(last_day + timedelta(days=1))
+    event_end = min(ends)
+    if event_end <= event_start:
+        return None                      # 아직 볼 수 있는 구간이 없다
+    # 🔴 **사건기간이 사건일을 담지 못하면 판정하지 않는다.** 커버리지나 스냅샷이
+    #    사건일보다 이르면 창이 사건 **이전** 구간만 담는데, 그걸로 낸 비율은
+    #    "사건 때문에 들썩였나" 가 아니라 "사건 전에 들썩였나" 를 잰 값이다.
+    #    통과·탈락 어느 쪽이 나와도 근거가 없다.
+    if event_end <= event_date:
+        return None
+
+    length = event_end - event_start
+    baseline_start = event_start - length
+    baseline_end = event_start
+    if first_day is not None and baseline_start < first_day:
+        return None                      # 기준선이 잘린다 — 위 ⚠️ (오탐 방향)
+    # 🔴 **기준기간 내내 존재하지 않았으면 판정하지 않는다** (2026-09-20 실측).
+    #    문서가 그때 없었으면 기준 편집이 0 인데, 그건 "조용했다" 가 아니라
+    #    "없었다" 다. 실측에서 기준 0 인 3,546개 중 67.5% 가 그 이전에도 편집 0 —
+    #    사건 때문에 새로 생긴 문서였다(`2026 Colombia earthquake` 등).
+    #    그런 문서는 비-씨드(배경 재조명)가 아니라 추가 씨드 쪽이고, 생성일 창이
+    #    ±30일이라 31~61일 전에 생긴 것만 여기로 샌다. 그 구멍을 막는다.
+    if created_at is not None and created_at.date() >= baseline_start:
+        return None
+
+    def _at(day: date) -> datetime:
+        return datetime(day.year, day.month, day.day, tzinfo=timezone.utc)
+
+    return EditResurgence(
+        event_edits=sum_days(days, event_start, event_end),
+        baseline_edits=sum_days(days, baseline_start, baseline_end),
+        event_start=_at(event_start),
+        event_end=_at(event_end),
+        baseline_start=_at(baseline_start),
+        baseline_end=_at(baseline_end),
+    )
 
 
 def neighbors_for_snapshot(
@@ -415,6 +522,11 @@ def neighbors_for_snapshot(
     *,
     creation_window_days: int,
     stats: NeighborStats,
+    snapshot_ts: datetime | None = None,
+    edit_days_of_title: dict[str, dict[date, int]] | None = None,
+    edit_coverage: tuple[date | None, date | None] = (None, None),
+    resurgence_ratio: float = DEFAULT_RESURGENCE_RATIO,
+    resurgence_min_edits: int = DEFAULT_RESURGENCE_MIN_EDITS,
 ) -> dict[int, list[Neighbor]]:
     """한 시점의 씨드들에 이웃을 붙인다. `build_snapshot(neighbors=...)` 입력 형태.
 
@@ -423,9 +535,23 @@ def neighbors_for_snapshot(
 
     🔴 창 판정은 `snapshot._within_creation_window` 를 **그대로 부른다.** 여기에 같은
     조건을 다시 쓰면 게이트가 두 벌이 되고, 한쪽만 바뀌어도 에러 없이 결과가 갈린다.
+    재급증 판정(`_passes_resurgence`)도 같은 이유로 그대로 부른다.
+
+    게이트 둘은 배타적이고 순서가 있다 (WP-145). 창을 통과하면 추가 씨드로
+    끝내고, **떨어진 후보만** 재급증으로 내린다. 여기서 한 번 거르는 이유는 위의
+    page_id 등록 규칙 때문이다 — 재급증까지 떨어진 후보를 넘기면 멤버가 될 일 없는
+    문서가 `wiki_page` 에 쌓인다. `snapshot.py` 가 최종 판정을 다시 하므로 이 선별은
+    같은 함수를 부르는 사전 통과일 뿐이고 규칙을 새로 만들지 않는다.
+
+    `edit_days_of_title` 이 None 이면 재급증 경로 자체를 돌지 않는다 — 편집 인덱스를
+    안 준 호출자(기존 배선·테스트)는 씨드 전용 동작 그대로다.
     """
     kept: dict[int, list[NeighborRef]] = {}
     wanted: dict[str, set[str]] = {}
+    # 통과한 후보의 재급증 수치. 제목 단위라 여러 씨드에 걸쳐도 한 번만 잰다 —
+    # 사건일이 씨드마다 달라 값이 갈릴 수 있지만, 같은 스냅샷 안에서 같은 제목을
+    # 두 번 계산하지 않기 위해 마지막 승자를 쓴다(멤버는 클러스터별로 들어간다).
+    resurgence_of_title: dict[str, EditResurgence] = {}
 
     for seed in seeds:
         stats.seeds += 1
@@ -442,6 +568,25 @@ def neighbors_for_snapshot(
             stats.creation_resolved += 1
             if not _within_creation_window(created, seed.event_date, creation_window_days):
                 stats.window_rejected += 1
+                if edit_days_of_title is None or snapshot_ts is None:
+                    continue
+                # 2차 관문 — 오래전 문서가 사건으로 재조명됐는가 (WP-77).
+                spike = resurgence_for(edit_days_of_title.get(ref.title),
+                                       seed.event_date, creation_window_days,
+                                       snapshot_date=snapshot_ts.date(),
+                                       created_at=created,
+                                       coverage=edit_coverage)
+                if spike is None:
+                    stats.resurgence_missing += 1
+                    continue
+                if not _passes_resurgence(spike, snapshot_ts,
+                                          min_ratio=resurgence_ratio,
+                                          min_edits=resurgence_min_edits):
+                    stats.resurgence_rejected += 1
+                    continue
+                stats.resurgence_passed += 1
+                resurgence_of_title[ref.title] = spike
+                survivors.append(ref)
                 continue
             stats.gate_passed += 1
             survivors.append(ref)
@@ -460,7 +605,8 @@ def neighbors_for_snapshot(
     stats.months[month] = stats.months.get(month, 0) + 1
 
     return {
-        page_id: build_neighbor_inputs(refs, month, page_of_title, created_of_page)
+        page_id: build_neighbor_inputs(refs, month, page_of_title, created_of_page,
+                                       resurgence_of_title)
         for page_id, refs in kept.items()
     }
 
@@ -482,14 +628,28 @@ class MonthlyNeighborSource:
         creation_index: str | Path,
         *,
         creation_window_days: int = DEFAULT_CREATION_WINDOW_DAYS,
+        edit_index: str | Path | Sequence[str | Path] | None = None,
     ) -> None:
         self.shards_root = Path(shards_root)
         self.creation_index = Path(creation_index)
         self.creation_window_days = creation_window_days
+        # 비-씨드 재급증 인덱스(`batch/page_edit_daily`, -145). **선택이다** —
+        # 주지 않으면 창 게이트만 돌아 추가 씨드만 나온다. 월 덤프가 늦게 공개돼
+        # LIVE 최신 구간에는 아직 못 쓰기 때문에 필수로 두지 않는다.
+        # 월별 적재본 여러 개를 받는다 (WP-145 — 한 번에 여러 달을
+        # 훑으면 적재 쪽 메모리가 터진다). 하나만 줘도 된다.
+        self.edit_index = (
+            [Path(edit_index)] if isinstance(edit_index, (str, Path))
+            else [Path(d) for d in edit_index] if edit_index else None)
+        # 적재본이 실제로 담은 마지막 날짜. 매니페스트에 없으면 None 이고, 그때는
+        # 경계를 모르는 채로 판정한다 — 옛 적재본은 다시 만드는 편이 낫다.
+        self.edit_coverage = (
+            coverage_span(self.edit_index) if self.edit_index else (None, None))
         self.stats = NeighborStats()
         # (wiki, month) -> 씨드 제목 -> 이웃. 근거 월이 wiki 마다 다를 수 있어 키가 쌍이다.
         self._refs: dict[tuple[str, str], dict[str, list[NeighborRef]]] = {}
         self._created: dict[str, datetime] = {}
+        self._edit_days: dict[str, dict[date, int]] = {}
         self._month_of: dict[tuple[str, datetime], str] = {}
 
     def month_for(self, wiki: str, snapshot_ts: datetime) -> str:
@@ -539,6 +699,17 @@ class MonthlyNeighborSource:
                   f"이웃 보유 {len(month_refs):,}개")
 
         self._created = load_creation_dates(self.creation_index, all_titles)
+        if self.edit_index is not None:
+            # 창을 떨어질 후보가 대다수라 후보 전체를 한 번에 읽는다. 씨드마다
+            # 사건일이 달라 고정 구간으로 미리 합칠 수 없어 날짜별 원장을 든다.
+            self._edit_days = edit_days_for(self.edit_index, all_titles)
+            first, last = self.edit_coverage
+            print(f"  편집 인덱스 데이터 구간: {first or '미상'} ~ {last or '미상'}"
+                  " (사건·기준기간이 이 밖으로 나가면 판정하지 않는다)")
+            print(f"  편집 인덱스: 후보 제목 {len(all_titles):,}개 중 "
+                  f"{len(self._edit_days):,}개 resolve "
+                  f"({100.0 * len(self._edit_days) / len(all_titles):.1f}%)"
+                  if all_titles else "  편집 인덱스: 후보 제목 0개")
         print(f"  생성일: 후보 제목 {len(all_titles):,}개 중 "
               f"{len(self._created):,}개 resolve "
               f"({100.0 * len(self._created) / len(all_titles):.1f}%)"
@@ -555,7 +726,9 @@ class MonthlyNeighborSource:
             out.update(neighbors_for_snapshot(
                 conn, wiki_seeds, self._refs.get((wiki, month), {}), self._created,
                 month, creation_window_days=self.creation_window_days,
-                stats=self.stats))
+                stats=self.stats, snapshot_ts=snapshot_ts,
+                edit_days_of_title=self._edit_days if self.edit_index else None,
+                edit_coverage=self.edit_coverage))
         return out
 
 
@@ -720,6 +893,14 @@ def build_arg_parser() -> argparse.ArgumentParser:
                    default=os.environ.get("PAGE_CREATION_OUT", ""),
                    help="batch.page_creation 인덱스 디렉터리. --clickstream-root 와 "
                         "함께 필요하다. 생성일 없이는 창 게이트가 전부 탈락시킨다")
+    # 🔴 **선택이다.** 안 주면 창 게이트만 돌아 추가 씨드만 나온다 — 비-씨드 재급증
+    #    멤버가 안 생길 뿐 조용히 깨지지 않는다. 월 덤프 공개가 늦어 LIVE 최신
+    #    구간에는 아직 못 쓰기 때문에 필수로 두지 않는다 (WP-145).
+    p.add_argument("--edit-index", action="append", default=None,
+                   help="batch.page_edit_daily 인덱스 디렉터리. 주면 비-씨드 재급증 "
+                        "멤버(WP-77)를 배선한다. 없으면 추가 씨드만. "
+                        "적재가 월별로 쪼개지므로 **여러 번 줄 수 있다** — 빠진 달이 "
+                        "있으면 기동 때 CoverageGap 으로 막는다")
     return p
 
 
@@ -754,9 +935,13 @@ def main(argv: list[str] | None = None) -> int:
         neighbor_source = None
         if args.clickstream_root:
             neighbor_source = MonthlyNeighborSource(
-                args.clickstream_root, args.creation_index)
+                args.clickstream_root, args.creation_index,
+                edit_index=args.edit_index or None)
             print(f"이웃 배선: clickstream={args.clickstream_root} "
                   "(근거 월은 select_completed_month 가 고른다)")
+            print("  비-씨드 재급증: "
+                  + (", ".join(args.edit_index) if args.edit_index
+                     else "없음 — 추가 씨드만 배선한다"))
 
         snapshots = run(conn, args.source, snapshot_times=times,
                         dry_run=args.dry_run, neighbor_source=neighbor_source)
@@ -769,7 +954,12 @@ def main(argv: list[str] | None = None) -> int:
         print(f"이웃 배선 집계: 씨드 {s.seeds:,} (덤프에 있던 씨드 {s.seeds_in_dump:,}) / "
               f"후보 {s.candidates:,} / 생성일 resolve {s.creation_resolved:,} "
               f"미상 {s.creation_missing:,} / 창 탈락 {s.window_rejected:,} / "
-              f"게이트 통과 {s.gate_passed:,} / page_id 해석 {s.page_resolved:,}")
+              f"창 통과(추가 씨드) {s.gate_passed:,} / page_id 해석 {s.page_resolved:,}")
+        # 재급증(비-씨드)은 창을 **떨어진** 후보에만 도는 별개 관문이라 따로 적는다.
+        # 안 찍으면 "창 통과 0" 만 보이고 비-씨드가 어디서 왔는지 알 수 없다.
+        print(f"  비-씨드 재급증: 통과 {s.resurgence_passed:,} / "
+              f"미달 {s.resurgence_rejected:,} / 미상 {s.resurgence_missing:,} "
+              f"(미상 = 편집 인덱스에 없거나 기준기간을 잴 수 없는 후보)")
 
     clusters = sum(s.cluster_count for s in snapshots)
     members = sum(len(c.members) for s in snapshots for c in s.clusters)

@@ -10,9 +10,16 @@ Spark·DB 없이 테스트된다. 실 데이터 소스는 driver.py 가 배선�
         생성일 근접이 곧 시간 동시성이다 — 신규 사건 문서는 baseline 이 없어
         절대 편집수만으로 이미 급증 판정을 통과할 문서이고, 그래서 배경이 아니라
         사건 자체다. 이 모듈이 배선하는 경로는 여기까지다.
-    ⚠️ 비-씨드(`is_seed=false`) = 오래전 생성된 이웃 중 사건기간 편집 재급증
-        비율 >= 5 AND 절대 편집 >= 20 인 문서(WP-77). **이 모듈에 없다.**
-        재급증 입력 자체를 안 받는다 — 규칙을 여기서 흉내 내지 않는다.
+    비-씨드(`is_seed=false`) = 오래전 생성된 이웃 중 사건기간 편집 재급증
+        비율 >= 5 AND 사건 편집 >= 20 **AND 기준 편집 >= 5** 인 문서
+        (WP-77 + 기준 하한은 -145 실측 추가). 사건 **이전부터 있던**
+        문서가 사건으로 재조명된 경우다(예: Mojtaba_Khamenei, 2009 생성).
+        ~~이 모듈에 없다 — 재급증 입력 자체를 안 받는다~~ → **배선됨** (2026-09-20,
+        WP-144). `Neighbor.resurgence` 로 받고 `_passes_resurgence` 가 판정한다.
+
+        🔴 **두 게이트는 배타적이고 순서가 있다.** 생성일 창을 먼저 본다 — 창을
+        통과하면 추가 씨드로 끝내고, **떨어진 문서만** 재조명 후보로 내린다. 뒤집으면
+        사건 때문에 새로 생긴 문서가 배경으로 기록된다. 한 문서가 둘 다일 수는 없다.
 
     🔴 ~~생성일 창을 통과한 이웃을 `is_seed=false` 로 저장~~ → **`true`**
         (2026-09-18, -115). 한 칸에 성격이 정반대인 둘이 섞여 있었다. 생성일 창을
@@ -46,8 +53,9 @@ Spark·DB 없이 테스트된다. 실 데이터 소스는 driver.py 가 배선�
         `cluster/driver.CLICKSTREAM_MONTH_RULES` 에 수치와 함께 적어 두었다.
     Wikidata 관계는 게이트에서 빠졌다(§3.2 4번 — 속성 5종 전수 검사 실패). 화면 근거
         간선(점선)으로만 그리며, 스냅샷 이후 관측한 관계는 소급하지 않는다.
-    ⚠️ 기존 문서가 사건으로 재조명되는 비-씨드(예: Mojtaba_Khamenei, 2009 생성)는
-        생성일 창으로 못 잡는다 — WP-77 로 분리. 이 모듈은 다루지 않는다.
+    ⚠️ 재급증 편집 수는 `all-editor-types`(봇 포함)로 센 값이다. 이슈 판정 1차 관문의
+        "봇이 아닌 편집"과 **다른 editor type 이다** — `EditResurgence` 주석 참고.
+        같은 값으로 통일하려는 정리는 신호를 죽인다.
 
 issue_key
     id 는 스냅샷마다 새로 생기지만, 같은 사건을 시점 간에 이으려면 안정 키가 필요하다.
@@ -71,6 +79,39 @@ DEFAULT_CREATION_WINDOW_DAYS = 30
 
 #: Clickstream 월별 덤프 자체의 하한. 이보다 낮은 이동량 행은 덤프에 없다.
 CLICKSTREAM_FLOOR = 10
+
+#: 비-씨드(재조명) 게이트 — 사건기간 편집 / 직전 동일 길이 기준기간 편집.
+#: WP-77 실측(3사건 22건). 통과: Mojtaba_Khamenei 19.5 · IRGC 6.7 · Ali_Khamenei 5.0.
+#: 탈락: Saffir-Simpson 1.7 · Katrina 0.9 · Helene 0.3 — 배경·계절성은 비율에서 갈린다.
+DEFAULT_RESURGENCE_RATIO = 5.0
+
+#: 같은 게이트의 **사건 쪽** 절대 하한. 🔴 비율 단독으로는 안 된다 — 표본 크기가 70배
+#: 달라도 비율은 동률이 나온다(Tampa 5.0배 10건 vs Ali_Khamenei 5.0배 700건). 10건짜리
+#: 비율은 편집 1~2건에 통째로 흔들린다. 이 프로젝트가 급증 임계에서 이미 겪은 형태다(§11).
+DEFAULT_RESURGENCE_MIN_EDITS = 20
+
+#: **기준 쪽** 절대 하한 (2026-09-20 실측 추가, WP-145).
+#: ~~`-77` 은 사건 쪽에만 하한을 걸었다~~ → 분모도 막아야 한다. 같은 버그의 반대쪽이다.
+#:
+#: 🔴 **기준이 작으면 비율이 편집 한두 건에 통째로 흔들려 문턱으로 쓸 수 없다.**
+#:    실측 통과 사례 `British philosophy`(사건 867·기준 1)는 기준이 1→5 로만 바뀌어도
+#:    867배에서 173배가 된다. 반면 `Ali_Khamenei`(기준 140)는 1건 증감에 4.96~5.04 다.
+#:    같은 "5배" 가 두 경우에 전혀 다른 신뢰도를 갖는다.
+#:    31일에 편집 1건인 문서는 **평소 수준이라 할 것이 없어** "재조명" 이 성립하지 않는다 —
+#:    정리 편집 한 번이 800배로 찍힌다. 실측에서 `British/German/American/French philosophy`
+#:    가 상위에 나란히 나왔는데 사건이 아니라 카테고리 일괄 편집이었다.
+#:
+#: 값이 5 인 근거: enwiki 2026-08-15 전수 판정(250만 제목)에서 하한별 통과가
+#: 0→6,313 · 5→718 · 10→207 이고, `-77` 정답 3건의 기준값이 7·54·140 이라
+#: **10 으로 올리면 IRGC(7)가 죽는다.** 5 가 근거로 잡을 수 있는 최대치다.
+#: ⚠️ 하루치 모집단에서 고른 값이다 — `-77` 처럼 여러 사건에서 검증하지 않았다.
+#:
+#: ~~기준 0 이면 절대 하한만으로 통과~~ → **폐기** (2026-09-20). 실측에서 기준 0 의
+#: 67.5% 가 기준기간 이전에도 편집 0 이었다 — "조용했다" 가 아니라 **"문서가 없었다"** 다.
+#: 0 < 5 라 이 하한이 그 자리를 대신한다. 라플라스 스무딩(`e/(b+k)`)은 검토 후 폐기 —
+#: `Ali_Khamenei`(정확히 5.0배)가 k=1 에서 이미 죽고, 새 문서는 `867/(0+5)=173배` 라
+#: 그대로 통과해 방향이 반대다(통과 중 새 문서 비율 46.6% → k=5 에서 53.9% 로 **증가**).
+DEFAULT_RESURGENCE_MIN_BASELINE = 5
 
 #: HOT(이 스냅샷에서 활발히 급증 중) 판정 임계. 씨드 급등도 최댓값 기준.
 #: detector 확정 점수(Milton 9.7)와 편집만 통과(3~4) 사이인 5.0.
@@ -106,6 +147,28 @@ class Seed:
 
 
 @dataclass(frozen=True)
+class EditResurgence:
+    """한 이웃의 사건기간 편집과 그 직전 기준기간 편집 (WP-77).
+
+    🔴 **편집 수는 `all-editor-types`(봇 포함)로 센 값이어야 한다.** `user` 단독으로
+    재면 신호가 사라진다 — POC 에서 Mojtaba_Khamenei 가 1,053건에서 5건까지
+    떨어졌다(`ai/nonseed-resurgence-poc/RESULT.md`). 이슈 판정 1차 관문(§3.2 의
+    "봇이 아닌 편집 1건")과 **다른 editor type 을 쓴다.** 목적이 다르다 — 1차 관문은
+    "사람이 손댔는가"를 묻고, 여기는 "이 문서가 평소보다 얼마나 들썩였는가"를 묻는다.
+    같은 값으로 통일하려는 정리는 신호를 죽인다.
+
+    ⚠️ 두 구간은 **같은 길이**여야 한다. 기준기간이 짧으면 비율이 부풀고, 길면 죽는다.
+    이 모듈은 길이를 계산하지 않고 받은 값을 검사만 한다 — 구간을 고르는 건 driver 다.
+    """
+    event_edits: int
+    baseline_edits: int
+    event_start: datetime       # 사건기간. 씨드 사건일 기준 창.
+    event_end: datetime
+    baseline_start: datetime    # 직전 동일 길이 구간.
+    baseline_end: datetime      # <= event_start
+
+
+@dataclass(frozen=True)
 class Neighbor:
     """루트 씨드의 Clickstream 이웃. 생성일 창을 통과하면 **추가 씨드** 멤버가 된다."""
     page_id: int
@@ -119,6 +182,10 @@ class Neighbor:
     # 소스는 mediawiki_history page_creation_timestamp (`batch/page_creation`).
     created_at: datetime | None
     directed: bool = True       # Clickstream 은 방향(씨드 -> 이웃) 이동이다.
+    #: 생성일 창을 **떨어진** 이웃을 재조명으로 건질지 판정할 입력 (WP-77).
+    #: None 이면 재급증 판정을 하지 않는다 — 측정 실패와 "측정했는데 미달"은 다르다.
+    #: 창을 통과한 이웃에는 필요 없다(이미 추가 씨드로 들어간다).
+    resurgence: EditResurgence | None = None
 
 
 @dataclass(frozen=True)
@@ -223,6 +290,60 @@ def _within_creation_window(
     return abs((created_date - event_date).days) <= window_days
 
 
+def _passes_resurgence(
+    resurgence: EditResurgence | None,
+    snapshot_ts: datetime,
+    *,
+    min_ratio: float,
+    min_edits: int,
+    min_baseline: int = DEFAULT_RESURGENCE_MIN_BASELINE,
+) -> bool:
+    """기존 문서가 사건으로 재조명됐는가 (WP-77 확정 규칙).
+
+    **비율 >= min_ratio AND 사건 편집 >= min_edits AND 기준 편집 >= min_baseline.** 셋 다다.
+
+    🔴 **기준 하한이 셋째 조건이다** (2026-09-20 추가). `-77` 은 분자만 막았다 —
+    분모가 작으면 비율이 편집 한두 건에 흔들려 문턱 자체가 무의미해진다. 근거 수치는
+    `DEFAULT_RESURGENCE_MIN_BASELINE` 주석에 있다.
+
+    ~~기준기간 편집이 0 이면 절대 하한만으로 통과시킨다~~ → **폐기** (2026-09-20).
+    "측정된 적 없는 판단" 이라고 적어 둔 자리였는데, 실측이 반증했다 — 기준 0 의
+    67.5% 가 그 이전에도 편집 0 이라 **애초에 없던 문서**였다. 0 은 이제 기준 하한에
+    걸려 자연히 탈락한다.
+
+    🔴 **전년 동기는 보지 않는다.** 연도가 박힌 제목(`2024_Atlantic_hurricane_season`)은
+    전년 대응 문서 제목이 아예 달라(`2023_...`) 같은 제목으로 1년 전을 조회하면
+    무의미하다. POC 에서 교차 확인용으로는 유용했지만 자동 게이트에 넣으면 오작동한다.
+    """
+    if resurgence is None:
+        return False
+
+    event_start = _as_utc(resurgence.event_start, "EditResurgence.event_start")
+    event_end = _as_utc(resurgence.event_end, "EditResurgence.event_end")
+    baseline_start = _as_utc(resurgence.baseline_start, "EditResurgence.baseline_start")
+    baseline_end = _as_utc(resurgence.baseline_end, "EditResurgence.baseline_end")
+
+    # 시점 정합성 — 스냅샷 이후 편집은 과거 지도에 소급하지 않는다.
+    if event_end > snapshot_ts:
+        return False
+    # 기준기간은 사건기간보다 **앞서야** 한다. 겹치면 기준선이 사건 자체로 오염된다.
+    if baseline_end > event_start:
+        return False
+    if event_start >= event_end or baseline_start >= baseline_end:
+        return False
+    # 두 구간 길이가 다르면 비율이 길이 비를 재는 것이지 재급증을 재는 게 아니다.
+    if (event_end - event_start) != (baseline_end - baseline_start):
+        return False
+
+    if resurgence.event_edits < min_edits:
+        return False
+    if resurgence.baseline_edits < 0 or resurgence.event_edits < 0:
+        return False
+    if resurgence.baseline_edits < min_baseline:
+        return False                     # 위 🔴 — 기준이 작으면 비율을 믿을 수 없다
+    return (resurgence.event_edits / resurgence.baseline_edits) >= min_ratio
+
+
 def _is_completed_clickstream_month(clickstream_month: str, snapshot_date: date) -> bool:
     """근거 월이 스냅샷 월보다 이전의 완료된 월인가."""
     if len(clickstream_month) != 7 or clickstream_month[4] != "-":
@@ -243,6 +364,9 @@ def _build_cluster(
     prior_first_detected: Mapping[str, datetime],
     window_days: int,
     hot_threshold: float,
+    resurgence_ratio: float,
+    resurgence_min_edits: int,
+    resurgence_min_baseline: int,
 ) -> Cluster:
     key = issue_key_of(source, seed)
 
@@ -277,23 +401,51 @@ def _build_cluster(
                       if nb.created_at is not None else None)
         if created_at is not None and created_at > snapshot_ts:
             continue                         # 스냅샷 이후 생성 — 과거 지도에 소급 금지
-        if not _within_creation_window(created_at, seed.event_date, window_days):
-            continue                         # 생성일 창 밖 — 게이트 탈락
         if not _is_completed_clickstream_month(nb.clickstream_month, snapshot_date):
             continue                         # 당월·미래·잘못된 월 근거는 사용하지 않는다
 
-        included_page_ids.add(nb.page_id)
-        members.append(Member(
-            page_id=nb.page_id,
+        # 게이트 둘은 **순서가 있고 배타적이다.** 생성일 창이 먼저다 — 창을 통과한
+        # 문서는 사건 때문에 새로 생긴 문서(추가 씨드)이고, 창을 떨어진 문서만
+        # 재조명(비-씨드) 후보다. 뒤집으면 신규 사건 문서가 배경으로 기록된다.
+        if _within_creation_window(created_at, seed.event_date, window_days):
             # 🔴 **추가 씨드다** (명세 v0.3 §3.2 4번). 생성일 창을 통과했다는 것은
             #    사건 때문에 새로 생긴 문서라는 뜻이고, 그건 배경이 아니라 사건의
-            #    일부다. `false` 자리는 -77 재급증 문서 몫으로 비워 둔다.
-            is_seed=True,
-            weight=float(nb.clickstream_n),
-            # 시점 지표(편집·조회수)는 이 경로에서 재지 않는다 — 관계로만 딸려온다.
-            # 루트 씨드와 달리 detector 를 직접 통과한 문서가 아니라서 급증 수치가 없다.
-            completeness="unavailable",
-        ))
+            #    일부다.
+            member = Member(
+                page_id=nb.page_id,
+                is_seed=True,
+                weight=float(nb.clickstream_n),
+                # 시점 지표(편집·조회수)는 이 경로에서 재지 않는다 — 관계로만 딸려온다.
+                # 루트 씨드와 달리 detector 를 직접 통과한 문서가 아니라 급증 수치가 없다.
+                completeness="unavailable",
+            )
+        elif _passes_resurgence(nb.resurgence, snapshot_ts,
+                                min_ratio=resurgence_ratio,
+                                min_edits=resurgence_min_edits,
+                                min_baseline=resurgence_min_baseline):
+            # 🔴 **비-씨드다** (WP-77). 사건 **이전부터 있던** 문서가 사건으로
+            #    재조명된 경우다(예: Mojtaba_Khamenei, 2009 생성). 추가 씨드와 같은
+            #    값으로 저장하면 화면도 API 도 "사건 자체인가, 사건이 끌어온 배경인가"를
+            #    구분할 수 없다.
+            member = Member(
+                page_id=nb.page_id,
+                is_seed=False,
+                weight=float(nb.clickstream_n),
+                # 판정 당시 수치를 **복사**한다 (명세 v0.3 시점 정합성 계약). 나중에
+                # 최신 page_edit_window 로 보충하면 미래 수치가 과거에 섞인다.
+                edit_count=nb.resurgence.event_edits,
+                edit_baseline=float(nb.resurgence.baseline_edits),
+                window_start=_as_utc(nb.resurgence.event_start, "event_start"),
+                window_end=_as_utc(nb.resurgence.event_end, "event_end"),
+                # 조회수 판정을 거친 문서가 아니다 — completeness 는 조회수 계약이라
+                # 편집 수치가 있어도 unavailable 이다.
+                completeness="unavailable",
+            )
+        else:
+            continue                         # 두 게이트 다 탈락
+
+        included_page_ids.add(nb.page_id)
+        members.append(member)
         edges.append(Edge(
             source_page_id=seed.page_id,
             target_page_id=nb.page_id,
@@ -332,7 +484,15 @@ def _build_cluster(
         first_detected_at=prior_first_detected.get(key, snapshot_ts),
         members=tuple(members),
         edges=tuple(edges),
-        label=None,
+        # 🔴 **루트 씨드의 제목이 이슈 이름이다.** ~~`None`~~ → `seed.title`
+        # (2026-09-20, WP-149).
+        #
+        # ⚠️ 아무도 채우지 않아서 계속 NULL 이었다. 파이프라인 어디에도 `label` 을 쓰는
+        # UPDATE 가 없는데(백엔드 `matching` 포함) 프론트 `PulseCluster.jsx` 는
+        # `cluster.label` 로 제목을 그린다 — 운영에 4,474 클러스터를 적재하고 나서야
+        # **제목 없는 버블**로 드러났다. 데모 시드(`docker/seed/*.sql`)는 제목을 직접
+        # 넣어 뒀어서 화면상 차이가 안 보였다.
+        label=seed.title,
         seed_page_id=seed.page_id,
     )
 
@@ -348,6 +508,9 @@ def build_snapshot(
     creation_window_days: int = DEFAULT_CREATION_WINDOW_DAYS,
     hot_spike_threshold: float = DEFAULT_HOT_SPIKE_THRESHOLD,
     new_window_hours: float = DEFAULT_NEW_WINDOW_HOURS,
+    resurgence_ratio: float = DEFAULT_RESURGENCE_RATIO,
+    resurgence_min_edits: int = DEFAULT_RESURGENCE_MIN_EDITS,
+    resurgence_min_baseline: int = DEFAULT_RESURGENCE_MIN_BASELINE,
 ) -> Snapshot:
     """한 시점의 클러스터·멤버·간선을 생산한다.
 
@@ -376,6 +539,9 @@ def build_snapshot(
             prior_first_detected=prior_first_detected,
             window_days=creation_window_days,
             hot_threshold=hot_spike_threshold,
+            resurgence_ratio=resurgence_ratio,
+            resurgence_min_edits=resurgence_min_edits,
+            resurgence_min_baseline=resurgence_min_baseline,
         )
         for seed in seeds
     )

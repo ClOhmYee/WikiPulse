@@ -35,6 +35,11 @@ py -3 pageview_hourly_offset.py delay
 py -3 pageview_hourly_offset.py align        # 덤프 568 MB + 55 MB×N 다운로드, 수십 분
 ```
 
+`edit_source_gap.py` 는 §11 행이 아니라 **WP-163 전용**이다. 실행법과
+결과는 [편집 소스 공백 대안 실측](../../docs/validation/2026-09-21-edit-source-gap.md)
+에 있다. 위 함정 2번(스냅샷 통째 교체)과 같은 축이고, 거기서 한 걸음 더 들어가
+**마지막 달 파일이 잘려 있다**는 것까지 잰다.
+
 `requirements.txt` 없음 — `requests` 하나만 쓰고 나머지는 표준 라이브러리 +
 `data-pipeline`의 순수 함수(`gdelt/catalog.py`, `gkg/match.py`, `producer/sse.py`)
 재사용.

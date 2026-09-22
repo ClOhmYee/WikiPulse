@@ -125,14 +125,42 @@ def test_정각이_아닌_윈도우는_조회수와_안_붙는다(conn):
 
 
 def test_만료는_first_seen_at_기준이다(conn):
+    """오래된 대기는 `first_seen_at` 으로 만료된다.
+
+    🔴 **경계는 `now()` 기준 상대값이어야 한다.** ~~`first_seen_at < '2026-09-18T00:00:00Z'`~~
+    처럼 날짜를 박으면 **그 날짜가 지나는 순간 조용히 깨진다** — 심은 행은 `now()-48h` 라
+    같이 움직이는데 경계만 고정이라, `now()-48h` 가 경계를 넘어서면 삭제가 안 되고
+    `assert 1 == 0` 으로 터진다. 실제로 **2026-09-20 00:00 UTC 부터** 깨져서 develop
+    파이프라인이 실패했다(WP-151).
+
+    ⚠️ 이 테스트가 develop 배포를 막는다 — `test:db` 가 실패하면 deploy 스테이지가
+    통째로 skip 된다. 날짜를 박은 대가가 "테스트 하나 빨감" 이 아니라 "배포 중단" 이다.
+    """
     pid = _page(conn, "Stale")
     _candidate(conn, pid)
     x(conn, "UPDATE spike_candidate SET first_seen_at = now() - interval '48 hours' "
             "WHERE page_id = %s", pid)
 
-    x(conn, "DELETE FROM spike_candidate WHERE source = %s AND first_seen_at < %s",
-      "live", "2026-09-18T00:00:00Z")
+    # 48시간 된 행을 24시간 경계로 지운다 — 둘 다 now() 기준이라 언제 돌려도 같다.
+    x(conn, "DELETE FROM spike_candidate WHERE source = %s "
+            "AND first_seen_at < now() - interval '24 hours'", "live")
     assert q(conn, "SELECT count(*) FROM spike_candidate WHERE page_id = %s", pid)[0][0] == 0
+
+
+def test_만료_경계_안쪽은_남는다(conn):
+    """🔴 위 테스트의 짝 — 경계가 실제로 걸러내는지 확인한다.
+
+    삭제만 검사하면 `DELETE` 가 전부 지워도 통과한다. 경계 안쪽(최근) 행이 살아남는 것까지
+    봐야 "경계로 걸렀다" 가 된다.
+    """
+    pid = _page(conn, "Fresh")
+    _candidate(conn, pid)
+    x(conn, "UPDATE spike_candidate SET first_seen_at = now() - interval '1 hour' "
+            "WHERE page_id = %s", pid)
+
+    x(conn, "DELETE FROM spike_candidate WHERE source = %s "
+            "AND first_seen_at < now() - interval '24 hours'", "live")
+    assert q(conn, "SELECT count(*) FROM spike_candidate WHERE page_id = %s", pid)[0][0] == 1
 
 
 def test_문서를_지우면_대기도_지워진다(conn):

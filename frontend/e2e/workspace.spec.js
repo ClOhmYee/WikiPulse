@@ -72,7 +72,7 @@ test("issue -> verified related stocks -> stock -> issue retains identifiers and
     .click();
   await expect(page.getByRole("heading", { level: 1 })).toHaveText(stock.name);
   await expect(
-    page.getByText("가격 자료 미제공", { exact: true }),
+    page.getByText("데모 데이터에는 주가가 없습니다", { exact: true }),
   ).toBeVisible();
   await expect(page.locator(".st-detail-page .data-scope")).toContainText(
     "최대 50개",

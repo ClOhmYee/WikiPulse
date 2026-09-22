@@ -13,6 +13,8 @@ from __future__ import annotations
 
 import copy
 import json
+import os
+import time
 
 import pytest
 
@@ -23,7 +25,11 @@ pyspark = pytest.importorskip("pyspark", reason="pyspark 미설치 — 이 파�
 from pyspark.sql import SparkSession  # noqa: E402
 from pyspark.sql import functions as F  # noqa: E402
 
-from streaming.edit_windows import EDIT_EVENT_SCHEMA  # noqa: E402
+from streaming.edit_windows import (  # noqa: E402
+    EDIT_EVENT_SCHEMA,
+    aggregate_edit_windows,
+    prepare_live_events,
+)
 
 BASE = {
     "$schema": "/mediawiki/recentchange/1.0.0",
@@ -76,6 +82,106 @@ def parse(spark, payloads):
         .select("e.*")
         .withColumn("event_ts", F.to_timestamp("event_ts"))
     )
+
+
+def test_live_preparation_removes_duplicate_meta_id(spark):
+    duplicate = event(meta={"id": "same-id"})
+    raw = spark.createDataFrame([(duplicate,), (duplicate,)], "value string")
+    assert prepare_live_events(raw, watermark="10 minutes").count() == 1
+
+
+@pytest.mark.parametrize("meta_id", [None, "", " \t"])
+def test_live_preparation_rejects_missing_or_blank_meta_id(spark, meta_id):
+    payload = json.loads(event())
+    payload["meta_id"] = meta_id
+    payload = json.dumps(payload)
+    raw = spark.createDataFrame([(payload,)], "value string")
+    assert prepare_live_events(raw, watermark="10 minutes").count() == 0
+
+
+def test_live_pipeline_does_not_crash_when_planning_second_micro_batch(spark):
+    raw = (
+        spark.readStream.format("rate-micro-batch")
+        .option("rowsPerBatch", 1)
+        .option("advanceMillisPerBatch", 1000)
+        .option("startTimestamp", 1788826200000)
+        .load()
+        .select(
+            F.to_json(
+                F.struct(
+                    F.lit("enwiki").alias("wiki"),
+                    F.lit("en.wikipedia.org").alias("domain"),
+                    F.lit("Hurricane Milton").alias("title"),
+                    F.lit("edit").alias("event_type"),
+                    (F.col("value") + 1).cast("long").alias("rev_id"),
+                    F.col("value").cast("long").alias("rev_parent_id"),
+                    F.lit(100).alias("byte_delta"),
+                    F.lit(1100).alias("new_length"),
+                    F.lit("Alice").alias("user"),
+                    F.lit(False).alias("is_bot"),
+                    F.lit(False).alias("is_minor"),
+                    F.col("timestamp").cast("string").alias("event_ts"),
+                    (F.col("timestamp").cast("double") * 1000)
+                    .cast("long")
+                    .alias("event_ts_ms"),
+                    F.lit("eventstreams").alias("source"),
+                    F.concat(F.lit("batch-"), F.col("value")).alias("meta_id"),
+                )
+            ).alias("value")
+        )
+    )
+    aggregated = aggregate_edit_windows(
+        prepare_live_events(raw, watermark="10 minutes")
+    )
+
+    def count_watermarks(plan):
+        children = plan.children()
+        return int(plan.nodeName() == "EventTimeWatermark") + sum(
+            count_watermarks(children.apply(index)) for index in range(children.size())
+        )
+
+    # Windows PySpark cannot create a local streaming checkpoint without Hadoop's
+    # native DLL.  The logical plan still gives a platform-independent regression:
+    # the broken implementation contains two EventTimeWatermark nodes.
+    assert count_watermarks(aggregated._jdf.logicalPlan()) == 1
+    if os.name == "nt":
+        pytest.skip("Windows lacks the Hadoop native DLL required by writeStream")
+
+    query = (
+        aggregated.writeStream.format("memory")
+        .queryName("test_second_micro_batch_watermark")
+        .outputMode("update")
+        .trigger(processingTime="100 milliseconds")
+        .start()
+    )
+    try:
+        # ⚠️ 이 상한은 "정상이면 이만큼 걸린다"가 아니라 "이만큼 넘으면 멈춘 것이다"다.
+        #    Spark JVM 기동 + 마이크로배치 두 번이라 러너 부하에 그대로 흔들린다.
+        #    ~~30초~~ → 180초 (WP-177). 30초는 여유가 2배뿐이었다 — 한가한
+        #    컨테이너에서 15초가 걸리니, 부하가 걸리면 그냥 넘는다.
+        #
+        # 🔴 이건 성능 테스트가 아니다. 잡으려는 회귀는 위의 EventTimeWatermark 개수와
+        #    "두 번째 마이크로배치가 계획 단계에서 터지지 않는다" 뿐이다. 상한을 조여도
+        #    잡는 버그가 늘지 않고, 성공한 실행이 빨갛게 뜨는 것만 늘어난다. 그러면
+        #    진짜 실패와 구분이 안 되고 다음에 정말 깨져도 무시하게 된다(-174 와 같은 교훈).
+        timeout = float(os.environ.get("WIKIPULSE_STREAM_TEST_TIMEOUT", "180"))
+        started = time.monotonic()
+        deadline = started + timeout
+        while query.isActive and len(query.recentProgress) < 2:
+            query.awaitTermination(0.2)
+            # 쿼리가 죽었으면 느린 게 아니라 터진 것이다 — 원인을 그대로 보여준다.
+            failure = query.exception()
+            assert failure is None, f"streaming query failed: {failure}"
+            assert time.monotonic() < deadline, (
+                f"second micro-batch did not finish in {timeout:.0f}s "
+                f"(elapsed {time.monotonic() - started:.1f}s, "
+                f"progress {len(query.recentProgress)}/2). "
+                "러너가 느린 것이면 WIKIPULSE_STREAM_TEST_TIMEOUT 으로 늘린다."
+            )
+        assert query.exception() is None, f"streaming query failed: {query.exception()}"
+        assert len(query.recentProgress) >= 2
+    finally:
+        query.stop()
 
 
 def test_스키마가_프로듀서_출력과_맞는다(spark):

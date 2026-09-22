@@ -89,6 +89,70 @@ def test_dry_run은_적용하지_않는다(blank, tiny):
         assert cur.fetchone()[0] == 0
 
 
+# ---------------------------------------------------------------- 줄바꿈 정규화
+
+SAME_CONTENT = b"CREATE TABLE one (id int);\n-- \xed\x95\x9c\xea\xb8\x80 \xec\xa3\xbc\xec\x84\x9d\n"
+
+
+def test_체크섬은_줄바꿈에_영향받지_않는다(tmp_path):
+    """같은 내용이면 Windows 체크아웃과 리눅스 체크아웃이 같은 값을 내야 한다."""
+    lf = tmp_path / "V1__lf.sql"
+    crlf = tmp_path / "V1__crlf.sql"
+    lf.write_bytes(SAME_CONTENT)
+    crlf.write_bytes(SAME_CONTENT.replace(b"\n", b"\r\n"))
+
+    assert am.checksum(lf) == am.checksum(crlf)
+    assert am.crlf_checksum(lf) == am.crlf_checksum(crlf)
+    assert am.checksum(lf) != am.crlf_checksum(lf)      # 옛 방식과는 달라야 알아본다
+
+
+@pytest.fixture()
+def 여러줄_V1(tiny):
+    """LF 와 CRLF 가 실제로 다른 값을 내는 파일.
+
+    🔴 한 줄짜리 파일로는 이 검사가 조용히 무의미해진다 — 줄바꿈이 없으면 두 방식이
+       같은 값을 낸다. 2026-09-19 에 이 테스트를 처음 쓸 때 실제로 그렇게 통과했다.
+    """
+    path = tiny / "V1__one.sql"
+    path.write_bytes(b"CREATE TABLE one (id int);\n-- \xed\x95\x9c\xea\xb8\x80\n")
+    assert am.checksum(path) != am.crlf_checksum(path)
+    return path
+
+
+def test_CRLF로_심긴_옛_원장을_알아보고_고쳐_적는다(blank, tiny, 여러줄_V1):
+    """🔴 2026-09-19 에 EC2 배포가 멈춘 자리다.
+
+    원장을 Windows 체크아웃(core.autocrlf=true)에서 심어 CRLF 로 계산된 값이 들어 있었고,
+    리눅스 CI 는 LF 로 계산해 V1 부터 "내용이 바뀌었다"로 멈췄다. 내용은 같았다.
+    """
+    am.apply(blank, tiny)
+    path = 여러줄_V1
+    with blank.cursor() as cur:
+        cur.execute("UPDATE schema_migration SET checksum = %s WHERE version = 1",
+                    (am.crlf_checksum(path),))
+
+    assert am.apply(blank, tiny) == []                  # 멈추지 않는다
+
+    with blank.cursor() as cur:
+        cur.execute("SELECT checksum FROM schema_migration WHERE version = 1")
+        assert cur.fetchone()[0] == am.checksum(path)   # 정규화 값으로 고쳐 적었다
+
+
+def test_dry_run은_원장_체크섬도_안_고친다(blank, tiny, 여러줄_V1, capsys):
+    """"보기만 한다" 는 약속은 이 수습 경로에도 그대로 적용된다."""
+    am.apply(blank, tiny)
+    old = am.crlf_checksum(여러줄_V1)
+    with blank.cursor() as cur:
+        cur.execute("UPDATE schema_migration SET checksum = %s WHERE version = 1", (old,))
+
+    assert am.apply(blank, tiny, dry_run=True) == []
+
+    with blank.cursor() as cur:
+        cur.execute("SELECT checksum FROM schema_migration WHERE version = 1")
+        assert cur.fetchone()[0] == old
+    assert "[dry-run]" in capsys.readouterr().out
+
+
 # ---------------------------------------------------------------- baseline
 
 def test_baseline은_실행하지_않고_기록만_한다(blank, tiny):

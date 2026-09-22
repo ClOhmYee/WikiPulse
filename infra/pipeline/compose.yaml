@@ -1,0 +1,75 @@
+name: wikipulse-pipeline
+
+x-logging: &bounded-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+services:
+  producer:
+    build:
+      context: ${PIPELINE_APP_DIR:-../../data-pipeline}
+    container_name: wikipulse-producer
+    network_mode: host
+    init: true
+    restart: ${RESTART_POLICY:-no}
+    cpus: 0.25
+    mem_limit: 256m
+    environment:
+      CONTACT_EMAIL: ${CONTACT_EMAIL:?Set CONTACT_EMAIL in .env}
+      KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS:-192.0.2.10:9092}
+      KAFKA_TOPIC: wiki.edits
+      WIKIS: enwiki
+      LOG_EVERY_SECONDS: "30"
+      SSE_CURSOR_FILE: /var/lib/wikipulse-producer/last-event-id
+    volumes:
+      - ${PIPELINE_STATE_DIR:-./state}:/var/lib/wikipulse-producer
+    logging: *bounded-logging
+
+  edit-stream:
+    image: apache/spark:3.5.3-python3
+    container_name: wikipulse-edit-stream
+    network_mode: host
+    init: true
+    restart: ${RESTART_POLICY:-no}
+    mem_limit: 1536m
+    environment:
+      SPARK_LOCAL_IP: ${DATA_SERVER_IP:-192.0.2.10}
+      SPARK_CONF_DIR: /opt/spark/conf
+      HADOOP_CONF_DIR: /opt/hadoop-conf
+      PYSPARK_PYTHON: python3
+      PYSPARK_DRIVER_PYTHON: python3
+      KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS:-192.0.2.10:9092}
+      KAFKA_TOPIC: wiki.edits
+      STARTING_OFFSETS: earliest
+      MAX_OFFSETS_PER_TRIGGER: "50000"
+      WINDOW_SIZE: 1 hour
+      SLIDE_SIZE: 5 minutes
+      WATERMARK: 10 minutes
+      TRIGGER_INTERVAL: 30 seconds
+      SHUFFLE_PARTITIONS: "8"
+      CHECKPOINT_DIR: hdfs://192.0.2.10:8020/wikipulse/checkpoints/edit-windows-v1
+      SINK: console
+    volumes:
+      - ${SPARK_INFRA_DIR:-/home/deploy/infra/spark}/conf:/opt/spark/conf:ro
+      - ${SPARK_INFRA_DIR:-/home/deploy/infra/spark}/hadoop-conf:/opt/hadoop-conf:ro
+      - ${PIPELINE_APP_DIR:-../../data-pipeline}/streaming:/opt/app/streaming:ro
+      - ${PIPELINE_IVY_DIR:-./ivy}:/tmp/ivy
+    working_dir: /opt/app
+    entrypoint: ["/opt/spark/bin/spark-submit"]
+    command:
+      - --master
+      - ${SPARK_MASTER:-spark://192.0.2.10:7077}
+      - --packages
+      - org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.3
+      - --conf
+      - spark.cores.max=2
+      - --conf
+      - spark.executor.cores=1
+      - --conf
+      - spark.executor.memory=1g
+      - --conf
+      - spark.jars.ivy=/tmp/ivy
+      - /opt/app/streaming/edit_windows.py
+    logging: *bounded-logging

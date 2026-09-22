@@ -106,7 +106,7 @@ def test_출처를_질의에_넘긴다():
 @pytest.fixture()
 def stub_cycle(monkeypatch):
     """적재·재판정을 대역으로 바꾼다. 무엇을 어떤 인자로 불렀는지만 본다."""
-    calls = {"ingest": [], "recheck": 0}
+    calls = {"ingest": [], "recheck": 0, "prune": []}
 
     def fake_ingest(ts_hour, wiki, cache_dir, out_root, *, titles, shard_records,
                     dry_run, conn):
@@ -117,8 +117,13 @@ def stub_cycle(monkeypatch):
         calls["recheck"] += 1
         return RecheckSummary(rechecked=2, confirmed=1, rejected=1)
 
+    def fake_prune(cache_dir, **kwargs):
+        calls["prune"].append(cache_dir)
+        return 3
+
     monkeypatch.setattr(live_cycle, "ingest_hour", fake_ingest)
     monkeypatch.setattr(live_cycle, "recheck", fake_recheck)
+    monkeypatch.setattr(live_cycle, "prune_cache", fake_prune)
     return calls
 
 
@@ -159,6 +164,19 @@ def test_dry_run은_받지_않는다(stub_cycle, tmp_path):
 
     assert stub_cycle["ingest"] == []       # 다운로드 없음
     assert summary.hours_due == 1           # 무엇을 받을지는 보여준다
+    assert stub_cycle["prune"] == []        # WP-171: dry-run 은 아무것도 안 지운다
+
+
+# ---------------------------------------------------------------- 캐시 정리 (WP-171)
+
+def test_주기가_끝나면_캐시를_정리한다(stub_cycle, tmp_path):
+    """ingest_hour() 만 직접 부르는 이 서비스가 실제로 도는 자리라, main() 이 아니라
+    여기서 prune_cache 를 불러야 배포된 live-cycle 에 실제로 걸린다."""
+    summary = run_once(FakeConn([]), cache_dir=tmp_path, out_root=tmp_path, now=NOW)
+
+    assert stub_cycle["prune"] == [tmp_path]
+    assert summary.cache_pruned == 3
+    assert "캐시 정리 3" in summary.format()
 
 
 # ---------------------------------------------------------------- 요약·락

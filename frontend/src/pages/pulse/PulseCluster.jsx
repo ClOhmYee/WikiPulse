@@ -3,6 +3,10 @@ import { isNewIssue } from "../../data/pulse/time.js";
 import { NEON_COLORS, neonColor } from "./neonTheme.js";
 import { MAP_SCALE, DEFAULT_ZOOM } from "./useMapCamera.js";
 import DocumentLabels from "./DocumentLabels.jsx";
+import { overviewRadius, overviewTitle } from "./clusterOverview.js";
+
+// Keep text geometry stable; useMapView applies the live camera transforms.
+const camera = { zoom: DEFAULT_ZOOM, x: 0, y: 0 };
 
 function activate(action) {
   return (event) => {
@@ -19,16 +23,16 @@ export default memo(function PulseCluster({
   active,
   nodeId,
   emphasized,
-  camera,
   compact,
   viewport,
   marker,
   meta,
-  onSelect,
+  onActivate,
   onNodeSelect,
   onEmphasize,
   trackClusterOrbit,
 }) {
+  const summary = overviewTitle(cluster, camera.zoom);
   const titleUnit = (camera.zoom / DEFAULT_ZOOM) ** 0.35 / camera.zoom;
   const titleSize = compact ? 23 : 20;
   const labelSize = (compact ? 14 : 13) / camera.zoom ** 0.8;
@@ -109,9 +113,53 @@ export default memo(function PulseCluster({
         tabIndex="0"
         aria-label={`${cluster.label}, ${cluster.memberCount}개 문서`}
         aria-pressed={active}
-        onClick={() => onSelect(cluster.issueKey)}
-        onKeyDown={activate(() => onSelect(cluster.issueKey))}
+        onClick={() => onActivate(cluster)}
+        onKeyDown={activate(() => onActivate(cluster))}
       >
+        <g
+          className="document-cluster__summary"
+          data-scan-x={cluster.x}
+          data-scan-y={cluster.y}
+          data-scan-mode="overview"
+        >
+          <circle
+            className="document-node__halo"
+            r={overviewRadius(cluster) * 1.22}
+            fill={`url(#${marker}-${category}-halo)`}
+            aria-hidden="true"
+          />
+          <circle
+            className="document-cluster__summary-circle document-node__body"
+            r={overviewRadius(cluster)}
+            fill={`url(#${marker}-${category}-body)`}
+            vectorEffect="non-scaling-stroke"
+          />
+          <circle
+            className="document-node__echo"
+            r={overviewRadius(cluster) * 1.1}
+            vectorEffect="non-scaling-stroke"
+            aria-hidden="true"
+          />
+          <text
+            className="document-cluster__summary-title"
+            textAnchor="middle"
+            dominantBaseline="central"
+            fontSize={18}
+            transform={`scale(${summary.fontSize / 18})`}
+            aria-hidden="true"
+          >
+            {[0, 1, 2].map((index) => (
+              <tspan
+                key={index}
+                x="0"
+                y={(index - (summary.lines.length - 1) / 2) * 18 * 1.3}
+              >
+                {summary.lines[index] || ""}
+              </tspan>
+            ))}
+          </text>
+        </g>
+        <title>{cluster.label}</title>
         <circle className="document-cluster__boundary" r={cluster.radius} />
         <circle
           className="document-cluster__field"

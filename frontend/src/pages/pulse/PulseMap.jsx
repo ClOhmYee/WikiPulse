@@ -26,6 +26,7 @@ import useMapCamera, {
   MIN_ZOOM,
   MAX_ZOOM,
   DEFAULT_ZOOM,
+  OVERVIEW_ZOOM,
 } from "./useMapCamera.js";
 
 export default function PulseMap({
@@ -44,13 +45,33 @@ export default function PulseMap({
   const svgRef = useRef(null),
     drag = useRef(null);
   const marker = useId().replaceAll(":", "");
-  const { camera, current, subscribe, move, stop, zoomBy } =
+  const { camera, current, subscribe, move, stop, zoomBy, animateTo } =
     useMapCamera(svgRef);
   const view = useMapView(svgRef, scene, current, subscribe);
   const reducedMotion = useNeonScan(svgRef, scene, scanEnabled, view);
   const [emphasized, setEmphasized] = useState(null);
   const [pointerFocus, setPointerFocus] = useState(false);
   const [viewport, setViewport] = useState({ width: 0, height: 0 });
+  const activateCluster = useCallback(
+    (cluster) => {
+      if (current.current.zoom > OVERVIEW_ZOOM) {
+        onSelect(cluster.issueKey);
+        return;
+      }
+      const svg = svgRef.current;
+      const zoom = Math.max(
+        OVERVIEW_ZOOM + 0.1,
+        Math.min(
+          DEFAULT_ZOOM,
+          (Math.min(svg.clientWidth, svg.clientHeight) * 0.72) /
+            (2 * cluster.radius * MAP_SCALE),
+        ),
+      );
+      setEmphasized(null);
+      animateTo({ zoom, x: -cluster.x * zoom, y: -cluster.y * zoom });
+    },
+    [current, animateTo, onSelect],
+  );
   useLayoutEffect(() => {
     const svg = svgRef.current;
     const measure = () =>
@@ -250,12 +271,11 @@ export default function PulseMap({
                   ? emphasized.pageId
                   : null
               }
-              camera={camera}
               compact={compact}
               viewport={viewport}
               marker={marker}
               meta={meta}
-              onSelect={onSelect}
+              onActivate={activateCluster}
               onNodeSelect={onNodeSelect}
               onEmphasize={setEmphasized}
               trackClusterOrbit={trackClusterOrbit}

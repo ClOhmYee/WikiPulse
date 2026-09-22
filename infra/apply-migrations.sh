@@ -25,8 +25,40 @@ SERVICE_ENV="${SERVICE_ENV:-/home/deploy/infra/service/.env}"
 NETWORK="${NETWORK:-wikipulse-net}"
 IMAGE="${MIGRATION_IMAGE:-python:3.11-slim}"
 
+# ⚠️ "못 읽는다" 한 줄로는 원인을 못 가린다. 실제로 2026-09-18 #207183 과 2026-09-19
+#    #207748 의 deploy:backend 가 이 검사에서 죽었는데, 로그만 보고는 파일이 없는
+#    건지 권한이 없는 건지 알 수 없어 다른 잡(deploy:frontend)의 성공 여부로 추리해야
+#    했다. 세 경우를 갈라 찍고 실행 계정을 남긴다 — 이 잡은 ubuntu 가 아니라
+#    gitlab-runner 로 돈다.
+# 🔴 디렉터리를 먼저 본다. 상위 디렉터리에 x 권한이 없으면 파일이 있어도 `[ -e ]` 가
+#    거짓이라 "파일이 없다" 로 오진한다.
+require_env_file() {
+    local f="$1"
+    local d
+    d="$(dirname "$f")"
+
+    if [ ! -x "$d" ]; then
+        echo "🔴 디렉터리에 접근할 수 없다: $d" >&2
+        echo "   실행 계정: $(id -un) (groups: $(id -Gn))" >&2
+        echo "   infra/README.md '배포 러너 권한' 을 본다." >&2
+        exit 2
+    fi
+    if [ ! -e "$f" ]; then
+        echo "🔴 env 파일이 없다: $f" >&2
+        echo "   실행 계정: $(id -un) · 호스트: $(hostname)" >&2
+        echo "   같은 디렉터리의 .env.example 을 보고 서버에서 만든다 — 저장소엔 넣지 않는다." >&2
+        exit 2
+    fi
+    if [ ! -r "$f" ]; then
+        echo "🔴 env 파일을 못 읽는다(권한): $f" >&2
+        echo "   파일: $(stat -c '%U:%G %a' "$f") · 실행 계정: $(id -un) (groups: $(id -Gn))" >&2
+        echo "   infra/README.md '배포 러너 권한' 을 본다." >&2
+        exit 2
+    fi
+}
+
 for f in "$DB_ENV" "$SERVICE_ENV"; do
-    [ -r "$f" ] || { echo "🔴 env 파일을 못 읽는다: $f" >&2; exit 2; }
+    require_env_file "$f"
 done
 
 # ⚠️ --env-file 은 뒤에 준 것이 이긴다. 겹치는 POSTGRES_* 는 db 쪽이 맞다.

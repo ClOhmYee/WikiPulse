@@ -20,6 +20,12 @@
     저장소가 조용히 갈라진다 — 그 상태로 다음 배포가 지나가면 어느 쪽이 맞는지
     알 수 없게 된다. 고칠 일이 있으면 새 버전 파일을 만든다.
 
+    ⚠️ **체크섬은 줄바꿈을 LF 로 정규화한 뒤 계산한다.** 안 그러면 같은 파일이 OS 마다
+    다른 값이 된다. 2026-09-19 에 실제로 터졌다 — EC2 원장이 Windows 체크아웃
+    (`core.autocrlf=true`)에서 CRLF 로 심겨 있어서, 리눅스 CI 가 V1 부터 "내용이
+    바뀌었다"로 멈췄다. **내용은 같았고 줄바꿈만 달랐다.** 옛 CRLF 값은 한 번 알아보고
+    정규화 값으로 고쳐 적는다. 재발은 `.gitattributes` 가 막는다.
+
     ⚠️ Flyway 를 대신하는 최소 구현이다. 롤백·리페어·베이스라인 검증 같은 건 없다.
     도구를 들일지는 WP-133 에서 정하고, 그때 호출부는 이 파일 하나만 본다.
 
@@ -73,9 +79,33 @@ def migration_files(directory: pathlib.Path = MIGRATIONS_DIR) -> list[pathlib.Pa
     return sorted(directory.glob("V*__*.sql"), key=version_of)
 
 
+def _lf_bytes(path: pathlib.Path) -> bytes:
+    """줄바꿈을 LF 로 맞춘 파일 내용."""
+    return path.read_bytes().replace(b"\r\n", b"\n")
+
+
 def checksum(path: pathlib.Path) -> str:
-    """파일 내용의 sha256. 적용된 마이그레이션이 나중에 바뀌었는지 보는 값이다."""
-    return hashlib.sha256(path.read_bytes()).hexdigest()
+    """파일 내용의 sha256. 적용된 마이그레이션이 나중에 바뀌었는지 보는 값이다.
+
+    🔴 줄바꿈을 LF 로 정규화하고 계산한다 — 안 그러면 Windows 체크아웃과 리눅스
+       체크아웃이 같은 파일에 다른 값을 낸다 (모듈 독스트링 참고).
+    """
+    return hashlib.sha256(_lf_bytes(path)).hexdigest()
+
+
+def crlf_checksum(path: pathlib.Path) -> str:
+    """정규화 이전 방식으로 Windows 체크아웃이 남겼을 값.
+
+    옛 원장을 알아보는 데만 쓴다. 새로 적을 때는 절대 쓰지 않는다.
+    """
+    return hashlib.sha256(_lf_bytes(path).replace(b"\n", b"\r\n")).hexdigest()
+
+
+def rewrite_checksum(conn, version: int, value: str) -> None:
+    """원장의 체크섬만 고쳐 적는다. 내용이 같다고 확인한 경우에만 부른다."""
+    with conn.cursor() as cur:
+        cur.execute("UPDATE schema_migration SET checksum = %s WHERE version = %s",
+                    (value, version))
 
 
 def applied_versions(conn) -> dict[int, str]:
@@ -86,8 +116,12 @@ def applied_versions(conn) -> dict[int, str]:
         return dict(cur.fetchall())
 
 
-def pending(conn, directory: pathlib.Path = MIGRATIONS_DIR) -> list[pathlib.Path]:
-    """아직 안 적용된 파일. 적용된 파일이 바뀌었으면 예외를 던진다."""
+def pending(conn, directory: pathlib.Path = MIGRATIONS_DIR, *,
+            repair: bool = True) -> list[pathlib.Path]:
+    """아직 안 적용된 파일. 적용된 파일이 바뀌었으면 예외를 던진다.
+
+    `repair` 가 거짓이면(= dry-run) 원장을 고치지 않고 무엇을 고칠지만 알린다.
+    """
     done = applied_versions(conn)
     remaining = []
     for path in migration_files(directory):
@@ -95,11 +129,22 @@ def pending(conn, directory: pathlib.Path = MIGRATIONS_DIR) -> list[pathlib.Path
         if version not in done:
             remaining.append(path)
             continue
-        if done[version] != checksum(path):
-            raise SystemExit(
-                f"🔴 이미 적용된 {path.name} 의 내용이 바뀌었다. DB 와 저장소가 갈라진다 — "
-                "적용된 마이그레이션은 고치지 말고 새 버전 파일을 만든다."
-            )
+        current = checksum(path)
+        if done[version] == current:
+            continue
+        if done[version] == crlf_checksum(path):
+            # 내용은 같고 줄바꿈만 CRLF 로 기록된 옛 원장이다. 막을 이유가 없고,
+            # 그대로 두면 배포마다 같은 자리에서 멈춘다 — 한 번만 정규화해 적는다.
+            if repair:
+                rewrite_checksum(conn, version, current)
+                print(f"원장 체크섬 정규화(CRLF → LF): {path.name}")
+            else:
+                print(f"[dry-run] 원장 체크섬 정규화 대상: {path.name}")
+            continue
+        raise SystemExit(
+            f"🔴 이미 적용된 {path.name} 의 내용이 바뀌었다. DB 와 저장소가 갈라진다 — "
+            "적용된 마이그레이션은 고치지 말고 새 버전 파일을 만든다."
+        )
     return remaining
 
 
@@ -113,7 +158,7 @@ def record(conn, path: pathlib.Path) -> None:
 
 def apply(conn, directory: pathlib.Path = MIGRATIONS_DIR, *, dry_run: bool = False) -> list[str]:
     """남은 마이그레이션을 적용하고 적용한 파일명을 돌려준다."""
-    remaining = pending(conn, directory)
+    remaining = pending(conn, directory, repair=not dry_run)
     if dry_run:
         return [p.name for p in remaining]
     for path in remaining:

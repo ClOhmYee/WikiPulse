@@ -19,9 +19,10 @@ import sys
 import time
 from types import FrameType
 
-from confluent_kafka import KafkaException, Producer
+from confluent_kafka import Producer
 
 from .config import Config
+from .cursor import CursorStore
 from .normalize import SkipEvent, normalize, partition_key
 
 log = logging.getLogger("producer")
@@ -58,10 +59,28 @@ class Stats:
         self._last_produced = self.produced
 
 
-def _on_delivery(err: KafkaException | None, msg: object) -> None:
-    if err is not None:
-        # 여기서 죽이지 않는다. 개별 실패는 로그로 남기고 스트림은 계속 간다.
-        log.error("발행 실패: %s", err)
+def publish_and_checkpoint(
+    producer: Producer,
+    *,
+    topic: str,
+    key: bytes,
+    value: bytes,
+    event_id: str,
+    cursor: CursorStore,
+) -> None:
+    delivery_errors: list[object] = []
+
+    def delivered(err: object | None, _message: object) -> None:
+        if err is not None:
+            delivery_errors.append(err)
+
+    producer.produce(topic, key=key, value=value, on_delivery=delivered)
+    remaining = producer.flush(10)
+    if delivery_errors:
+        raise RuntimeError(f"Kafka delivery failed: {delivery_errors[0]}")
+    if remaining:
+        raise RuntimeError(f"Kafka acknowledgement timeout: {remaining} pending")
+    cursor.save(event_id)
 
 
 def main() -> int:
@@ -88,7 +107,12 @@ def main() -> int:
     # 지연 로딩을 피하려고 SSE 는 나중에 import 하지 않는다.
     from .sse import SSEClient
 
-    client = SSEClient(config.stream_url, user_agent=config.user_agent)
+    cursor = CursorStore(config.cursor_file)
+    client = SSEClient(
+        config.stream_url,
+        user_agent=config.user_agent,
+        last_event_id=cursor.load(),
+    )
     stats = Stats(config.log_every)
 
     stopping = False
@@ -105,14 +129,17 @@ def main() -> int:
     log.info("대상 %s -> %s (토픽 %s)", target, config.bootstrap_servers, config.topic)
 
     try:
-        for payload in client.events():
+        for frame in client.events():
             if stopping:
                 break
 
             stats.received += 1
+            payload = frame.data
             try:
                 raw = json.loads(payload)
                 event = normalize(raw, wikis=config.wikis)
+                if not frame.event_id:
+                    raise ValueError("SSE event id가 없다")
             except SkipEvent:
                 stats.skipped += 1
                 continue
@@ -123,26 +150,16 @@ def main() -> int:
                     log.warning("이벤트 파싱 실패(%s): %.200s", exc, payload)
                 continue
 
-            try:
-                producer.produce(
-                    config.topic,
-                    key=partition_key(event),
-                    value=json.dumps(event, ensure_ascii=False).encode("utf-8"),
-                    on_delivery=_on_delivery,
-                )
-            except BufferError:
-                # 로컬 큐가 찼다 = 브로커가 못 따라오고 있다. 비우고 다시 시도.
-                log.warning("로컬 큐 포화 — 비우는 중")
-                producer.flush(10)
-                producer.produce(
-                    config.topic,
-                    key=partition_key(event),
-                    value=json.dumps(event, ensure_ascii=False).encode("utf-8"),
-                    on_delivery=_on_delivery,
-                )
+            publish_and_checkpoint(
+                producer,
+                topic=config.topic,
+                key=partition_key(event),
+                value=json.dumps(event, ensure_ascii=False).encode("utf-8"),
+                event_id=frame.event_id,
+                cursor=cursor,
+            )
 
             stats.produced += 1
-            producer.poll(0)  # 배달 콜백 처리
             stats.maybe_log()
     finally:
         remaining = producer.flush(30)

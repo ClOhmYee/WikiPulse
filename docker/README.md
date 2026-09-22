@@ -29,6 +29,23 @@ docker compose down -v                       # 정지 + 데이터 삭제 (스키
 | hdfs-namenode | 9870 | HDFS NameNode + WebHDFS 진입점 | `gdelt` |
 | hdfs-datanode | — | HDFS DataNode (단일) | `gdelt` |
 
+## 매칭·검증·요약 워커 (backend)
+
+셋 다 backend 안의 스케줄러이고 **기본 꺼짐**이다. `.env` 에 값을 넣으면
+compose 가 컨테이너로 전달한다 — 전달 목록은 `infra/service/compose.yaml`(EC2)과
+같다.
+
+| 변수 | 켜는 것 | 켜기 전 조건 |
+| --- | --- | --- |
+| `LLM_GATEWAY_KEY` | GATEWAY 게이트웨이 호출(임베딩·LLM) | 세 워커 중 하나라도 켜면 필수 |
+| `WIKIPULSE_MATCHING_SCHEDULER_ENABLED` | 후보 생성 폴러 | 종목 임베딩 **전량** 적재 후 |
+| `WIKIPULSE_MATCHING_VERIFICATION_ENABLED` | LLM 검증 워커 | `PENDING` 후보가 쌓인 뒤 |
+| `WIKIPULSE_MATCHING_SUMMARY_ENABLED` | 이슈 요약 writer·상태 전이 | 검증과 같은 키·모델을 재사용 |
+
+⚠️ **compose 가 전달하지 않으면 `.env` 에 넣어도 조용히 무시된다.** 애플리케이션
+기본값(`false`·빈 키)으로 떨어져서 "켰는데 아무 일도 안 일어난다"로 보인다. 워커를
+새로 만들면 `application.yml` 과 **양쪽 compose** 세 곳을 같이 고친다.
+
 ## GDELT 수집 (HDFS)
 
 `WP-32`. GDELT GKG 원본을 적재할 **개발용 단일노드 HDFS**다. `--profile
@@ -70,6 +87,18 @@ gdelt` 로 namenode·datanode 가 뜬다. `db/migrations` 처럼 무언가 자�
 ## 검증 (2026-09-08, 이 스택으로 직접 확인)
 
 - postgres·kafka 헬스체크 통과. **스키마 17개 테이블 + pgvector 자동 적재.**
+  (2026-09-20 재확인 시점에는 21개 — V10 까지 누적된 결과다.)
+
+🔴 **마이그레이션은 번호를 채워서 복사한다** (WP-146, 2026-09-20).
+`/docker-entrypoint-initdb.d` 는 **알파벳 순**으로 실행하는데 `V10__` 이 `V1__` 보다
+앞선다. V10 이 생긴 뒤 깨끗한 볼륨으로 올리면 `relation "wiki_page" does not exist`
+로 죽었다 — 컨테이너가 죽은 채 healthcheck 만 `unhealthy` 라 원인이 바로 안 보인다.
+`docker/postgres/Dockerfile` 이 복사할 때 `V001__`·`V010__` 으로 바꾼다. 저장소
+파일명은 그대로다.
+
+⚠️ **적용 경로가 둘이고 정렬 규칙이 다르다.** `db/apply_migrations.py`(EC2)는 정수
+version 으로 정렬해 원래부터 문제가 없었다. 마이그레이션을 추가할 때 두 경로를
+같이 생각한다.
 - 백엔드 이미지 빌드(컨테이너 안 gradle bootJar) 후 실 PostgreSQL 에
   `ddl-auto=validate` 로 기동 성공 — 엔티티가 스키마와 정확히 맞는다.
 - 실제 HTTP: `/actuator/health` UP, `/api/issues` 빈 배열 → 시드 후 카드,
