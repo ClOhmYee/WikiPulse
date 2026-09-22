@@ -1,6 +1,6 @@
 .explore-layout {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr) clamp(280px, 25vw, 340px);
   align-items: start;
   gap: clamp(28px, 3vw, 56px);
 }
@@ -8,13 +8,15 @@
   min-width: 0;
 }
 .explore-page .explore-toolbar {
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
 }
 .explore-page .explore-toolbar > .wp-search {
-  flex-basis: 100%;
+  flex-basis: auto;
+  min-width: 0;
 }
 .explore-page .explore-toolbar > .wp-segment:last-child {
-  margin-left: 0;
+  margin-left: auto;
+  flex-shrink: 0;
 }
 .explore-page .event-list[data-view="list"] .event-row {
   gap: 16px;
@@ -30,7 +32,7 @@
   display: none;
 }
 .explore-page .event-list[data-view="card"] {
-  grid-template-columns: 1fr;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 290px), 1fr));
 }
 .explore-rankings {
   position: sticky;
@@ -45,27 +47,25 @@
   overscroll-behavior: contain;
   padding: 0 6px 2px 0;
 }
-.explore-ranking,
-.explore-ranking-error {
+.explore-ranking {
   min-width: 0;
   padding: 22px 24px 12px;
   border: 1px solid var(--wp-border);
   border-radius: 12px;
   background: var(--wp-surface);
 }
-.explore-ranking h2 {
+.explore-ranking-heading {
   display: flex;
   justify-content: space-between;
-  align-items: baseline;
+  align-items: center;
   gap: 16px;
   margin: 0 0 14px;
+}
+.explore-ranking h2 {
+  margin: 0;
+  color: var(--teal);
   font-size: 18px;
   font-weight: 550;
-}
-.explore-ranking h2 span {
-  color: var(--teal);
-  font-size: 12px;
-  font-weight: 500;
   letter-spacing: 0.04em;
 }
 .explore-ranking-list {
@@ -115,15 +115,6 @@
 .explore-ranking-error {
   padding-bottom: 24px;
 }
-@media (min-width: 1600px) {
-  .explore-rankings {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 18px;
-  }
-  .explore-ranking {
-    padding: 20px 18px 10px;
-  }
-}
 @media (max-width: 1050px) {
   .explore-layout {
     grid-template-columns: 1fr;
@@ -133,12 +124,14 @@
     max-height: none;
     overflow: visible;
     padding: 0;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 @media (max-width: 640px) {
-  .explore-rankings {
-    grid-template-columns: 1fr;
+  .explore-page .explore-toolbar {
+    flex-wrap: wrap;
+  }
+  .explore-page .explore-toolbar > .wp-search {
+    flex-basis: 100%;
   }
   .explore-ranking {
     padding: 20px 18px 10px;
