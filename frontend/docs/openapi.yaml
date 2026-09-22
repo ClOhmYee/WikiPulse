@@ -474,6 +474,11 @@ components:
         title:
           type: string
           minLength: 1
+        titleKo:
+          type: string
+          minLength: 1
+          nullable: true
+          description: "표시 전용 ko.wikipedia 대응 제목. ko 문서가 없으면 null이고 화면은 title(영문)로 떨어진다. title을 대체하지 않으며 위키백과 링크·식별자는 계속 title을 쓴다."
         isSeed:
           type: boolean
           description: >-
@@ -820,6 +825,11 @@ components:
           type: string
         title:
           type: string
+        titleKo:
+          type: string
+          minLength: 1
+          nullable: true
+          description: "표시 전용 ko.wikipedia 대응 제목. ko 문서가 없으면 null이고 화면은 title(영문)로 떨어진다. title을 대체하지 않으며 위키백과 링크·식별자는 계속 title을 쓴다."
         weight:
           type: number
         isSeed:

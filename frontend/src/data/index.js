@@ -1,4 +1,5 @@
 import { readDataConfig } from "./config.js";
+import { clusterTitle, documentTitle } from "./titles.js";
 
 // App presentation metadata is never a required server response field.
 export function presentPulseMap(result, dataMode, aliasFor) {
@@ -9,8 +10,13 @@ export function presentPulseMap(result, dataMode, aliasFor) {
       clusters: result.data.clusters.map((cluster) => ({
         ...cluster,
         aliases: aliasFor ? [aliasFor(cluster.id)] : [],
-        label:
-          cluster.label?.trim() || cluster.nodes[0]?.title || "제목 미제공",
+        // 서버가 준 title/titleKo 는 그대로 두고 표시용만 덧붙인다 — 위키 링크는 title 을
+        // 쓰고 검색 색인은 둘 다 본다.
+        nodes: cluster.nodes.map((node) => ({
+          ...node,
+          displayTitle: documentTitle(node),
+        })),
+        label: clusterTitle(cluster),
         issueKey:
           cluster.issueKey ||
           `${result.meta.source}:${result.meta.snapshotTs}:${cluster.id}`,

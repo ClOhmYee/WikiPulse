@@ -112,7 +112,8 @@ public class PulseMapService {
         for (NodeRow n : repo.findNodes(ts, source)) {
             byCluster.computeIfAbsent(n.getClusterId(), k -> new ArrayList<>())
                     .add(new PulseMap.Node(
-                            str(n.getPageId()), n.getWiki(), n.getTitle(), n.getIsSeed(),
+                            str(n.getPageId()), n.getWiki(), n.getTitle(), n.getTitleKo(),
+                            n.getIsSeed(),
                             n.getEditCount(), n.getViews(), n.getEditBaseline(),
                             n.getViewBaseline(), n.getSpikeScore(), n.getSizeScore(),
                             n.getCompleteness(), iso(n.getWindowStart()), iso(n.getWindowEnd())));

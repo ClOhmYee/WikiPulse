@@ -244,6 +244,7 @@ docker compose run --rm spark            # 윈도우 집계 잡
 - ~~replay 대표 텍스트를 현재 Wikipedia 도입부로 읽음~~ → **`page_intro`에서 `snapshot_ts` 이하 마지막 revision을 읽도록 구현** (2026-09-18, WP-129, V8). 현재 도입부 폴백은 금지하며 EC2·실제 replay 재검증은 하지 않음
 - ~~spike 조회수·기준선이 `cluster_member`에 전달되지 않고 상세 API가 최신 원시 행을 읽음~~ → **판정 수치 전달·`completeness` 결정·상세 고정값 조회 구현** (2026-09-18, WP-129, V7). `max_rev_id`·`last_edit_ts` 감사 필드도 V9로 추가. 로컬 회귀 테스트만 완료하고 EC2에서는 검증하지 않음
 - ~~실시간 이슈 요약 writer·상태 전이 미구현~~ → **백엔드 구현 완료** (2026-09-18, WP-119). 워커 기본값은 꺼짐이며 실제 GATEWAY·EC2 실행은 하지 않음
+- ~~화면이 영문 raw title만 표시~~ → **ko.wikipedia 표시명 구현** (2026-09-22, WP-205, V15). `wiki_page.title_ko`를 `cluster_member` 편입 enwiki 문서에 한해 `prop=langlinks&lllang=ko`로 1회 조회(50개/요청)해 채우고, `title`(영문)은 그대로 둔다. LIVE·replay 공통. 워커 `wikipulse.page-title.enabled` 기본 꺼짐이라 켜기 전에는 전량 영문이며 EC2 실행은 0회임. 리다이렉트 제목은 ko를 붙이지 않고 영문 폴백(정밀 매핑은 후속)
 
 **남은 설계·검증**
 

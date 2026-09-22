@@ -52,7 +52,7 @@ class PulseMapControllerTest {
 
     @Test
     void 지도는_클러스터_노드_간선과_meta를_담는다() throws Exception {
-        var node = new PulseMap.Node("901", "enwiki", "Strait of Hormuz", true,
+        var node = new PulseMap.Node("901", "enwiki", "Strait of Hormuz", "호르무즈 해협", true,
                 47, 91000, 3.2, 390.0, 9.7, 0.66, "complete",
                 "2025-06-12T00:00:00Z", "2025-06-12T04:00:00Z");
         var edge = new PulseMap.Edge("5", "901", "902", "clickstream", true, 383.0,
@@ -72,6 +72,9 @@ class PulseMapControllerTest {
                 .andExpect(jsonPath("$.data.clusters[0].issueKey").value("live:enwiki:Strait of Hormuz"))
                 .andExpect(jsonPath("$.data.clusters[0].hot").value(true))
                 .andExpect(jsonPath("$.data.clusters[0].nodes[0].pageId").value("901"))
+                // 🔴 표시명은 더하는 것이지 영문을 대체하는 게 아니다.
+                .andExpect(jsonPath("$.data.clusters[0].nodes[0].title").value("Strait of Hormuz"))
+                .andExpect(jsonPath("$.data.clusters[0].nodes[0].titleKo").value("호르무즈 해협"))
                 .andExpect(jsonPath("$.data.clusters[0].nodes[0].sizeScore").value(0.66))
                 .andExpect(jsonPath("$.data.clusters[0].edges[0].kind").value("clickstream"))
                 .andExpect(jsonPath("$.data.clusters[0].edges[0].evidence.month").value("2025-05"))
@@ -95,7 +98,7 @@ class PulseMapControllerTest {
     @Test
     void nullable_지표는_null로_나온다() throws Exception {
         // 비-씨드 노드: 지표가 전부 null 이어도 필드가 present 여야 한다(계약)
-        var node = new PulseMap.Node("902", "enwiki", "Sibling", false,
+        var node = new PulseMap.Node("902", "enwiki", "Sibling", null, false,
                 null, null, null, null, null, null, "unavailable",
                 "2025-06-12T00:00:00Z", "2025-06-12T04:00:00Z");
         var cluster = new PulseMap.Cluster("42", "k", "label", null, "other", null,
@@ -111,6 +114,9 @@ class PulseMapControllerTest {
                 .andExpect(jsonPath("$.data.clusters[0].nodes[0].sizeScore").value(nullValue()))
                 .andExpect(jsonPath("$.data.clusters[0].nodes[0].editCount").value(nullValue()))
                 .andExpect(jsonPath("$.data.clusters[0].nodes[0].completeness").value("unavailable"))
+                // ko 문서가 없는 노드. 화면은 title(영문)로 떨어진다 — 결함이 아니라 정상 경로다.
+                .andExpect(jsonPath("$.data.clusters[0].nodes[0].titleKo").value(nullValue()))
+                .andExpect(jsonPath("$.data.clusters[0].nodes[0].title").value("Sibling"))
                 .andExpect(jsonPath("$.data.clusters[0].summary").value(nullValue()))
                 .andExpect(jsonPath("$.data.clusters[0].firstDetectedAt").value(nullValue()));
     }

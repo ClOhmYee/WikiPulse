@@ -145,6 +145,9 @@ export function clusterAt(episode, date) {
       pageId,
       wiki: "enwiki",
       title: doc.title,
+      // 시연용 한국어 표시명. 운영에서는 ko.wikipedia langlinks 가 채우는 자리다
+      // (wiki_page.title_ko). 데모에는 위키를 부르지 않으므로 손으로 붙인 이름을 쓴다.
+      titleKo: doc.name,
       isSeed: spikeScore >= 4,
       editCount: metric.edits,
       editBaseline: metric.baseline,

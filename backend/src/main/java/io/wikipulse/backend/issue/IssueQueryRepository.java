@@ -31,6 +31,7 @@ public interface IssueQueryRepository extends JpaRepository<IssueCluster, Long> 
      */
     @Query(value = """
             SELECT p.id AS pageId, p.wiki AS wiki, p.title AS title,
+                   p.title_ko AS titleKo,
                    cm.weight AS weight, cm.is_seed AS isSeed,
                    cm.edit_count AS editCount, cm.views AS views,
                    cm.completeness AS completeness

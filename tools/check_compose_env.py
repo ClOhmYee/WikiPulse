@@ -1,4 +1,4 @@
-"""application.yml 의 WIKIPULSE_MATCHING_* 환경변수가 compose 에 다 적혀 있는지 본다.
+"""application.yml 의 WIKIPULSE_* 환경변수가 compose 에 다 적혀 있는지 본다.
 
 ⚠️ **같은 함정에 두 번 물려서 만들었다.** 노브를 더해 놓고 compose 에 안 적으면 `.env` 에
 값을 넣어도 컨테이너 안에 안 들어간다. 애플리케이션 기본값으로 조용히 떨어지므로
@@ -7,7 +7,13 @@
     WP-142  GATEWAY·워커 변수 누락
     WP-168  scheduler/summary SOURCE 누락 (머지 직전에 발견)
 
-🔴 대상은 WIKIPULSE_MATCHING_* 뿐이다. DATABASE_URL 처럼 compose 가 직접 값을 주는 것은
+⚠️ ~~WIKIPULSE_MATCHING_*~~ → **WIKIPULSE_*** 로 넓혔다 (2026-09-22, WP-205).
+   `wikipulse.page-title` 노브를 더하면서, 접두사가 MATCHING 으로 박혀 있어 **새 노브가
+   이 검사 밖에 있었다.** 검사는 통과하는데 정작 막으려던 그 실패가 그대로 가능한 상태였다
+   — 가드가 있다는 사실 자체가 오히려 확인을 건너뛰게 만든다. 앞으로 `wikipulse.*` 밑에
+   무엇을 더하든 자동으로 걸린다.
+
+🔴 대상은 WIKIPULSE_* 뿐이다. DATABASE_URL 처럼 compose 가 직접 값을 주는 것은
    application.yml 의 플레이스홀더와 이름이 달라 여기 걸면 오탐이 된다.
 
 의존성 없이 돈다:  py -3 tools/check_compose_env.py
@@ -23,7 +29,7 @@ ROOT = pathlib.Path(__file__).resolve().parents[1]
 SOURCE_YML = ROOT / "backend/src/main/resources/application.yml"
 COMPOSES = [ROOT / "infra/service/compose.yaml", ROOT / "docker-compose.yml"]
 
-PREFIX = "WIKIPULSE_MATCHING_"
+PREFIX = "WIKIPULSE_"
 PLACEHOLDER = re.compile(r"\$\{(" + PREFIX + r"[A-Z0-9_]+)")
 
 

@@ -314,7 +314,11 @@ test("pulse raw missing labels/keys become presentation fallbacks scoped to one 
   cluster.label = null;
   cluster.issueKey = null;
   const result = presentPulseMap(raw, "mock");
-  assert.equal(result.data.clusters[0].label, cluster.nodes[0].title);
+  // label 이 없으면 root/lead 문서로 떨어진다. 그 문서에 ko 제목이 있으면 그쪽이 먼저다.
+  assert.equal(
+    result.data.clusters[0].label,
+    cluster.nodes[0].titleKo || cluster.nodes[0].title,
+  );
   assert.equal(
     result.data.clusters[0].issueKey,
     `${raw.meta.source}:${raw.meta.snapshotTs}:${cluster.id}`,

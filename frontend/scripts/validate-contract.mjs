@@ -139,6 +139,8 @@ if (issues.length) {
   for (const member of omitted.data.members) {
     delete member.editCount;
     delete member.views;
+    // ko 표시명은 선택 필드다(NON_NULL 직렬화로 빠진다). 빠져도 계약을 지켜야 한다.
+    delete member.titleKo;
   }
   check("IssueDetailResponse", omitted);
 }

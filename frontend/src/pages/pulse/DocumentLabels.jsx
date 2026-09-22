@@ -1,5 +1,7 @@
 // Every document keeps an in-bubble label. CSS clamps long titles with an
 // ellipsis; the original title remains available in the active callout.
+// displayTitle 은 data/titles.js 가 조립한 표시명(ko 우선, 없으면 영문)이다.
+// 위키백과 링크는 계속 영문 title 을 쓴다 — PulsePreview 참고.
 export default function DocumentLabels({
   nodes,
   fontSize,
@@ -18,7 +20,9 @@ export default function DocumentLabels({
     nodes.find((node) => node.pageId === emphasized) ||
     nodes.find((node) => node.pageId === selected);
   const activeLines = active
-    ? active.title.replaceAll("_", " ").match(/.{1,28}(?:\s|$)|.{1,28}/gu)
+    ? active.displayTitle
+        .replaceAll("_", " ")
+        .match(/.{1,28}(?:\s|$)|.{1,28}/gu)
     : [];
   const activeWidth = active ? Math.max(...activeLines.map(widthOf)) : 0;
   const calloutX = active
@@ -58,7 +62,7 @@ export default function DocumentLabels({
                 WebkitLineClamp: node.radius >= 20 ? 2 : 1,
               }}
             >
-              {node.title.replaceAll("_", " ")}
+              {node.displayTitle.replaceAll("_", " ")}
             </span>
           </div>
         </foreignObject>
