@@ -86,10 +86,6 @@ class PageWindow:
     edit_count: int
     editor_count: int
     views: int | None = None
-    #: `views` 중 모바일 몫 (V15, WP-210). 1단계 대체 경로의 봇 필터 입력이다.
-    #: 🔴 None 은 **"모바일 0" 이 아니라 "안 쟀다"** — V15 이전 적재분이 그렇다.
-    #: 0 으로 메우면 그 구간이 전부 봇으로 판정된다.
-    mobile_views: int | None = None
     #: 윈도우 끝. 안 주면 `window_start + WINDOW_HOURS`. 소스가 주면 그 값이 이긴다.
     window_end: datetime | None = None
     #: 이 윈도우 집계에 들어간 최대 revision id. 판정에는 안 쓰고 **증거로만** 남긴다
@@ -153,10 +149,6 @@ class PageWindow:
             edit_count=int(row["edit_count"]),
             editor_count=int(row.get("editor_count") or 0),
             views=None if views is None else int(views),
-            # ⚠️ 없으면 None 이다 — 0 으로 메우지 않는다. V15 이전 산출물에는 아예
-            #    이 키가 없고, 0 으로 채우면 "모바일 0%" = 봇으로 판정된다.
-            mobile_views=(None if row.get("mobile_views") is None
-                          else int(row["mobile_views"])),
             window_end=None if end is None else parse_window_start(end),
             # 시점 감사 증거. 안 싣는 입력(옛 산출물)도 있어서 없으면 None 이다.
             max_rev_id=(None if row.get("max_rev_id") is None
@@ -173,8 +165,7 @@ class PageWindow:
     def as_detector_window(self) -> Window:
         return Window(edit_count=self.edit_count,
                       editor_count=self.editor_count,
-                      views=self.views,
-                      mobile_views=self.mobile_views)
+                      views=self.views)
 
 
 @dataclass(frozen=True)
@@ -253,14 +244,9 @@ class SpikeRuntime:
     """
 
     def __init__(self, baselines: BaselineRepository, sink: SpikeSink | None = None,
-                 candidates=None, *, view_only_gate: bool = False) -> None:
+                 candidates=None) -> None:
         self._baselines = baselines
         self._sink = sink
-        #: 1단계 대체 경로(WP-210). **기본 꺼짐** — 켜면 편집이 없어도
-        #: `조회수 >= 100 AND 모바일 >= 25%` 인 윈도우가 1단계를 통과한다.
-        #: 🔴 `spike/view_candidates.harvest` 와 **짝이다.** 여기만 켜면 판정은 열리는데
-        #:    그런 윈도우가 후보로 들어오지 않아 아무것도 안 바뀐다.
-        self._view_only_gate = view_only_gate
         #: 후보 대기 보관소(`spike/candidate_store.CandidateStore`). 없으면 대기를 세기만
         #: 하고 버린다 — 그게 WP-128 이전의 동작이고, LIVE 가 확정을 못 내던 이유다.
         self._candidates = candidates
@@ -268,8 +254,7 @@ class SpikeRuntime:
     def evaluate(self, window: PageWindow) -> DetectionOutcome:
         """판정만 한다. 저장하지 않는다."""
         baseline = self._baselines.get(window.wiki, window.title, window.hour_of_day)
-        decision = detect(window.as_detector_window(), baseline,
-                          view_only_gate=self._view_only_gate)
+        decision = detect(window.as_detector_window(), baseline)
         return DetectionOutcome(window=window, baseline=baseline,
                                 decision=decision, persisted=False)
 

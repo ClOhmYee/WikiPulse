@@ -75,7 +75,7 @@ class RecheckSummary:
 def recheck(
     conn, *, source: str = "live", limit: int = DEFAULT_LIMIT,
     expire_hours: int = DEFAULT_EXPIRE_HOURS, now: datetime | None = None,
-    dry_run: bool = False, view_only_gate: bool = False,
+    dry_run: bool = False,
 ) -> RecheckSummary:
     """조회수가 도착한 대기를 재판정한다. 커밋은 여기서 한다(dry-run 이면 롤백).
 
@@ -83,11 +83,7 @@ def recheck(
     """
     store = CandidateStore(conn, source=source)
     sink = None if dry_run else SpikeSink(conn, source=source)
-    # 🔴 `view_only_gate` 는 `spike/view_candidates.harvest` 와 짝이다 (WP-210).
-    #    여기만 켜면 편집 0 후보가 애초에 안 들어와서 아무것도 안 바뀌고,
-    #    거기만 켜면 들어온 후보가 1단계에서 전부 폐기된다.
-    runtime = SpikeRuntime(BaselineRepository(conn), sink,
-                           view_only_gate=view_only_gate)
+    runtime = SpikeRuntime(BaselineRepository(conn), sink)
 
     summary = RecheckSummary()
     for candidate in list(store.due(limit)):

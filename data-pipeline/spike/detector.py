@@ -18,17 +18,6 @@
 유형"(Hormuz)을 잡으려던 것인데, 2단계 계약은 그 문제를 **조회수를 최종 관문으로
 올려서** 푼다 — 편집은 후보를 만드는 신호일 뿐이다.
 
-1단계 대체 경로 (WP-210, **기본 꺼짐**)
-    `detect(..., view_only_gate=True)` 를 주면 1단계가
-        사람 편집 >= 1  **또는**  (조회수 >= 100 AND 모바일 비중 >= 25%)
-    가 된다. 2단계(조회수 급등)는 그대로다.
-    🔴 위의 폐기된 `-90` 과 다른 점은 **오른쪽 가지에 봇 필터가 붙어 있다**는 것이다.
-       편집 관문이 사실상 유일한 봇 필터였기 때문에(`Roblox` 2026-08-10, 하루 478만
-       조회·674배·모바일 0.1%), 그냥 열면 크롤러가 그대로 들어온다.
-    왜 여는가: 기업 문서는 편집이 사건보다 느리다. 2026-08-19 Moderna–Merck Phase 3 는
-       문서 5개가 60배까지 급등했는데 **당일 편집이 0건**이라 현행 1단계에서 탈락한다.
-    근거·수치: `ai/spec-evidence/gate-review/RESULT.md`. 채택 여부는 WP-210.
-
 조회수 관문 (명세 §3.2 3번 그대로)
     표본 있음  z >= 3  AND  평소의 2배 이상  AND  현재 조회수 >= 100   (셋 다)
     표본 없음  현재 조회수 >= 100                                     ← 0 에서의 급등
@@ -87,27 +76,6 @@ MIN_VIEW_RATIO = 2.0      # 조회수 최소 배수. z 만으로는 부족(6/12 
 #: 꼬리 문서만 막는다.
 MIN_ABSOLUTE_VIEWS = 100
 
-#: 1단계 대체 경로(WP-210)의 모바일 비중 하한. **기본은 꺼짐**이고
-#: `detect(..., view_only_gate=True)` 로 명시해야 열린다.
-#:
-#: 왜 필요한가
-#:   사고 문서와 기업 문서는 편집 속도가 다르다. `Air India Flight 171` 은 분 단위로
-#:   편집되지만 `Moderna` 는 임상 결과가 나와도 편집이 이틀 늦는다. 2026-08-19
-#:   Moderna–Merck Phase 3 는 문서 5개가 동시 급등(60배)했는데 **당일 편집 0건**이라
-#:   현행 1단계에서 통째로 탈락한다. 상장사 급등 후보 174건 중 편집 게이트 통과는 24%다.
-#:
-#: 🔴 왜 조회수만으로 열지 않고 모바일 비중을 같이 보나
-#:   편집 게이트는 사실상 **유일한 봇 필터**였다. 빼기만 하면 `Roblox` 2026-08-10
-#:   (하루 478만 조회·674배)이 그대로 1위로 올라온다 — 그건 데스크톱 단일 채널
-#:   크롤러였다(모바일 0.1%, 평소 60%).
-#:
-#: 값 0.25 의 근거 (2026-09-22 실측, `ai/spec-evidence/gate-review/`)
-#:   사건 52~64% (Air India 63.1 · Boeing 787 63.9 · Moderna 52.1 · MRNA-4157 53.5)
-#:   봇   0.1~4% (Roblox 0.1 · Google 4.0 · Lowe's 2.4)
-#:   겹치는 구간이 없어 그 사이 아무 데나 둘 수 있다. 사건 쪽 여유를 크게 남겼다.
-#:   ⚠️ **기업 문서 174건 표본에서 나온 첫 컷이다.** 사건 문서 쪽 분포는 아직 안 쟀다.
-MIN_MOBILE_RATIO = 0.25
-
 #: 🔴 **아래 셋은 판정 관문이 아니다** (2026-09-18, WP-126).
 #: 명세 §3.2 2번이 "편집 z-score·편집 10건·편집자 2명 기준은 이 단계의 관문으로
 #: 사용하지 않는다" 로 못박았다. 지우지 않고 남긴 이유는 둘이다:
@@ -151,16 +119,6 @@ class Window:
     edit_count: int
     editor_count: int
     views: int | None  # 조회수는 늦게 와서 판정 시점엔 None 일 수 있다
-    #: `views` 중 모바일 몫 (V15, WP-210). `views` 에 포함된 부분집합이다.
-    #: None 은 **"모바일 0" 이 아니라 "안 쟀다"** — V15 이전 적재분이 그렇다.
-    mobile_views: int | None = None
-
-    @property
-    def mobile_ratio(self) -> float | None:
-        """모바일 비중 0.0~1.0. 안 쟀거나 조회수가 0/미도착이면 None."""
-        if self.mobile_views is None or not self.views:
-            return None
-        return self.mobile_views / self.views
 
 
 class DecisionStatus(str, Enum):
@@ -235,33 +193,7 @@ def may_spike(window: Window) -> bool:
     return window.views is None or window.views >= MIN_ABSOLUTE_VIEWS
 
 
-def passes_first_gate(window: Window, *, view_only_gate: bool = False) -> bool:
-    """1단계 관문 — 사람 편집, 또는(노브를 켰을 때) 봇이 아닌 조회수.
-
-        기본           사람 편집 >= MIN_HUMAN_EDITS
-        view_only_gate 위 **또는** (조회수 >= MIN_ABSOLUTE_VIEWS AND 모바일 >= 25%)
-
-    🔴 **OR 의 오른쪽은 폐기된 `-90`(편집 OR 조회수) 부활이 아니다.** 거기서 뺀 것은
-    "편집 없이 조회수만으로 통과"였고, 여기서는 그 자리에 **봇 필터**를 세운다.
-    모바일 비중이 없으면(=안 쟀으면) 오른쪽 가지는 열리지 않는다 — 열어 주면 V15
-    이전 적재분(mobile_views 기본 0)이 전부 봇으로 몰리거나, 반대로 측정 안 된 값이
-    통과 근거가 된다.
-
-    ⚠️ 조회수 미도착(None)은 오른쪽 가지를 **열지 않는다.** 편집이 없으면 판단 근거가
-    아직 아무것도 없다 — 대기로 둘 값도 없어서 후보가 되지 못한다.
-    """
-    if window.edit_count >= MIN_HUMAN_EDITS:
-        return True
-    if not view_only_gate:
-        return False
-    ratio = window.mobile_ratio
-    if ratio is None:
-        return False
-    return (window.views or 0) >= MIN_ABSOLUTE_VIEWS and ratio >= MIN_MOBILE_RATIO
-
-
-def detect(window: Window, baseline: Baseline | None, *,
-           view_only_gate: bool = False) -> SpikeDecision:
+def detect(window: Window, baseline: Baseline | None) -> SpikeDecision:
     """2단계 관문 판정 (명세 v0.2 §3.2 2~3번, WP-126).
 
         1단계  사람 편집 >= MIN_HUMAN_EDITS  ->  조회수 검사 후보
@@ -269,20 +201,14 @@ def detect(window: Window, baseline: Baseline | None, *,
 
     반환은 3상태다(`DecisionStatus`). 조회수 미도착은 **확정도 폐기도 아니다.**
     """
-    if not passes_first_gate(window, view_only_gate=view_only_gate):
-        ratio = window.mobile_ratio
-        if view_only_gate and window.edit_count < MIN_HUMAN_EDITS and ratio is not None:
-            why = (f"1단계 미통과 — 편집 {window.edit_count} · "
-                   f"조회수 {window.views} · 모바일 {ratio:.1%}")
-        else:
-            why = f"1단계 미통과 — 사람 편집 {window.edit_count} < {MIN_HUMAN_EDITS}"
+    if window.edit_count < MIN_HUMAN_EDITS:
         return SpikeDecision(
             status=DecisionStatus.REJECTED,
             is_new_page=_thin(baseline),
             edit_z=_edit_z(window, baseline),
             view_ratio=None,
             spike_score=0.0,
-            reason=why,
+            reason=f"1단계 미통과 — 사람 편집 {window.edit_count} < {MIN_HUMAN_EDITS}",
         )
 
     if window.views is None:
