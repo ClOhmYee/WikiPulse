@@ -67,6 +67,14 @@ def main():
     artifact = ROOT / "output" / "account-e2e"
     artifact.mkdir(parents=True, exist_ok=True)
     server = pgserver.get_server(tempfile.mkdtemp(prefix="wikipulse-account-test-"))
+    if os.name != "nt":
+        # pgserver 0.1.4 disables TCP on Unix. JDBC needs a loopback listener;
+        # restart only this disposable cluster and refresh its lifecycle metadata.
+        from pgserver._commands import pg_ctl
+        pg_ctl(["-w", "-o", f'-h 127.0.0.1 -p {port()} -k "{server.pgdata}"',
+                "-l", str(server.log), "restart"],
+               pgdata=server.pgdata, user=server.system_user, timeout=15)
+        server.ensure_postgres_running()
     dsn = server.get_uri()
     migrations = sorted((ROOT / "db/migrations").glob("V*__*.sql"), key=lambda p: int(p.name.split("__")[0][1:]))
     with psycopg.connect(dsn, autocommit=True) as db:
@@ -95,10 +103,12 @@ def main():
         db.execute("INSERT INTO stock(ticker,name,exchange) VALUES ('T211','Account E2E Stock','NASDAQ')")
         cluster = db.execute("INSERT INTO issue_cluster(snapshot_ts,label,pulse_score,status,source) VALUES (now(),'Account E2E Issue',42,'CONFIRMED','live') RETURNING id").fetchone()[0]
     uri = urlparse(dsn)
-    # pgserver defaults to a Unix socket on Linux; use its exposed port over loopback for JDBC.
+    # Resolve the disposable cluster's port and user for JDBC.
     with psycopg.connect(dsn) as db:
         pg_port = db.execute("SHOW port").fetchone()[0]
         pg_user = db.execute("SELECT current_user").fetchone()[0]
+    with psycopg.connect(dsn, host="127.0.0.1", port=pg_port) as db:
+        assert db.execute("SELECT 1").fetchone()[0] == 1
     backend_port = port()
     env = dict(os.environ, DATABASE_URL=f"jdbc:postgresql://127.0.0.1:{pg_port}/{uri.path.lstrip('/') or 'postgres'}",
                DB_USER=pg_user, DB_PASSWORD="", SERVER_PORT=str(backend_port), SESSION_COOKIE_SECURE="false",
@@ -116,6 +126,8 @@ def main():
         process = subprocess.Popen([java, "-Duser.timezone=GMT+00:00", "-jar", str(jar)], cwd=ROOT, env=dict(env, SESSION_TIMEOUT=timeout, SESSION_COOKIE_SECURE=secure), stdout=log, stderr=subprocess.STDOUT)
         for _ in range(120):
             if process.poll() is not None:
+                log.flush()
+                print(Path(log.name).read_text(encoding="utf-8"), flush=True)
                 raise RuntimeError(f"backend exited; inspect {log.name}")
             try:
                 urllib.request.urlopen(f"http://127.0.0.1:{backend_port}/actuator/health", timeout=1)
