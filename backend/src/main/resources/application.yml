@@ -84,6 +84,19 @@ wikipulse:
       org-context-limit: 15
       # 3등급(EMBEDDING_ONLY) 발동 문턱 — 1·2등급 확정 통과가 이 값 미만일 때만(WP-22).
       tier3-threshold: 2
+    # 하루에 쓸 수 있는 LLM 호출 수 (WP-191).
+    # 🔴 이미 있는 상한들과 축이 다르다 — top-per-snapshot 은 스냅샷당, summary.max-attempts 는
+    #    클러스터당, 이건 하루에 몇 번이다. 셋 다 필요하다.
+    # 크레딧이 아니라 호출 수로 묶는다: 크레딧은 GATEWAY key-info 를 주기적으로 읽어야 하는데
+    #    값이 지연되고 소액 호출은 델타가 0 으로 반올림된다(-170 실측).
+    # 환산 (2026-09-21, -170): 검증 nano 호출당 약 9 · 요약 1회 41~62 크레딧.
+    #    기본값이면 하루 최대 약 5,200(요약) + 2,700(검증) = 7,900 크레딧.
+    # 🔴 요약과 검증을 나눈다 — 한 통이면 검증이 요약을 굶는다(이슈당 검증은 후보 수만큼,
+    #    요약은 1회).
+    # 0 이하 = 무제한. ⚠️ 켜지 말 것.
+    budget:
+      summary-calls: ${WIKIPULSE_MATCHING_BUDGET_SUMMARYCALLS:100}
+      verification-calls: ${WIKIPULSE_MATCHING_BUDGET_VERIFICATIONCALLS:300}
     # 이슈 요약 writer·상태 전이 워커 (WP-119, 명세 §3.2 7번). 검증 워커와 별개로 켠다 —
     # 검증과 같은 gateway 계층·모델을 재사용한다(새 GATEWAY 설정 없음).
     summary:
