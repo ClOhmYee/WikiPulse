@@ -162,7 +162,7 @@ DB `CHECK` 제약과 **같은 값을 그대로** 쓴다. 번역하지 않는다.
 }
 ```
 
-- `summary`는 `issue_report`. 아직 없으면 `null`. 운영 writer와 상태 전이는 WP-119로 구현됐지만 worker는 기본값이 꺼져 있고 실제 GATEWAY·EC2 실행은 하지 않았다. 현재 로컬 데모 값은 시드에서 생성한 요약이다.
+- `summary`는 `issue_report`. 아직 없으면 `null`. 운영 writer와 상태 전이는 WP-119로 구현됐고 EC2에서 실제 GATEWAY 호출도 수행했다. 다만 2026-09-22 재클러스터링 뒤 운영 `issue_report`는 0건이며 summary worker는 꺼져 있다. 과거 로컬 데모 값은 시드에서 생성한 요약이므로 현재 운영 결과로 간주하지 않는다.
 - `members`는 `weight` 내림차순. `isSeed=true`는 최종 급증 관문을 직접 통과한 루트 문서 또는 생성 시각 동시성으로 편입된 새 사건 문서다. `isSeed=false`는 Clickstream 이웃 중 사건기간 편집 재급증 기준을 통과한 기존 문서다. Wikidata 관계는 멤버 편입 사유가 아니다.
 - `members[].editCount/views`는 이 `cluster_id`가 가리키는 스냅샷에서 판정에 사용한 고정값(`cluster_member`)이다. 아직 판정 입력이 없거나 원본이 없어서 `null`일 수 있지만, 최신 원시 테이블 값으로 대체하지 않는다. ~~최신 `page_edit_window`·`page_view_hourly` 한 행을 끌어왔다~~ → 고정값으로 전환 (2026-09-18, WP-129). 과거 스냅샷에 그 뒤의 수치가 붙던 결함이다.
 - `members[].completeness`는 그 `null`이 무슨 뜻인지 말한다 — `complete`(판정 끝) / `pending`(입력 대기) / `unavailable`(원본 없음). 지도 노드와 같은 어휘다. 둘 다 빈칸으로 보이면 사용자는 서비스가 고장 난 줄 안다.
