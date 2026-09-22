@@ -43,6 +43,9 @@ services:
       WIKIPULSE_MATCHING_SUMMARY_TOPPERSNAPSHOT: ${WIKIPULSE_MATCHING_SUMMARY_TOPPERSNAPSHOT:-10}
       # 🔴 SCHEDULER_SOURCE 와 **같은 값**이어야 한다. 근거는 그쪽 주석.
       WIKIPULSE_MATCHING_SUMMARY_SOURCE: ${WIKIPULSE_MATCHING_SUMMARY_SOURCE:-}
+      # 같은 model 로 요약 저장에 실패해도 되는 횟수 (WP-182).
+      # 🔴 0 이하 = 무제한. 켜지 말 것 — 저장 못 하는 클러스터를 매 폴 다시 집는다.
+      WIKIPULSE_MATCHING_SUMMARY_MAXATTEMPTS: ${WIKIPULSE_MATCHING_SUMMARY_MAXATTEMPTS:-3}
       # 🔴 이름이 claude- 로 시작하면 Anthropic, 아니면 OpenAI 경로다 (WP-172).
       #    검증 기본값이 gpt-5.4-nano 로 바뀌었다 — Sonnet 대비 9.8배 싸고 정답셋에서 오탐 0.
       #    되돌리려면 claude-sonnet-4-5-20250929 을 넣는다. 요약은 측정 안 해서 Sonnet 유지.
