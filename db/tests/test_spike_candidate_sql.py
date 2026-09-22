@@ -190,6 +190,32 @@ def test_정각이_아닌_윈도우는_조회수와_안_붙는다(conn):
     assert q(conn, SELECT_DUE, "live") == []
 
 
+#: `spike/candidate_store.py:EXPIRE_SQL` 과 같은 구문이다.
+#:
+#: ⚠️ 경계만 다르다 — 실물은 파이썬이 계산한 시각을 파라미터로 넘기고 여기는
+#:    `now() - interval` 을 인라인한다. 🔴 **날짜를 박으면 안 되기 때문이다**
+#:    (아래 `test_만료는_first_seen_at_기준이다` 독스트링, WP-151).
+#:
+#: 🔴 `EXISTS` 절이 WP-202 다. 시간만으로 버리면 **상류가 멈춘 것**과
+#:    **그 문서가 덤프에 없었던 것**을 구분 못 한다.
+EXPIRE = """
+DELETE FROM spike_candidate c
+ USING wiki_page p
+ WHERE p.id = c.page_id
+   AND c.source = %s
+   AND c.first_seen_at < now() - interval '24 hours'
+   AND EXISTS (SELECT 1
+                 FROM page_view_hourly_ingest g
+                WHERE g.wiki = p.wiki
+                  AND g.ts_hour >= c.window_start)
+"""
+
+
+def _aged(conn, page_id: int, hours: int) -> None:
+    x(conn, f"UPDATE spike_candidate SET first_seen_at = now() - interval '{hours} hours' "
+            "WHERE page_id = %s", page_id)
+
+
 def test_만료는_first_seen_at_기준이다(conn):
     """오래된 대기는 `first_seen_at` 으로 만료된다.
 
@@ -204,12 +230,11 @@ def test_만료는_first_seen_at_기준이다(conn):
     """
     pid = _page(conn, "Stale")
     _candidate(conn, pid)
-    x(conn, "UPDATE spike_candidate SET first_seen_at = now() - interval '48 hours' "
-            "WHERE page_id = %s", pid)
+    _aged(conn, pid, 48)
+    _ingested(conn, WINDOW_START)  # 상류는 이 시간을 지나갔다 (WP-202)
 
     # 48시간 된 행을 24시간 경계로 지운다 — 둘 다 now() 기준이라 언제 돌려도 같다.
-    x(conn, "DELETE FROM spike_candidate WHERE source = %s "
-            "AND first_seen_at < now() - interval '24 hours'", "live")
+    x(conn, EXPIRE, "live")
     assert q(conn, "SELECT count(*) FROM spike_candidate WHERE page_id = %s", pid)[0][0] == 0
 
 
@@ -221,11 +246,56 @@ def test_만료_경계_안쪽은_남는다(conn):
     """
     pid = _page(conn, "Fresh")
     _candidate(conn, pid)
-    x(conn, "UPDATE spike_candidate SET first_seen_at = now() - interval '1 hour' "
-            "WHERE page_id = %s", pid)
+    _aged(conn, pid, 1)
+    _ingested(conn, WINDOW_START)
 
-    x(conn, "DELETE FROM spike_candidate WHERE source = %s "
-            "AND first_seen_at < now() - interval '24 hours'", "live")
+    x(conn, EXPIRE, "live")
+    assert q(conn, "SELECT count(*) FROM spike_candidate WHERE page_id = %s", pid)[0][0] == 1
+
+
+def test_상류가_그_시간을_안_지났으면_오래돼도_안_버린다(conn):
+    """🔴 WP-202. 만료 주석의 전제는 **상류가 돌고 있을 때만** 참이다.
+
+    "하루가 넘도록 조회수가 없었다면 그 시간 파일은 이미 나왔고 이 문서가 그 안에
+    없었던 것" — 상류가 멈추면 파일이 **안 나온** 것인데 "안 들어있었다" 로 읽는다.
+
+    2026-09-21 에 위키미디어 조회수 집계가 통째로 멈춰 후보 54,043건이 판정도 못 한
+    채 만료될 참이었다(WP-200). 8월 선례는 복구까지 4일이었다 — 그 정도면
+    전량 소실이다.
+    """
+    pid = _page(conn, "UpstreamStalled")
+    _candidate(conn, pid)
+    _aged(conn, pid, 48)  # 만료 시간은 한참 지났다
+    # 원장이 비어 있다 = 상류가 이 시간까지 못 왔다
+
+    x(conn, EXPIRE, "live")
+    assert q(conn, "SELECT count(*) FROM spike_candidate WHERE page_id = %s", pid)[0][0] == 1
+
+
+def test_상류가_뒤_시간까지_갔으면_버린다(conn):
+    """⚠️ 반대쪽 — 상류는 멀쩡한데 그 시간만 결손이거나 문서가 덤프에 없던 경우다.
+
+    이때까지 안 버리면 만료가 통째로 죽어 적체가 된다. `>=` 라서 **뒤 시간 원장 하나만
+    들어와도** 그보다 오래된 후보 전부가 다시 만료 대상이 된다 — 상류가 복귀하면
+    백로그가 저절로 풀린다.
+    """
+    pid = _page(conn, "SkippedHour")
+    _candidate(conn, pid)
+    _aged(conn, pid, 48)
+    _ingested(conn, LATER_START)  # 그 시간은 없고 뒤 시간만 들어왔다
+
+    x(conn, EXPIRE, "live")
+    assert q(conn, "SELECT count(*) FROM spike_candidate WHERE page_id = %s", pid)[0][0] == 0
+
+
+def test_만료도_원장을_wiki_별로_본다(conn):
+    """⚠️ 다른 wiki 가 진행했다고 이 wiki 의 상류가 진행한 것은 아니다."""
+    pid = _page(conn, "OtherWikiMovedOn")
+    _candidate(conn, pid)
+    _aged(conn, pid, 48)
+    _ingested(conn, LATER_START, wiki="kowiki")
+
+    x(conn, EXPIRE, "live")
     assert q(conn, "SELECT count(*) FROM spike_candidate WHERE page_id = %s", pid)[0][0] == 1
 
 

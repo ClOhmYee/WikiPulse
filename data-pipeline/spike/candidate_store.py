@@ -73,9 +73,34 @@ SELECT c.source, c.page_id, p.wiki, p.title,
  LIMIT %s
 """
 
+#: 🔴 **만료 기준은 벽시계 단독이 아니다** (WP-202). 위 상수 주석의 전제
+#:    ("하루가 넘도록 조회수가 없었다면 그 시간 파일은 이미 나왔다")는 **상류가 돌고
+#:    있을 때만 참이다.** 멈추면 파일이 안 나온 것인데 "안 들어있었다" 로 읽고 버린다.
+#:
+#:    2026-09-21 에 위키미디어 조회수 집계가 통째로 멈췄고(WP-200) 후보
+#:    54,043건이 판정도 못 한 채 만료될 참이었다. 8월 선례는 복구까지 4일이었다.
+#:
+#:    그래서 적재 원장(V14)으로 전제를 직접 검사한다 — **상류가 이 후보의 시간을
+#:    지나갔을 때만** 버린다.
+#:
+#:      상류 정지        원장이 안 늘어 아무것도 안 버린다. 쌓이지만 그게 사실이다
+#:      그 시간만 결손   뒤 시간이 들어와 원장이 넘어가므로 36시간 뒤 정상 만료
+#:      상류 복귀        원장 행 하나만 들어와도 그보다 오래된 후보 전부가 다시
+#:                       만료 대상이 된다 (`>=` 라서). 백로그가 저절로 풀린다
+#:
+#: ⚠️ **원장이 비면 아무것도 안 버린다.** 배포 직후가 그렇다. 첫 적재 한 번으로
+#:    해소되지만, 상류가 오래 멈춰 있으면 그동안 무한정 쌓인다. 지금은 "판정 가능한
+#:    걸 버리는 것보다 쌓이는 게 낫다" 로 둔다 — 상한이 필요하면 별건이다.
 EXPIRE_SQL = """
-DELETE FROM spike_candidate
- WHERE source = %s AND first_seen_at < %s
+DELETE FROM spike_candidate c
+ USING wiki_page p
+ WHERE p.id = c.page_id
+   AND c.source = %s
+   AND c.first_seen_at < %s
+   AND EXISTS (SELECT 1
+                 FROM page_view_hourly_ingest g
+                WHERE g.wiki = p.wiki
+                  AND g.ts_hour >= c.window_start)
 """
 
 BUMP_RECHECK_SQL = """
@@ -192,6 +217,10 @@ class CandidateStore:
 
         조회수가 영영 안 오는 문서가 있다(삭제·이동, 또는 후보 필터 밖). 안 버리면
         매 실행에서 같은 행을 다시 조회한다.
+
+        🔴 **시간만으로는 안 버린다** (WP-202). 상류가 그 시간을 지나간 증거
+        (적재 원장 V14)가 같이 있어야 한다 — 상류가 멈춘 것과 그 문서가 없었던 것은
+        다른 사실이다. 근거는 `EXPIRE_SQL` 주석.
         """
         cutoff = require_utc(now, "now") - timedelta(hours=hours)
         with self._conn.cursor() as cur:
