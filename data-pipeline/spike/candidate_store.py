@@ -43,13 +43,31 @@ DELETE FROM spike_candidate
 #: 조회수가 **이미 들어온** 대기만 가져온다. 아직 없는 것은 다음 실행에서 본다.
 #: `page_view_hourly` 는 (page_id, ts_hour) 가 키라 윈도우 시작 정각과 1:1 로 붙는다.
 #: 🔴 정각 윈도우만 붙는다 — 아래 `due()` 독스트링 참고.
+#:
+#: 🔴 **`JOIN page_view_hourly` 하나로는 안 된다** (WP-199). 위키미디어 덤프는
+#:    조회수 0 인 문서를 **아예 싣지 않는다.** 그래서 행이 없는 것이 두 가지를 뜻한다:
+#:      (1) 그 시간 원본이 아직 안 왔다     → 대기 유지가 맞다
+#:      (2) 원본은 왔는데 그 문서가 0회였다 → 폐기가 맞다
+#:    옛 SQL 은 (1)로만 해석해 0회 문서가 영영 대기로 남았고, 재판정이 가장 오래된
+#:    시간부터 도는 구조라 **큐가 맨 앞에서 막혔다.** 2026-09-22 에 0회 문서 500건이
+#:    뒤의 53,982건을 굶겼다.
+#:
+#:    그래서 적재 원장(`page_view_hourly_ingest`, V14)을 같이 본다. 그 시간이 원장에
+#:    있으면 도착한 것이고, 행이 없으면 **조회수 0** 으로 판정한다.
+#:
+#: ⚠️ `COALESCE(v.views, 0)` 의 0 은 추측이 아니라 **관측**이다 — 덤프에 없다는 것이
+#:    0회라는 뜻이다. 원장에 없는 시간은 애초에 이 질의에 안 걸리므로 0 이 지어내는
+#:    값이 되는 경우는 없다.
 SELECT_DUE_SQL = """
 SELECT c.source, c.page_id, p.wiki, p.title,
        c.window_start, c.window_end, c.edit_count, c.editor_count,
-       c.max_rev_id, c.last_edit_ts, v.views
+       c.max_rev_id, c.last_edit_ts, COALESCE(v.views, 0) AS views
   FROM spike_candidate c
   JOIN wiki_page p ON p.id = c.page_id
-  JOIN page_view_hourly v ON v.page_id = c.page_id AND v.ts_hour = c.window_start
+  JOIN page_view_hourly_ingest g
+       ON g.wiki = p.wiki AND g.ts_hour = c.window_start
+  LEFT JOIN page_view_hourly v
+       ON v.page_id = c.page_id AND v.ts_hour = c.window_start
  WHERE c.source = %s
  ORDER BY c.window_start
  LIMIT %s
@@ -137,7 +155,11 @@ class CandidateStore:
                         (self._source, page_id, require_utc(window_start, "window_start")))
 
     def due(self, limit: int = 1_000) -> Iterator[DueCandidate]:
-        """조회수가 **이미 들어온** 대기를 오래된 것부터 준다.
+        """조회수 원본이 **이미 도착한** 시간의 대기를 오래된 것부터 준다.
+
+        🔴 "조회수 행이 있는" 이 아니라 "그 시간 원본이 도착한" 이다
+        (WP-199). 덤프가 0회 문서를 안 실어서 둘이 다르다 — 원본은 왔는데
+        그 문서만 행이 없으면 `views=0` 으로 준다. 적재 원장(V14)이 그 구분을 준다.
 
         🔴 **정각 윈도우만 붙는다.** 조회수는 시간 버킷(`page_view_hourly.ts_hour`)이라
         윈도우 시작이 정각이어야 1:1 로 대응한다. LIVE 기본 슬라이드는 5분이라 한 시간에
