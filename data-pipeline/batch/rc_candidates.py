@@ -35,6 +35,7 @@ from __future__ import annotations
 import argparse
 import bz2
 import gzip
+import itertools
 import json
 import sys
 from collections.abc import Iterable, Iterator
@@ -55,6 +56,18 @@ EDIT_TYPES = frozenset({"edit", "new"})
 
 #: 본문 namespace. 명세 §3.2 1차 관문이 여기로 한정한다.
 NAMESPACE_MAIN = 0
+
+#: `rctype=log` 중 **revision 을 만드는** 것 (WP-184).
+#:
+#: 🔴 **`edit|new` 만으로는 이것들을 놓친다.** 이동은 revision 두 개(원본에 남는
+#:    리다이렉트 + 대상 문서)를 만드는데 RC 는 `log` 로만 준다. 보호(protect)도
+#:    null revision 을 만든다 — 이건 예상 못 했다가 이음매 대조에서 나왔다.
+#:
+#: 2026-09-22 이음매 실측(2026-09-01 02:00~02:29Z): 덤프에만 있던 33건 중
+#:    move 13 · protect 2 를 revid 로 회수했다.
+#: ⚠️ `delete`·`pagetriage-curation` 은 여기 없다. 삭제는 revision 을 만들지 않고
+#:    **오히려 지운다**(아래 ⚠️), curation 은 revid 자체가 없다.
+REVISION_LOG_TYPES = frozenset({"move", "protect"})
 
 #: 산출 shard 하나에 담을 행 수. 적재본(-56)과 같은 입도.
 DEFAULT_SHARD_RECORDS = 500_000
@@ -103,6 +116,55 @@ def edit_events(records: Iterable[dict], wiki: str) -> Iterator[dict]:
     for rec in records:
         if is_edit_record(rec):
             yield to_edit_event(rec, wiki)
+
+
+def is_revision_log(rec: dict) -> bool:
+    """revision 을 만드는 log 항목인가 (WP-184)."""
+    return (rec.get("ns") == NAMESPACE_MAIN
+            and rec.get("type") == "log"
+            and rec.get("logtype") in REVISION_LOG_TYPES)
+
+
+def log_titles(rec: dict) -> list[str]:
+    """이 log 항목이 편집을 남긴 제목들. 이동은 **원본과 대상 둘 다**다.
+
+    🔴 **revid 로 맞추면 절반을 놓친다.** 이동은 revision 두 개를 만드는데 로그는
+    revid 를 하나만 준다 — 2026-09-22 이음매 실측에서 덤프에만 있던 33건 중
+    revid 로는 15건만 회수됐고, 남은 18건 중 **14건이 로그의 제목으로 커버**됐다.
+    candidate title 이 필요한 것은 애초에 revid 가 아니라 제목이므로 제목으로 맞춘다.
+    """
+    out = [rec["title"]]
+    target = (rec.get("logparams") or {}).get("target_title")
+    if target:
+        out.append(target)
+    return out
+
+
+def log_events(records: Iterable[dict], wiki: str) -> Iterator[dict]:
+    """revision 을 만드는 log 항목을 edit_event 모양으로 바꾼다.
+
+    ⚠️ **`rev_id` 를 싣지 않는다.** 로그가 주는 revid 는 이동이 만든 revision 두 개
+    중 하나뿐이라, 그대로 실으면 `max_rev_id`(시점 증거)가 실제 최대보다 작게 찍힌다.
+    없는 값을 지어내느니 비워 두고, 최대값은 edit|new 쪽에서만 센다.
+    """
+    for rec in records:
+        if not is_revision_log(rec):
+            continue
+        for title in log_titles(rec):
+            yield {
+                "wiki": wiki,
+                "title": canonical_title(title),
+                "event_type": rec.get("logtype"),
+                "rev_id": None,
+                "rev_parent_id": None,
+                "user": rec.get("user"),
+                "is_bot": bool(rec.get("bot")),
+                "is_minor": False,
+                "event_ts": rec["timestamp"],
+                "source": RC_SOURCE,
+                "rc_id": rec.get("rcid"),
+                "page_id": rec.get("pageid"),
+            }
 
 
 def candidate_rows(aggregates: dict) -> list[dict]:
@@ -163,6 +225,23 @@ def _in_seam(ts: str) -> bool:
     return _seconds(SEAM_TS) <= _seconds(ts) < _seconds(SEAM_OVERLAP_END)
 
 
+def _dump_titles(path: Path, wiki: str) -> set[str]:
+    """이음매 구간 덤프의 ns0 제목."""
+    out: set[str] = set()
+    with bz2.open(path, "rt", encoding="utf-8") as handle:
+        for line in handle:
+            row = line.rstrip("\n").split("\t")
+            if len(row) != COLUMN_COUNT:
+                continue
+            try:
+                event = normalize_dump(row, wikis=frozenset({wiki}))
+            except SkipEvent:
+                continue
+            if _in_seam(event["event_ts"]):
+                out.add(event["title"])
+    return out
+
+
 def read_dump_revisions(path: Path, wiki: str) -> dict[int, str]:
     """덤프 꼬리 파일의 ns0 revision → {rev_id: event_ts}. 필터는 normalize_dump 것."""
     out: dict[int, str] = {}
@@ -179,12 +258,17 @@ def read_dump_revisions(path: Path, wiki: str) -> dict[int, str]:
     return out
 
 
-def verify_seam(root: Path, dump: Path, wiki: str) -> int:
+def verify_seam(root: Path, dump: Path, wiki: str, log_root: Path | None = None) -> int:
     """이음매에서 중복·누락이 0 인지 본다.
 
     겹치는 구간 `[SEAM_TS, SEAM_OVERLAP_END)` 을 두 소스에서 각각 뽑아 `rev_id` 로
     맞춘다. 이 구간은 **두 소스가 같은 편집을 담고 있어야 한다** — 한쪽에만 있는
     것이 있으면 이어붙였을 때 그만큼 새거나 겹친다.
+
+    🔴 **판정은 제목 기준이다** (WP-184). 이 산출물이 내는 것은 candidate
+    title 이지 revision 목록이 아니다. revid 로만 재면 이동이 만든 revision 두 개
+    중 하나만 로그에 실려 실제보다 나쁘게 보인다 — 2026-09-22 실측에서 revid
+    기준 누락 18건이 제목 기준으로는 4건이었다. 두 수치를 다 낸다.
     """
     dump_rows = {rev: ts for rev, ts in read_dump_revisions(dump, wiki).items()
                  if _in_seam(ts)}
@@ -194,21 +278,50 @@ def verify_seam(root: Path, dump: Path, wiki: str) -> int:
         if is_edit_record(rec) and rec.get("revid") and _in_seam(rec["timestamp"])
     }
 
-    only_dump = sorted(set(dump_rows) - set(rc_rows))
+    log_ids: set[int] = set()
+    log_titles_seen: set[str] = set()
+    if log_root is not None:
+        for rec in read_raw(log_root):
+            if not _in_seam(rec["timestamp"]):
+                continue
+            if rec.get("revid"):
+                log_ids.add(int(rec["revid"]))
+            if is_revision_log(rec):
+                log_titles_seen.update(canonical_title(t) for t in log_titles(rec))
+
+    only_dump = sorted(set(dump_rows) - set(rc_rows) - log_ids)
     only_rc = sorted(set(rc_rows) - set(dump_rows))
     both = set(dump_rows) & set(rc_rows)
 
+    # 제목 기준 — 이 산출물이 실제로 내는 것 (위 🔴).
+    dump_titles = {canonical_title(t) for t in _dump_titles(dump, wiki)}
+    rc_titles = {canonical_title(rec["title"]) for rec in read_raw(root)
+                 if is_edit_record(rec) and _in_seam(rec["timestamp"])}
+    covered = rc_titles | log_titles_seen
+    missing_titles = dump_titles - covered
+
     print(f"이음매 {SEAM_TS} ~ {SEAM_OVERLAP_END} (덤프의 잘린 마지막 분 제외)")
     print(f"  덤프 {len(dump_rows):,} · RC {len(rc_rows):,} · 공통 {len(both):,}")
-    print(f"  덤프에만 {len(only_dump):,} · RC 에만 {len(only_rc):,}")
-    for label, revs in (("덤프에만", only_dump), ("RC 에만", only_rc)):
-        for rev in revs[:5]:
-            ts = dump_rows.get(rev) or rc_rows.get(rev)
-            print(f"    {label} rev={rev} ts={ts}")
-    if only_dump or only_rc:
-        print("🔴 이음매가 안 맞는다 — 이어붙이면 그만큼 새거나 겹친다.")
+    if log_root is not None:
+        print(f"  log 보충 revid {len(log_ids):,} · 제목 {len(log_titles_seen):,}")
+    print(f"  [revision] 덤프에만 {len(only_dump):,} · RC 에만 {len(only_rc):,}")
+    print(f"  [제목] 덤프 {len(dump_titles):,} · 커버 {len(dump_titles & covered):,} "
+          f"· 누락 {len(missing_titles):,}")
+    for title in sorted(missing_titles)[:5]:
+        print(f"    제목 누락: {title}")
+    for rev in only_rc[:5]:
+        print(f"    RC 에만 rev={rev} ts={rc_rows.get(rev)}")
+
+    # 🔴 판정은 제목 기준이다 (docstring). revision 수준의 `덤프에만` 은 이동이 만든
+    #    짝 revision 이 로그에 안 실려서 남는 것이라, 제목이 커버되면 candidate title
+    #    산출물에는 구멍이 없다.
+    if only_rc:
+        print("🔴 RC 에만 있는 편집이 있다 — 이어붙이면 그만큼 겹친다.")
         return 1
-    print("✅ 중복·누락 0")
+    if missing_titles:
+        print(f"⚠️ 제목 {len(missing_titles)}개가 안 잡힌다. 중복은 0 이다.")
+        return 1
+    print("✅ 중복 0 · 제목 누락 0")
     return 0
 
 
@@ -218,6 +331,9 @@ def build_arg_parser() -> argparse.ArgumentParser:
                    help="batch.recentchanges 수집본 루트")
     p.add_argument("--wiki", default="enwiki")
     p.add_argument("--out", default="data/rc-candidates-164")
+    p.add_argument("--log-root",
+                   help="batch.recentchanges --types log 수집본 루트 (WP-184). "
+                        "주면 이동·보호가 만든 편집을 제목 기준으로 합친다")
     p.add_argument("--shard-records", type=int, default=DEFAULT_SHARD_RECORDS)
     p.add_argument("--dry-run", action="store_true", help="적재 없이 세기만")
     p.add_argument("--verify-seam", metavar="DUMP",
@@ -236,7 +352,8 @@ def main(argv: list[str] | None = None) -> int:
     # 🔴 이벤트를 리스트로 모으지 않는다. 구간 전체가 180만 건이라 dict 로 들면
     #    수 GB 다. 세는 값은 흘려보내면서 같이 센다.
     if args.verify_seam:
-        return verify_seam(root, Path(args.verify_seam), args.wiki)
+        log_root = (Path(args.log_root) / args.wiki) if args.log_root else None
+        return verify_seam(root, Path(args.verify_seam), args.wiki, log_root)
 
     read = kept = bots = 0
 
@@ -252,12 +369,31 @@ def main(argv: list[str] | None = None) -> int:
                 bots += 1
             yield event
 
-    aggregates = aggregate_edits(counted())
+    log_read = log_kept = 0
+
+    def counted_log() -> Iterator[dict]:
+        nonlocal log_read, log_kept
+        if not args.log_root:
+            return
+        log_root = Path(args.log_root) / args.wiki
+        if not log_root.is_dir():
+            print(f"log 수집본이 없다: {log_root}", file=sys.stderr)
+            return
+        for rec in read_raw(log_root):
+            log_read += 1
+            for event in log_events([rec], args.wiki):
+                log_kept += 1
+                yield event
+
+    aggregates = aggregate_edits(itertools.chain(counted(), counted_log()))
     rows = candidate_rows(aggregates)
     titles = {(r["wiki"], r["title"]) for r in rows}
 
     print(f"읽음 {read:,} · 편집 {kept:,} · 봇 {bots:,} "
           f"({100.0 * bots / kept if kept else 0:.1f}%)")
+    if args.log_root:
+        print(f"log 보충: 읽음 {log_read:,} · 편집으로 센 항목 {log_kept:,} "
+              f"({'/'.join(sorted(REVISION_LOG_TYPES))})")
     print(f"candidate 윈도우 {len(rows):,} · candidate title {len(titles):,}")
     if rows:
         print(f"구간 {rows[0]['window_start']} ~ {rows[-1]['window_start']}")
