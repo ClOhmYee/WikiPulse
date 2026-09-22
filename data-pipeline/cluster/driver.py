@@ -96,6 +96,13 @@ from batch.page_creation import creation_dates_for
 from batch.page_edit_daily import coverage_span, edit_days_for, sum_days
 from spike.spike_sink import SPIKE_SOURCES
 
+from . import asof_links
+from .root_selection import (
+    DEFAULT_COOLDOWN_HOURS,
+    DEFAULT_LIMIT_PER_SNAPSHOT,
+    RootSelectionConfig,
+    load_selection,
+)
 from .snapshot import (
     DEFAULT_CREATION_WINDOW_DAYS,
     DEFAULT_RESURGENCE_MIN_EDITS,
@@ -108,7 +115,7 @@ from .snapshot import (
     _passes_resurgence,
     _within_creation_window,
 )
-from .writer import persist_snapshot
+from .writer import DownstreamDataWouldBeDeleted, downstream_counts, persist_snapshot
 
 #: Clickstream 근거 월은 **`batch.clickstream.select_completed_month` 하나가 고른다**
 #: (2026-09-18, -115 + develop 머지).
@@ -144,7 +151,8 @@ from .writer import persist_snapshot
 #: 정렬은 저장 순서일 뿐 — 노출 순위는 백엔드가 pulse_score 로 다시 매긴다.
 SELECT_SEEDS_SQL = """
 SELECT s.id, s.page_id, p.wiki, p.title, s.window_start, s.detected_at,
-       s.edit_count, s.views, s.view_baseline, s.view_ratio, s.spike_score
+       s.edit_count, s.views, s.view_baseline, s.view_ratio, s.spike_score,
+       s.max_rev_id
   FROM spike s
   JOIN wiki_page p ON p.id = s.page_id
  WHERE s.source = %s
@@ -170,6 +178,16 @@ SELECT DISTINCT s.detected_at
 #: 다시 훑을 수 없다). `s.source = %s` 는 위 🔴 와 같은 이유로 여기도 걸린다.
 SELECT_SEED_TITLES_SQL = """
 SELECT DISTINCT p.wiki, p.title
+  FROM spike s
+  JOIN wiki_page p ON p.id = s.page_id
+ WHERE s.source = %s
+   AND s.detected_at = ANY(%s)
+"""
+
+#: 위와 같은데 `(detected_at, page_id)` 를 함께 준다 — ROOT SELECTION 이 그 쌍으로
+#: 선택 여부를 판단한다. DISTINCT 를 뺀 이유는 쌍이 키라서다.
+SELECT_SEED_TITLES_WITH_ID_SQL = """
+SELECT p.wiki, p.title, s.detected_at, s.page_id
   FROM spike s
   JOIN wiki_page p ON p.id = s.page_id
  WHERE s.source = %s
@@ -246,7 +264,10 @@ def require_spike_source(source: str) -> str:
     return source
 
 
-def load_seeds_from_spike(conn, snapshot_ts: datetime, source: str) -> list[Seed]:
+def load_seeds_from_spike(
+    conn, snapshot_ts: datetime, source: str,
+    selection: set[tuple[datetime, int]] | None = None,
+) -> list[Seed]:
     """`spike` + `wiki_page` 를 조인해 **이 출처·이 시점**의 씨드를 만든다.
 
     🔴 **`source` 는 필수다** (~~아예 받지 않는다, -99~~ → -102). 같은 `detected_at` 에
@@ -264,9 +285,16 @@ def load_seeds_from_spike(conn, snapshot_ts: datetime, source: str) -> list[Seed
         cur.execute(SELECT_SEEDS_SQL, (source, snapshot_ts))
         rows = cur.fetchall()
 
+    # ROOT SELECTION (WP-137 → -161 에서 MVP 정본 1단계). None 이면 컷이 꺼진
+    # 것이라 전부 통과한다 — 🔴 빈 집합(아무것도 안 고름)과 구분해야 한다.
+    # `not selection` 으로 쓰면 "컷을 켰는데 이 시점에 0개" 가 "컷 없음" 으로 뒤집힌다.
+    if selection is not None:
+        rows = [r for r in rows if (snapshot_ts, r[1]) in selection]
+
     seeds: list[Seed] = []
     for (_id, page_id, wiki, title, window_start, detected_at,
-         edit_count, views, view_baseline, view_ratio, spike_score) in rows:
+         edit_count, views, view_baseline, view_ratio, spike_score,
+         max_rev_id) in rows:
         # spike 에 window_end 가 없어 detected_at 을 쓴다(모듈 독스트링 ⚠️).
         # Seed 계약은 "시작 < 종료" 다 — 어긋나면 조용히 이상한 구간이 저장되므로 막는다.
         if detected_at <= window_start:
@@ -292,6 +320,9 @@ def load_seeds_from_spike(conn, snapshot_ts: datetime, source: str) -> list[Seed
             edit_baseline=None,
             view_baseline=view_baseline,
             completeness=_completeness(views),
+            # CORE 의 as-of 링크 앵커 (V9). 없으면 링크를 안 쓰고 singleton 으로 둔다 —
+            # 현재 판으로 폴백하지 않는다 (WP-161).
+            max_rev_id=max_rev_id,
         ))
     return seeds
 
@@ -325,17 +356,29 @@ def load_prior_first_detected(conn, source: str) -> dict[str, datetime]:
 
 
 def load_seed_titles(
-    conn, source: str, snapshot_times: Sequence[datetime]
+    conn, source: str, snapshot_times: Sequence[datetime],
+    selection: set[tuple[datetime, int]] | None = None,
 ) -> dict[str, set[str]]:
-    """여러 시점의 씨드 제목을 wiki 별로 모은다. Clickstream 1회 순회용 입력."""
+    """여러 시점의 씨드 제목을 wiki 별로 모은다. Clickstream 1회 순회용 입력.
+
+    `selection` 을 주면 ROOT SELECTION 을 통과한 root 의 제목만 모은다 — 컷이 켜졌는데
+    여기서 안 거르면 **컷에서 빠진 문서의 이웃까지** 덤프에서 찾아 두고 쓰지 않는다
+    (낭비이고, 통계가 실제 root 수와 어긋나 보인다).
+    """
     require_spike_source(source)
     if not snapshot_times:
         return {}
     by_wiki: dict[str, set[str]] = {}
     with conn.cursor() as cur:
-        cur.execute(SELECT_SEED_TITLES_SQL, (source, list(snapshot_times)))
-        for wiki, title in cur.fetchall():
-            by_wiki.setdefault(wiki, set()).add(title)
+        if selection is None:
+            cur.execute(SELECT_SEED_TITLES_SQL, (source, list(snapshot_times)))
+            for wiki, title in cur.fetchall():
+                by_wiki.setdefault(wiki, set()).add(title)
+        else:
+            cur.execute(SELECT_SEED_TITLES_WITH_ID_SQL, (source, list(snapshot_times)))
+            for wiki, title, detected_at, page_id in cur.fetchall():
+                if (detected_at, page_id) in selection:
+                    by_wiki.setdefault(wiki, set()).add(title)
     return by_wiki
 
 
@@ -671,10 +714,14 @@ class MonthlyNeighborSource:
         """`clickstream_ingest` 출력 규칙: `{out}/{wiki}/{month}`."""
         return self.shards_root / wiki / month
 
-    def prepare(self, conn, source: str, snapshot_times: Sequence[datetime]) -> None:
-        """필요한 (wiki, 월) 을 한 번씩 읽고 생성 시각까지 붙인다."""
+    def prepare(self, conn, source: str, snapshot_times: Sequence[datetime],
+                selection: set[tuple[datetime, int]] | None = None) -> None:
+        """필요한 (wiki, 월) 을 한 번씩 읽고 생성 시각까지 붙인다.
+
+        `selection` 은 ROOT SELECTION 이 고른 root 다. 주면 그 root 의 이웃만 찾는다.
+        """
         # 어떤 wiki 가 있는지 먼저 안다 — 근거 월이 wiki 마다 다를 수 있다.
-        wikis = sorted(load_seed_titles(conn, source, list(snapshot_times)))
+        wikis = sorted(load_seed_titles(conn, source, list(snapshot_times), selection))
 
         # 🔴 **훑기 전에 전부 고른다.** 뒤에서 고르면 앞 월을 수천만 행 다 읽고 나서
         #    마지막 월에서 죽는다 — 실제로 61일 구간 끝의 경계 스냅샷 1개 때문에
@@ -687,7 +734,7 @@ class MonthlyNeighborSource:
 
         all_titles: set[str] = set()
         for (wiki, month), times in sorted(groups.items()):
-            titles = load_seed_titles(conn, source, times).get(wiki, set())
+            titles = load_seed_titles(conn, source, times, selection).get(wiki, set())
             found = neighbors_for(read_shards(self.shards_dir(wiki, month)), titles)
             month_refs: dict[str, list[NeighborRef]] = {}
             for seed_title, refs in found.items():
@@ -786,6 +833,57 @@ def load_pages_by_title(
     return found
 
 
+# --- CORE as-of 링크 ---------------------------------------------------------
+
+def load_root_links(
+    conn,
+    seeds: Sequence[Seed],
+    *,
+    fetcher=None,
+    log=None,
+) -> dict[int, set[str]]:
+    """CORE 입력 — root 별 as-of strict 아웃링크 집합 (WP-161).
+
+    `spike.max_rev_id` 를 앵커로 `page_asof_links`(V12) 캐시를 먼저 보고, 없는 것만
+    받아 캐시에 넣는다. revision 단위 캐시라 만료가 없다.
+
+    🔴 **`max_rev_id` 가 없는 root 는 결과에서 아예 뺀다.** 호출자가 빈 집합으로 읽어
+       singleton 으로 둔다 — 현재 판 링크로 폴백하면 그 순간 미래 정보가 과거 스냅샷에
+       섞인다. replay 든 LIVE 든 같은 규칙이다.
+
+    ⚠️ **`fetcher=None` 이면 캐시만 쓴다.** 기본을 이렇게 둔 이유는 리플레이 대량
+       재계산이 실수로 수만 건을 받는 것을 막기 위해서다 — 수집은 호출자가 켠다.
+       캐시가 비어 있으면 스냅샷이 통째로 singleton 이 되므로 그 경우 경고를 찍는다.
+    """
+    anchored = [s for s in seeds if s.max_rev_id is not None]
+    if not anchored:
+        return {}
+    by_rev: dict[int, list[Seed]] = {}
+    for seed in anchored:
+        by_rev.setdefault(int(seed.max_rev_id), []).append(seed)
+
+    cached = asof_links.load_cached(conn, list(by_rev))
+    missing = [rev for rev in by_rev if rev not in cached]
+    if missing and fetcher is not None:
+        fetched = fetcher.fetch_many(missing, log=log)
+        asof_links.store(conn, [
+            (rev, by_rev[rev][0].wiki, by_rev[rev][0].title, links, error)
+            for rev, (_title, links, error) in fetched.items()
+        ])
+        for rev, (_title, links, error) in fetched.items():
+            if not error:
+                cached[rev] = set(links)
+    elif missing and log:
+        log(f"⚠️ as-of 링크 캐시 미보유 {len(missing)}건 — 그 root 는 singleton 이 된다")
+
+    out: dict[int, set[str]] = {}
+    for rev, group in by_rev.items():
+        if rev in cached:
+            for seed in group:
+                out[seed.page_id] = cached[rev]
+    return out
+
+
 # --- 런타임 -----------------------------------------------------------------
 
 def build_snapshot_at(
@@ -795,8 +893,16 @@ def build_snapshot_at(
     *,
     neighbors: dict[int, Sequence[Neighbor]] | None = None,
     neighbor_source=None,
+    selection: set[tuple[datetime, int]] | None = None,
+    root_grouping: bool = True,
+    expansion: bool = False,
+    link_fetcher=None,
+    log=None,
 ) -> Snapshot:
-    """한 시점의 스냅샷을 생산한다(저장 안 함). 로직은 전부 -75 자산이다.
+    """한 시점의 스냅샷을 생산한다(저장 안 함). 로직은 전부 -75·-161 자산이다.
+
+    `root_grouping=True`(기본) 면 CORE 로 root 를 묶는다. `expansion=False`(기본) 면
+    멤버는 root 뿐이다 — 현재 MVP 정본 경로다(WP-161).
 
     🔴 **`source` 하나가 입력 필터이자 산출물 라벨이다.** 읽는 씨드(`spike.source`),
     이전 감지 이력(`issue_cluster.source`), 붙는 라벨(`Snapshot.source`) 이 같은 값에서
@@ -811,12 +917,16 @@ def build_snapshot_at(
     읽으면 같은 질의가 두 번 나가고, 두 결과가 갈릴 여지가 생긴다.
     """
     require_spike_source(source)
-    seeds = load_seeds_from_spike(conn, snapshot_ts, source)
-    if neighbors is None and neighbor_source is not None:
+    seeds = load_seeds_from_spike(conn, snapshot_ts, source, selection)
+    if expansion and neighbors is None and neighbor_source is not None:
         neighbors = neighbor_source(conn, snapshot_ts, seeds)
+    root_links = (load_root_links(conn, seeds, fetcher=link_fetcher, log=log)
+                  if root_grouping else None)
     return build_snapshot(
         snapshot_ts, source, seeds, neighbors or {},
         prior_first_detected=load_prior_first_detected(conn, source),
+        root_links=root_links,
+        expansion=expansion,
     )
 
 
@@ -827,6 +937,12 @@ def run(
     snapshot_times: Sequence[datetime],
     dry_run: bool = False,
     neighbor_source=None,
+    selection: set[tuple[datetime, int]] | None = None,
+    root_grouping: bool = True,
+    expansion: bool = False,
+    link_fetcher=None,
+    allow_downstream_delete: bool = False,
+    log=None,
 ) -> list[Snapshot]:
     """시점들을 순서대로 생산하고 저장한다. 커밋은 호출자 책임.
 
@@ -841,17 +957,36 @@ def run(
     유효한 산출물이라 에러가 안 난다. `load_snapshot_times(conn, source)` 를 쓴다.
     """
     require_spike_source(source)
-    if neighbor_source is not None:
+    if expansion and neighbor_source is not None:
         # 월 덤프 순회는 여기서 한 번에 끝낸다 — 시점 루프 안에서 하면 월당 수천 번이다.
-        neighbor_source.prepare(conn, source, snapshot_times)
+        neighbor_source.prepare(conn, source, snapshot_times, selection)
     produced: list[Snapshot] = []
+    cascade_at_risk: dict[str, int] = {}
     for snapshot_ts in snapshot_times:
         snapshot = build_snapshot_at(
-            conn, snapshot_ts, source, neighbor_source=neighbor_source)
-        if not dry_run:
+            conn, snapshot_ts, source, neighbor_source=neighbor_source,
+            selection=selection, root_grouping=root_grouping, expansion=expansion,
+            link_fetcher=link_fetcher, log=log)
+
+        if dry_run:
+            # 🔴 dry-run 은 **아무것도 쓰지 않는다.** 대신 재저장이 무엇을 지우게 될지
+            #    센다 — 운영에 걸기 전에 이 숫자를 먼저 보라고 두는 출구다.
+            at_risk = {t: n for t, n in
+                       downstream_counts(conn, snapshot_ts, source).items() if n}
+            if at_risk and log:
+                log(f"  [dry-run] {snapshot_ts.isoformat()} 재저장 시 삭제: "
+                    f"클러스터 {snapshot.cluster_count} · "
+                    + ", ".join(f"{t} {n:,}" for t, n in sorted(at_risk.items())))
+            for table, n in at_risk.items():
+                cascade_at_risk[table] = cascade_at_risk.get(table, 0) + n
+        else:
             # 멱등은 writer 계약 그대로 — (source, snapshot_ts) 단위 지우고 다시 넣는다.
-            persist_snapshot(conn, snapshot)
+            persist_snapshot(conn, snapshot,
+                             allow_downstream_delete=allow_downstream_delete)
         produced.append(snapshot)
+    if dry_run and cascade_at_risk and log:
+        log("[dry-run] 합계 — 실제 실행 시 CASCADE 로 삭제될 행: "
+            + ", ".join(f"{t} {n:,}" for t, n in sorted(cascade_at_risk.items())))
     return produced
 
 
@@ -882,8 +1017,49 @@ def build_arg_parser() -> argparse.ArgumentParser:
                    help="이 시점 하나만 생산한다. 없으면 spike.detected_at 고유값 전부")
     p.add_argument("--since", type=_parse_ts, help="시점 범위 시작(포함)")
     p.add_argument("--until", type=_parse_ts, help="시점 범위 끝(포함)")
-    p.add_argument("--dry-run", action="store_true", help="저장 없이 생산만")
-    # Clickstream 이웃(추가 씨드) 배선 — WP-115.
+    p.add_argument("--dry-run", action="store_true",
+                   help="저장 없이 생산만. 재저장 시 CASCADE 로 지워질 downstream 행 수를 "
+                        "함께 센다 — 운영에 걸기 전에 이걸 먼저 본다")
+    # 🔴 **기본이 꺼짐이다** (WP-161). 재저장은 그 스냅샷에 붙은 요약·종목
+    #    후보·GDELT 기관명·토론을 CASCADE 로 함께 지운다. GATEWAY 크레딧과 GDELT 호출로
+    #    만든 것이라 되돌리려면 돈과 시간이 든다.
+    p.add_argument("--allow-downstream-delete", action="store_true",
+                   help="downstream(요약·종목·GKG 기관명·토론)이 있어도 재저장을 진행한다. "
+                        "🔴 CASCADE 로 함께 지워진다. 기본은 중단")
+
+    # --- ROOT SELECTION (WP-137 → -161 에서 MVP 정본 1단계) -----------
+    # 🔴 **기본이 켜짐이다.** spike 전량을 클러스터링에 넣으면 CORE 가 giant 를 만든다
+    #    (2026-09-22 실측: 162,775 root → max 63 · 20+ giant 59).
+    p.add_argument("--root-limit-per-snapshot", type=int,
+                   default=DEFAULT_LIMIT_PER_SNAPSHOT,
+                   help=f"한 시점에 root 로 쓸 spike 수 상한, views DESC "
+                        f"(기본 {DEFAULT_LIMIT_PER_SNAPSHOT}). 0 이면 제한 없음")
+    p.add_argument("--root-cooldown-hours", type=int, default=DEFAULT_COOLDOWN_HOURS,
+                   help=f"같은 문서를 다시 root 로 고르기까지 비울 시간(되돌아보는 창, "
+                        f"기본 {DEFAULT_COOLDOWN_HOURS}). 0 이면 쿨다운 없음")
+
+    # --- CORE (WP-161, MVP 정본) -------------------------------------
+    # 🔴 **기본이 켜짐이다.** 이게 지금 제품 규칙이다.
+    p.add_argument("--no-root-grouping", dest="root_grouping", action="store_false",
+                   help="CORE grouping 을 끈다 — root 1개 = 클러스터 1개(-161 이전 동작). "
+                        "비상용이며 평소에 쓰지 않는다")
+    # 🔴 **as-of 링크는 캐시가 기본이다.** 수집은 명시적으로 켠다 — 리플레이 한 판이
+    #    root 수만큼(실측 22,080) 요청을 낼 수 있어서, 실수로 켜지면 위키미디어를
+    #    그만큼 때린다. 캐시가 비면 스냅샷이 통째로 singleton 이 되고 경고가 찍힌다.
+    p.add_argument("--fetch-links", action="store_true",
+                   help="캐시에 없는 as-of 링크를 위키미디어에서 받아 V12 캐시에 넣는다 "
+                        "(기본: 캐시만 사용). CONTACT_EMAIL 이 필요하다")
+    p.add_argument("--link-workers", type=int, default=4,
+                   help="--fetch-links 동시 요청 수 (기본 4)")
+
+    # --- LEGACY expansion (기본 OFF, WP-161) --------------------------
+    # 🔴 켜면 CORE component 의 각 root 에 Clickstream 이웃이 붙는다. PoC 5 에서 검증한
+    #    분포가 보장되지 않고, non-root 멤버는 window_start/end 가 없어 프론트 계약
+    #    (`contract.js` 의 metric window)에 걸려 **펄스맵이 통째로 안 그려진다.**
+    p.add_argument("--expansion", action="store_true",
+                   help="legacy Clickstream/생성일/재급증 멤버 확장을 켠다 "
+                        "(기본 꺼짐 — CORE 정본은 root 멤버만 쓴다)")
+    # Clickstream 이웃(추가 씨드) 배선 — WP-115. --expansion 과 함께 쓴다.
     # 🔴 **기본이 꺼짐이다.** 적재본 없이 돌던 기존 운영(-109)이 이 변경으로
     #    갑자기 FileNotFoundError 를 내면 안 된다. 주면 켜고, 안 주면 씨드 단독이다.
     p.add_argument("--clickstream-root", default=os.environ.get("CLICKSTREAM_OUT", ""),
@@ -912,6 +1088,13 @@ def main(argv: list[str] | None = None) -> int:
     if args.snapshot_ts and (args.since or args.until):
         print("--snapshot-ts 와 --since/--until 은 같이 못 쓴다.", file=sys.stderr)
         return 2
+    # 🔴 expansion 을 안 켠 채 이웃 인자를 주면 막는다. 그냥 무시하면 "붙였는데 왜
+    #    멤버가 없지" 로 한참을 헤맨다 — -161 에서 기본이 꺼짐으로 바뀐 걸 모르면
+    #    조용히 씨드 단독 결과만 나온다.
+    if args.clickstream_root and not args.expansion:
+        print("--clickstream-root 는 --expansion 과 함께 준다. CORE 정본(-161)은 "
+              "root 멤버만 쓰므로 expansion 없이는 이웃이 붙지 않는다.", file=sys.stderr)
+        return 2
     # 🔴 한쪽만 주면 막는다. Clickstream 만 주면 생성일이 전부 미상이 되어 창 게이트가
     #    이웃을 **한 건도** 통과시키지 않는데, 그건 "이웃이 없다" 와 구분되지 않는다.
     if bool(args.clickstream_root) != bool(args.creation_index):
@@ -932,6 +1115,27 @@ def main(argv: list[str] | None = None) -> int:
         print(f"시점 {len(times)}개 ({times[0].isoformat()} ~ {times[-1].isoformat()}) "
               f"source={args.source}{' [dry-run]' if args.dry_run else ''}")
 
+        cut = RootSelectionConfig(
+            limit_per_snapshot=(args.root_limit_per_snapshot
+                                if args.root_limit_per_snapshot else None),
+            cooldown_hours=args.root_cooldown_hours)
+        selection = load_selection(conn, args.source, cut, args.since, args.until)
+        if selection is None:
+            print("ROOT SELECTION: 끔 — spike 전량이 클러스터링에 들어간다")
+        else:
+            print(f"ROOT SELECTION: {cut.describe()} → root {len(selection):,}개")
+
+        link_fetcher = None
+        if args.fetch_links:
+            from batch.ingest import user_agent
+            link_fetcher = asof_links.WikipediaLinkFetcher(
+                user_agent=user_agent(), workers=args.link_workers)
+        print("CORE grouping: "
+              + ("켬 (as-of strict link → component → focus 0.005 → D2)"
+                 if args.root_grouping else "끔 — root 1개 = 클러스터 1개")
+              + f" / as-of 링크 {'수집+캐시' if args.fetch_links else '캐시만'}"
+              + f" / expansion {'켬(legacy)' if args.expansion else '끔'}")
+
         neighbor_source = None
         if args.clickstream_root:
             neighbor_source = MonthlyNeighborSource(
@@ -943,8 +1147,23 @@ def main(argv: list[str] | None = None) -> int:
                   + (", ".join(args.edit_index) if args.edit_index
                      else "없음 — 추가 씨드만 배선한다"))
 
-        snapshots = run(conn, args.source, snapshot_times=times,
-                        dry_run=args.dry_run, neighbor_source=neighbor_source)
+        try:
+            snapshots = run(
+                conn, args.source, snapshot_times=times,
+                dry_run=args.dry_run, neighbor_source=neighbor_source,
+                selection=selection,
+                allow_downstream_delete=args.allow_downstream_delete,
+                root_grouping=args.root_grouping, expansion=args.expansion,
+                link_fetcher=link_fetcher,
+                log=lambda m: print(m, file=sys.stderr, flush=True))
+        except DownstreamDataWouldBeDeleted as exc:
+            # 🔴 스택트레이스로 끝내지 않는다 — 운영에서 이 한 줄로 판단해야 한다.
+            #    이미 저장된 앞 시점도 되돌린다: 절반만 지워진 상태가 제일 나쁘다.
+            conn.rollback()
+            print("\n중단: " + str(exc), file=sys.stderr)
+            print("먼저 --dry-run 으로 삭제 예정 규모를 확인한다. "
+                  "이번 실행은 아무것도 커밋하지 않았다.", file=sys.stderr)
+            return 3
         if not args.dry_run:
             conn.commit()
 

@@ -11,16 +11,114 @@ PostgreSQL 에 저장한다. 버블맵 조회 API(WP-74)가 이 산출물을 읽
 
 | 파일 | 역할 | 테스트 |
 | --- | --- | --- |
-| `snapshot.py` | 순수 생산 로직 — 게이트·멤버·간선·issue_key. Spark·DB 없이 돈다 | `tests/test_snapshot.py` |
+| `root_selection.py` | **정본 1단계** — spike 후보 중 클러스터링에 넣을 root 선택 | `tests/test_root_selection.py` |
+| `rootgraph.py` | **정본 2단계(CORE)** — root 를 사건 component 로 묶는 순수 그래프 | `tests/test_rootgraph.py` |
+| `asof_links.py` | as-of revision 링크 추출·정규화·수집 + V12 캐시 | `tests/test_asof_links.py` |
+| `snapshot.py` | 순수 생산 로직 — CORE 결과 → Cluster/Member, legacy 게이트·간선·issue_key | `tests/test_snapshot_core.py` · `tests/test_snapshot.py` |
 | `score.py` | 공통 sizeScore 0~1 + `SCORE_VERSION` | (snapshot 테스트에 포함) |
-| `writer.py` | 스냅샷을 PostgreSQL 에 멱등 저장(재계산 호환) | `tests/test_writer.py`(pgserver 왕복) |
+| `writer.py` | 스냅샷을 PostgreSQL 에 멱등 저장 + **downstream CASCADE 가드** | `tests/test_writer.py`(pgserver 왕복) |
 | `driver.py` | 실 데이터 소스 배선 + CLI — **씨드 경로 배선됨**(아래) | `tests/test_driver_seeds.py` · `tests/test_driver_pg.py` · `tests/test_driver.py` |
 
 ```
 pytest cluster/tests        # Docker 불필요(pgserver 번들 PostgreSQL)
 ```
 
-## 클러스터링 게이트 (제품 계약: WP-51·77, 명세 §3.2 4번·§11)
+## 🔴 운영 재실행 보호장치 (WP-161)
+
+`persist_snapshot` 은 같은 `(source, snapshot_ts)` 를 다시 저장할 때 기존
+`issue_cluster` 를 지우는데, 그 DELETE 가 **CASCADE 로 downstream 까지 끌고 간다.**
+
+| 테이블 | 재생성 비용 |
+| --- | --- |
+| `issue_report` | GATEWAY 요약 호출 |
+| `cluster_stock` | 임베딩 + GDELT + LLM 검증 |
+| `cluster_org_mention` | GDELT GKG 집계 |
+| `issue_summary_attempt` | (develop V11) |
+| `comment_thread` | 사용자 입력 — 복구 불가 |
+
+그래서 downstream 이 **하나라도 있으면 기본은 중단**이다.
+
+```bash
+# 1) 무엇이 지워질지 먼저 본다. DB 에 한 줄도 쓰지 않는다.
+python -m cluster.driver --dsn ... --source replay --dry-run
+
+# 2) 지워도 된다고 판단했을 때만
+python -m cluster.driver --dsn ... --source replay --allow-downstream-delete
+```
+
+플래그 없이 downstream 이 있으면 `DownstreamDataWouldBeDeleted` 로 **종료 코드 3**,
+그때까지의 저장도 전부 롤백한다 — 절반만 지워진 상태가 제일 나쁘다.
+
+⚠️ `cluster_member`·`cluster_edge` 도 CASCADE 지만 가드 대상이 아니다. 그건 이 스냅샷의
+산출물 자체라 바로 다시 만들어진다. `notification` 은 `ON DELETE SET NULL` 이라 안 지워진다.
+
+## 클러스터링 정본 (WP-161, 2026-09-22 확정) — **두 단계**
+
+```
+spike 후보
+  ↓  1. ROOT SELECTION   root_selection.py   views DESC · 시점당 20 · 24h 쿨다운
+20 roots / snapshot
+  ↓  2. CORE GROUPING    rootgraph.py
+     strict historical as-of direct Wikipedia link (한 방향이라도)
+     → connected component → sym focus τ=0.005 → D2 directional bridge 억제
+component 자체가 issue cluster, 그 안의 root 가 cluster_member (root-only)
+```
+
+🔴 **두 단계가 함께 정본이다.** ROOT SELECTION 없이 `spike` 전량을 CORE 에 넣으면
+2026-09-22 실측으로 component 146,988 · **max 63 · 20+ giant 59** 가 나온다.
+`giant 0` 은 두 단계가 함께 만드는 성질이다. 1단계 규칙은 `root_selection.py` 참고.
+
+고정 2개월 replay 실측 (`tools/cluster-preview/verify_core_regression.py` 가 매번 대조한다):
+
+| 스냅샷 | root | component | 1 | 2 | 3~4 | 5~7 | 8~12 | 13+ | max | 20+ giant |
+| --: | --: | --: | --: | --: | --: | --: | --: | --: | --: | --: |
+| 1,104 | 22,080 | 19,432 | 17,569 | 1,461 | 322 | 57 | 20 | 3 | 16 | 0 |
+
+- **앵커는 `spike.max_rev_id`(V9)** — replay 는 과거 판정 시점의 판, LIVE 는 관측 시점의
+  판이라 **두 출처가 같은 계약**이다. 코드에 replay/live 분기가 없다.
+- 🔴 **`prop=wikitext` 의 리터럴 `[[...]]` 만 쓴다.** `parse.links` 는 옛 revision 을
+  렌더해도 템플릿을 현재 판으로 전개해 스냅샷 이후 navbox 링크가 섞인다 — 미래 누수이고
+  에러 없이 조용히 틀린다.
+- 🔴 **`max_rev_id` 가 없으면 현재 판으로 폴백하지 않는다.** 그 root 는 singleton 이다.
+- 🔴 **링크 비교 정규화는 `asof_links.link_key` 다.** `producer.normalize.canonical_title`
+  과 달리 **첫 글자를 대문자로 올린다** — 링크 타깃은 사람이 쓴 문자열이고 MediaWiki 가
+  그렇게 해석한다(`[[eBay]]` → `EBay`). 양쪽에 같은 함수를 걸어야 하며, 한쪽만 걸면
+  간선이 에러 없이 사라진다. 저장 제목은 계속 `canonical_title` 계약이다.
+- 채택하지 않은 것: common-neighbor expansion(PoC 7 B1~B4, precision 미달) ·
+  Clickstream 을 membership 필수조건으로 · resurgence 를 CORE 생성 규칙으로.
+
+### 링크 캐시 (V12 `page_asof_links`)
+
+revision 단위라 만료가 없다. 대량 재계산 전에 미리 채운다.
+
+```bash
+# 캐시만 사용 (기본) — 없는 root 는 singleton 이 되고 경고를 찍는다
+python -m cluster.driver --dsn ... --source replay
+
+# 캐시에 없는 것을 받아 채우면서 돌린다. CONTACT_EMAIL 필요
+python -m cluster.driver --dsn ... --source replay --fetch-links --link-workers 4
+```
+
+⚠️ 리플레이 한 판이 root 수만큼 요청을 낸다(실측 22,080). 그래서 `--fetch-links` 가
+**기본이 아니다** — 실수로 켜지면 위키미디어를 그만큼 때린다.
+
+### ~~root 집합이 두 벌이다~~ → 해소 (2026-09-22)
+
+~~`issue_cluster` 의 22,080 root 와 `spike` 의 162,775 행이 서로 다른 실행의 산출물이고,
+driver 에 상한도 중복 제거도 없다~~ → **ROOT SELECTION 이 그 자리다.** WP-137 이
+만들어 둔 `seed_selection.py` 가 바로 22,080 을 만든 코드였고, 그걸 `root_selection.py`
+로 가져와 기본 경로에 넣었다. 같은 DB 의 `spike` 에서 production selector 를 돌리면
+`(snapshot_ts, page_id)` 22,080 쌍이 PoC frozen set 과 **정확히 일치**한다
+(prod-only 0 · PoC-only 0 · 스냅샷당 20 위반 0 · 24h 쿨다운 위반 0).
+
+## LEGACY 멤버 확장 게이트 — 기본 OFF (제품 계약: WP-51·77, 명세 §3.2 4번·§11)
+
+🔴 **`--expansion` 을 줘야 돈다.** CORE 뒤에 자동으로 다시 적용하지 않는다 — 위 분포가
+보장되지 않고, non-root 멤버는 `window_start`·`window_end` 가 없어 프론트 계약
+(`contract.js` 의 `metric window`)에 걸려 **펄스맵이 통째로 안 그려진다.**
+2026-09-22 preview 에서 baseline 5,120 클러스터가 그 이유로 렌더에서 탈락했다.
+아래 서술은 그 레이어의 계약이며 규칙 자체는 -161 에서 바뀌지 않았다.
+
 
 - **루트 씨드**(`is_seed=true`) = 조회수 최종 관문을 직접 통과한 문서. 각 루트 씨드가 클러스터를 연다.
 - **추가 씨드**(`is_seed=true`) = 루트 씨드의 Clickstream 이웃(월별 덤프, `n>=10`) 중 문서 생성일이 사건일 ±창(기본 30일) 안인 새 사건 문서.
@@ -33,6 +131,11 @@ pytest cluster/tests        # Docker 불필요(pgserver 번들 PostgreSQL)
 
 ## 점수
 
+- `pulse_score` = component 안 root 들의 `spike_score` **최댓값**, `hot` 은 하나라도 임계를
+  넘으면 참. `label`·`issue_key`·`seed_page_id` 는 **lead root**(최대 `spike_score`, 동점이면
+  제목 내림차순)에서 나온다 — 입력 순서에 안 흔들린다.
+  ⚠️ 같은 사건이 앞뒤 시점에 다른 lead 를 가지면 `issue_key` 도 달라진다.
+  temporal episode grouping 후속 과제로 분리했다(2026-09-22).
 - `size_score = s/(s+5)` (`s`=spike_score), 0~1 절대 척도. 매 시점 최댓값 정규화 아님 — 시점 간 버블 크기가 비교돼야 한다. 비-씨드는 원시 점수가 없어 `None`(화면은 작은 점선 노드, 0과 구분).
 - `pulse_score` = 씨드 급등도 최댓값. 문서 수가 아니라 가장 강한 급증이 이슈 세기를 대표.
 - 산식·상수를 바꾸면 `SCORE_VERSION` 을 올리고 `cluster_snapshot.score_version` 으로 시점과 함께 저장한다.
@@ -59,6 +162,10 @@ pytest cluster/tests        # Docker 불필요(pgserver 번들 PostgreSQL)
 ```bash
 python -m cluster.driver --dsn "$DATABASE_URL" --source replay
 python -m cluster.driver --dsn "$DATABASE_URL" --source live
+python -m cluster.driver --dsn ... --source replay --no-root-grouping   # 2단계 끔(비상용)
+python -m cluster.driver --dsn ... --source replay     --root-limit-per-snapshot 20 --root-cooldown-hours 24   # 1단계 기본값(명시)
+python -m cluster.driver --dsn ... --source replay --root-limit-per-snapshot 0     --root-cooldown-hours 0                                  # 1단계 끔 — 🔴 giant 가 생긴다
+python -m cluster.driver --dsn ... --source replay --expansion     --clickstream-root ./data/clickstream --creation-index ./data/page-creation/...
 python -m cluster.driver --dsn ... --source replay --snapshot-ts 2024-10-07T14:00:00Z
 python -m cluster.driver --dsn ... --source live --dry-run
 ```
