@@ -1,7 +1,8 @@
 # 기술 명세서 — WikiPulse (WikiPulse)
 
-- 버전: **v0.3 (2026-09-18 개정)**
+- 버전: **v0.3 (2026-09-22 정합성 갱신)**
 - v0.3 변경: 1일 실제 원본 E2E 결과와 historical 대표 텍스트·스냅샷 증거·상세 API의 시점 계약을 반영했다.
+- 2026-09-22 정합성 갱신: 운영 배포·DB V14·파이썬 런타임·HDFS/Kafka 상태를 재실측 값으로 교체했다.
 - 상위 문서: [requirements-v0.3.md](requirements-v0.3.md) — **왜 이 컴포넌트가 있는가는 §3.1이 정본이다.** 여기 다시 적지 않는다.
 - 이 문서가 다루는 것: **무엇이 어느 버전으로, 어느 서버 어느 포트에서, 어떻게 뜨는가.**
 - API는 [api-v0.3.md](api-v0.3.md), 데이터 모델은 [erd-v0.1.md](erd-v0.1.md).
@@ -33,7 +34,7 @@
 
 | | 버전 | 출처 |
 | --- | --- | --- |
-| Python | 일반 파이프라인 **3.11**, Spark 이미지 **3.8.10** | `data-pipeline/Dockerfile`은 `python:3.11-slim`로 고정. `apache/spark:3.5.3-python3`은 2026-09-17 실측 3.8.10이라 `psycopg 3.3.5` 설치 불가; 운영 `SINK=spike` 미해결 |
+| Python | 일반 파이프라인·서비스 Spark **3.11.16**, 추가 EC2 edit-stream **3.8.10** | 저장소의 일반 파이프라인은 `python:3.11-slim`, Spark는 `wikipulse-spark:py311` 자체 이미지다. 기본 EC2 `live-cycle`·Spark worker는 3.11.16, 추가 EC2의 공식 Spark 이미지 기반 edit-stream driver만 3.8.10이며 Spark worker는 3.11.16이다 (2026-09-22 실측). `SINK=spike` 경로는 기본 EC2의 3.11 이미지로 구성됐다 |
 | Kafka | **3.9.0** (`apache/kafka:3.9.0`) | `data-pipeline/docker-compose.yml` (저장소) — **로컬 개발용** |
 | Spark | **3.5.3** (`apache/spark:3.5.3-python3`) | 같은 파일 (저장소) — **로컬 개발용** |
 | Kafka 커넥터 | `spark-sql-kafka-0-10_2.12:3.5.3` | 같은 파일 |
@@ -46,13 +47,13 @@
 
 | | 버전 | 상태 |
 | --- | --- | --- |
-| PostgreSQL | **17.11** (`pgvector/pgvector:0.8.6-pg17-bookworm`) | 저장소의 누적 스키마는 **V1~V9**. 기본 EC2는 앱 사용자·V1~V6 테이블·pgvector 존재, health 정상까지 확인했다. ~~사용자 테이블 전부 0행~~ → 2025-06-12 canary 원시 신호 `page_edit_window` 72,632행·`page_view_hourly` 61,197행 적재, `spike` 0행 (2026-09-17 19:20 KST 정확 조회). Backend는 미배포이며 **V7~V9 적용과 WP-119·129 실행은 EC2에서 확인하지 않았다** |
+| PostgreSQL | **17.11** (`pgvector/pgvector:0.8.6-pg17-bookworm`) | 누적 스키마 **V1~V14**가 기본 EC2에 적용됐고 schema version 최댓값 14를 확인했다. Spring Backend가 이 DB에 연결되어 서비스 중이다 (2026-09-22 실측). 테이블별 현재 역할과 상태는 [ERD](erd-v0.1.md)가 정본이다 |
 | pgvector | **0.8.6**, 차원 **1536** 고정 | 같은 이미지 (2026-09-17 실측). `vector(1536)` — `text-embedding-3-small` 기준. 모델을 바꾸면 DDL도 바꿔야 한다 |
-| Hadoop / HDFS | **3.5.0** (`apache/hadoop:3.5.0`) | NameNode 1 + DataNode 2, 복제 2. 104 blocks 건강·누락 0. 저장 원본은 2024-10/2025-06 표본이며 고정 MVP 2개월은 없음 (2026-09-17 18:30 KST 실측) |
+| Hadoop / HDFS | **3.5.0** (`apache/hadoop:3.5.0`) | NameNode 1 + DataNode 2, 복제 2. `/wikipulse`는 논리 약 1.7 GiB·복제 포함 약 3.5 GiB이며 `mediawiki_history`와 `pageview_complete` 원본이 있다. 고정 MVP 2개월 원본은 아직 완성되지 않았다 (2026-09-22 실측) |
 | Spark (EC2) | **3.5.3** (`apache/spark:3.5.3-python3`) | Standalone 2노드, client 모드. 제한 2코어 작업에서 Worker 2대 참여·HDFS Parquet 20행 왕복 통과 (2026-09-17 18:26 KST) |
-| Kafka (EC2) | **3.9.0** (`apache/kafka:3.9.0`) | 추가 EC2 KRaft 단일 broker + controller. `wiki.edits` 3파티션, 실제 이벤트 0건 상태에서 smoke 1건 발행·읽기 통과 (2026-09-17 18:26 KST) |
+| Kafka (EC2) | **3.9.0** (`apache/kafka:3.9.0`) | 추가 EC2 KRaft 단일 broker + controller. `wiki.edits` 3파티션과 EventStreams producer·edit-stream 잡이 기동 상태다 (2026-09-22 실측) |
 | Redis | **채택 여부 미정** | CLAUDE.md 인프라 절에 이름만 있고 명세 §3.1 컴포넌트 표에는 없다. 지금 필요한 캐시가 무엇인지부터 정할 것 |
-| Nginx / Jenkins | Nginx **1.30.5** / Jenkins inactive | Nginx container가 80/443에서 동작하고 HTTPS 200이나 `nginx ok` placeholder뿐이다. Backend·Frontend 미배포, Jenkins 미사용 (2026-09-17 18:30 KST 실측) |
+| Nginx / 배포 | Nginx **1.30.5** / GitLab CI | Nginx·Frontend·Spring Backend가 기본 EC2에 배포됐다. HTTPS 루트와 snapshots·map·rankings·stocks API가 모두 200을 반환했다 (2026-09-22 실측). 현재 자동 배포 정본은 `.gitlab-ci.yml`이며 Jenkins는 배포 경로가 아니다 |
 
 ⚠️ **로컬 개발 스택의 Hadoop 은 3.4.1, EC2 는 3.5.0 이다** (2026-09-17 확인). 서로 다른 환경이라 그 자체로 불일치는 아니지만, 한쪽만 보고 다른 쪽을 "고치지" 말 것. 맞출지 여부는 결정된 바 없다. Kafka(3.9.0)·Spark(3.5.3)는 양쪽이 같다.
 
