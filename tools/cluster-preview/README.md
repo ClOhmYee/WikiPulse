@@ -47,6 +47,23 @@ docker compose -f tools/cluster-preview/compose.preview.yml up -d
 DB 는 이 compose 가 만들지 않는다. 이미 떠 있는 `wikipulse-cluster-preview-pg` 에
 `wikipulse-preview-net` 으로 붙는다.
 
+## CORE 회귀 검증 (WP-186)
+
+프로덕션 코드(`cluster.snapshot.build_snapshot` → `cluster.rootgraph.core`)가 PoC 5 분포를
+그대로 내는지 매번 대조한다. 어긋나면 종료 코드가 0이 아니다.
+
+```bash
+python tools/cluster-preview/seed_asof_link_cache.py   # PoC 캐시 → V11 (1회)
+python tools/cluster-preview/verify_core_regression.py
+```
+
+🔴 **root 집합은 `baseline.cluster_member`(= PoC 5 가 쓴 22,080 root)에서 읽는다.
+`spike` 가 아니다.** 이 DB 의 `spike` 는 스냅샷당 51~393행인데 `issue_cluster` 는 정확히
+20행이고 한 문서가 하루에 두 번 root 가 되지 않는다 — 두 테이블이 **서로 다른 실행의
+산출물**이다. 그래서 이 스크립트가 보증하는 것은 "같은 root 를 주면 같은 component 가
+나온다" 이지 "driver 를 그대로 돌리면 19,432 가 나온다" 가 아니다. 자세한 것은
+`data-pipeline/cluster/README.md` 의 "root 집합이 두 벌이다" 절.
+
 ## 적재 스크립트
 
 ```bash

@@ -18,7 +18,19 @@ import pytest
 pytest.importorskip("psycopg")
 
 from batch.page_creation import write_index
-from cluster.driver import MonthlyNeighborSource, load_pages_by_title, run
+from cluster.driver import MonthlyNeighborSource, load_pages_by_title
+from cluster.driver import run as _run
+
+
+def run(*args, **kwargs):
+    """이 파일은 **legacy expansion 배선**(-115)의 DB 왕복 테스트다.
+
+    -186 에서 CORE 가 정본이 되며 `expansion` 기본값이 False 가 됐다. 이웃이 실제로
+    멤버가 되는지 보려면 레이어를 켜야 한다. CORE 기본 경로(root 만)의 DB 왕복은
+    `test_driver_core_pg.py` 가 본다.
+    """
+    kwargs.setdefault("expansion", True)
+    return _run(*args, **kwargs)
 
 UTC = timezone.utc
 

@@ -2,6 +2,45 @@
 
 Spark·DB 없이 테스트된다. 실 데이터 소스는 driver.py 가 배선한다.
 
+═══════════════════════════════════════════════════════════════════════════
+MVP 정본 = CORE (WP-186, 2026-09-22 확정)
+═══════════════════════════════════════════════════════════════════════════
+
+    같은 스냅샷의 spike root
+    + strict historical as-of direct Wikipedia link
+    → connected component
+    → sym focus τ=0.005
+    → D2 directional bridge 억제
+    → **그 component 자체가 issue cluster 이고, 그 안의 root 가 cluster_member 다**
+
+규칙 본체는 `rootgraph.py` 에 있다. 이 모듈은 그 결과를 Cluster/Member 로 옮긴다.
+
+🔴 **CORE 는 여기서 끝이다.** root 를 묶은 뒤 아래 expansion 레이어를 자동으로 다시
+   돌리지 않는다. 돌리면 PoC 5 에서 검증한 분포(전체 1,104 스냅샷 · root 22,080 ·
+   component 19,432 · singleton 17,569 · size2 1,461 · 3~4 322 · 5~7 57 · 8~12 20 ·
+   13+ 3 · max 16 · 20+ giant 0)가 보장되지 않는다.
+
+🔴 **non-root 멤버는 Pulse Map 을 깨뜨린다.** clickstream/creation/resurgence 로 들어온
+   멤버는 `window_start`·`window_end` 가 없는데 프론트 계약(`contract.js` 의
+   `metric window`)이 노드마다 두 값을 요구한다. 2026-09-22 preview 에서 baseline
+   5,120 클러스터가 이 이유로 렌더 대상에서 탈락하는 것을 실측했다.
+
+lead root (클러스터 대표)
+    component 에서 `spike_score` 최댓값, 동점이면 제목 내림차순으로 하나를 고른다.
+    `label`·`issue_key`·`seed_page_id` 가 이 root 에서 나온다. 순서만으로 결정되므로
+    같은 입력이면 항상 같은 lead 다(재계산 호환).
+    ⚠️ 같은 사건이 앞뒤 시점에 다른 lead 를 가지면 `issue_key` 도 달라진다 — 시간축
+    추적 문제는 temporal episode grouping 후속 과제로 분리했다(2026-09-22 결정).
+
+═══════════════════════════════════════════════════════════════════════════
+LEGACY expansion 레이어 — 기본 OFF (`build_snapshot(expansion=False)`)
+═══════════════════════════════════════════════════════════════════════════
+
+아래 게이트들은 **지우지 않고 보존**한다. `expansion=True` 일 때만 돈다. 켜면 CORE
+component 의 **각 root** 에 대해 Clickstream 이웃을 붙인다.
+
+⚠️ 이 절의 서술은 legacy 레이어의 계약이다. CORE 기본 경로에는 적용되지 않는다.
+
 클러스터링 게이트 (명세 v0.3 §3.2 4번, §11 실측 — WP-51·77)
     루트 씨드(`is_seed=true`) = 급증 판정(detector.py)을 직접 통과한 문서.
         각 루트 씨드가 한 클러스터를 연다.
@@ -69,6 +108,8 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta, timezone
 
+from . import rootgraph
+from .asof_links import link_key
 from .score import SCORE_VERSION, pulse_score, size_score
 
 # --- 기본 파라미터 (실측 기반, 운영하며 조정) --------------------------------
@@ -144,6 +185,9 @@ class Seed:
     edit_baseline: float | None = None
     view_baseline: float | None = None
     completeness: str = "complete"   # complete / pending(조회수 대기) / unavailable
+    #: 판정에 들어간 마지막 revision (`spike.max_rev_id`, V9). CORE 의 as-of 링크 앵커.
+    #: 🔴 None 이면 링크를 **안 쓴다**. 현재 판으로 폴백하지 않는다 — 그건 미래 누수다.
+    max_rev_id: int | None = None
 
 
 @dataclass(frozen=True)
@@ -355,22 +399,17 @@ def _is_completed_clickstream_month(clickstream_month: str, snapshot_date: date)
     return evidence_month < snapshot_date.replace(day=1)
 
 
-def _build_cluster(
-    source: str,
-    snapshot_ts: datetime,
-    seed: Seed,
-    neighbors: Sequence[Neighbor],
-    relations: Sequence[WikidataRelation],
-    prior_first_detected: Mapping[str, datetime],
-    window_days: int,
-    hot_threshold: float,
-    resurgence_ratio: float,
-    resurgence_min_edits: int,
-    resurgence_min_baseline: int,
-) -> Cluster:
-    key = issue_key_of(source, seed)
+def lead_of(group: Sequence[Seed]) -> Seed:
+    """component 의 대표 root. `spike_score` 최댓값, 동점이면 제목 내림차순.
 
-    seed_member = Member(
+    `label`·`issue_key`·`seed_page_id` 가 여기서 나온다. 입력 순서에 기대지 않으므로
+    같은 component 면 항상 같은 lead 다 — 재계산 호환의 근거다.
+    """
+    return max(group, key=lambda s: (s.spike_score, s.title))
+
+
+def _seed_member(seed: Seed) -> Member:
+    return Member(
         page_id=seed.page_id,
         is_seed=True,
         weight=1.0,
@@ -385,9 +424,83 @@ def _build_cluster(
         window_end=seed.window_end,
     )
 
-    members: list[Member] = [seed_member]
+
+def _build_cluster(
+    source: str,
+    snapshot_ts: datetime,
+    group: Sequence[Seed],
+    neighbors: Mapping[int, Sequence[Neighbor]],
+    wikidata: Mapping[int, Sequence[WikidataRelation]],
+    prior_first_detected: Mapping[str, datetime],
+    window_days: int,
+    hot_threshold: float,
+    resurgence_ratio: float,
+    resurgence_min_edits: int,
+    resurgence_min_baseline: int,
+) -> Cluster:
+    """CORE component 하나 → 클러스터 하나.
+
+    `group` 은 같은 사건으로 묶인 root 들이다(크기 1 이면 singleton). 멤버는 이 root
+    들뿐이고, expansion 레이어가 켜졌을 때만 `neighbors` 가 더 붙는다 — 호출자가
+    OFF 면 빈 매핑을 넘겨서 아래 루프가 no-op 이 된다.
+    """
+    lead = lead_of(group)
+    key = issue_key_of(source, lead)
+
+    # 저장 순서를 급등도 순으로 고정한다 — 입력 순서가 달라도 같은 결과가 나온다.
+    ordered = sorted(group, key=lambda s: (-s.spike_score, s.page_id))
+    members: list[Member] = [_seed_member(s) for s in ordered]
     edges: list[Edge] = []
-    included_page_ids: set[int] = {seed.page_id}
+    included_page_ids: set[int] = {s.page_id for s in group}
+
+    for seed in ordered:
+        _expand_seed(
+            snapshot_ts, seed, neighbors.get(seed.page_id, ()),
+            wikidata.get(seed.page_id, ()), members, edges, included_page_ids,
+            window_days, resurgence_ratio, resurgence_min_edits,
+            resurgence_min_baseline)
+
+    return Cluster(
+        issue_key=key,
+        category=DEFAULT_CATEGORY,
+        status=DEFAULT_STATUS,
+        pulse_score=pulse_score([s.spike_score for s in group]),
+        hot=any(s.spike_score >= hot_threshold for s in group),
+        first_detected_at=prior_first_detected.get(key, snapshot_ts),
+        members=tuple(members),
+        edges=tuple(edges),
+        # 🔴 **lead root 의 제목이 이슈 이름이다.** ~~`None`~~ → 제목
+        # (2026-09-20, WP-149. -186 에서 seed → lead root).
+        #
+        # ⚠️ 아무도 채우지 않아서 계속 NULL 이었다. 파이프라인 어디에도 `label` 을 쓰는
+        # UPDATE 가 없는데(백엔드 `matching` 포함) 프론트 `PulseCluster.jsx` 는
+        # `cluster.label` 로 제목을 그린다 — 운영에 4,474 클러스터를 적재하고 나서야
+        # **제목 없는 버블**로 드러났다. 데모 시드(`docker/seed/*.sql`)는 제목을 직접
+        # 넣어 뒀어서 화면상 차이가 안 보였다.
+        label=lead.title,
+        seed_page_id=lead.page_id,
+    )
+
+
+def _expand_seed(
+    snapshot_ts: datetime,
+    seed: Seed,
+    neighbors: Sequence[Neighbor],
+    relations: Sequence[WikidataRelation],
+    members: list[Member],
+    edges: list[Edge],
+    included_page_ids: set[int],
+    window_days: int,
+    resurgence_ratio: float,
+    resurgence_min_edits: int,
+    resurgence_min_baseline: int,
+) -> None:
+    """LEGACY expansion — 한 root 에 Clickstream 이웃·Wikidata 간선을 붙인다.
+
+    🔴 **CORE 기본 경로에서는 호출되지 않는다** (`neighbors`·`relations` 가 비어 있다).
+    `build_snapshot(expansion=True)` 일 때만 실제로 뭔가 붙는다. 규칙은 -51·-77·-115
+    그대로이며 이번 -186 에서 한 줄도 바뀌지 않았다.
+    """
     snapshot_date = snapshot_ts.date()
 
     for nb in neighbors:
@@ -475,36 +588,41 @@ def _build_cluster(
             evidence_observed_at=observed_at,
         ))
 
-    return Cluster(
-        issue_key=key,
-        category=DEFAULT_CATEGORY,
-        status=DEFAULT_STATUS,
-        pulse_score=pulse_score([seed.spike_score]),
-        hot=seed.spike_score >= hot_threshold,
-        first_detected_at=prior_first_detected.get(key, snapshot_ts),
-        members=tuple(members),
-        edges=tuple(edges),
-        # 🔴 **루트 씨드의 제목이 이슈 이름이다.** ~~`None`~~ → `seed.title`
-        # (2026-09-20, WP-149).
-        #
-        # ⚠️ 아무도 채우지 않아서 계속 NULL 이었다. 파이프라인 어디에도 `label` 을 쓰는
-        # UPDATE 가 없는데(백엔드 `matching` 포함) 프론트 `PulseCluster.jsx` 는
-        # `cluster.label` 로 제목을 그린다 — 운영에 4,474 클러스터를 적재하고 나서야
-        # **제목 없는 버블**로 드러났다. 데모 시드(`docker/seed/*.sql`)는 제목을 직접
-        # 넣어 뒀어서 화면상 차이가 안 보였다.
-        label=seed.title,
-        seed_page_id=seed.page_id,
-    )
+
+def _group_roots(
+    seeds: Sequence[Seed],
+    root_links: Mapping[int, set[str]] | None,
+    focus_tau: float,
+    min_detach: int,
+) -> list[list[Seed]]:
+    """CORE — root 를 사건 component 로 묶는다. 규칙 본체는 `rootgraph.core`.
+
+    `root_links` 가 없으면 grouping 자체를 하지 않는다(root 1개 = 클러스터 1개).
+    링크를 못 구한 root 는 빈 집합이 되어 간선이 안 생기고 singleton 으로 남는다 —
+    🔴 현재 판 링크로 폴백하지 않는다.
+    """
+    if root_links is None:
+        return [[seed] for seed in seeds]
+    keys = [link_key(seed.title) for seed in seeds]
+    linksets = [set(root_links.get(seed.page_id) or ()) for seed in seeds]
+    views = [seed.views for seed in seeds]
+    result = rootgraph.core(keys, linksets, views,
+                            tau=focus_tau, min_detach=min_detach)
+    return [[seeds[i] for i in comp] for comp in result.components]
 
 
 def build_snapshot(
     snapshot_ts: datetime,
     source: str,
     seeds: Sequence[Seed],
-    neighbors: Mapping[int, Sequence[Neighbor]],
+    neighbors: Mapping[int, Sequence[Neighbor]] | None = None,
     wikidata: Mapping[int, Sequence[WikidataRelation]] | None = None,
     prior_first_detected: Mapping[str, datetime] | None = None,
     *,
+    root_links: Mapping[int, set[str]] | None = None,
+    expansion: bool = False,
+    focus_tau: float = rootgraph.DEFAULT_FOCUS_TAU,
+    min_detach: int = rootgraph.DEFAULT_MIN_DETACH,
     creation_window_days: int = DEFAULT_CREATION_WINDOW_DAYS,
     hot_spike_threshold: float = DEFAULT_HOT_SPIKE_THRESHOLD,
     new_window_hours: float = DEFAULT_NEW_WINDOW_HOURS,
@@ -512,11 +630,17 @@ def build_snapshot(
     resurgence_min_edits: int = DEFAULT_RESURGENCE_MIN_EDITS,
     resurgence_min_baseline: int = DEFAULT_RESURGENCE_MIN_BASELINE,
 ) -> Snapshot:
-    """한 시점의 클러스터·멤버·간선을 생산한다.
+    """한 시점의 클러스터·멤버·간선을 생산한다. **CORE component 하나 = 클러스터 하나.**
 
-    seeds 각각이 한 클러스터를 연다. neighbors[seed.page_id] 는 그 씨드의
-    Clickstream 이웃, wikidata[seed.page_id] 는 그 클러스터 안 Wikidata 관계다.
-    같은 문서가 여러 씨드의 이웃이면 각 클러스터에 한 번씩 들어간다(계약).
+    `root_links[seed.page_id]` 는 그 root 의 as-of strict 아웃링크 집합
+    (`asof_links.link_key` 정규화). 이게 CORE 의 유일한 입력 신호다.
+
+    - `root_links=None` 이면 grouping 을 하지 않는다 — root 하나가 클러스터 하나가 되는
+      -186 이전 동작이다. 🔴 **링크를 못 구했을 때 쓰는 값이 아니다.** 그 경우는 해당
+      root 만 빈 집합으로 넘긴다(그 root 가 singleton 이 된다). 여기에 None 을 넘기면
+      스냅샷 전체의 grouping 이 조용히 꺼진다.
+    - `expansion=False`(기본)면 멤버는 root 뿐이다. `neighbors`·`wikidata` 는 무시된다.
+      True 면 legacy 레이어가 CORE component 의 각 root 에 이웃을 붙인다.
 
     source 는 'live' 또는 'replay'. 파라미터는 실측 기본값이며 리플레이 재계산에서
     같은 값을 주면 결정적으로 같은 스냅샷이 나온다(재계산 호환).
@@ -526,16 +650,22 @@ def build_snapshot(
 
     snapshot_ts = _as_utc(snapshot_ts, "snapshot_ts")
 
-    wikidata = wikidata or {}
     prior_first_detected = prior_first_detected or {}
+    # 🔴 expansion 이 꺼져 있으면 이웃 입력을 **여기서 버린다.** 아래로 흘려 보내고
+    #    루프 안에서 거르면, 새 게이트가 하나 추가될 때마다 OFF 경로가 조용히 새는
+    #    자리가 하나씩 는다.
+    neighbors = dict(neighbors or {}) if expansion else {}
+    wikidata = dict(wikidata or {}) if expansion else {}
+
+    groups = _group_roots(seeds, root_links, focus_tau, min_detach)
 
     clusters = tuple(
         _build_cluster(
             source=source,
             snapshot_ts=snapshot_ts,
-            seed=seed,
-            neighbors=neighbors.get(seed.page_id, ()),
-            relations=wikidata.get(seed.page_id, ()),
+            group=group,
+            neighbors=neighbors,
+            wikidata=wikidata,
             prior_first_detected=prior_first_detected,
             window_days=creation_window_days,
             hot_threshold=hot_spike_threshold,
@@ -543,7 +673,7 @@ def build_snapshot(
             resurgence_min_edits=resurgence_min_edits,
             resurgence_min_baseline=resurgence_min_baseline,
         )
-        for seed in seeds
+        for group in groups
     )
 
     return Snapshot(

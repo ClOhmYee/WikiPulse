@@ -96,6 +96,7 @@ from batch.page_creation import creation_dates_for
 from batch.page_edit_daily import coverage_span, edit_days_for, sum_days
 from spike.spike_sink import SPIKE_SOURCES
 
+from . import asof_links
 from .snapshot import (
     DEFAULT_CREATION_WINDOW_DAYS,
     DEFAULT_RESURGENCE_MIN_EDITS,
@@ -144,7 +145,8 @@ from .writer import persist_snapshot
 #: 정렬은 저장 순서일 뿐 — 노출 순위는 백엔드가 pulse_score 로 다시 매긴다.
 SELECT_SEEDS_SQL = """
 SELECT s.id, s.page_id, p.wiki, p.title, s.window_start, s.detected_at,
-       s.edit_count, s.views, s.view_baseline, s.view_ratio, s.spike_score
+       s.edit_count, s.views, s.view_baseline, s.view_ratio, s.spike_score,
+       s.max_rev_id
   FROM spike s
   JOIN wiki_page p ON p.id = s.page_id
  WHERE s.source = %s
@@ -266,7 +268,8 @@ def load_seeds_from_spike(conn, snapshot_ts: datetime, source: str) -> list[Seed
 
     seeds: list[Seed] = []
     for (_id, page_id, wiki, title, window_start, detected_at,
-         edit_count, views, view_baseline, view_ratio, spike_score) in rows:
+         edit_count, views, view_baseline, view_ratio, spike_score,
+         max_rev_id) in rows:
         # spike 에 window_end 가 없어 detected_at 을 쓴다(모듈 독스트링 ⚠️).
         # Seed 계약은 "시작 < 종료" 다 — 어긋나면 조용히 이상한 구간이 저장되므로 막는다.
         if detected_at <= window_start:
@@ -292,6 +295,9 @@ def load_seeds_from_spike(conn, snapshot_ts: datetime, source: str) -> list[Seed
             edit_baseline=None,
             view_baseline=view_baseline,
             completeness=_completeness(views),
+            # CORE 의 as-of 링크 앵커 (V9). 없으면 링크를 안 쓰고 singleton 으로 둔다 —
+            # 현재 판으로 폴백하지 않는다 (WP-186).
+            max_rev_id=max_rev_id,
         ))
     return seeds
 
@@ -786,6 +792,57 @@ def load_pages_by_title(
     return found
 
 
+# --- CORE as-of 링크 ---------------------------------------------------------
+
+def load_root_links(
+    conn,
+    seeds: Sequence[Seed],
+    *,
+    fetcher=None,
+    log=None,
+) -> dict[int, set[str]]:
+    """CORE 입력 — root 별 as-of strict 아웃링크 집합 (WP-186).
+
+    `spike.max_rev_id` 를 앵커로 `page_asof_links`(V11) 캐시를 먼저 보고, 없는 것만
+    받아 캐시에 넣는다. revision 단위 캐시라 만료가 없다.
+
+    🔴 **`max_rev_id` 가 없는 root 는 결과에서 아예 뺀다.** 호출자가 빈 집합으로 읽어
+       singleton 으로 둔다 — 현재 판 링크로 폴백하면 그 순간 미래 정보가 과거 스냅샷에
+       섞인다. replay 든 LIVE 든 같은 규칙이다.
+
+    ⚠️ **`fetcher=None` 이면 캐시만 쓴다.** 기본을 이렇게 둔 이유는 리플레이 대량
+       재계산이 실수로 수만 건을 받는 것을 막기 위해서다 — 수집은 호출자가 켠다.
+       캐시가 비어 있으면 스냅샷이 통째로 singleton 이 되므로 그 경우 경고를 찍는다.
+    """
+    anchored = [s for s in seeds if s.max_rev_id is not None]
+    if not anchored:
+        return {}
+    by_rev: dict[int, list[Seed]] = {}
+    for seed in anchored:
+        by_rev.setdefault(int(seed.max_rev_id), []).append(seed)
+
+    cached = asof_links.load_cached(conn, list(by_rev))
+    missing = [rev for rev in by_rev if rev not in cached]
+    if missing and fetcher is not None:
+        fetched = fetcher.fetch_many(missing, log=log)
+        asof_links.store(conn, [
+            (rev, by_rev[rev][0].wiki, by_rev[rev][0].title, links, error)
+            for rev, (_title, links, error) in fetched.items()
+        ])
+        for rev, (_title, links, error) in fetched.items():
+            if not error:
+                cached[rev] = set(links)
+    elif missing and log:
+        log(f"⚠️ as-of 링크 캐시 미보유 {len(missing)}건 — 그 root 는 singleton 이 된다")
+
+    out: dict[int, set[str]] = {}
+    for rev, group in by_rev.items():
+        if rev in cached:
+            for seed in group:
+                out[seed.page_id] = cached[rev]
+    return out
+
+
 # --- 런타임 -----------------------------------------------------------------
 
 def build_snapshot_at(
@@ -795,8 +852,15 @@ def build_snapshot_at(
     *,
     neighbors: dict[int, Sequence[Neighbor]] | None = None,
     neighbor_source=None,
+    root_grouping: bool = True,
+    expansion: bool = False,
+    link_fetcher=None,
+    log=None,
 ) -> Snapshot:
-    """한 시점의 스냅샷을 생산한다(저장 안 함). 로직은 전부 -75 자산이다.
+    """한 시점의 스냅샷을 생산한다(저장 안 함). 로직은 전부 -75·-186 자산이다.
+
+    `root_grouping=True`(기본) 면 CORE 로 root 를 묶는다. `expansion=False`(기본) 면
+    멤버는 root 뿐이다 — 현재 MVP 정본 경로다(WP-186).
 
     🔴 **`source` 하나가 입력 필터이자 산출물 라벨이다.** 읽는 씨드(`spike.source`),
     이전 감지 이력(`issue_cluster.source`), 붙는 라벨(`Snapshot.source`) 이 같은 값에서
@@ -812,11 +876,15 @@ def build_snapshot_at(
     """
     require_spike_source(source)
     seeds = load_seeds_from_spike(conn, snapshot_ts, source)
-    if neighbors is None and neighbor_source is not None:
+    if expansion and neighbors is None and neighbor_source is not None:
         neighbors = neighbor_source(conn, snapshot_ts, seeds)
+    root_links = (load_root_links(conn, seeds, fetcher=link_fetcher, log=log)
+                  if root_grouping else None)
     return build_snapshot(
         snapshot_ts, source, seeds, neighbors or {},
         prior_first_detected=load_prior_first_detected(conn, source),
+        root_links=root_links,
+        expansion=expansion,
     )
 
 
@@ -827,6 +895,10 @@ def run(
     snapshot_times: Sequence[datetime],
     dry_run: bool = False,
     neighbor_source=None,
+    root_grouping: bool = True,
+    expansion: bool = False,
+    link_fetcher=None,
+    log=None,
 ) -> list[Snapshot]:
     """시점들을 순서대로 생산하고 저장한다. 커밋은 호출자 책임.
 
@@ -841,13 +913,15 @@ def run(
     유효한 산출물이라 에러가 안 난다. `load_snapshot_times(conn, source)` 를 쓴다.
     """
     require_spike_source(source)
-    if neighbor_source is not None:
+    if expansion and neighbor_source is not None:
         # 월 덤프 순회는 여기서 한 번에 끝낸다 — 시점 루프 안에서 하면 월당 수천 번이다.
         neighbor_source.prepare(conn, source, snapshot_times)
     produced: list[Snapshot] = []
     for snapshot_ts in snapshot_times:
         snapshot = build_snapshot_at(
-            conn, snapshot_ts, source, neighbor_source=neighbor_source)
+            conn, snapshot_ts, source, neighbor_source=neighbor_source,
+            root_grouping=root_grouping, expansion=expansion,
+            link_fetcher=link_fetcher, log=log)
         if not dry_run:
             # 멱등은 writer 계약 그대로 — (source, snapshot_ts) 단위 지우고 다시 넣는다.
             persist_snapshot(conn, snapshot)
@@ -883,7 +957,29 @@ def build_arg_parser() -> argparse.ArgumentParser:
     p.add_argument("--since", type=_parse_ts, help="시점 범위 시작(포함)")
     p.add_argument("--until", type=_parse_ts, help="시점 범위 끝(포함)")
     p.add_argument("--dry-run", action="store_true", help="저장 없이 생산만")
-    # Clickstream 이웃(추가 씨드) 배선 — WP-115.
+
+    # --- CORE (WP-186, MVP 정본) -------------------------------------
+    # 🔴 **기본이 켜짐이다.** 이게 지금 제품 규칙이다.
+    p.add_argument("--no-root-grouping", dest="root_grouping", action="store_false",
+                   help="CORE grouping 을 끈다 — root 1개 = 클러스터 1개(-186 이전 동작). "
+                        "비상용이며 평소에 쓰지 않는다")
+    # 🔴 **as-of 링크는 캐시가 기본이다.** 수집은 명시적으로 켠다 — 리플레이 한 판이
+    #    root 수만큼(실측 22,080) 요청을 낼 수 있어서, 실수로 켜지면 위키미디어를
+    #    그만큼 때린다. 캐시가 비면 스냅샷이 통째로 singleton 이 되고 경고가 찍힌다.
+    p.add_argument("--fetch-links", action="store_true",
+                   help="캐시에 없는 as-of 링크를 위키미디어에서 받아 V11 캐시에 넣는다 "
+                        "(기본: 캐시만 사용). CONTACT_EMAIL 이 필요하다")
+    p.add_argument("--link-workers", type=int, default=4,
+                   help="--fetch-links 동시 요청 수 (기본 4)")
+
+    # --- LEGACY expansion (기본 OFF, WP-186) --------------------------
+    # 🔴 켜면 CORE component 의 각 root 에 Clickstream 이웃이 붙는다. PoC 5 에서 검증한
+    #    분포가 보장되지 않고, non-root 멤버는 window_start/end 가 없어 프론트 계약
+    #    (`contract.js` 의 metric window)에 걸려 **펄스맵이 통째로 안 그려진다.**
+    p.add_argument("--expansion", action="store_true",
+                   help="legacy Clickstream/생성일/재급증 멤버 확장을 켠다 "
+                        "(기본 꺼짐 — CORE 정본은 root 멤버만 쓴다)")
+    # Clickstream 이웃(추가 씨드) 배선 — WP-115. --expansion 과 함께 쓴다.
     # 🔴 **기본이 꺼짐이다.** 적재본 없이 돌던 기존 운영(-109)이 이 변경으로
     #    갑자기 FileNotFoundError 를 내면 안 된다. 주면 켜고, 안 주면 씨드 단독이다.
     p.add_argument("--clickstream-root", default=os.environ.get("CLICKSTREAM_OUT", ""),
@@ -912,6 +1008,13 @@ def main(argv: list[str] | None = None) -> int:
     if args.snapshot_ts and (args.since or args.until):
         print("--snapshot-ts 와 --since/--until 은 같이 못 쓴다.", file=sys.stderr)
         return 2
+    # 🔴 expansion 을 안 켠 채 이웃 인자를 주면 막는다. 그냥 무시하면 "붙였는데 왜
+    #    멤버가 없지" 로 한참을 헤맨다 — -186 에서 기본이 꺼짐으로 바뀐 걸 모르면
+    #    조용히 씨드 단독 결과만 나온다.
+    if args.clickstream_root and not args.expansion:
+        print("--clickstream-root 는 --expansion 과 함께 준다. CORE 정본(-186)은 "
+              "root 멤버만 쓰므로 expansion 없이는 이웃이 붙지 않는다.", file=sys.stderr)
+        return 2
     # 🔴 한쪽만 주면 막는다. Clickstream 만 주면 생성일이 전부 미상이 되어 창 게이트가
     #    이웃을 **한 건도** 통과시키지 않는데, 그건 "이웃이 없다" 와 구분되지 않는다.
     if bool(args.clickstream_root) != bool(args.creation_index):
@@ -932,6 +1035,17 @@ def main(argv: list[str] | None = None) -> int:
         print(f"시점 {len(times)}개 ({times[0].isoformat()} ~ {times[-1].isoformat()}) "
               f"source={args.source}{' [dry-run]' if args.dry_run else ''}")
 
+        link_fetcher = None
+        if args.fetch_links:
+            from batch.ingest import user_agent
+            link_fetcher = asof_links.WikipediaLinkFetcher(
+                user_agent=user_agent(), workers=args.link_workers)
+        print("CORE grouping: "
+              + ("켬 (as-of strict link → component → focus 0.005 → D2)"
+                 if args.root_grouping else "끔 — root 1개 = 클러스터 1개")
+              + f" / as-of 링크 {'수집+캐시' if args.fetch_links else '캐시만'}"
+              + f" / expansion {'켬(legacy)' if args.expansion else '끔'}")
+
         neighbor_source = None
         if args.clickstream_root:
             neighbor_source = MonthlyNeighborSource(
@@ -944,7 +1058,10 @@ def main(argv: list[str] | None = None) -> int:
                      else "없음 — 추가 씨드만 배선한다"))
 
         snapshots = run(conn, args.source, snapshot_times=times,
-                        dry_run=args.dry_run, neighbor_source=neighbor_source)
+                        dry_run=args.dry_run, neighbor_source=neighbor_source,
+                        root_grouping=args.root_grouping, expansion=args.expansion,
+                        link_fetcher=link_fetcher,
+                        log=lambda m: print(m, file=sys.stderr, flush=True))
         if not args.dry_run:
             conn.commit()
 

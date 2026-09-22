@@ -52,7 +52,7 @@ class FakeCursor:
             # SELECT_SEEDS_SQL 파라미터: (source, detected_at).
             # 시각은 거르지 않는다 — 대역의 `spikes` 가 곧 "이 질의가 낼 행" 이다.
             source = params[0]
-            self._rows = [row[:11] for row in self._conn.spikes if row[11] == source]
+            self._rows = [row[:12] for row in self._conn.spikes if row[12] == source]
         elif "FROM issue_cluster" in sql:
             self._rows = list(self._conn.prior.items())
         else:
@@ -89,18 +89,22 @@ class FakeConn:
 def spike_row(page_id=398, wiki="enwiki", title="Hurricane Milton",
               window_start=WINDOW_START, detected_at=DETECTED_AT,
               edit_count=10, views=24_669, view_baseline=None, view_ratio=None,
-              spike_score=26.4575, row_id=1, source="replay"):
+              spike_score=26.4575, row_id=1, max_rev_id=1_250_000_001,
+              source="replay"):
     """SELECT_SEEDS_SQL 의 컬럼 순서 그대로 + 맨 뒤에 출처 태그.
 
     `source` 는 조회 컬럼이 아니라 대역 테이블의 태그다 — `FakeCursor` 가 그걸로 거르고
-    드라이버에는 앞 11개만 넘긴다(실 질의가 내는 컬럼 수와 같다).
+    드라이버에는 앞 12개만 넘긴다(실 질의가 내는 컬럼 수와 같다).
+
+    `max_rev_id` 는 V9 증거 컬럼이자 CORE 의 as-of 링크 앵커다 (WP-186).
 
     기본값은 canary 실측(2025-06-12 `Air India Flight 171`)을 따랐다 — 신규 문서라
     기준선 표본이 없어 `view_baseline`·`view_ratio` 가 NULL 이고 조회수 원값만 있다.
     **그 조합이 바로 이번 결함이 났던 자리다** (WP-129).
     """
     return (row_id, page_id, wiki, title, window_start, detected_at,
-            edit_count, views, view_baseline, view_ratio, spike_score, source)
+            edit_count, views, view_baseline, view_ratio, spike_score,
+            max_rev_id, source)
 
 
 # ---------------------------------------------------------------- 씨드 매핑

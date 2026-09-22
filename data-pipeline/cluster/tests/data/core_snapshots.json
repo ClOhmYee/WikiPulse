@@ -1,0 +1,1014 @@
+{
+ "dolly": {
+  "roots": [
+   {
+    "key": "Stella Parton",
+    "links_to": [
+     "Dollywood",
+     "Randy Parton"
+    ],
+    "rev_id": 1371300590,
+    "spike_score": 10.263,
+    "title": "Stella Parton",
+    "total_links": 45,
+    "views": 28664
+   },
+   {
+    "key": "Randy Parton",
+    "links_to": [
+     "Stella Parton"
+    ],
+    "rev_id": 1371300536,
+    "spike_score": 10.193,
+    "title": "Randy Parton",
+    "total_links": 22,
+    "views": 26712
+   },
+   {
+    "key": "Rachel Parton George",
+    "links_to": [
+     "Randy Parton",
+     "Stella Parton"
+    ],
+    "rev_id": 1371300604,
+    "spike_score": 10.163,
+    "title": "Rachel Parton George",
+    "total_links": 24,
+    "views": 25936
+   },
+   {
+    "key": "Bill Owens (songwriter)",
+    "links_to": [
+     "Dollywood",
+     "Nashville, Tennessee"
+    ],
+    "rev_id": 1371300496,
+    "spike_score": 9.834,
+    "title": "Bill Owens (songwriter)",
+    "total_links": 35,
+    "views": 18660
+   },
+   {
+    "key": "Dollywood",
+    "links_to": [],
+    "rev_id": 1371304290,
+    "spike_score": 9.782,
+    "title": "Dollywood",
+    "total_links": 94,
+    "views": 17709
+   },
+   {
+    "key": "List of songs recorded by Dolly Parton",
+    "links_to": [
+     "Coat of Many Colors (song)",
+     "Hello, I'm Dolly",
+     "Nashville, Tennessee",
+     "Randy Parton",
+     "Reba McEntire",
+     "Stella Parton",
+     "Straight Talk"
+    ],
+    "rev_id": 1371300656,
+    "spike_score": 9.665,
+    "title": "List of songs recorded by Dolly Parton",
+    "total_links": 887,
+    "views": 15759
+   },
+   {
+    "key": "Dolly Parton filmography",
+    "links_to": [
+     "Straight Talk"
+    ],
+    "rev_id": 1371300783,
+    "spike_score": 9.638,
+    "title": "Dolly Parton filmography",
+    "total_links": 91,
+    "views": 15329
+   },
+   {
+    "key": "Rockstar (Dolly Parton album)",
+    "links_to": [],
+    "rev_id": 1371304366,
+    "spike_score": 9.003,
+    "title": "Rockstar (Dolly Parton album)",
+    "total_links": 192,
+    "views": 8126
+   },
+   {
+    "key": "Hello, I'm Dolly",
+    "links_to": [
+     "Bill Owens (songwriter)"
+    ],
+    "rev_id": 1371298797,
+    "spike_score": 8.865,
+    "title": "Hello, I'm Dolly",
+    "total_links": 47,
+    "views": 7080
+   },
+   {
+    "key": "Dolly Parton albums discography",
+    "links_to": [
+     "Hello, I'm Dolly",
+     "Rockstar (Dolly Parton album)"
+    ],
+    "rev_id": 1371301077,
+    "spike_score": 8.799,
+    "title": "Dolly Parton albums discography",
+    "total_links": 164,
+    "views": 6626
+   },
+   {
+    "key": "List of awards and nominations received by Dolly Parton",
+    "links_to": [
+     "Coat of Many Colors (song)",
+     "Reba McEntire"
+    ],
+    "rev_id": 1371300711,
+    "spike_score": 8.594,
+    "title": "List of awards and nominations received by Dolly Parton",
+    "total_links": 310,
+    "views": 5396
+   },
+   {
+    "key": "Reba McEntire",
+    "links_to": [
+     "Nashville, Tennessee"
+    ],
+    "rev_id": 1371300762,
+    "spike_score": 8.356,
+    "title": "Reba McEntire",
+    "total_links": 391,
+    "views": 4254
+   },
+   {
+    "key": "Dolly Parton singles discography",
+    "links_to": [
+     "Coat of Many Colors (song)",
+     "Hello, I'm Dolly",
+     "List of songs recorded by Dolly Parton",
+     "Nashville, Tennessee",
+     "Randy Parton",
+     "Reba McEntire",
+     "Rockstar (Dolly Parton album)",
+     "Stella Parton"
+    ],
+    "rev_id": 1371301298,
+    "spike_score": 8.319,
+    "title": "Dolly Parton singles discography",
+    "total_links": 404,
+    "views": 4101
+   },
+   {
+    "key": "Killing of the Clancy children",
+    "links_to": [],
+    "rev_id": 1371299734,
+    "spike_score": 8.153,
+    "title": "Killing of the Clancy children",
+    "total_links": 43,
+    "views": 3473
+   },
+   {
+    "key": "Coat of Many Colors (song)",
+    "links_to": [
+     "Dollywood",
+     "Nashville, Tennessee"
+    ],
+    "rev_id": 1371300414,
+    "spike_score": 8.078,
+    "title": "Coat of Many Colors (song)",
+    "total_links": 52,
+    "views": 3222
+   },
+   {
+    "key": "Ananta (video game)",
+    "links_to": [],
+    "rev_id": 1371301663,
+    "spike_score": 7.966,
+    "title": "Ananta (video game)",
+    "total_links": 23,
+    "views": 2881
+   },
+   {
+    "key": "Nashville, Tennessee",
+    "links_to": [],
+    "rev_id": 1371301928,
+    "spike_score": 7.76,
+    "title": "Nashville, Tennessee",
+    "total_links": 800,
+    "views": 2343
+   },
+   {
+    "key": "Geetu Mohandas",
+    "links_to": [],
+    "rev_id": 1371297918,
+    "spike_score": 7.689,
+    "title": "Geetu Mohandas",
+    "total_links": 68,
+    "views": 2183
+   },
+   {
+    "key": "Straight Talk",
+    "links_to": [],
+    "rev_id": 1371297306,
+    "spike_score": 7.591,
+    "title": "Straight Talk",
+    "total_links": 38,
+    "views": 1979
+   },
+   {
+    "key": "Deaths in 2026",
+    "links_to": [],
+    "rev_id": 1371303680,
+    "spike_score": 3.751,
+    "title": "Deaths in 2026",
+    "total_links": 1323,
+    "views": 26028
+   }
+  ],
+  "snapshot_ts": "2026-08-25T20:00:00Z"
+ },
+ "mangione": {
+  "roots": [
+   {
+    "key": "Joshua Kushner",
+    "links_to": [],
+    "rev_id": 1369270526,
+    "spike_score": 8.327,
+    "title": "Joshua Kushner",
+    "total_links": 67,
+    "views": 4134
+   },
+   {
+    "key": "Google",
+    "links_to": [],
+    "rev_id": 1369269648,
+    "spike_score": 8.103,
+    "title": "Google",
+    "total_links": 647,
+    "views": 3304
+   },
+   {
+    "key": "Back Street (1961 film)",
+    "links_to": [
+     "John Gavin"
+    ],
+    "rev_id": 1369268205,
+    "spike_score": 7.889,
+    "title": "Back Street (1961 film)",
+    "total_links": 50,
+    "views": 2668
+   },
+   {
+    "key": "John Gavin",
+    "links_to": [
+     "Back Street (1961 film)"
+    ],
+    "rev_id": 1369272739,
+    "spike_score": 7.644,
+    "title": "John Gavin",
+    "total_links": 140,
+    "views": 2088
+   },
+   {
+    "key": "Luigi Mangione",
+    "links_to": [
+     "Killing of Brian Thompson"
+    ],
+    "rev_id": 1369272341,
+    "spike_score": 7.604,
+    "title": "Luigi Mangione",
+    "total_links": 239,
+    "views": 2005
+   },
+   {
+    "key": "Iga Świątek",
+    "links_to": [],
+    "rev_id": 1369272444,
+    "spike_score": 7.489,
+    "title": "Iga Świątek",
+    "total_links": 379,
+    "views": 1787
+   },
+   {
+    "key": "Verity (novel)",
+    "links_to": [],
+    "rev_id": 1369267944,
+    "spike_score": 7.259,
+    "title": "Verity (novel)",
+    "total_links": 19,
+    "views": 1420
+   },
+   {
+    "key": "Phoebe Bridgers",
+    "links_to": [],
+    "rev_id": 1369270754,
+    "spike_score": 7.037,
+    "title": "Phoebe Bridgers",
+    "total_links": 259,
+    "views": 1137
+   },
+   {
+    "key": "Lioness (American TV series)",
+    "links_to": [],
+    "rev_id": 1369268124,
+    "spike_score": 7.019,
+    "title": "Lioness (American TV series)",
+    "total_links": 260,
+    "views": 1117
+   },
+   {
+    "key": "Project Hail Mary (film)",
+    "links_to": [],
+    "rev_id": 1369267385,
+    "spike_score": 6.911,
+    "title": "Project Hail Mary (film)",
+    "total_links": 207,
+    "views": 1002
+   },
+   {
+    "key": "Matthew McConaughey",
+    "links_to": [],
+    "rev_id": 1369267401,
+    "spike_score": 6.807,
+    "title": "Matthew McConaughey",
+    "total_links": 255,
+    "views": 903
+   },
+   {
+    "key": "Killing of Brian Thompson",
+    "links_to": [
+     "Luigi Mangione"
+    ],
+    "rev_id": 1369267918,
+    "spike_score": 6.801,
+    "title": "Killing of Brian Thompson",
+    "total_links": 261,
+    "views": 898
+   },
+   {
+    "key": "Spider-Man in film",
+    "links_to": [],
+    "rev_id": 1369271048,
+    "spike_score": 6.698,
+    "title": "Spider-Man in film",
+    "total_links": 455,
+    "views": 810
+   },
+   {
+    "key": "One Night Only (2026 film)",
+    "links_to": [],
+    "rev_id": 1369266809,
+    "spike_score": 6.668,
+    "title": "One Night Only (2026 film)",
+    "total_links": 77,
+    "views": 786
+   },
+   {
+    "key": "Agamemnon",
+    "links_to": [],
+    "rev_id": 1369269068,
+    "spike_score": 6.558,
+    "title": "Agamemnon",
+    "total_links": 204,
+    "views": 704
+   },
+   {
+    "key": "Jagiellonia Białystok",
+    "links_to": [],
+    "rev_id": 1369270354,
+    "spike_score": 6.531,
+    "title": "Jagiellonia Białystok",
+    "total_links": 242,
+    "views": 685
+   },
+   {
+    "key": "Chelsea F.C.",
+    "links_to": [],
+    "rev_id": 1369271735,
+    "spike_score": 6.522,
+    "title": "Chelsea F.C.",
+    "total_links": 535,
+    "views": 679
+   },
+   {
+    "key": "Clacton in the 2024 United Kingdom general election",
+    "links_to": [],
+    "rev_id": 1369270578,
+    "spike_score": 6.492,
+    "title": "Clacton in the 2024 United Kingdom general election",
+    "total_links": 43,
+    "views": 659
+   },
+   {
+    "key": "2027 FIFA Women's World Cup qualification (inter-confederation play-offs)",
+    "links_to": [],
+    "rev_id": 1369271468,
+    "spike_score": 6.439,
+    "title": "2027 FIFA Women's World Cup qualification (inter-confederation play-offs)",
+    "total_links": 23,
+    "views": 625
+   },
+   {
+    "key": "Elon Musk",
+    "links_to": [],
+    "rev_id": 1369268848,
+    "spike_score": 6.353,
+    "title": "Elon Musk",
+    "total_links": 570,
+    "views": 573
+   }
+  ],
+  "snapshot_ts": "2026-08-14T00:00:00Z"
+ },
+ "quiet": {
+  "roots": [
+   {
+    "key": "Sonam Wangchuk",
+    "links_to": [],
+    "rev_id": 1364734976,
+    "spike_score": 9.373,
+    "title": "Sonam Wangchuk",
+    "total_links": 143,
+    "views": 11765
+   },
+   {
+    "key": "Circe",
+    "links_to": [],
+    "rev_id": 1364733011,
+    "spike_score": 7.854,
+    "title": "Circe",
+    "total_links": 354,
+    "views": 2575
+   },
+   {
+    "key": "The East Palace",
+    "links_to": [],
+    "rev_id": 1364731585,
+    "spike_score": 7.156,
+    "title": "The East Palace",
+    "total_links": 25,
+    "views": 1281
+   },
+   {
+    "key": "Mentor (Odyssey)",
+    "links_to": [],
+    "rev_id": 1364733356,
+    "spike_score": 7.098,
+    "title": "Mentor (Odyssey)",
+    "total_links": 11,
+    "views": 1209
+   },
+   {
+    "key": "Ryan Gosling",
+    "links_to": [],
+    "rev_id": 1364732995,
+    "spike_score": 6.844,
+    "title": "Ryan Gosling",
+    "total_links": 283,
+    "views": 937
+   },
+   {
+    "key": "The Dark Knight Rises",
+    "links_to": [],
+    "rev_id": 1364731689,
+    "spike_score": 6.781,
+    "title": "The Dark Knight Rises",
+    "total_links": 414,
+    "views": 880
+   },
+   {
+    "key": "Melantho (Odyssey)",
+    "links_to": [],
+    "rev_id": 1364731052,
+    "spike_score": 6.507,
+    "title": "Melantho (Odyssey)",
+    "total_links": 12,
+    "views": 669
+   },
+   {
+    "key": "Chloë Sevigny",
+    "links_to": [],
+    "rev_id": 1364732524,
+    "spike_score": 6.203,
+    "title": "Chloë Sevigny",
+    "total_links": 352,
+    "views": 493
+   },
+   {
+    "key": "Didier Deschamps",
+    "links_to": [],
+    "rev_id": 1364734339,
+    "spike_score": 6.196,
+    "title": "Didier Deschamps",
+    "total_links": 245,
+    "views": 490
+   },
+   {
+    "key": "Beef (TV series)",
+    "links_to": [],
+    "rev_id": 1364731035,
+    "spike_score": 6.082,
+    "title": "Beef (TV series)",
+    "total_links": 192,
+    "views": 437
+   },
+   {
+    "key": "Armie Hammer",
+    "links_to": [],
+    "rev_id": 1364733265,
+    "spike_score": 6.071,
+    "title": "Armie Hammer",
+    "total_links": 309,
+    "views": 432
+   },
+   {
+    "key": "Jason Foley",
+    "links_to": [],
+    "rev_id": 1364735124,
+    "spike_score": 6.019,
+    "title": "Jason Foley",
+    "total_links": 45,
+    "views": 410
+   },
+   {
+    "key": "Roger Waters",
+    "links_to": [],
+    "rev_id": 1364736496,
+    "spike_score": 5.976,
+    "title": "Roger Waters",
+    "total_links": 449,
+    "views": 393
+   },
+   {
+    "key": "International Society for Krishna Consciousness",
+    "links_to": [],
+    "rev_id": 1364733065,
+    "spike_score": 5.945,
+    "title": "International Society for Krishna Consciousness",
+    "total_links": 317,
+    "views": 381
+   },
+   {
+    "key": "Hamilcar Barca",
+    "links_to": [],
+    "rev_id": 1364734843,
+    "spike_score": 5.943,
+    "title": "Hamilcar Barca",
+    "total_links": 147,
+    "views": 380
+   },
+   {
+    "key": "Tides of Annihilation",
+    "links_to": [],
+    "rev_id": 1364734472,
+    "spike_score": 5.866,
+    "title": "Tides of Annihilation",
+    "total_links": 34,
+    "views": 352
+   },
+   {
+    "key": "Chloe Fineman",
+    "links_to": [],
+    "rev_id": 1364735140,
+    "spike_score": 5.814,
+    "title": "Chloe Fineman",
+    "total_links": 119,
+    "views": 334
+   },
+   {
+    "key": "The Super Mario Galaxy Movie",
+    "links_to": [],
+    "rev_id": 1364732539,
+    "spike_score": 5.771,
+    "title": "The Super Mario Galaxy Movie",
+    "total_links": 140,
+    "views": 320
+   },
+   {
+    "key": "Taiwan",
+    "links_to": [],
+    "rev_id": 1364731306,
+    "spike_score": 5.724,
+    "title": "Taiwan",
+    "total_links": 811,
+    "views": 305
+   },
+   {
+    "key": "Wildberries",
+    "links_to": [],
+    "rev_id": 1364732975,
+    "spike_score": 5.673,
+    "title": "Wildberries",
+    "total_links": 57,
+    "views": 290
+   }
+  ],
+  "snapshot_ts": "2026-07-18T06:00:00Z"
+ },
+ "summerslam": {
+  "roots": [
+   {
+    "key": "Pan Am Flight 103",
+    "links_to": [],
+    "rev_id": 1367245789,
+    "spike_score": 9.173,
+    "title": "Pan Am Flight 103",
+    "total_links": 303,
+    "views": 9636
+   },
+   {
+    "key": "Nick Aldis",
+    "links_to": [
+     "Gunther (wrestler)"
+    ],
+    "rev_id": 1367248232,
+    "spike_score": 8.438,
+    "title": "Nick Aldis",
+    "total_links": 269,
+    "views": 4618
+   },
+   {
+    "key": "Bev Craig",
+    "links_to": [
+     "2026 Greater Manchester mayoral by-election"
+    ],
+    "rev_id": 1367250197,
+    "spike_score": 7.347,
+    "title": "Bev Craig",
+    "total_links": 29,
+    "views": 1551
+   },
+   {
+    "key": "SummerSlam",
+    "links_to": [
+     "Gunther (wrestler)"
+    ],
+    "rev_id": 1367250613,
+    "spike_score": 7.251,
+    "title": "SummerSlam",
+    "total_links": 252,
+    "views": 1409
+   },
+   {
+    "key": "Alex Berenson",
+    "links_to": [],
+    "rev_id": 1367245515,
+    "spike_score": 7.15,
+    "title": "Alex Berenson",
+    "total_links": 61,
+    "views": 1273
+   },
+   {
+    "key": "Disappearance of Nancy Guthrie",
+    "links_to": [],
+    "rev_id": 1367247917,
+    "spike_score": 6.954,
+    "title": "Disappearance of Nancy Guthrie",
+    "total_links": 66,
+    "views": 1046
+   },
+   {
+    "key": "Linda Blair",
+    "links_to": [],
+    "rev_id": 1367251090,
+    "spike_score": 6.824,
+    "title": "Linda Blair",
+    "total_links": 195,
+    "views": 919
+   },
+   {
+    "key": "Gunther (wrestler)",
+    "links_to": [
+     "Nick Aldis",
+     "SummerSlam"
+    ],
+    "rev_id": 1367246403,
+    "spike_score": 6.762,
+    "title": "Gunther (wrestler)",
+    "total_links": 304,
+    "views": 863
+   },
+   {
+    "key": "Women's Pro Baseball League",
+    "links_to": [],
+    "rev_id": 1367250297,
+    "spike_score": 6.676,
+    "title": "Women's Pro Baseball League",
+    "total_links": 102,
+    "views": 792
+   },
+   {
+    "key": "Sam Neill",
+    "links_to": [],
+    "rev_id": 1367246249,
+    "spike_score": 6.599,
+    "title": "Sam Neill",
+    "total_links": 226,
+    "views": 733
+   },
+   {
+    "key": "Shark Tale",
+    "links_to": [],
+    "rev_id": 1367251264,
+    "spike_score": 6.586,
+    "title": "Shark Tale",
+    "total_links": 205,
+    "views": 724
+   },
+   {
+    "key": "Captain Kronos – Vampire Hunter",
+    "links_to": [],
+    "rev_id": 1367246876,
+    "spike_score": 6.55,
+    "title": "Captain Kronos – Vampire Hunter",
+    "total_links": 56,
+    "views": 698
+   },
+   {
+    "key": "Brendan Ingle",
+    "links_to": [],
+    "rev_id": 1367246947,
+    "spike_score": 6.548,
+    "title": "Brendan Ingle",
+    "total_links": 56,
+    "views": 697
+   },
+   {
+    "key": "2026 Greater Manchester mayoral by-election",
+    "links_to": [
+     "Bev Craig"
+    ],
+    "rev_id": 1367249494,
+    "spike_score": 6.544,
+    "title": "2026 Greater Manchester mayoral by-election",
+    "total_links": 83,
+    "views": 694
+   },
+   {
+    "key": "Ann Droid",
+    "links_to": [],
+    "rev_id": 1367250993,
+    "spike_score": 6.405,
+    "title": "Ann Droid",
+    "total_links": 29,
+    "views": 604
+   },
+   {
+    "key": "Nauru",
+    "links_to": [],
+    "rev_id": 1367244967,
+    "spike_score": 6.192,
+    "title": "Nauru",
+    "total_links": 335,
+    "views": 488
+   },
+   {
+    "key": "O. J. Simpson",
+    "links_to": [],
+    "rev_id": 1367251428,
+    "spike_score": 6.073,
+    "title": "O. J. Simpson",
+    "total_links": 572,
+    "views": 433
+   },
+   {
+    "key": "The Smashing Pumpkins",
+    "links_to": [],
+    "rev_id": 1367250158,
+    "spike_score": 6.033,
+    "title": "The Smashing Pumpkins",
+    "total_links": 359,
+    "views": 416
+   },
+   {
+    "key": "Daredevil: Born Again",
+    "links_to": [],
+    "rev_id": 1367249620,
+    "spike_score": 6.031,
+    "title": "Daredevil: Born Again",
+    "total_links": 267,
+    "views": 415
+   },
+   {
+    "key": "Lindow Man",
+    "links_to": [],
+    "rev_id": 1367248174,
+    "spike_score": 6.031,
+    "title": "Lindow Man",
+    "total_links": 58,
+    "views": 415
+   }
+  ],
+  "snapshot_ts": "2026-08-02T00:00:00Z"
+ },
+ "wwe_0803": {
+  "roots": [
+   {
+    "key": "Pan Am Flight 103",
+    "links_to": [],
+    "rev_id": 1367412787,
+    "spike_score": 9.277,
+    "title": "Pan Am Flight 103",
+    "total_links": 303,
+    "views": 10683
+   },
+   {
+    "key": "Odyssey",
+    "links_to": [
+     "Laestrygonians"
+    ],
+    "rev_id": 1367410198,
+    "spike_score": 8.901,
+    "title": "Odyssey",
+    "total_links": 382,
+    "views": 7336
+   },
+   {
+    "key": "Max Miller (politician)",
+    "links_to": [],
+    "rev_id": 1367414198,
+    "spike_score": 8.886,
+    "title": "Max Miller (politician)",
+    "total_links": 136,
+    "views": 7232
+   },
+   {
+    "key": "Sadie Sink",
+    "links_to": [],
+    "rev_id": 1367409407,
+    "spike_score": 8.465,
+    "title": "Sadie Sink",
+    "total_links": 172,
+    "views": 4744
+   },
+   {
+    "key": "Trick Williams",
+    "links_to": [
+     "Sami Zayn",
+     "WWE United States Championship"
+    ],
+    "rev_id": 1367410756,
+    "spike_score": 8.343,
+    "title": "Trick Williams",
+    "total_links": 192,
+    "views": 4199
+   },
+   {
+    "key": "Spider-Man in film",
+    "links_to": [
+     "Spider-Man: Across the Spider-Verse"
+    ],
+    "rev_id": 1367414561,
+    "spike_score": 8.036,
+    "title": "Spider-Man in film",
+    "total_links": 455,
+    "views": 3090
+   },
+   {
+    "key": "Laestrygonians",
+    "links_to": [
+     "Odyssey"
+    ],
+    "rev_id": 1367411350,
+    "spike_score": 7.699,
+    "title": "Laestrygonians",
+    "total_links": 39,
+    "views": 2206
+   },
+   {
+    "key": "List of WWE pay-per-view and livestreaming supercards",
+    "links_to": [
+     "Sami Zayn",
+     "Trick Williams",
+     "WWE United States Championship"
+    ],
+    "rev_id": 1367413529,
+    "spike_score": 7.517,
+    "title": "List of WWE pay-per-view and livestreaming supercards",
+    "total_links": 1529,
+    "views": 1838
+   },
+   {
+    "key": "Sami Zayn",
+    "links_to": [
+     "Trick Williams",
+     "WWE United States Championship"
+    ],
+    "rev_id": 1367411418,
+    "spike_score": 7.243,
+    "title": "Sami Zayn",
+    "total_links": 442,
+    "views": 1397
+   },
+   {
+    "key": "WWE United States Championship",
+    "links_to": [
+     "Trick Williams"
+    ],
+    "rev_id": 1367414582,
+    "spike_score": 7.203,
+    "title": "WWE United States Championship",
+    "total_links": 120,
+    "views": 1343
+   },
+   {
+    "key": "Sam Neill",
+    "links_to": [],
+    "rev_id": 1367412247,
+    "spike_score": 7.118,
+    "title": "Sam Neill",
+    "total_links": 224,
+    "views": 1233
+   },
+   {
+    "key": "WWE Women's Championship",
+    "links_to": [
+     "Chelsea Green"
+    ],
+    "rev_id": 1367413666,
+    "spike_score": 7.087,
+    "title": "WWE Women's Championship",
+    "total_links": 85,
+    "views": 1195
+   },
+   {
+    "key": "I Want Your Sex (film)",
+    "links_to": [],
+    "rev_id": 1367415061,
+    "spike_score": 7.063,
+    "title": "I Want Your Sex (film)",
+    "total_links": 36,
+    "views": 1167
+   },
+   {
+    "key": "Chelsea Green",
+    "links_to": [
+     "WWE United States Championship",
+     "WWE Women's Championship"
+    ],
+    "rev_id": 1367414785,
+    "spike_score": 7.002,
+    "title": "Chelsea Green",
+    "total_links": 229,
+    "views": 1098
+   },
+   {
+    "key": "Leopold Aschenbrenner",
+    "links_to": [],
+    "rev_id": 1367415313,
+    "spike_score": 6.991,
+    "title": "Leopold Aschenbrenner",
+    "total_links": 34,
+    "views": 1086
+   },
+   {
+    "key": "Spider-Man: Across the Spider-Verse",
+    "links_to": [
+     "Spider-Man in film"
+    ],
+    "rev_id": 1367413213,
+    "spike_score": 6.832,
+    "title": "Spider-Man: Across the Spider-Verse",
+    "total_links": 412,
+    "views": 926
+   },
+   {
+    "key": "Bruce Willis",
+    "links_to": [],
+    "rev_id": 1367411207,
+    "spike_score": 6.485,
+    "title": "Bruce Willis",
+    "total_links": 355,
+    "views": 654
+   },
+   {
+    "key": "Kavinsky",
+    "links_to": [],
+    "rev_id": 1367415713,
+    "spike_score": 6.319,
+    "title": "Kavinsky",
+    "total_links": 89,
+    "views": 554
+   },
+   {
+    "key": "Paul McCartney",
+    "links_to": [],
+    "rev_id": 1367410409,
+    "spike_score": 6.236,
+    "title": "Paul McCartney",
+    "total_links": 902,
+    "views": 510
+   },
+   {
+    "key": "Los Angeles Dodgers",
+    "links_to": [],
+    "rev_id": 1367415464,
+    "spike_score": 6.205,
+    "title": "Los Angeles Dodgers",
+    "total_links": 595,
+    "views": 494
+   }
+  ],
+  "snapshot_ts": "2026-08-03T00:00:00Z"
+ }
+}
