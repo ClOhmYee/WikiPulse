@@ -131,3 +131,73 @@ def test_옛_shard_를_남기지_않는다(tmp_path):
     write_rows([{"title": "T0"}], out, shard_records=1)
 
     assert [p.name for p in sorted(out.glob("part-*.jsonl.gz"))] == ["part-00000.jsonl.gz"]
+
+
+# ------------------------------------------ 이동·보호 보충 (WP-184)
+
+def _log(title="Guy I of Blois", *, logtype="move", target=None, ns=0,
+         bot=False, user="Illini11", ts="2026-09-01T02:01:00Z", revid=100):
+    rec = {"ns": ns, "type": "log", "logtype": logtype, "bot": bot, "user": user,
+           "title": title, "timestamp": ts, "revid": revid, "rcid": 9}
+    if target:
+        rec["logparams"] = {"target_title": target}
+    return rec
+
+
+def test_revision_을_만드는_log_만_센다():
+    """삭제는 revision 을 만들지 않고 오히려 지운다. curation 은 revid 가 없다."""
+    from batch.rc_candidates import is_revision_log
+
+    assert is_revision_log(_log(logtype="move")) is True
+    assert is_revision_log(_log(logtype="protect")) is True
+    for logtype in ("delete", "pagetriage-curation", "merge"):
+        assert is_revision_log(_log(logtype=logtype)) is False
+
+
+def test_log_도_본문_namespace_밖은_버린다():
+    from batch.rc_candidates import is_revision_log
+
+    assert is_revision_log(_log(ns=1)) is False
+
+
+def test_이동은_원본과_대상_제목_둘_다_센다():
+    """🔴 revid 로 맞추면 절반을 놓친다 — 이동은 revision 두 개를 만든다."""
+    from batch.rc_candidates import log_events
+
+    events = list(log_events([_log(target="Guy I, Count of Blois")], "enwiki"))
+
+    assert [e["title"] for e in events] == ["Guy I of Blois", "Guy I, Count of Blois"]
+
+
+def test_대상_제목이_없으면_원본만_센다():
+    from batch.rc_candidates import log_events
+
+    events = list(log_events([_log(logtype="protect", target=None)], "enwiki"))
+
+    assert [e["title"] for e in events] == ["Guy I of Blois"]
+
+
+def test_log_은_rev_id_를_싣지_않는다():
+    """⚠️ 로그의 revid 는 두 revision 중 하나뿐이라 max_rev_id 를 작게 찍는다."""
+    from batch.rc_candidates import log_events
+
+    events = list(log_events([_log(target="T2")], "enwiki"))
+
+    assert all(e["rev_id"] is None for e in events)
+
+
+def test_log_제목도_canonical_로_통과시킨다():
+    from batch.rc_candidates import log_events
+
+    events = list(log_events([_log(title="A__B ", target="C__D")], "enwiki"))
+
+    assert [e["title"] for e in events] == ["A B", "C D"]
+
+
+def test_봇_이동만_있는_문서는_candidate_가_되지_않는다():
+    from batch.rc_candidates import log_events
+
+    rows = candidate_rows(aggregate_edits(
+        log_events([_log(bot=True, target="T2")], "enwiki")))
+
+    assert rows == []
