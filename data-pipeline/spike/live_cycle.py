@@ -37,7 +37,9 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from batch.pageview_hourly_ingest import ingest_hour, prune_cache
+from batch.pageview_hourly_ingest import dump_url, ingest_hour, prune_cache
+
+from . import view_candidates
 
 from .candidate_store import CandidateStore
 from .recheck import RecheckSummary, recheck
@@ -82,13 +84,17 @@ class CycleSummary:
     titles: int = 0
     cache_pruned: int = 0
     recheck: RecheckSummary = field(default_factory=RecheckSummary)
+    #: 1단계 대체 경로 결과 (WP-210). 노브가 꺼져 있으면 전부 0 이다.
+    view_gate: view_candidates.HarvestSummary = field(
+        default_factory=view_candidates.HarvestSummary)
     seconds: float = 0.0
 
     def format(self) -> str:
         return (f"시간 {self.hours_ingested}/{self.hours_due} 적재 "
                 f"(대기 {self.hours_pending}) · 문서 {self.titles:,} · "
                 f"{self.recheck.format()} · 캐시 정리 {self.cache_pruned} · "
-                f"{self.seconds:.1f}s")
+                + (f"{self.view_gate.format()} · " if self.view_gate.scanned_titles else "")
+                + f"{self.seconds:.1f}s")
 
 
 def missing_views(conn, source: str, *, now: datetime,
@@ -112,6 +118,7 @@ def run_once(
     conn, *, source: str = "live", cache_dir: Path, out_root: Path,
     wiki: str = "enwiki", now: datetime | None = None,
     max_hours: int = DEFAULT_MAX_HOURS, dry_run: bool = False,
+    view_only_gate: bool = False,
 ) -> CycleSummary:
     """한 주기. 커넥션은 호출자가 연다 — 루프에서 재사용한다."""
     started = time.monotonic()
@@ -132,10 +139,20 @@ def run_once(
         if status == "pending":
             # 아직 안 나왔다. 다음 주기가 다시 본다 — 실패가 아니다.
             summary.hours_pending += 1
-        else:
-            summary.hours_ingested += 1
+            continue
+        summary.hours_ingested += 1
 
-    summary.recheck = recheck(conn, source=source, dry_run=dry_run)
+        # 1단계 대체 경로 (WP-210). 🔴 **적재 뒤에 부른다** — 원장(V14)에 그
+        # 시간이 있어야 여기서 만든 후보를 재판정이 집는다.
+        # ⚠️ 이미 받아 둔 캐시 파일을 두 번 더 읽을 뿐 새로 내려받지 않는다.
+        if view_only_gate:
+            dump = cache_dir / Path(dump_url(ts_hour)).name
+            if dump.exists():
+                summary.view_gate = view_candidates.harvest(
+                    conn, dump, ts_hour, wiki, source=source, dry_run=dry_run)
+
+    summary.recheck = recheck(conn, source=source, dry_run=dry_run,
+                              view_only_gate=view_only_gate)
     if not dry_run:
         # WP-171: 다 쓴 시간별 원본은 매 주기 끝에 정리한다.
         # ingest_hour() 만 직접 부르므로 main() 안의 prune_cache 호출은 이 서비스에
@@ -170,6 +187,13 @@ def build_arg_parser() -> argparse.ArgumentParser:
                    help="--loop 일 때 주기(초). 기본 15분 — 파일이 매시 한 번 나오지만 "
                         "지연이 125~153분으로 흔들려서 더 자주 본다")
     p.add_argument("--dry-run", action="store_true", help="받을 것만 보여주고 아무것도 안 쓴다")
+    # 🔴 기본 꺼짐. 2026-09-17 팀 결정(사람 편집 1건 → 조회수 급등)을 넓히는 노브라
+    #    켜는 것은 WP-210 의 결론을 따른다.
+    #    ⚠️ 켜면 후보가 시간당 약 2,096 → 8,190 건으로 는다(2026-09-21 15:00Z 실측).
+    p.add_argument("--view-only-gate", action="store_true",
+                   default=os.environ.get("VIEW_ONLY_GATE", "") == "1",
+                   help="편집이 없어도 조회수 >= 100 이고 모바일 비중 >= 25%% 면 "
+                        "1단계를 통과시킨다 (WP-210, 기본 꺼짐)")
     return p
 
 
@@ -194,7 +218,8 @@ def main(argv: list[str] | None = None) -> int:
             try:
                 summary = run_once(conn, source=args.source, cache_dir=cache_dir,
                                    out_root=out_root, wiki=args.wiki,
-                                   max_hours=args.max_hours, dry_run=args.dry_run)
+                                   max_hours=args.max_hours, dry_run=args.dry_run,
+                                   view_only_gate=args.view_only_gate)
                 log.info("%s%s", "[dry-run] " if args.dry_run else "", summary.format())
             except Exception:
                 # 🔴 한 주기 실패가 다음 주기를 막지 않는다. 네트워크·404·DB 오류는

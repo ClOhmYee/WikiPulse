@@ -253,9 +253,14 @@ class SpikeRuntime:
     """
 
     def __init__(self, baselines: BaselineRepository, sink: SpikeSink | None = None,
-                 candidates=None) -> None:
+                 candidates=None, *, view_only_gate: bool = False) -> None:
         self._baselines = baselines
         self._sink = sink
+        #: 1단계 대체 경로(WP-210). **기본 꺼짐** — 켜면 편집이 없어도
+        #: `조회수 >= 100 AND 모바일 >= 25%` 인 윈도우가 1단계를 통과한다.
+        #: 🔴 `spike/view_candidates.harvest` 와 **짝이다.** 여기만 켜면 판정은 열리는데
+        #:    그런 윈도우가 후보로 들어오지 않아 아무것도 안 바뀐다.
+        self._view_only_gate = view_only_gate
         #: 후보 대기 보관소(`spike/candidate_store.CandidateStore`). 없으면 대기를 세기만
         #: 하고 버린다 — 그게 WP-128 이전의 동작이고, LIVE 가 확정을 못 내던 이유다.
         self._candidates = candidates
@@ -263,7 +268,8 @@ class SpikeRuntime:
     def evaluate(self, window: PageWindow) -> DetectionOutcome:
         """판정만 한다. 저장하지 않는다."""
         baseline = self._baselines.get(window.wiki, window.title, window.hour_of_day)
-        decision = detect(window.as_detector_window(), baseline)
+        decision = detect(window.as_detector_window(), baseline,
+                          view_only_gate=self._view_only_gate)
         return DetectionOutcome(window=window, baseline=baseline,
                                 decision=decision, persisted=False)
 
