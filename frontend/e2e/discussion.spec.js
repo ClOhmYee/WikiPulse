@@ -44,6 +44,7 @@ test("report overview contains three example discussions, and the top CTA opens 
   page,
 }) => {
   await page.goto(`/#/issues/${EVENT}`);
+  await page.getByRole("tab").nth(1).click();
   const overviewBoard = page.getByRole("region", { name: regionName });
   await expect(overviewBoard.locator(".dc-thread")).toHaveCount(3);
   await expect(overviewBoard).toContainText(

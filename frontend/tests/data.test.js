@@ -33,6 +33,12 @@ const stock = {
   name: "NVIDIA Corporation",
   exchange: "NASDAQ",
 };
+const report = {
+  status: "generating",
+  generatedAt: "2025-06-12T05:05:00Z",
+  model: "test-model",
+  sections: [{ id: "conclusion", title: "결론", body: null, evidenceIds: [] }],
+};
 
 test("configuration and source labels do not infer a live service", () => {
   assert.deepEqual(readDataConfig(), { source: "mock", baseURL: "/api/v1" });
@@ -73,7 +79,26 @@ test("Spring responses without meta, dataMode or nullable optional fields load n
   );
   for (const field of ["chart", "timeline", "news", "keywords", "insights"])
     assert.deepEqual(value.events[0][field], []);
+  assert.equal(value.events[0].report.status, "insufficient_evidence");
+  assert.deepEqual(
+    value.events[0].report.sections.map((section) => section.id),
+    ["conclusion", "change", "context", "evidence"],
+  );
   assert.equal(value.meta.dataMode, "api");
+});
+
+test("structured report states are accepted without inventing missing sections", async () => {
+  const api = createApiClient("/api/v1", async () =>
+    Response.json({ data: { ...issue, report } }),
+  );
+  const value = await loadPageData(api, "event", { id: "42" });
+  assert.equal(value.events[0].report.status, "generating");
+  assert.equal(value.events[0].report.model, "test-model");
+  assert.equal(value.events[0].report.sections[0].body, null);
+  assert.deepEqual(
+    value.events[0].report.sections.map((section) => section.id),
+    ["conclusion", "change", "context", "evidence"],
+  );
 });
 
 test("invalid configuration rejects an async resource rather than crashing module construction", async () => {
@@ -156,6 +181,11 @@ test("mock filtering, raw response projection, stable legacy aliases and cancell
   assert.equal(legacy.data.id, issueId(old));
   assert.deepEqual(legacy, await mockClient.getIssue(legacy.data.id));
   assert.equal(legacy.data.news, undefined);
+  assert.equal(legacy.data.report.status, "ready");
+  assert.deepEqual(
+    legacy.data.report.sections.map((section) => section.id),
+    ["conclusion", "change", "context", "evidence"],
+  );
   assert.equal(legacy.data.relatedStocks.length <= 5, true);
   assert.deepEqual(
     (await mockClient.listStocks({ q: "no-such-stock" })).data,

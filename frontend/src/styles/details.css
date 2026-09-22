@@ -384,6 +384,115 @@
   text-decoration: underline;
   color: #b0e4e0;
 }
+.dt-report {
+  max-width: 860px;
+}
+.dt-report-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 28px;
+  padding-bottom: 26px;
+  border-bottom: 1px solid var(--dt-border);
+}
+.dt-report-heading h2 {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+.dt-report-heading h2 svg {
+  color: var(--dt-gold);
+}
+.dt-report-heading p {
+  max-width: 55ch;
+  margin: 8px 0 0;
+  font-size: 13px;
+}
+.dt-report-meta {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(92px, 1fr));
+  flex: 0 1 430px;
+  gap: 12px;
+  margin: 0;
+}
+.dt-report-meta div {
+  min-width: 0;
+}
+.dt-report-meta dt {
+  margin-bottom: 5px;
+  color: var(--dt-muted);
+  font-size: 10px;
+}
+.dt-report-meta dd {
+  margin: 0;
+  color: var(--dt-paper);
+  font-size: 11px;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+.dt-report-sections {
+  display: grid;
+  gap: 0;
+}
+.dt-report-section {
+  padding: 25px 0 24px;
+  border-bottom: 1px solid var(--dt-border);
+}
+.dt-report-section h3 {
+  margin-bottom: 9px;
+  font-size: 17px;
+}
+.dt-report-section p {
+  max-width: 72ch;
+  margin-bottom: 0;
+}
+.dt-report-empty {
+  color: var(--dt-muted);
+}
+.dt-report-evidence {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 16px;
+}
+.dt-evidence-chip {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+  max-width: 100%;
+  gap: 6px;
+  padding: 6px 9px;
+  border: 1px solid var(--dt-border);
+  border-radius: 5px;
+  color: var(--dt-teal);
+  font-size: 11px;
+  line-height: 1.4;
+  text-decoration: none;
+  overflow-wrap: anywhere;
+}
+.dt-evidence-chip:hover {
+  border-color: var(--dt-teal);
+  color: var(--dt-paper);
+}
+.dt-report-state {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 25px 0;
+  border-bottom: 1px solid var(--dt-border);
+}
+.dt-report-state > svg {
+  flex: 0 0 auto;
+  margin-top: 4px;
+  color: var(--dt-gold);
+}
+.dt-report-state h3 {
+  margin-bottom: 6px;
+}
+.dt-report-state p {
+  max-width: 62ch;
+  margin-bottom: 0;
+}
 .dt-interpretation {
   padding: 25px 0;
   border-top: 1px solid var(--dt-border);
@@ -1167,6 +1276,21 @@
   }
 }
 @media (max-width: 600px) {
+  .dt-report-heading {
+    display: block;
+    padding-bottom: 22px;
+  }
+  .dt-report-meta {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px 18px;
+    margin-top: 18px;
+  }
+  .dt-report-section {
+    padding: 21px 0;
+  }
+  .dt-report-section h3 {
+    font-size: 16px;
+  }
   .dt-page h1 {
     margin-bottom: 15px;
     font-size: 29px;
