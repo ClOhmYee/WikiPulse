@@ -55,6 +55,7 @@ test("every daily cluster has a matching report, sums, article identities and va
       assert(report, cluster.id);
       assert.equal(report.date, date);
       assert.equal(report.summary, cluster.summary);
+      assert.ok(report.summary?.trim(), `${cluster.id}: issue summary missing`);
       assert.deepEqual(
         report.articleIds,
         cluster.nodes.map((n) => n.pageId),

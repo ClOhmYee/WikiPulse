@@ -1,6 +1,6 @@
 import sources from "./sources.json" with { type: "json" };
 import { topics } from "./topics.js";
-import { newsroomExamples } from "./newsroom.js";
+import { issueBriefs } from "./newsroom.js";
 
 export const HISTORY_START = "2025-09-01";
 export const DEMO_DATE = "2026-09-10";
@@ -179,14 +179,7 @@ export function clusterAt(episode, date) {
     id: date === episode.end ? episode.id : `${episode.id}~${date}`,
     issueKey: episode.topic.id,
     label: episode.topic.title,
-    summary:
-      newsroomExamples[episode.topic.id]?.summary ||
-      `${date} 시연: ${nodes
-        .slice(0, 3)
-        .map((n) => docs.get(n.pageId).name)
-        .join(
-          "·",
-        )} 등 ${nodes.length}개 문서의 합성 편집 신호를 ${episode.topic.focus} 주제로 묶었습니다.`,
+    summary: issueBriefs[episode.topic.id]?.summary || null,
     category: episode.topic.category,
     firstDetectedAt: timestamp(episode.start),
     hot: totals.pulse >= 6,
@@ -279,18 +272,7 @@ export function reportAt(episode, date = episode?.end) {
         {
           id: "article",
           title: cluster.label,
-          body: [
-            ...(newsroomExamples[topic.id]?.paragraphs || [
-              `${topic.focus} 주제를 따라 ${cluster.nodes
-                .slice(0, 3)
-                .map((node) => docs.get(node.pageId).name)
-                .join(
-                  ", ",
-                )} 문서를 함께 읽습니다. 서로 다른 문서에서 출발한 관심을 연결해 하나의 주제가 어떤 기술과 산업으로 이어지는지 살펴보는 시연입니다.`,
-              `연결된 ${topic.symbols.join(", ")} 종목은 기업의 사업 영역을 더 살펴볼 수 있는 후보입니다. 같은 문서 묶음에 포함되었다는 이유로 개별 기업의 실적이나 주가 영향을 판단하지 않습니다.`,
-            ]),
-            `${date} 기준 시연 화면에는 ${articleIds.length}개 문서가 포함되어 있습니다. 합성 편집량은 ${metrics.edits.toLocaleString("ko-KR")}회로, 기준량 ${metrics.baseline.toLocaleString("ko-KR")}회와 함께 문서 활동을 비교하는 예시로 표시됩니다. 이 수치와 문서 연결은 실제 사건 관측이나 자동 분석 결과가 아닙니다.`,
-          ].join("\n\n"),
+          body: (issueBriefs[topic.id]?.paragraphs || []).join("\n\n"),
           evidenceIds: articleIds,
         },
       ],
