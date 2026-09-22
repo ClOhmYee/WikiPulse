@@ -86,6 +86,10 @@ class PageWindow:
     edit_count: int
     editor_count: int
     views: int | None = None
+    #: `views` 중 모바일 몫 (V15, WP-210). 1단계 대체 경로의 봇 필터 입력이다.
+    #: 🔴 None 은 **"모바일 0" 이 아니라 "안 쟀다"** — V15 이전 적재분이 그렇다.
+    #: 0 으로 메우면 그 구간이 전부 봇으로 판정된다.
+    mobile_views: int | None = None
     #: 윈도우 끝. 안 주면 `window_start + WINDOW_HOURS`. 소스가 주면 그 값이 이긴다.
     window_end: datetime | None = None
     #: 이 윈도우 집계에 들어간 최대 revision id. 판정에는 안 쓰고 **증거로만** 남긴다
@@ -149,6 +153,10 @@ class PageWindow:
             edit_count=int(row["edit_count"]),
             editor_count=int(row.get("editor_count") or 0),
             views=None if views is None else int(views),
+            # ⚠️ 없으면 None 이다 — 0 으로 메우지 않는다. V15 이전 산출물에는 아예
+            #    이 키가 없고, 0 으로 채우면 "모바일 0%" = 봇으로 판정된다.
+            mobile_views=(None if row.get("mobile_views") is None
+                          else int(row["mobile_views"])),
             window_end=None if end is None else parse_window_start(end),
             # 시점 감사 증거. 안 싣는 입력(옛 산출물)도 있어서 없으면 None 이다.
             max_rev_id=(None if row.get("max_rev_id") is None
@@ -165,7 +173,8 @@ class PageWindow:
     def as_detector_window(self) -> Window:
         return Window(edit_count=self.edit_count,
                       editor_count=self.editor_count,
-                      views=self.views)
+                      views=self.views,
+                      mobile_views=self.mobile_views)
 
 
 @dataclass(frozen=True)

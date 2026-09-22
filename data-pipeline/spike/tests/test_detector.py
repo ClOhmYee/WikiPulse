@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import statistics
 
+from spike import detector
 from spike.detector import (
     MIN_ABSOLUTE_VIEWS,
     MIN_HUMAN_EDITS,
@@ -246,3 +247,58 @@ def test_편집은_점수에_안_들어간다():
     few = detect(Window(1, 1, 291_824), base)
     many = detect(Window(9_836, 50, 291_824), base)
     assert few.spike_score == many.spike_score
+
+
+# ------------------------- 1단계 대체 경로 (WP-210, 기본 꺼짐)
+
+def test_노브가_꺼져_있으면_편집_없는_윈도우는_탈락한다():
+    """🔴 기본값이 안 바뀌는 것을 고정한다. 이 테스트가 깨지면 계약이 조용히 바뀐 것이다."""
+    w = Window(edit_count=0, editor_count=0, views=6_893, mobile_views=3_594)
+    assert detector.passes_first_gate(w) is False
+    assert detect(w, None).status is DecisionStatus.REJECTED
+
+
+def test_모바일이_충분하면_편집_없이도_1단계를_통과한다():
+    """2026-08-19 Moderna — 60배 급등인데 당일 편집 0건, 모바일 52.1%."""
+    w = Window(edit_count=0, editor_count=0, views=6_893, mobile_views=3_594)
+    assert detector.passes_first_gate(w, view_only_gate=True) is True
+    assert detect(w, None, view_only_gate=True).status is DecisionStatus.CONFIRMED
+
+
+def test_데스크톱_단일_채널_급등은_노브를_켜도_탈락한다():
+    """🔴 Roblox 2026-08-10 — 하루 478만 조회(674배)인데 모바일 0.1% 인 크롤러다.
+
+    편집 관문이 사실상 유일한 봇 필터였다. 그냥 열면 이게 1위로 올라온다.
+    """
+    w = Window(edit_count=0, editor_count=0, views=4_781_244, mobile_views=3_746)
+    assert detector.passes_first_gate(w, view_only_gate=True) is False
+    d = detect(w, None, view_only_gate=True)
+    assert d.status is DecisionStatus.REJECTED
+    assert "모바일" in d.reason
+
+
+def test_모바일을_안_잰_윈도우는_오른쪽_가지를_열지_않는다():
+    """⚠️ V15 이전 적재분은 mobile_views 가 None 이다 — '모바일 0' 이 아니라 '미측정'.
+
+    열어 주면 안 잰 값이 통과 근거가 되고, 0 으로 치면 과거 구간이 전부 봇이 된다.
+    """
+    w = Window(edit_count=0, editor_count=0, views=500_000, mobile_views=None)
+    assert detector.passes_first_gate(w, view_only_gate=True) is False
+
+
+def test_조회수_하한을_못_넘으면_모바일이_높아도_탈락한다():
+    w = Window(edit_count=0, editor_count=0, views=99, mobile_views=90)
+    assert detector.passes_first_gate(w, view_only_gate=True) is False
+
+
+def test_조회수_미도착이면_오른쪽_가지는_안_열린다():
+    """편집도 없고 조회수도 없으면 판단 근거가 아무것도 없다 — 대기로 둘 값도 없다."""
+    w = Window(edit_count=0, editor_count=0, views=None, mobile_views=None)
+    assert detector.passes_first_gate(w, view_only_gate=True) is False
+
+
+def test_편집이_있으면_모바일과_무관하게_기존대로_간다():
+    """노브를 켜도 왼쪽 가지는 그대로다. 골든데이 경로가 안 바뀌는 것을 고정한다."""
+    w = Window(edit_count=3, editor_count=2, views=657_119, mobile_views=414_126)
+    assert detector.passes_first_gate(w, view_only_gate=True) is True
+    assert detector.passes_first_gate(w) is True

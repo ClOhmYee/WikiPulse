@@ -61,7 +61,8 @@ DELETE FROM spike_candidate
 SELECT_DUE_SQL = """
 SELECT c.source, c.page_id, p.wiki, p.title,
        c.window_start, c.window_end, c.edit_count, c.editor_count,
-       c.max_rev_id, c.last_edit_ts, COALESCE(v.views, 0) AS views
+       c.max_rev_id, c.last_edit_ts, COALESCE(v.views, 0) AS views,
+       v.mobile_views AS mobile_views
   FROM spike_candidate c
   JOIN wiki_page p ON p.id = c.page_id
   JOIN page_view_hourly_ingest g
@@ -199,7 +200,8 @@ class CandidateStore:
             cur.execute(SELECT_DUE_SQL, (self._source, limit))
             for row in cur.fetchall():
                 (source, page_id, wiki, title, window_start, window_end,
-                 edit_count, editor_count, max_rev_id, last_edit_ts, views) = row
+                 edit_count, editor_count, max_rev_id, last_edit_ts, views,
+                 mobile_views) = row
                 yield DueCandidate(
                     source=source,
                     page_id=page_id,
@@ -207,7 +209,8 @@ class CandidateStore:
                         wiki=wiki, title=title,
                         window_start=window_start, window_end=window_end,
                         edit_count=edit_count, editor_count=editor_count,
-                        views=views, max_rev_id=max_rev_id, last_edit_ts=last_edit_ts,
+                        views=views, mobile_views=mobile_views,
+                        max_rev_id=max_rev_id, last_edit_ts=last_edit_ts,
                     ),
                     views=views,
                 )
