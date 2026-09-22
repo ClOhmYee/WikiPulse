@@ -200,6 +200,11 @@ def build_arg_parser() -> argparse.ArgumentParser:
     p.add_argument("--grant-role", metavar="ROLE",
                    help="이 롤에 DML 권한과 default privileges 를 준다")
     p.add_argument("--dry-run", action="store_true", help="남은 마이그레이션만 출력")
+    # 🔴 배포 드리프트 감지용 (WP-193). `--dry-run` 은 남은 게 있어도 0 을
+    #    돌려주므로 CI 가 못 잡는다. 2026-09-22 에 deploy:backend 가 취소되고 후속
+    #    파이프라인이 그 잡을 안 만들어 V13 이 조용히 빠졌는데, 파이프라인은 초록이었다.
+    p.add_argument("--fail-if-pending", action="store_true",
+                   help="남은 마이그레이션이 있으면 비영으로 끝낸다 (--dry-run 을 포함)")
     p.add_argument("--dir", type=pathlib.Path, default=MIGRATIONS_DIR,
                    help="마이그레이션 디렉터리 (기본 db/migrations). 검사·실험용")
     return p
@@ -220,14 +225,22 @@ def main(argv: list[str] | None = None) -> int:
             print(f"이력만 기록: {len(marked)}개 (V1..V{args.baseline})")
             return 0
 
-        names = apply(conn, args.dir, dry_run=args.dry_run)
-        if args.dry_run:
+        dry_run = args.dry_run or args.fail_if_pending
+        names = apply(conn, args.dir, dry_run=dry_run)
+        if dry_run:
             print("남은 마이그레이션: " + (", ".join(names) if names else "없음"))
+            if args.fail_if_pending and names:
+                print(
+                    "🔴 저장소에 있는 마이그레이션이 이 DB 에 적용되지 않았다.\n"
+                    "   배포가 돌지 않았거나 중간에 취소된 것이다 (WP-193).\n"
+                    "   `bash infra/apply-migrations.sh` 로 적용한다.",
+                    file=sys.stderr)
+                return 1
         else:
             print(f"마이그레이션 {len(names)}개 적용" + (f" ({', '.join(names)})" if names else " (변경 없음)"))
 
         if args.grant_role:
-            if args.dry_run:
+            if dry_run:
                 # 🔴 dry-run 은 아무것도 안 바꾼다. 권한은 멱등이라 티가 안 나지만,
                 #    "보기만 한다" 는 약속이 한 번 깨지면 다음 사람이 dry-run 을 못 믿는다.
                 print(f"[dry-run] 권한 부여 대상: {args.grant_role}")
