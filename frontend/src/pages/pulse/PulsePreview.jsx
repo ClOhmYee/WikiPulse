@@ -155,8 +155,17 @@ export default function PulsePreview({
               <p className="wp-small wp-muted">
                 집계 구간
                 <br />
-                {kstTimestamp(node.windowStart)}
-                <br />~ {kstTimestamp(node.windowEnd)}
+                {node.windowStart && node.windowEnd ? (
+                  <>
+                    {kstTimestamp(node.windowStart)}
+                    <br />~ {kstTimestamp(node.windowEnd)}
+                  </>
+                ) : (
+                  // ⚠️ kstTimestamp(null) 은 RangeError 를 던진다 — 계약만 완화하면
+                  //    legacy 멤버를 클릭하는 순간 이 패널이 깨진다. 지표 쪽 metric()
+                  //    과 같은 어휘를 쓴다.
+                  "미제공"
+                )}
               </p>
               <a
                 className="wp-text-button"

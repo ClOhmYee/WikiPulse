@@ -186,3 +186,174 @@ test("cluster importance decreases with distance, packing does not overlap, and 
   assert.equal(nodeRadius(1), 40);
   assert.deepEqual(engine([]).clusters, []);
 });
+
+// legacy expansion 산출물(-115, CORE -161 이전)은 non-root 멤버에 집계 구간이 없다.
+// 2026-09-21 LIVE 6개 스냅샷이 노드 하나 때문에 통째로 탈락했다 — 12개 클러스터의
+// 정상 root 까지 같이 사라졌다. `unavailable` + 양쪽 모두 null 만 통과시킨다.
+test("unavailable 멤버의 빈 집계 구간만 통과하고 나머지 조합은 그대로 reject", () => {
+  const node = (v) => v.data.clusters[0].nodes[0];
+  const check = (label, mutate, shouldPass) => {
+    const copy = structuredClone(pulseMaps.at(-1));
+    mutate(copy);
+    if (shouldPass) {
+      const out = validateMap(copy);
+      // 노드를 걸러내지 않는다 — memberCount 계약이 유지돼야 한다.
+      for (const cluster of out.data.clusters)
+        assert.equal(cluster.memberCount, cluster.nodes.length, label);
+      assert.equal(out.meta.nodeCount, copy.meta.nodeCount, label);
+    } else {
+      assert.throws(() => validateMap(copy), /metric window/, label);
+    }
+  };
+  // 1. 일반 노드 + 정상 구간
+  check("normal + valid", () => {}, true);
+  // 2. 일반 노드 + 빈 구간 → 기존 계약 그대로 거부
+  check(
+    "normal + null",
+    (v) => Object.assign(node(v), { windowStart: null, windowEnd: null }),
+    false,
+  );
+  // 3. unavailable + 양쪽 null → 통과 (이번 완화의 대상)
+  check(
+    "unavailable + both null",
+    (v) =>
+      Object.assign(node(v), {
+        completeness: "unavailable",
+        windowStart: null,
+        windowEnd: null,
+      }),
+    true,
+  );
+  // 4. unavailable + 한쪽만 null → 비정상 조합이라 거부
+  check(
+    "unavailable + start null",
+    (v) => Object.assign(node(v), { completeness: "unavailable", windowStart: null }),
+    false,
+  );
+  check(
+    "unavailable + end null",
+    (v) => Object.assign(node(v), { completeness: "unavailable", windowEnd: null }),
+    false,
+  );
+  // 5. unavailable + 정상 구간 → 값이 있으면 검사한다
+  check(
+    "unavailable + valid",
+    (v) => Object.assign(node(v), { completeness: "unavailable" }),
+    true,
+  );
+  // 6. unavailable + 역순 구간 → completeness 로 검사를 면제받지 않는다
+  check(
+    "unavailable + reversed",
+    (v) =>
+      Object.assign(node(v), {
+        completeness: "unavailable",
+        windowStart: node(v).windowEnd,
+      }),
+    false,
+  );
+  // pending 은 완화 대상이 아니다 — 조회수 대기는 구간이 이미 정해져 있다.
+  check(
+    "pending + both null",
+    (v) =>
+      Object.assign(node(v), {
+        completeness: "pending",
+        windowStart: null,
+        windowEnd: null,
+      }),
+    false,
+  );
+});
+
+// 운영 2026-09-21T12:00:00Z (live) 와 같은 구조: root 1개(complete·구간 있음) +
+// clickstream expansion 멤버 2개(unavailable·지표 전부 null·구간 없음).
+test("2026-09-21 LIVE 와 같은 구조의 legacy 스냅샷이 렌더 대상으로 통과한다", () => {
+  const snapshotTs = "2026-09-21T12:00:00Z";
+  const member = (pageId, title) => ({
+    pageId,
+    title,
+    wiki: "enwiki",
+    isSeed: true, // -115 이후 추가 씨드도 true 로 저장된다
+    editCount: null,
+    views: null,
+    editBaseline: null,
+    viewBaseline: null,
+    spikeScore: null,
+    sizeScore: null,
+    completeness: "unavailable",
+    windowStart: null,
+    windowEnd: null,
+  });
+  const legacy = {
+    meta: {
+      snapshotTs,
+      source: "live",
+      scoreVersion: "v1",
+      newWindowHours: 24,
+      clusterCount: 1,
+      nodeCount: 3,
+      edgeCount: 2,
+      truncated: false,
+    },
+    data: {
+      clusters: [
+        {
+          id: "137886",
+          issueKey: "live:enwiki:2026 Israeli legislative election",
+          label: "2026 Israeli legislative election",
+          summary: null,
+          category: "other",
+          status: "DETECTED",
+          firstDetectedAt: snapshotTs,
+          hot: true,
+          pulseScore: 7.5,
+          memberCount: 3,
+          nodes: [
+            {
+              pageId: "500001",
+              title: "2026 Israeli legislative election",
+              wiki: "enwiki",
+              isSeed: true,
+              editCount: 12,
+              views: 9000,
+              editBaseline: null,
+              viewBaseline: null,
+              spikeScore: 7.5,
+              sizeScore: 0.5,
+              completeness: "complete",
+              windowStart: "2026-09-21T11:00:00Z",
+              windowEnd: snapshotTs,
+            },
+            member("500002", "Amcha Yisrael"),
+            member("500003", "Israel First (political party)"),
+          ],
+          edges: [
+            {
+              id: "e1",
+              sourcePageId: "500001",
+              targetPageId: "500002",
+              kind: "clickstream",
+              directed: true,
+              weight: 120,
+              evidence: { label: "클릭 이동 120회", month: "2026-08" },
+            },
+            {
+              id: "e2",
+              sourcePageId: "500001",
+              targetPageId: "500003",
+              kind: "clickstream",
+              directed: true,
+              weight: 45,
+              evidence: { label: "클릭 이동 45회", month: "2026-08" },
+            },
+          ],
+        },
+      ],
+    },
+  };
+  const out = validateMap(legacy, { snapshotTs, source: "live" });
+  const cluster = out.data.clusters[0];
+  assert.equal(cluster.memberCount, cluster.nodes.length);
+  assert.equal(cluster.nodes.length, 3);
+  // 지표가 없는 멤버도 남아 있어야 한다(노드 제거 금지).
+  assert.equal(cluster.nodes.filter((v) => v.windowStart === null).length, 2);
+});
