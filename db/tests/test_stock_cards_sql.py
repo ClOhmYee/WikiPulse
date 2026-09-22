@@ -124,3 +124,30 @@ def test_hasIssues_필터는_lastClose_없이도_동작한다(conn):
     cards = _cards(conn, has_issues=True)
 
     assert set(cards) == {"BBB"}
+
+
+def test_q_는_소문자_부분일치_패턴을_받는다(conn):
+    # 서비스가 QueryParams.likePattern 에서 lower+trim 후 %…% 로 감싸 넘기므로
+    # SQL 계층은 이미 소문자·wrap 된 패턴을 받는 전제다. lower(s.name) 분기가
+    # 대소문자 무시로 걸리는지까지 본다("BA Inc" ← "%ba%").
+    _stock(conn, "BA")   # name "BA Inc"
+    _stock(conn, "XY")   # name "XY Inc"
+    _price(conn, "BA", "2026-01-05", "201.1500")
+
+    cards = _cards(conn, q_="%ba%")
+
+    assert set(cards) == {"BA"}
+    assert cards["BA"]["lastClose"] == Decimal("201.1500")
+
+
+def test_issueCount_는_verified_매칭만_센다(conn):
+    # verified=false 매칭은 세지 않는다(issueCount 서브쿼리 WHERE cs.verified).
+    _stock(conn, "AAA")
+    rows = q(conn, "INSERT INTO issue_cluster (snapshot_ts, pulse_score, status) "
+                   "VALUES ('2026-09-01T00:00:00+00:00', 9.0, 'CONFIRMED') RETURNING id")
+    x(conn, "INSERT INTO cluster_stock (cluster_id, ticker, tier, verified) "
+            "VALUES (%s, 'AAA', 'BOTH', false)", rows[0][0])
+
+    cards = _cards(conn)
+
+    assert cards["AAA"]["issueCount"] == 0
