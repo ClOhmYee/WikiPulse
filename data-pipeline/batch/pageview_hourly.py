@@ -6,8 +6,23 @@
 `pageview_complete` **일별** 덤프는 하루가 끝나야 나와서 LIVE 판정에 못 쓴다 — 그건
 품질 검증용으로 함께 보존하는 소스다. AQS 일별 API 도 LIVE 관문이 아니다.
 
+🔴 **파일명의 시각은 윈도우 끝이다. 시작이 아니다.** `pageviews-20250612-090000.gz` 는
+09시가 아니라 **08:00~09:00** 을 담는다 (2026-09-18 실측, 아래 근거). 이걸 시작으로 읽으면
+모든 조회수가 한 시간 늦게 붙는데, 값이 그럴듯해서 화면만 봐서는 모른다.
+
+    근거 — `Air India Flight 171` (2025-06-12, 문서 생성 08:58:02 UTC, 사고 08:09 UTC)
+      일별 pageview_complete 의 시간 프로파일:  08시 3회 · 09시 24,669회 · 10시 36,434회
+      시간별 `-090000` = 3       -> 일별 08시(생성 후 2분치)와 **정확히 같다**
+      시간별 `-100000` = 24,669  -> 일별 09시와 정확히 같다
+      시간별 `-110000` = 36,434  -> 일별 10시와 정확히 같다
+    2026-09-21 재현 — `ai/spec-evidence/pageview_hourly_offset.py align` (3구간 차이 0).
+    Main Page·Vijay Rupani 로도 같은 방향을 확인했다(한 시간 밀면 전부 어긋난다).
+
+    ⚠️ 위 대조에서 agent 없는 이 덤프와 일별 `agent=user` 값이 **비트 단위로 같았다.**
+       문서 1개·3구간 표본이라 "차이가 없다"로 일반화하지 않는다 — 아래 agent 절 참고.
+
 덤프 형식 (2026-09-18 실측, dumps.wikimedia.org/other/pageviews)
-    경로 : /{YYYY}/{YYYY}-{MM}/pageviews-{YYYYMMDD}-{HH}0000.gz
+    경로 : /{YYYY}/{YYYY}-{MM}/pageviews-{YYYYMMDD}-{HH}0000.gz   (HH = 윈도우 **끝**)
     컬럼 : project title count bytes   (공백 4개, 헤더 없음)
       project : 도메인 약어. `en`=en.wikipedia 데스크톱, `en.m`=모바일웹.
                 ⚠️ 일별 덤프의 `en.wikipedia` 와 **코드 체계가 다르다.**
@@ -21,10 +36,21 @@
     2026-09-18 04:00Z 파일 실측: 45.7 MB(gz) · 5,144,442 행 · 압축 해제 1.0s.
     `en`+`en.m` 은 2,025,414 행 · 조회수 8,140,767, 그중 ns0 은 1,915,570 행 · 7,923,840 회.
 
-지연 (2026-09-18 실측, 같은 날 06:40Z 기준)
-    04:00Z 파일이 06:06Z 에 올라왔다 — 윈도우 **끝(05:00Z)** 기준 약 1시간 6분이다.
-    03:00Z 05:05Z · 02:00Z 04:12Z · 01:00Z 03:07Z · 00:00Z 02:19Z 로 같은 패턴이고,
-    05:00Z·06:00Z 는 아직 404 였다. 명세 §3.2 3번의 "약 1시간 지연" 과 맞는다.
+지연 (실측. ⚠️ 윈도우 끝 기준이다)
+    2026-09-18 08:49Z 기준
+      [01:00~02:00) 공개 04:12Z (+132분) · [02:00~03:00) 05:05Z (+125분)
+      [03:00~04:00) 06:06Z (+126분) · [04:00~05:00) 07:13Z (+134분)
+      [05:00~06:00) 이후는 아직 404.
+    2026-09-21 00:36Z 재측정 (`ai/spec-evidence/pageview_hourly_offset.py delay`)
+      +127 · +152 · +138 · +150 · +153분 (09-20 16시~21시 구간), 그 뒤 3구간은 404.
+    합치면 **125~153분**이다. 한 시점의 표본으로 상한을 확정하지 않는다 — 09-18 만
+    보면 134분이 상한 같았는데 사흘 뒤 153분이 나왔다.
+
+    🔴 **약 2시간이다.** ~~명세 §3.2 3번의 "약 1시간 지연"~~ 은 이 실측으로 정정됐다
+       (2026-09-21 — §3.2·§11·기술 명세 §4 모두 약 2시간).
+    처음엔 1시간으로 쟀는데 그건 파일명을 윈도우 시작으로 잘못 읽었기 때문이다(위 🔴).
+    사건 발생부터 최종 노출까지의 목표도 1~2시간에서 **2~3시간**으로 옮겼다 — 원본이
+    없는 시점을 목표로 두면 내부 처리를 0으로 만들어도 못 지킨다.
 
 ⚠️ **agent 필드가 없다.** 위키미디어가 감지한 봇·스파이더는 upstream 에서 이미
    걸러 내지만(명세 §3.2 3번), 어느 agent 였는지는 노출하지 않는다. 그래서
@@ -41,6 +67,7 @@ from __future__ import annotations
 import re
 from collections.abc import Iterable, Iterator
 from dataclasses import dataclass
+from datetime import datetime, timedelta, timezone
 
 from producer.normalize import canonical_title
 
@@ -60,6 +87,9 @@ WIKI_TO_PROJECTS = {
 
 #: 파일명에서 시각을 뽑는다: pageviews-20260918-040000.gz
 _FILENAME_TS = re.compile(r"pageviews-(\d{8})-(\d{2})0000")
+
+#: 파일명 시각과 윈도우 시작의 차이. 파일명은 윈도우 **끝**이다 (모듈 독스트링 🔴).
+FILENAME_IS_WINDOW_END = True
 
 
 @dataclass(frozen=True)
@@ -88,16 +118,33 @@ def projects_for(wiki: str) -> frozenset[str]:
 
 
 def ts_hour_from_filename(name: str) -> str:
-    """`pageviews-20260918-040000.gz` → `2026-09-18T04:00:00`.
+    """`pageviews-20260918-040000.gz` → **`2026-09-18T03:00:00`** (윈도우 시작).
 
+    🔴 파일명 시각은 윈도우 **끝**이라 한 시간을 뺀다 (모듈 독스트링 🔴의 근거).
+       ~~파일명 시각을 그대로 썼다~~ → 그러면 모든 조회수가 한 시간 늦게 붙는다.
     🔴 시각은 **파일명에서만** 온다. 행에는 시각 컬럼이 아예 없다 — 그래서 파일과
-    시각을 잘못 짝지으면 조회수 전체가 통째로 밀리고 아무 에러도 안 난다.
+       시각을 잘못 짝지으면 조회수 전체가 통째로 밀리고 아무 에러도 안 난다.
+
+    ⚠️ `-000000` 파일은 **전날 23시**다. 날짜가 넘어간다.
     """
     match = _FILENAME_TS.search(name)
     if match is None:
         raise SchemaMismatch(f"파일명에서 시각을 못 읽었다: {name!r}")
     date, hour = match.groups()
-    return f"{date[:4]}-{date[4:6]}-{date[6:]}T{hour}:00:00"
+    end = datetime(int(date[:4]), int(date[4:6]), int(date[6:]), int(hour), tzinfo=timezone.utc)
+    start = end - timedelta(hours=1)
+    return start.strftime("%Y-%m-%dT%H:00:00")
+
+
+def filename_hour(ts_hour: str) -> tuple[str, str]:
+    """윈도우 시작 `2026-09-18T03:00:00` → 파일 날짜·시각 `("20260918", "04")`.
+
+    `ts_hour_from_filename` 의 역이다. 둘을 한 파일에 두는 이유는 한쪽만 고치면
+    조용히 어긋나기 때문이다.
+    """
+    start = datetime.strptime(ts_hour[:19], "%Y-%m-%dT%H:%M:%S").replace(tzinfo=timezone.utc)
+    end = start + timedelta(hours=1)
+    return end.strftime("%Y%m%d"), end.strftime("%H")
 
 
 def parse_row(line: str, projects: frozenset[str]) -> tuple[str, int] | None:

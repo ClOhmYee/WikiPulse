@@ -11,7 +11,6 @@ import {
   Layers3,
   MessageCircle,
   Newspaper,
-  Sparkles,
 } from "lucide-react";
 import { usePageData } from "../../data/hooks/PageData";
 import {
@@ -27,17 +26,20 @@ import { EmptyState } from "../../components/ui/EmptyState";
 import { TrendChart } from "../../components/charts/TrendChart";
 import { Timeline, EventNews, Evidence } from "./EventSections";
 import EventDiscussion from "./EventDiscussion";
+import { IssueReport } from "../../components/event/IssueReport";
 import { wikipediaUrl } from "../../lib/wiki";
 import "../../styles/details.css";
 const exampleTabs = [
-  { id: "overview", label: "이벤트 개요" },
+  { id: "report", label: "리포트" },
+  { id: "overview", label: "탐색" },
   { id: "timeline", label: "타임라인" },
   { id: "news", label: "관련 소식" },
   { id: "evidence", label: "근거 문서" },
   { id: "discussion", label: "토론" },
 ];
 const apiTabs = [
-  { id: "overview", label: "이벤트 개요" },
+  { id: "report", label: "리포트" },
+  { id: "overview", label: "탐색" },
   { id: "evidence", label: "근거 문서" },
 ];
 
@@ -48,13 +50,13 @@ export default function EventPage({
 }) {
   const { getEvent, getEntity, getStock, getCategory, isExample } =
     usePageData();
-  const [tab, setTab] = useState("overview");
+  const [tab, setTab] = useState("report");
   const [range, setRange] = useState("all");
   const [showBaseline, setShowBaseline] = useState(true);
   const [selectedArticle, setSelectedArticle] = useState(null);
   const event = getEvent(eventId);
   useEffect(() => {
-    setTab("overview");
+    setTab("report");
     setRange("all");
     setSelectedArticle(null);
   }, [eventId]);
@@ -364,44 +366,6 @@ export default function EventPage({
                   )}
                 </div>
               </section>
-              <section className="dt-interpretation">
-                <div className="dt-section-heading">
-                  <h2>
-                    <Sparkles size={20} />
-                    {isExample
-                      ? "AI 해석 예시"
-                      : "제공된 해석 · 출처 확인 필요"}
-                  </h2>
-                  <IssueState status={event.status} />
-                </div>
-                <p className="dt-interpretation-note">
-                  제공된 해석의 근거는 문서와 출처에서 확인하세요. 분석 상태는
-                  요약 생성 여부와 검증된 종목 연결 여부를 대신하지 않습니다.
-                </p>
-                {!event.insights?.length && (
-                  <p className="data-availability">
-                    구조화된 상세 해석은 제공되지 않았습니다.
-                    {event.summaryModel && (
-                      <span> 요약 모델: {event.summaryModel}</span>
-                    )}
-                  </p>
-                )}
-                <div>
-                  {(event.insights || []).map((insight, index) => (
-                    <article key={`${insight.title}-${index}`}>
-                      <h3>{insight.title}</h3>
-                      <p>{insight.body}</p>
-                    </article>
-                  ))}
-                </div>
-                <button
-                  type="button"
-                  className="dt-text-link"
-                  onClick={() => selectTab("evidence")}
-                >
-                  해석의 근거 문서 보기 <ArrowRight size={16} />
-                </button>
-              </section>
               {isExample && (
                 <>
                   <section className="dt-timeline-preview">
@@ -425,6 +389,9 @@ export default function EventPage({
                 </>
               )}
             </>
+          )}
+          {tab === "report" && (
+            <IssueReport report={event.report} articles={articles} />
           )}
           {tab === "timeline" && (
             <section>

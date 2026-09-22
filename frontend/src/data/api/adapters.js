@@ -13,6 +13,22 @@ const timestamp = (v) =>
 const status = (v) => ["DETECTED", "VERIFYING", "CONFIRMED"].includes(v);
 const source = (v) => ["live", "replay"].includes(v);
 const completeness = (v) => ["complete", "pending", "unavailable"].includes(v);
+const reportStatus = (v) =>
+  ["ready", "generating", "insufficient_evidence", "failed"].includes(v);
+const reportSection = (v) =>
+  object(v) &&
+  text(v.id) &&
+  text(v.title) &&
+  optionalText(v.body) &&
+  Array.isArray(v.evidenceIds) &&
+  v.evidenceIds.every(id);
+const report = (v) =>
+  object(v) &&
+  reportStatus(v.status) &&
+  optionalText(v.model) &&
+  (v.generatedAt == null || timestamp(v.generatedAt)) &&
+  Array.isArray(v.sections) &&
+  v.sections.every(reportSection);
 
 export const issueCard = (v) =>
   object(v) &&
@@ -85,6 +101,7 @@ export const issueDetail = (v) =>
   timestamp(v.snapshotTs) &&
   optionalText(v.summary) &&
   optionalText(v.summaryModel) &&
+  (v.report == null || report(v.report)) &&
   Array.isArray(v.members) &&
   v.members.every(member) &&
   Array.isArray(v.relatedStocks) &&

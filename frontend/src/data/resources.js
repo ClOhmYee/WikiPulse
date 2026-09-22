@@ -7,6 +7,32 @@ const unique = (items) => [
 const optionalNumber = (value) => (Number.isFinite(value) ? value : null);
 const availableText = (value) =>
   typeof value === "string" && value.trim() ? value : null;
+const reportSections = [
+  { id: "conclusion", title: "결론" },
+  { id: "change", title: "변화" },
+  { id: "context", title: "맥락" },
+  { id: "evidence", title: "근거" },
+];
+const reportView = (raw, snapshotTs) => {
+  const source = raw.report;
+  const sectionsById = new Map(
+    (source?.sections || []).map((section) => [section.id, section]),
+  );
+  return {
+    status: source?.status || "insufficient_evidence",
+    snapshotTs,
+    generatedAt: source?.generatedAt ?? null,
+    model: source?.model ?? raw.summaryModel ?? null,
+    sections: reportSections.map((section) => {
+      const value = sectionsById.get(section.id);
+      return {
+        ...section,
+        body: availableText(value?.body),
+        evidenceIds: value?.evidenceIds?.map(String) || [],
+      };
+    }),
+  };
+};
 export function memberView(member, eventId) {
   const id = String(member.pageId);
   return {
@@ -44,6 +70,7 @@ export function issueView(raw, aliases = []) {
     title: availableText(raw.label) || members[0]?.title || "제목 미제공",
     summary: availableText(raw.summary),
     summaryModel: raw.summaryModel ?? null,
+    report: reportView(raw, raw.snapshotTs),
     pulseScore: raw.pulseScore,
     status: raw.status,
     source: raw.source,

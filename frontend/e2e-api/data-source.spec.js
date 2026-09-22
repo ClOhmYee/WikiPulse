@@ -272,8 +272,8 @@ test("API detail exposes only server-backed report sections", async ({
 }) => {
   await serve(page);
   await page.goto(`/#/issues/${issue.id}`);
-  await expect(page.getByRole("tab")).toHaveCount(2);
-  await expect(page.getByRole("tab", { name: "이벤트 개요" })).toBeVisible();
+  await expect(page.getByRole("tab")).toHaveCount(3);
+  await expect(page.getByRole("tab").first()).toHaveText("리포트");
   await expect(page.getByRole("tab", { name: /^근거 문서/ })).toBeVisible();
   await expect(page.getByRole("tab", { name: "타임라인" })).toHaveCount(0);
   await expect(page.getByRole("tab", { name: "관련 소식" })).toHaveCount(0);

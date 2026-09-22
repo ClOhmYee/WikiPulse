@@ -17,7 +17,7 @@ from datetime import datetime, timedelta
 from .runtime import PageWindow
 from .spike_sink import require_source, require_utc
 
-#: 대기가 이 시간을 넘으면 버린다. 시간별 덤프가 약 1시간 뒤에 나오므로, 하루가 넘도록
+#: 대기가 이 시간을 넘으면 버린다. 시간별 덤프가 약 2시간 뒤에 나오므로, 하루가 넘도록
 #: 조회수가 없었다면 그 시간 파일은 이미 나왔고 이 문서가 그 안에 없었던 것이다
 #: (삭제·이동된 문서, 또는 후보 필터 밖). ⚠️ 이 값을 늘리면 만료가 아니라 적체가 된다.
 DEFAULT_EXPIRE_HOURS = 36

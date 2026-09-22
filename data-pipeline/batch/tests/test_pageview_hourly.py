@@ -11,6 +11,7 @@ from batch.pageview import SchemaMismatch, UnsupportedWiki
 from batch.pageview_hourly import (
     PageviewHourly,
     aggregate,
+    filename_hour,
     parse_row,
     projects_for,
     ts_hour_from_filename,
@@ -21,10 +22,32 @@ EN = projects_for("enwiki")
 
 # ---------------------------------------------------------------- 시각
 
-def test_시각은_파일명에서_온다():
-    """🔴 행에는 시각 컬럼이 없다. 파일과 시각을 잘못 짝지으면 전부 밀리고 에러도 안 난다."""
-    assert ts_hour_from_filename("pageviews-20260918-040000.gz") == "2026-09-18T04:00:00"
-    assert ts_hour_from_filename("/tmp/cache/pageviews-20250612-230000.gz") == "2025-06-12T23:00:00"
+def test_파일명_시각은_윈도우_끝이라_한_시간을_뺀다():
+    """🔴 `-090000` 은 09시가 아니라 **08:00~09:00** 이다 (2026-09-18 실측).
+
+    근거 — `Air India Flight 171` (2025-06-12, 문서 생성 08:58:02 UTC):
+      일별 pageview_complete 프로파일  08시 3회 · 09시 24,669회 · 22시 26,757회
+      시간별 `-090000` = 3회      -> 일별 08시(생성 후 2분치)와 일치
+      시간별 `-230000` = 26,757회 -> 일별 22시와 일치
+    ~~파일명 시각을 그대로 썼다~~ → 모든 조회수가 한 시간 늦게 붙었다. 값이 그럴듯해서
+    화면만 봐서는 모른다 — 2단계 관문이 엉뚱한 시간의 조회수로 판정하게 된다.
+    """
+    assert ts_hour_from_filename("pageviews-20260918-040000.gz") == "2026-09-18T03:00:00"
+    assert ts_hour_from_filename("/tmp/cache/pageviews-20250612-230000.gz") == "2025-06-12T22:00:00"
+
+
+def test_자정_파일은_전날_23시다():
+    """⚠️ 날짜가 넘어간다. 하루 경계에서 하루치가 통째로 어긋나는 자리다."""
+    assert ts_hour_from_filename("pageviews-20250612-000000.gz") == "2025-06-11T23:00:00"
+
+
+def test_파일명_변환이_왕복한다():
+    """한쪽만 고치면 조용히 어긋난다 — 두 함수를 같은 파일에 둔 이유다."""
+    for name in ("pageviews-20250612-000000.gz", "pageviews-20250612-090000.gz",
+                 "pageviews-20261231-230000.gz"):
+        start = ts_hour_from_filename(name)
+        date, hour = filename_hour(start)
+        assert f"pageviews-{date}-{hour}0000.gz" == name.split("/")[-1]
 
 
 def test_시각을_못_읽으면_막는다():

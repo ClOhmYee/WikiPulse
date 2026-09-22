@@ -416,12 +416,36 @@ public class CandidateProperties {
          */
         private String source = "";
 
+        /**
+         * 같은 model 로 요약 저장에 실패해도 되는 횟수 (WP-182).
+         *
+         * <p>🔴 <b>{@link #topPerSnapshot} 은 이걸 못 막는다.</b> 그 상한은 "한 스냅샷에서
+         * 몇 개를 고르나"이지 "같은 클러스터를 몇 번 시도하나"가 아니다. 저장 못 하는
+         * 클러스터는 {@code issue_report} 가 계속 비어 매 폴 다시 집힌다 — 종료 조건이 없다.
+         * 2026-09-22 운영에서 51분간 5,414 크레딧이 이렇게 나갔다.
+         *
+         * <p>값 3 은 {@code cluster_stock.attempt_count}(V6, -50)의 파킹 기준과 맞춘 것이다.
+         * 근거 부족은 보통 입력 문제라 재시도로 안 풀리지만, 스키마 위반은 모델 흔들림일 수
+         * 있어 몇 번은 준다.
+         *
+         * <p>0 이하면 무제한 — 🔴 켜지 말 것. 이 이슈 이전 동작으로 되돌아간다.
+         */
+        private int maxAttempts = 3;
+
         public boolean isEnabled() {
             return enabled;
         }
 
         public void setEnabled(boolean enabled) {
             this.enabled = enabled;
+        }
+
+        public int getMaxAttempts() {
+            return maxAttempts;
+        }
+
+        public void setMaxAttempts(int maxAttempts) {
+            this.maxAttempts = maxAttempts;
         }
 
         public String getFixedDelay() {

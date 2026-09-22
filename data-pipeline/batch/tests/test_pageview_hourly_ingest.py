@@ -27,10 +27,18 @@ def fake_download(dump: Path):
 
 # ---------------------------------------------------------------- URL·시각
 
-def test_dump_url_시각_분해():
-    assert ingest.dump_url("2025-06-12T09:00:00") == (
+def test_dump_url은_윈도우_끝_이름의_파일을_가리킨다():
+    """🔴 08~09시 구간은 `-090000` 파일에 들어 있다 (2026-09-18 실측)."""
+    assert ingest.dump_url("2025-06-12T08:00:00") == (
         "https://dumps.wikimedia.org/other/pageviews/"
         "2025/2025-06/pageviews-20250612-090000.gz")
+
+
+def test_dump_url_날짜가_넘어간다():
+    """23시 구간은 **다음 날** `-000000` 파일이다."""
+    assert ingest.dump_url("2025-06-12T23:00:00") == (
+        "https://dumps.wikimedia.org/other/pageviews/"
+        "2025/2025-06/pageviews-20250613-000000.gz")
 
 
 def test_하루는_24시간이다():
@@ -48,7 +56,7 @@ def test_hour_입력_표기를_흡수한다(given):
 # ---------------------------------------------------------------- 적재
 
 def test_받아서_합산해_샤드와_매니페스트를_쓴다(tmp_path, monkeypatch):
-    dump = write_dump(tmp_path / "pageviews-20250612-090000.gz", [
+    dump = write_dump(tmp_path / "pageviews-20250612-100000.gz", [
         "en Air_India_Flight_171 268 0",
         "en.m Air_India_Flight_171 732 0",       # 데스크톱+모바일 합산
         "ja Air_India_Flight_171 50 0",          # 다른 위키
@@ -80,7 +88,7 @@ def test_이미_적재된_시간은_건너뛴다(tmp_path, monkeypatch):
 
 
 def test_404는_실패가_아니라_대기다(tmp_path, monkeypatch):
-    """🔴 아직 안 나온 시간이다 (윈도우 끝 기준 약 1시간 지연, 2026-09-18 실측).
+    """🔴 아직 안 나온 시간이다 (윈도우 끝 기준 약 2시간 지연, 실측 125~153분).
 
     결손으로 세면 LIVE 스케줄러가 다시 안 받는다 — 그 시간 조회수가 영영 안 들어온다.
     """
@@ -94,7 +102,7 @@ def test_404는_실패가_아니라_대기다(tmp_path, monkeypatch):
 
 def test_파일명_시각이_요청과_다르면_막는다(tmp_path, monkeypatch):
     """🔴 행에 시각 컬럼이 없어서, 엉뚱한 파일을 받으면 조회수가 통째로 다른 시간에 붙는다."""
-    dump = write_dump(tmp_path / "pageviews-20250612-100000.gz", ["en Water 5 0"])
+    dump = write_dump(tmp_path / "pageviews-20250612-120000.gz", ["en Water 5 0"])
     monkeypatch.setattr(ingest, "download", fake_download(dump))
 
     with pytest.raises(SchemaMismatch, match="파일명 시각"):
@@ -103,7 +111,7 @@ def test_파일명_시각이_요청과_다르면_막는다(tmp_path, monkeypatch
 
 
 def test_후보_제목으로_거른다(tmp_path, monkeypatch):
-    dump = write_dump(tmp_path / "pageviews-20250612-090000.gz", [
+    dump = write_dump(tmp_path / "pageviews-20250612-100000.gz", [
         "en Air_India_Flight_171 268 0",
         "en Water 10 0",
     ])
@@ -119,7 +127,7 @@ def test_후보_제목으로_거른다(tmp_path, monkeypatch):
 
 
 def test_dry_run은_아무것도_안_쓴다(tmp_path, monkeypatch):
-    dump = write_dump(tmp_path / "pageviews-20250612-090000.gz", ["en Water 10 0"])
+    dump = write_dump(tmp_path / "pageviews-20250612-100000.gz", ["en Water 10 0"])
     monkeypatch.setattr(ingest, "download", fake_download(dump))
 
     assert ingest.ingest_hour("2025-06-12T09:00:00", "enwiki", tmp_path, tmp_path / "out",

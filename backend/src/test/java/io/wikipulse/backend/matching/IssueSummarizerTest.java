@@ -41,9 +41,10 @@ class IssueSummarizerTest {
     void 근거_충분하면_한국어_요약을_돌려준다() {
         when(client.completeForSummary(anyString(), anyList())).thenReturn(OK);
 
-        Optional<String> r = summarizer().summarize(input());
+        IssueSummarizer.Outcome r = summarizer().summarize(input());
 
-        assertThat(r).contains("이란-이스라엘 무력 충돌이 격화됐다.");
+        assertThat(r.summary()).contains("이란-이스라엘 무력 충돌이 격화됐다.");
+        assertThat(r.failure()).isEqualTo(IssueSummarizer.Failure.NONE);
         verify(client, times(1)).completeForSummary(anyString(), anyList());
     }
 
@@ -51,7 +52,7 @@ class IssueSummarizerTest {
     void 코드펜스로_감싸도_파싱한다() {
         when(client.completeForSummary(anyString(), anyList())).thenReturn("```json\n" + OK + "\n```");
 
-        assertThat(summarizer().summarize(input())).isPresent();
+        assertThat(summarizer().summarize(input()).summary()).isPresent();
     }
 
     @Test
@@ -60,9 +61,11 @@ class IssueSummarizerTest {
         when(client.completeForSummary(anyString(), anyList()))
                 .thenReturn("{\"sufficient_context\":false,\"summary_ko\":null}");
 
-        Optional<String> r = summarizer().summarize(input());
+        IssueSummarizer.Outcome r = summarizer().summarize(input());
 
-        assertThat(r).isEmpty();
+        assertThat(r.summary()).isEmpty();
+        // 🔴 사유를 구분해 돌려준다 (WP-182). 호출자가 원장에 남겨 재시도를 끊는다.
+        assertThat(r.failure()).isEqualTo(IssueSummarizer.Failure.INSUFFICIENT_CONTEXT);
         // 게이트 응답은 정상 스키마라 정정 재요청 없이 한 번만 호출한다.
         verify(client, times(1)).completeForSummary(anyString(), anyList());
     }
@@ -73,7 +76,7 @@ class IssueSummarizerTest {
                 .thenReturn("{\"summary_ko\":\"요약\"}")  // 1차: 키 불일치
                 .thenReturn(OK);                          // 정정 후: 통과
 
-        assertThat(summarizer().summarize(input())).isPresent();
+        assertThat(summarizer().summarize(input()).summary()).isPresent();
         verify(client, times(2)).completeForSummary(anyString(), anyList());
     }
 
@@ -83,7 +86,11 @@ class IssueSummarizerTest {
                 .thenReturn("not json")
                 .thenReturn("still broken");
 
-        assertThat(summarizer().summarize(input())).isEmpty();
+        IssueSummarizer.Outcome r = summarizer().summarize(input());
+
+        assertThat(r.summary()).isEmpty();
+        // 근거 부족과 다른 사유로 남는다 — 원인도 대책도 다르다.
+        assertThat(r.failure()).isEqualTo(IssueSummarizer.Failure.SCHEMA_VIOLATION);
         verify(client, times(2)).completeForSummary(anyString(), anyList());
     }
 

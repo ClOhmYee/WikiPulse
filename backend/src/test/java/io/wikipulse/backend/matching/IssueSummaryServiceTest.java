@@ -61,7 +61,7 @@ class IssueSummaryServiceTest {
     void DETECTED면_VERIFYING으로_올리고_요약을_생성_저장한다() {
         when(repository.statusOf(1L)).thenReturn("DETECTED");
         when(repository.hasReport(1L)).thenReturn(false);
-        when(summarizer.summarize(any())).thenReturn(Optional.of("이란 이슈 요약."));
+        when(summarizer.summarize(any())).thenReturn(ok("이란 이슈 요약."));
         when(repository.stockVerificationComplete(1L)).thenReturn(false); // 종목 미완료 → 확정 보류
 
         IssueSummaryService.Result r = service().processCluster(1L);
@@ -116,7 +116,8 @@ class IssueSummaryServiceTest {
     void 요약_근거부족이면_저장하지_않고_확정하지_않는다() {
         when(repository.statusOf(5L)).thenReturn("VERIFYING");
         when(repository.hasReport(5L)).thenReturn(false);
-        when(summarizer.summarize(any())).thenReturn(Optional.empty()); // sufficient_context=false 등
+        when(summarizer.summarize(any()))
+                .thenReturn(failed(IssueSummarizer.Failure.INSUFFICIENT_CONTEXT));
         // 요약이 없으니 stockVerificationComplete 를 볼 것도 없다.
 
         IssueSummaryService.Result r = service().processCluster(5L);
@@ -192,7 +193,7 @@ class IssueSummaryServiceTest {
         when(repository.statusOf(8L)).thenReturn("VERIFYING");
         when(repository.hasReport(8L)).thenReturn(false);
         when(verificationRepository.issueKeyOf(8L)).thenReturn(null); // V1 옛 클러스터
-        when(summarizer.summarize(any())).thenReturn(Optional.of("생성 요약."));
+        when(summarizer.summarize(any())).thenReturn(ok("생성 요약."));
         when(repository.stockVerificationComplete(8L)).thenReturn(false);
 
         service().processCluster(8L);
@@ -230,7 +231,7 @@ class IssueSummaryServiceTest {
         when(repository.hasReport(11L)).thenReturn(false);
         when(verificationRepository.topOrgMentions(eq(11L), anyInt()))
                 .thenReturn(List.of("NextEra Energy", "Duke Energy"));
-        when(summarizer.summarize(any())).thenReturn(Optional.of("요약."));
+        when(summarizer.summarize(any())).thenReturn(ok("요약."));
         when(repository.stockVerificationComplete(11L)).thenReturn(false);
 
         ArgumentCaptor<IssueSummarizer.Input> in = ArgumentCaptor.forClass(IssueSummarizer.Input.class);
@@ -239,5 +240,73 @@ class IssueSummaryServiceTest {
         verify(summarizer).summarize(in.capture());
         assertThat(in.getValue().gdeltContext()).isEqualTo("NextEra Energy, Duke Energy");
         assertThat(in.getValue().issueText()).isEqualTo("Iran: ...");
+    }
+
+    @Test
+    void 요약_저장에_실패하면_시도를_원장에_남긴다() {
+        // 🔴 WP-182. 안 남기면 hasReport 가 계속 false 라 다음 폴에서 같은
+        //    클러스터를 또 집는다 — 종료 조건이 없는 재시도다. 운영에서 51분에 5,414
+        //    크레딧이 이렇게 나갔다.
+        when(repository.statusOf(20L)).thenReturn("VERIFYING");
+        when(repository.hasReport(20L)).thenReturn(false);
+        when(summarizer.summarize(any()))
+                .thenReturn(failed(IssueSummarizer.Failure.INSUFFICIENT_CONTEXT));
+
+        service().processCluster(20L);
+
+        verify(repository).recordFailedAttempt(eq(20L), anyString(),
+                eq("INSUFFICIENT_CONTEXT"));
+        verify(repository, never()).upsertReport(anyLong(), anyString(), anyString());
+    }
+
+    @Test
+    void 스키마_위반은_근거부족과_다른_사유로_남는다() {
+        // 원인도 대책도 다르다 — 근거 부족은 입력을 고쳐야 풀리고 스키마 위반은 프롬프트다.
+        when(repository.statusOf(21L)).thenReturn("VERIFYING");
+        when(repository.hasReport(21L)).thenReturn(false);
+        when(summarizer.summarize(any()))
+                .thenReturn(failed(IssueSummarizer.Failure.SCHEMA_VIOLATION));
+
+        service().processCluster(21L);
+
+        verify(repository).recordFailedAttempt(eq(21L), anyString(), eq("SCHEMA_VIOLATION"));
+    }
+
+    @Test
+    void 전송_실패는_원장에_남기지_않는다() {
+        // 🔴 일시 장애라 재시도해야 한다. 여기 남기면 GATEWAY 가 잠깐 죽은 동안 상한을 태워
+        //    멀쩡한 클러스터가 영영 요약되지 않는다.
+        when(repository.statusOf(22L)).thenReturn("VERIFYING");
+        when(repository.hasReport(22L)).thenReturn(false);
+        when(summarizer.summarize(any()))
+                .thenThrow(new UpstreamUnavailableException("GATEWAY 불가", new RuntimeException()));
+
+        assertThatThrownBy(() -> service().processCluster(22L))
+                .isInstanceOf(UpstreamUnavailableException.class);
+
+        verify(repository, never()).recordFailedAttempt(anyLong(), anyString(), anyString());
+    }
+
+    @Test
+    void 요약에_성공하면_원장에_남기지_않는다() {
+        when(repository.statusOf(23L)).thenReturn("VERIFYING");
+        when(repository.hasReport(23L)).thenReturn(false);
+        when(summarizer.summarize(any())).thenReturn(ok("요약."));
+        when(repository.stockVerificationComplete(23L)).thenReturn(false);
+
+        service().processCluster(23L);
+
+        verify(repository, never()).recordFailedAttempt(anyLong(), anyString(), anyString());
+    }
+
+    // ---- WP-182: summarize 가 Optional 대신 Outcome 을 돌려준다 ----
+
+    private static IssueSummarizer.Outcome ok(String summaryKo) {
+        return new IssueSummarizer.Outcome(
+                Optional.of(summaryKo), IssueSummarizer.Failure.NONE);
+    }
+
+    private static IssueSummarizer.Outcome failed(IssueSummarizer.Failure failure) {
+        return new IssueSummarizer.Outcome(Optional.empty(), failure);
     }
 }
