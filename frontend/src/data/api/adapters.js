@@ -46,7 +46,8 @@ export const stockCard = (v) =>
   text(v.name) &&
   text(v.exchange) &&
   optionalText(v.sector) &&
-  count(v.issueCount);
+  count(v.issueCount) &&
+  optionalNumber(v.lastClose);
 export const stockDetail = (v) =>
   object(v) &&
   text(v.ticker) &&

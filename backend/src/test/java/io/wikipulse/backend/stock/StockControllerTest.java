@@ -4,6 +4,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
+import static org.hamcrest.Matchers.nullValue;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -35,18 +36,26 @@ class StockControllerTest {
     StockService service;
 
     @Test
-    void 종목_목록은_data_봉투_issueCount_pagination() throws Exception {
+    void 종목_목록은_data_봉투_issueCount_lastClose_pagination() throws Exception {
         when(service.search(any(), any(), any(), anyBoolean(), any(), any())).thenReturn(
                 ApiResponse.of(
-                        List.of(new StockCardResponse("NVDA", "NVIDIA Corporation",
-                                "NASDAQ", "Technology", 2)),
-                        PageMeta.of(PageMeta.Pagination.of(0, 50, 1, 1))));
+                        List.of(
+                                new StockCardResponse("NVDA", "NVIDIA Corporation",
+                                        "NASDAQ", "Technology", 2, new BigDecimal("201.1500")),
+                                new StockCardResponse("ZZZZ", "No Price Inc",
+                                        "NASDAQ", null, 0, null)),
+                        PageMeta.of(PageMeta.Pagination.of(0, 50, 2, 2))));
 
         mvc.perform(get("/api/v1/stocks?q=nvid"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data[0].ticker").value("NVDA"))
                 .andExpect(jsonPath("$.data[0].issueCount").value(2))
-                .andExpect(jsonPath("$.meta.pagination.total").value(1));
+                .andExpect(jsonPath("$.data[0].lastClose").value(201.15))
+                // 가격 없는 종목은 lastClose 가 null(키는 있고 값은 null)로 내려가야
+                // FE 가 "미제공"을 찍는다. StockCardResponse 는 NON_NULL 을 걸지 않아
+                // sector 처럼 null 도 직렬화된다.
+                .andExpect(jsonPath("$.data[1].lastClose").value(nullValue()))
+                .andExpect(jsonPath("$.meta.pagination.total").value(2));
     }
 
     @Test

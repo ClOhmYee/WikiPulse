@@ -962,12 +962,21 @@ components:
         issueCount:
           type: integer
           minimum: 0
+        lastClose:
+          type: number
+          minimum: 0
+          nullable: true
+          description: >-
+            Latest trading-day close (price column, WP-189). null when the
+            stock has no daily candle; FE renders "미제공". stock_price.close is
+            NUMERIC(14,4), serialized as a JSON number.
       required:
         - ticker
         - name
         - exchange
         - sector
         - issueCount
+        - lastClose
       additionalProperties: false
     StockDetail:
       type: object
