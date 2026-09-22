@@ -35,10 +35,3 @@ export function timestampLabel(value) {
     }).format(new Date(value)) + " KST"
   );
 }
-export function sourceLabel(source) {
-  return source === "live"
-    ? "실시간 수집"
-    : source === "replay"
-      ? "과거 재구성"
-      : "출처 미제공";
-}

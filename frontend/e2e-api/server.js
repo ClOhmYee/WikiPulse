@@ -24,6 +24,8 @@ export async function serve(page, override) {
         body = await mockClient.listSnapshots(params);
       else if (parts[0] === "issues" && parts[1] === "map")
         body = await mockClient.getPulseMap(params);
+      else if (parts[0] === "issues" && parts[1] === "rankings")
+        body = await mockClient.getIssueRankings(params);
       else if (parts[0] === "issues" && parts[2] === "stocks")
         body = await mockClient.listIssueStocks(parts[1], params);
       else if (parts[0] === "issues" && parts.length === 2)

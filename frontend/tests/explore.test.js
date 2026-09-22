@@ -57,7 +57,7 @@ test("all sources filters both latest snapshots, including replay-only confirmed
   const all = await listExploreIssues(client);
   assert.deepEqual(
     all.data.map((row) => row.id),
-    [1, 2, 3, 4, 5, 6],
+    [1, 3, 5, 2, 4, 6],
   );
   assert.deepEqual(all.meta.sourceSnapshots, times);
   assert.equal(all.meta.snapshotTs, undefined);
@@ -90,7 +90,7 @@ test("merged pagination preserves global order, totals and both snapshots past t
   const result = await listExploreIssues(client, next);
   assert.deepEqual(
     result.data.map((row) => row.id),
-    Array.from({ length: 20 }, (_, i) => i + 201),
+    Array.from({ length: 20 }, (_, i) => (i + 75) * 2 + 2),
   );
   assert.deepEqual(result.meta.pagination, {
     offset: 200,

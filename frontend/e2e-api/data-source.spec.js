@@ -17,7 +17,7 @@ test("all sources includes replay confirmed issues alongside live detected issue
     source,
     snapshotTs,
     status: source === "live" ? "DETECTED" : "CONFIRMED",
-    pulseScore: 10 - i,
+    pulseScore: 10 + i,
     memberCount: 1,
     stockCount: i,
   }));
@@ -64,23 +64,24 @@ test("all sources includes replay confirmed issues alongside live detected issue
   });
   await page.goto("/#/issues");
   await expect(page.locator(".event-row")).toHaveCount(2);
-  await expect(page.locator(".explore-date")).toContainText("2026");
-  await expect(page.locator(".explore-date")).toContainText("2025");
+  await expect(page.locator(".event-row__title")).toHaveText([
+    "live filter regression",
+    "replay filter regression",
+  ]);
+  await expect(page.locator(".event-list")).not.toContainText("실시간 수집");
+  await expect(page.locator(".event-list")).not.toContainText("과거 재구성");
   const status = page.getByRole("combobox", { name: "분석 상태", exact: true });
-  const source = page.getByRole("combobox", {
-    name: "데이터 출처",
-    exact: true,
-  });
+  await expect(
+    page.getByRole("combobox", {
+      name: "데이터 출처",
+      exact: true,
+    }),
+  ).toHaveCount(0);
   await status.selectOption("CONFIRMED");
   await expect(page.locator(".event-row")).toHaveCount(1);
   await expect(page.locator(".event-row")).toContainText(
     "replay filter regression",
   );
-  await source.selectOption("live");
-  await expect(page.locator(".event-row")).toHaveCount(0);
-  await source.selectOption("replay");
-  await expect(page.locator(".event-row")).toHaveCount(1);
-  await source.selectOption("");
   await status.selectOption("");
   await expect(page.locator(".event-row")).toHaveCount(2);
 });
@@ -105,21 +106,6 @@ test("HTTP lists request one page at a time and reset offset on filters", async 
   await expect.poll(() => calls.at(-1).searchParams.get("offset")).toBe("0");
   expect(calls.at(-1).searchParams.get("status")).toBe("CONFIRMED");
   expect(calls.at(-1).searchParams.get("snapshotTs")).toBe(snapshotTs);
-  await page
-    .getByRole("combobox", { name: "데이터 출처", exact: true })
-    .selectOption("replay");
-  await expect.poll(() => calls.at(-1).pathname).toBe("/api/v1/issues");
-  await expect
-    .poll(() => calls.at(-1).searchParams.get("source"))
-    .toBe("replay");
-  expect(calls.at(-1).searchParams.get("snapshotTs")).toBe(snapshotTs);
-  expect(
-    calls.some(
-      (url) =>
-        url.pathname === "/api/v1/issues/snapshots" &&
-        url.searchParams.get("source") === "replay",
-    ),
-  ).toBe(true);
   expect(
     calls.every(
       (url) => !/events|entities|categories|search/.test(url.pathname),
