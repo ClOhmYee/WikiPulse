@@ -13,6 +13,8 @@ public class ApiException extends RuntimeException {
     public enum Code {
         INVALID_QUERY(HttpStatus.BAD_REQUEST),
         UNAUTHORIZED(HttpStatus.UNAUTHORIZED),
+        FORBIDDEN(HttpStatus.FORBIDDEN),
+        CONFLICT(HttpStatus.CONFLICT),
         NOT_FOUND(HttpStatus.NOT_FOUND),
         INTERNAL(HttpStatus.INTERNAL_SERVER_ERROR);
 

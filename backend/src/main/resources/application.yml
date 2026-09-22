@@ -11,6 +11,10 @@ spring:
     url: ${DATABASE_URL:jdbc:postgresql://localhost:5432/wikipulse}
     username: ${DB_USER:wikipulse}
     password: ${DB_PASSWORD:}
+  session:
+    timeout: ${SESSION_TIMEOUT:24h}
+    jdbc:
+      initialize-schema: never
   jpa:
     hibernate:
       ddl-auto: validate
@@ -224,3 +228,11 @@ resilience4j:
         limit-for-period: 10
         limit-refresh-period: 1s
         timeout-duration: 0
+
+# HTTPS in production; local HTTP tests explicitly opt out.
+server:
+  servlet:
+    session:
+      cookie:
+        secure: ${SESSION_COOKIE_SECURE:true}
+

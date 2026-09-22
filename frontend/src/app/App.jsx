@@ -13,9 +13,21 @@ export default function App() {
   const requestedPath = route.split("?")[0];
   const authRoute = ["/login", "/signup"].includes(requestedPath);
   const pathname = authRoute ? "/pulse" : requestedPath;
-  const bookmarks = useBookmarks();
   const auth = useAuth();
   const [authMode, setAuthMode] = useState(null);
+  const [saveIntent, setSaveIntent] = useState(null);
+  const bookmarks = useBookmarks(auth.member, (intent) => {
+    setSaveIntent(intent);
+    setAuthMode("login");
+  });
+  const pendingSave = useRef(null);
+  useEffect(() => {
+    if (auth.member && pendingSave.current) {
+      const intent = pendingSave.current;
+      pendingSave.current = null;
+      bookmarks.completeSave(intent);
+    }
+  }, [auth.member, bookmarks]);
   const searchRef = useRef(null);
   const mainRef = useRef(null);
   const previousRoute = useRef(route);
@@ -66,6 +78,7 @@ export default function App() {
   const mode = authMode || (authRoute ? requestedPath.slice(1) : null);
   const closeAuth = () => {
     setAuthMode(null);
+    setSaveIntent(null);
     if (authRoute) window.location.hash = "/pulse";
   };
   return (
@@ -79,7 +92,17 @@ export default function App() {
       mainRef={mainRef}
       route={route}
     >
+      {auth.error && (
+        <div className="wp-page" role="alert">
+          {auth.error}{" "}
+          <button className="wp-button" onClick={auth.restore}>
+            다시 시도
+          </button>
+        </div>
+      )}
       <RouteContent
+        key={auth.member?.id ?? "guest"}
+        authStatus={auth.status}
         {...bookmarks}
         route={route}
         pathname={pathname}
@@ -91,7 +114,10 @@ export default function App() {
           key={mode}
           initialMode={mode}
           onClose={closeAuth}
-          onLogin={auth.login}
+          onLogin={async (values, signal) => {
+            const member = await auth.login(values, signal);
+            if (member && saveIntent) pendingSave.current = saveIntent;
+          }}
         />
       )}
     </WorkspaceLayout>

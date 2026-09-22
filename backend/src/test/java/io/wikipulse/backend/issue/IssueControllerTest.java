@@ -24,6 +24,7 @@ import org.springframework.test.web.servlet.MockMvc;
 /**
  * API 계약 검증. DB 없이 웹 레이어만. 봉투·오류·필드가 명세 v0.1 과 맞는지 본다.
  */
+@org.springframework.context.annotation.Import(io.wikipulse.backend.account.SecurityConfig.class)
 @WebMvcTest(IssueController.class)
 class IssueControllerTest {
 

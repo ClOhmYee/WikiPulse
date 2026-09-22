@@ -84,13 +84,13 @@ def test_다른_언어_위키는_안_받는다():
 # ---------------------------------------------------------------- 행 파싱
 
 def test_실제_줄을_읽는다():
-    assert parse_row("en !!!_(album) 1 0", EN) == ("!!! (album)", 1)
-    assert parse_row("en.m Air_India_Flight_171 268 0", EN) == ("Air India Flight 171", 268)
+    assert parse_row("en !!!_(album) 1 0", EN) == ("!!! (album)", 1, False)
+    assert parse_row("en.m Air_India_Flight_171 268 0", EN) == ("Air India Flight 171", 268, True)
 
 
 def test_제목은_canonical_공백형으로_나온다():
     """편집 덤프·LIVE 와 같은 키여야 조인이 된다 (WP-79)."""
-    assert parse_row("en Hurricane_Milton 500 0", EN) == ("Hurricane Milton", 500)
+    assert parse_row("en Hurricane_Milton 500 0", EN) == ("Hurricane Milton", 500, False)
 
 
 def test_ns0가_아니면_뺀다():
@@ -114,8 +114,8 @@ def test_퍼센트가_든_제목을_디코드하지_않는다():
     한 시간 파일에 85행(조회수 264, 0.00%)이 있었고 전부 `1%_rule`·`%s` 꼴이었다
     (2026-09-18 실측). 디코드하면 그런 제목이 깨진다.
     """
-    assert parse_row("en 1%_rule 2 0", EN) == ("1% rule", 2)
-    assert parse_row("en %s 21 0", EN) == ("%s", 21)
+    assert parse_row("en 1%_rule 2 0", EN) == ("1% rule", 2, False)
+    assert parse_row("en %s 21 0", EN) == ("%s", 21, False)
 
 
 def test_제목_없음_행은_뺀다():
@@ -144,14 +144,14 @@ def test_데스크톱과_모바일이_한_행으로_합쳐진다():
         ["en Air_India_Flight_171 268 0", "en.m Air_India_Flight_171 732 0"],
         "enwiki", "2025-06-12T09:00:00"))
     assert rows == [PageviewHourly("enwiki", "Air India Flight 171",
-                                   "2025-06-12T09:00:00", 1_000)]
+                                   "2025-06-12T09:00:00", 1_000, 732)]
 
 
 def test_표기가_다른_같은_문서도_한_키다():
     rows = list(aggregate(["en Hurricane_Milton 3 0", "en.m Hurricane__Milton 4 0"],
                           "enwiki", "2024-10-06T19:00:00"))
     assert rows == [PageviewHourly("enwiki", "Hurricane Milton",
-                                   "2024-10-06T19:00:00", 7)]
+                                   "2024-10-06T19:00:00", 7, 4)]
 
 
 def test_빈_줄은_건너뛴다():
@@ -166,7 +166,7 @@ def test_후보_문서만_남길_수_있다():
     rows = list(aggregate(lines, "enwiki", "2025-06-12T09:00:00",
                           titles=frozenset({"Air India Flight 171"})))
     assert rows == [PageviewHourly("enwiki", "Air India Flight 171",
-                                   "2025-06-12T09:00:00", 268)]
+                                   "2025-06-12T09:00:00", 268, 0)]
 
 
 def test_필터_제목도_canonical로_비교한다():
@@ -184,3 +184,49 @@ def test_필터_제목도_canonical로_비교한다():
 def test_필터가_없으면_전부_나온다():
     lines = ["en Water 10 0", "en Cat 7 0"]
     assert len(list(aggregate(lines, "enwiki", "2025-06-12T09:00:00"))) == 2
+
+
+# ------------------------------------------------ 모바일 몫 (WP-210)
+
+def test_모바일_몫을_따로_남긴다():
+    """🔴 봇은 데스크톱 단일 채널로 온다. 합산만 하고 버리면 다시 못 얻는다.
+
+    `Roblox` 2026-08-10 은 478만 조회(674배)인데 모바일이 0.1% 였다(평소 60%).
+    같은 파일 안에 있는 값이라 적재 때 남기면 공짜다 — 버리면 문서마다 AQS 를
+    때려야 하고 거기서 429 가 난다. 근거: ai/spec-evidence/gate-review/RESULT.md.
+    """
+    rows = list(aggregate(
+        ["en Roblox 4777498 0", "en.m Roblox 3746 0"],
+        "enwiki", "2026-08-10T12:00:00"))
+    assert rows == [PageviewHourly("enwiki", "Roblox", "2026-08-10T12:00:00",
+                                   4_781_244, 3_746)]
+    assert rows[0].mobile_ratio < 0.01
+
+
+def test_모바일_몫은_views_에_포함된_부분집합이다():
+    """⚠️ 빼는 값이 아니다. 빼는 쪽으로 오해하면 조회수가 조용히 절반이 된다."""
+    rows = list(aggregate(
+        ["en Air_India_Flight_171 268 0", "en.m Air_India_Flight_171 732 0"],
+        "enwiki", "2025-06-12T09:00:00"))
+    row = rows[0]
+    assert row.views == 1_000                 # 합
+    assert row.mobile_views == 732            # 그중 모바일
+    assert row.mobile_views <= row.views
+    assert row.mobile_ratio == pytest.approx(0.732)
+
+
+def test_모바일_행이_없으면_0_이다():
+    rows = list(aggregate(["en Water 5 0"], "enwiki", "2025-06-12T09:00:00"))
+    assert rows[0].mobile_views == 0
+    assert rows[0].mobile_ratio == 0.0
+
+
+def test_조회수가_0_이면_비율은_None_이다():
+    """0 으로 두면 '봇' 과 구분되지 않는다 — 판정하는 쪽이 갈라 봐야 한다."""
+    assert PageviewHourly("enwiki", "Water", "2025-06-12T09:00:00", 0, 0).mobile_ratio is None
+
+
+def test_m_접미사만_모바일로_센다():
+    """⚠️ `en` 에 붙는 다른 변종이 생겨도 데스크톱으로 오분류되지 않게 `.m` 만 본다."""
+    assert parse_row("en.m Water 5 0", EN)[2] is True
+    assert parse_row("en Water 5 0", EN)[2] is False

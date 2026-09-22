@@ -245,7 +245,7 @@ test("500, malformed responses and network failures expose retry instead of mock
   await expect(page.locator(".st-stock-row")).toHaveCount(20);
 });
 
-test("empty list and missing detail are different states and preserve API bookmarks", async ({
+test("empty list and missing detail differ; legacy local bookmarks stay untouched", async ({
   page,
 }) => {
   await page.addInitScript(() => {
@@ -274,8 +274,10 @@ test("empty list and missing detail are different states and preserve API bookma
   ).toBeVisible();
   await page.goto("/#/saved");
   await expect(
-    page.getByRole("region", { name: "조회할 수 없는 저장 항목" }),
-  ).toContainText("missing");
+    page.getByRole("heading", {
+      name: "다음에 다시 보고 싶은 사건을 담아보세요",
+    }),
+  ).toBeVisible();
   await expect(page.locator(".event-row")).toHaveCount(0);
   expect(
     await page.evaluate(() =>

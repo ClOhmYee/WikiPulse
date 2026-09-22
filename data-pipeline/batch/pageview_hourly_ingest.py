@@ -48,10 +48,12 @@ PAGEVIEW_HOURLY_BASE = "https://dumps.wikimedia.org/other/pageviews"
 DEFAULT_SHARD_RECORDS = 500_000
 
 #: `page_view_hourly` 는 (page_id, ts_hour) 가 PK 다(V1). 같은 시간을 다시 받으면 값만 갱신한다.
+#: `mobile_views` 는 V16 (WP-210) — views 에 포함된 부분집합이다.
 UPSERT_VIEW_SQL = """
-INSERT INTO page_view_hourly (page_id, ts_hour, views)
-VALUES (%s, %s, %s)
-ON CONFLICT (page_id, ts_hour) DO UPDATE SET views = EXCLUDED.views
+INSERT INTO page_view_hourly (page_id, ts_hour, views, mobile_views)
+VALUES (%s, %s, %s, %s)
+ON CONFLICT (page_id, ts_hour) DO UPDATE SET views = EXCLUDED.views,
+                                             mobile_views = EXCLUDED.mobile_views
 """
 
 #: 캐시 보존 시간. `live-cycle`의 `--max-hours`(기본 6)와 candidate 36시간 만료를
@@ -238,7 +240,8 @@ def load_to_db(conn, records) -> int:
     with conn.cursor() as cur:
         page_ids = resolve_page_ids(cur, [(r.wiki, r.title) for r in records])
         cur.executemany(UPSERT_VIEW_SQL, [
-            (page_ids[(r.wiki, r.title)], r.ts_hour, r.views) for r in records
+            (page_ids[(r.wiki, r.title)], r.ts_hour, r.views, r.mobile_views)
+            for r in records
         ])
     conn.commit()
     return len(records)
