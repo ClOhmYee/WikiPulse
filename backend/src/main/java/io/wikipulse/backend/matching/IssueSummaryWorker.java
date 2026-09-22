@@ -47,7 +47,8 @@ public class IssueSummaryWorker {
                 props.getSummary().getBatchSize(),
                 props.getSummary().getTopPerSnapshot(),
                 service.modelTag(),
-                props.getSummary().getSource());
+                props.getSummary().getSource(),
+                props.getSummary().getMaxAttempts());
         if (clusterIds.isEmpty()) {
             return;
         }

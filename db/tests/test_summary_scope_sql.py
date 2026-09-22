@@ -15,6 +15,9 @@
     - 같은 issue_key·같은 model 요약이 이미 있으면 상한과 무관하게 고른다 (LLM 0)
     - model 이 다르면 면제가 걸리지 않는다 (프롬프트 버전을 올리면 재생성이라 비용이 든다)
     - 0 이면 무제한 (옛 동작)
+    - 🔴 시도 상한에 닿은 클러스터는 빠진다 (WP-182). 이 상한과 위 상한은 **다른
+      축**이다 — 위는 "한 스냅샷에서 몇 개를 고르나", 이건 "같은 것을 몇 번 시도하나".
+      저장 못 하는 클러스터는 issue_report 가 계속 비어 매 폴 다시 집힌다
 """
 
 from __future__ import annotations
@@ -40,6 +43,12 @@ WITH ranked AS (
 SELECT id
   FROM ranked
  WHERE status IN ('DETECTED', 'VERIFYING')
+   AND (%(maxAttempts)s <= 0
+        OR NOT EXISTS (SELECT 1
+                         FROM issue_summary_attempt a
+                        WHERE a.cluster_id = ranked.id
+                          AND a.model = %(model)s
+                          AND a.attempt_count >= %(maxAttempts)s))
    AND (%(top)s <= 0
         OR rnk <= %(top)s
         OR EXISTS (SELECT 1
@@ -54,11 +63,20 @@ SELECT id
 
 
 def _select(conn, top: int, limit: int = 100, model: str = MODEL,
-            source=None) -> list[int]:
+            source=None, max_attempts: int = 3) -> list[int]:
     with conn.cursor() as cur:
         cur.execute(_SELECT,
-                    {"top": top, "limit": limit, "model": model, "source": source})
+                    {"top": top, "limit": limit, "model": model, "source": source,
+                     "maxAttempts": max_attempts})
         return [row[0] for row in cur.fetchall()]
+
+
+def _attempt(conn, cluster_id: int, *, count: int, model: str = MODEL,
+             state: str = "INSUFFICIENT_CONTEXT") -> None:
+    x(conn,
+      "INSERT INTO issue_summary_attempt "
+      "(cluster_id, model, attempt_count, last_state) VALUES (%s, %s, %s, %s)",
+      cluster_id, model, count, state)
 
 
 def _cluster(conn, *, score: float, status: str = "DETECTED",
@@ -201,3 +219,37 @@ def test_순위는_좁힌_출처_안에서_매긴다(conn):
     second = _cluster(conn, score=1.0, source="replay", snapshot=snap)
 
     assert set(_select(conn, top=2, source="replay")) == {first, second}
+
+
+# ---------------------------------------------- 시도 상한 (WP-182)
+
+def test_시도_상한에_닿으면_대상에서_빠진다(conn):
+    """🔴 이게 없으면 종료 조건이 없다 — 매 폴 다시 집어 LLM 만 부른다."""
+    keep = _cluster(conn, score=9.0)
+    exhausted = _cluster(conn, score=8.0)
+    _attempt(conn, exhausted, count=3)
+
+    assert _select(conn, top=0, max_attempts=3) == [keep]
+
+
+def test_상한_미만이면_아직_대상이다(conn):
+    cid = _cluster(conn, score=9.0)
+    _attempt(conn, cid, count=2)
+
+    assert _select(conn, top=0, max_attempts=3) == [cid]
+
+
+def test_model_이_다르면_시도_상한이_걸리지_않는다(conn):
+    """프롬프트·모델을 올렸는데 옛 실패 때문에 영영 안 집히면 고칠 방법이 없다."""
+    cid = _cluster(conn, score=9.0)
+    _attempt(conn, cid, count=9, model="old-model (summary_v0)")
+
+    assert _select(conn, top=0, max_attempts=3) == [cid]
+
+
+def test_시도_상한이_0이하면_무제한이다(conn):
+    """⚠️ 이 이슈 이전 동작. 기본값으로 쓰지 않는다 — 회귀를 눈에 보이게 못 박는다."""
+    cid = _cluster(conn, score=9.0)
+    _attempt(conn, cid, count=99)
+
+    assert _select(conn, top=0, max_attempts=0) == [cid]

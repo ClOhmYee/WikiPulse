@@ -28,10 +28,19 @@ import org.springframework.stereotype.Service;
  * <p>전송 실패({@link UpstreamUnavailableException})는 잡지 않고 전파해 워커가 클러스터를 건너뛰고
  * VERIFYING 으로 남긴다(다음 폴 재시도). GATEWAY·GDELT 실패를 빈 정상 결과(CONFIRMED)로 만들지 않는다.
  *
- * <p>⚠️ <b>알려진 잔여 위험</b>: sufficient_context=false 나 스키마 실패가 <b>지속</b>되면 같은
- * 클러스터가 매 폴 요약을 재시도해 GATEWAY 를 반복 호출한다(요약 시도 카운터는 issue_report 스키마에
- * 없어 두지 않았다 — {@link GatewayVerificationClient} 의 200 무텍스트 잔여 위험과 같은 계약). 실제
- * 트리거는 좁다(위키피디아 도입부 대표 텍스트는 보통 충분하다). 근본 해소는 후속 스키마 작업.
+ * <p>~~⚠️ 알려진 잔여 위험: sufficient_context=false 나 스키마 실패가 지속되면 같은 클러스터가
+ * 매 폴 요약을 재시도해 GATEWAY 를 반복 호출한다. 실제 트리거는 좁다(위키피디아 도입부 대표 텍스트는
+ * 보통 충분하다).~~ → <b>해소</b> (WP-182, V11 {@code issue_summary_attempt}).
+ *
+ * <p>🔴 <b>"트리거가 좁다"는 틀렸다.</b> 2026-09-22 운영에서 전면적으로 터졌다 — 12분 로그에
+ * "근거 부족(요약 폐기)" 40건 · "생성=true" 0건, 51분간 확정 +10건에 5,414 크레딧(확정 1건당
+ * 약 541, 앞 구간은 약 107). 골든데이 클러스터는 멤버가 1개뿐이고 Clickstream 이 없어 대표
+ * 텍스트가 빈약하다 — 모델이 거절하는 것이 <b>정상</b>인 입력이었다. 즉 원인은 LLM 이 아니라
+ * 입력이고, 그래서 "좁은 트리거"라는 가정이 통째로 어긋났다(WP-183 과 같은 뿌리).
+ *
+ * <p>이제 저장 못 한 시도를 원장에 남기고, 같은 model 로 상한만큼 실패하면 대상 선택에서 뺀다.
+ * ⚠️ 상한에 닿아도 status 는 VERIFYING 이다 — 요약 없이 CONFIRMED 로 올리면 빈 요약이 화면에
+ * 분석 완료로 나간다.
  */
 @Service
 public class IssueSummaryService {
@@ -135,12 +144,17 @@ public class IssueSummaryService {
                 verificationRepository.topOrgMentions(
                         clusterId, props.getVerification().getOrgContextLimit()));
 
-        Optional<String> summary = summarizer.summarize(new IssueSummarizer.Input(text, gdelt));
-        if (summary.isEmpty()) {
+        IssueSummarizer.Outcome outcome =
+                summarizer.summarize(new IssueSummarizer.Input(text, gdelt));
+        if (outcome.summary().isEmpty()) {
             // 근거 부족·스키마 실패 — 저장하지 않는다(거부/할루시네이션 저장 방지). VERIFYING 유지.
+            // 🔴 **시도는 반드시 남긴다** (WP-182). 안 남기면 hasReport 가 계속 false 라
+            //    다음 폴에서 같은 클러스터를 또 집고, LLM 은 매번 호출되고 결과는 매번 버려진다.
+            repository.recordFailedAttempt(clusterId, model, outcome.failure().name());
+            log.info("요약 실패 기록 cluster={} 사유={}", clusterId, outcome.failure());
             return new EnsureResult(false, false);
         }
-        repository.upsertReport(clusterId, summary.get(), model);
+        repository.upsertReport(clusterId, outcome.summary().get(), model);
         return new EnsureResult(true, false);
     }
 

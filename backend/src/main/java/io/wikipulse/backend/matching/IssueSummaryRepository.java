@@ -77,6 +77,34 @@ public class IssueSummaryRepository {
     }
 
     /**
+     * 저장되지 못한 요약 시도를 원장에 남긴다 (WP-182, V11).
+     *
+     * <p>🔴 <b>이게 없으면 종료 조건이 없다.</b> 저장을 건너뛰면 {@link #hasReport} 가 계속
+     * false 라 다음 폴에서 같은 클러스터가 또 집히고, LLM 은 매번 호출되고 결과는 매번
+     * 버려진다. 2026-09-22 운영에서 51분간 5,414 크레딧이 이렇게 나갔다.
+     *
+     * <p>{@code model} 이 바뀌면(모델·프롬프트 버전 상향) 별개 시도로 보아 카운터를 1 로
+     * 되돌린다 — 프롬프트를 고쳤는데 옛 실패 때문에 영영 안 집히면 고칠 방법이 없다.
+     */
+    public void recordFailedAttempt(long clusterId, String model, String state) {
+        jdbc.update("""
+                INSERT INTO issue_summary_attempt
+                       (cluster_id, model, attempt_count, last_state, last_attempt_at)
+                VALUES (:cid, :model, 1, :state, now())
+                ON CONFLICT (cluster_id) DO UPDATE
+                   SET attempt_count   = CASE WHEN issue_summary_attempt.model = EXCLUDED.model
+                                              THEN issue_summary_attempt.attempt_count + 1
+                                              ELSE 1 END,
+                       model           = EXCLUDED.model,
+                       last_state      = EXCLUDED.last_state,
+                       last_attempt_at = EXCLUDED.last_attempt_at
+                """, new MapSqlParameterSource()
+                .addValue("cid", clusterId)
+                .addValue("model", model)
+                .addValue("state", state));
+    }
+
+    /**
      * 같은 issue_key 의 다른 스냅샷에서 이미 만든 요약을 찾는다 (WP-119 요약 재사용).
      * GATEWAY 재호출을 아끼려고 복사한다 — 🔴 행을 공유하지 않고 복사한다. 각 스냅샷(cluster_id)이
      * 자기 issue_report 행을 가져 generated_at 이 그 스냅샷의 유효 시각이 되므로, 과거 조회가
@@ -170,9 +198,12 @@ public class IssueSummaryRepository {
      * @param topPerSnapshot 스냅샷당 {@code pulse_score} 상위 몇 개까지. 0 이하면 무제한
      * @param model {@code issue_report.model} 동등성으로 재사용 가능 여부를 본다
      * @param source {@code issue_cluster.source} 한정. {@code null}·빈 문자열이면 전체
+     * @param maxAttempts 같은 model 로 이 횟수만큼 실패한 클러스터는 뺀다 (WP-182).
+     *     🔴 이 제외가 없으면 저장 못 하는 클러스터를 매 폴 다시 집어 크레딧만 나간다 —
+     *     {@code topPerSnapshot} 은 "몇 개를 고르나"라 이걸 못 막는다
      */
     public List<Long> clustersNeedingSummary(int limit, int topPerSnapshot, String model,
-                                             String source) {
+                                             String source, int maxAttempts) {
         return jdbc.queryForList("""
                 WITH ranked AS (
                     SELECT id, status, issue_key,
@@ -185,6 +216,17 @@ public class IssueSummaryRepository {
                 SELECT id
                   FROM ranked
                  WHERE status IN ('DETECTED', 'VERIFYING')
+                   -- 🔴 시도 상한에 닿은 클러스터는 뺀다 (WP-182). 같은 model 일
+                   --    때만 막는다 — 모델·프롬프트를 올리면 다시 집혀야 고칠 수 있다.
+                   -- 🔴 :maxAttempts <= 0 이 "무제한"이다. 이 가드가 없으면
+                   --    attempt_count >= 0 이 항상 참이라 시도 기록이 있는 클러스터가
+                   --    **전부** 빠진다 — 의미가 정반대가 되는데 에러는 안 난다.
+                   AND (:maxAttempts <= 0
+                        OR NOT EXISTS (SELECT 1
+                                         FROM issue_summary_attempt a
+                                        WHERE a.cluster_id = ranked.id
+                                          AND a.model = :model
+                                          AND a.attempt_count >= :maxAttempts))
                    AND (:top <= 0
                         OR rnk <= :top
                         OR EXISTS (SELECT 1
@@ -199,6 +241,7 @@ public class IssueSummaryRepository {
                 .addValue("limit", limit)
                 .addValue("top", topPerSnapshot)
                 .addValue("model", model)
+                .addValue("maxAttempts", maxAttempts)
                 .addValue("source", source == null || source.isBlank() ? null : source),
                 Long.class);
     }
