@@ -189,6 +189,7 @@ const handlers = {
       snapshotTs: snapshot.meta.snapshotTs,
       summary: value.summary,
       summaryModel: "mock-authored",
+      report: value.report,
       members: cluster.nodes
         .map((node, index) => ({
           pageId: pageId(node.pageId),

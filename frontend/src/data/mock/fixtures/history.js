@@ -268,6 +268,37 @@ export function reportAt(episode, date = episode?.end) {
       url: docs.get(id).source.url,
       summary: `${topic.focus}을 이해하기 위한 실제 문서 링크입니다. 시각은 시연 리포트의 기준 시각이며 기사 발행일이나 실제 수정일이 아닙니다.`,
     })),
+    report: {
+      status: "ready",
+      generatedAt: reportTs,
+      model: "mock-authored",
+      sections: [
+        {
+          id: "conclusion",
+          title: "결론",
+          body: `${topic.focus} 주제에서 ${articleIds.length}개 문서의 동시 활동 신호가 관측되었습니다. 이는 사건 발생이나 인과관계를 확정하는 판단이 아니라, 함께 확인할 필요가 있는 문서 묶음입니다.`,
+          evidenceIds: articleIds.slice(0, 2),
+        },
+        {
+          id: "change",
+          title: "변화",
+          body: `클러스터의 합성 편집량은 ${metrics.edits.toLocaleString("ko-KR")}회이며, 기준량 ${metrics.baseline}회 대비 ${metrics.pulse}배로 집계되었습니다.`,
+          evidenceIds: [top.pageId],
+        },
+        {
+          id: "context",
+          title: "맥락",
+          body: `${cluster.nodes.map((n) => docs.get(n.pageId).name).join(" · ")} 문서를 함께 읽는 시연용 주제 묶음입니다. 자동 클러스터링의 실측 결과가 아니라 사람이 구성한 시나리오입니다.`,
+          evidenceIds: articleIds.slice(0, 3),
+        },
+        {
+          id: "evidence",
+          title: "근거",
+          body: "아래 원문 문서에서 각 문서의 수정 이력과 주제 내용을 직접 확인할 수 있습니다. 리포트는 제공된 근거를 넘어선 사실을 주장하지 않습니다.",
+          evidenceIds: articleIds,
+        },
+      ],
+    },
     insights: [
       {
         title: "급증 문서에서 클러스터로",
