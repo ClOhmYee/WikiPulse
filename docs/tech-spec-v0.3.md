@@ -244,18 +244,18 @@ docker compose run --rm spark            # 윈도우 집계 잡
 - ~~리플레이 범위·MVP 원본 보존~~ → **2026-07-17~09-17 고정 2개월**, 실제 공통 파이프라인 재생·E2E 검증 완료 전 편집·시간별/일별 조회수·GDELT·Clickstream 원본 삭제 금지
 - ~~replay 대표 텍스트를 현재 Wikipedia 도입부로 읽음~~ → **`page_intro`에서 `snapshot_ts` 이하 마지막 revision을 읽도록 구현** (2026-09-18, WP-129, V8). 현재 도입부 폴백은 금지하며 EC2·실제 replay 재검증은 하지 않음
 - ~~spike 조회수·기준선이 `cluster_member`에 전달되지 않고 상세 API가 최신 원시 행을 읽음~~ → **판정 수치 전달·`completeness` 결정·상세 고정값 조회 구현** (2026-09-18, WP-129, V7). `max_rev_id`·`last_edit_ts` 감사 필드도 V9로 추가. 로컬 회귀 테스트만 완료하고 EC2에서는 검증하지 않음
-- ~~실시간 이슈 요약 writer·상태 전이 미구현~~ → **백엔드 구현 완료** (2026-09-18, WP-119). 워커 기본값은 꺼짐이며 실제 GATEWAY·EC2 실행은 하지 않음
+- ~~실시간 이슈 요약 writer·상태 전이 미구현~~ → **백엔드 구현·EC2 실제 GATEWAY 실행 완료** (WP-119). 현재 워커는 꺼져 있고 재클러스터링 뒤 `issue_report`는 0건 (2026-09-22)
 
 **남은 설계·검증**
 
 - 문서 최초 revision 시각의 LIVE 수집 배선(WP-118). 저장 필드는 구현 완료했으며 `first_seen`은 시스템 최초 관측 시각이라 대체할 수 없음
 - 시간별 조회수 원본 미도착 후보 보관·재평가와 원본 도착 후 15분 이내 처리 계측(WP-118)
-- Docker Compose에서 GATEWAY 키·후보 생성/검증 워커 설정 전달(WP-120). 2026-09-18 별도 canary DB에서는 수동 환경 주입으로 후보·LLM·API/Frontend proxy E2E를 통과했으나 root Compose 배선은 그대로임
-- 클러스터 → GKG 검색 술어·lift 자동 실행(WP-120). canary에서는 통제값으로 수동 연결함
-- 요약 worker를 운영 설정으로 활성화하고 실제 GATEWAY로 요약·`DETECTED → VERIFYING → CONFIRMED`를 검증(WP-119·120). writer 코드는 구현됐지만 worker 기본값은 꺼져 있고 EC2 실행은 0회임
-- 같은 `issue_key`의 요약·검증 결과를 재사용할 때 **원 결과 스냅샷이 대상 `snapshot_ts` 이하인지 제한하고 원 유효 시각을 보존**하는 저장·조회 방식(WP-119·120). 현재 `findPriorSummary`·`findPriorVerdict`는 대상 스냅샷 상한 없이 가장 최근 결과를 고르고, 요약 upsert는 `generated_at=now()`로 기록하므로 과거 backfill에 미래 결과가 섞일 수 있음. 이 순서 역전 회귀 테스트도 없음
+- ~~Docker Compose에서 GATEWAY 키·후보 생성/검증 워커 설정 전달~~ → **완료** (2026-09-20, WP-142)
+- 클러스터 → GKG 검색 술어는 구현됨(WP-148). GKG lift 집계 자동 실행은 남아 있음
+- 요약 worker의 실제 GATEWAY·상태 전이는 EC2에서 실행했다. 반복 거절 방지와 일일 호출 상한도 적용했지만 현재 워커는 운영 안전을 위해 꺼져 있음
+- ~~같은 `issue_key` 결과 재사용이 미래 스냅샷을 과거에 복사할 수 있었음~~ → 요약·후보·검증 재사용과 비용 상한 면제를 원본 `snapshot_ts <=` 대상 `snapshot_ts`로 제한하고 순서 역전 회귀 테스트를 추가함(WP-208). `generated_at`·`verified_at`은 backfill 처리 시각이라 event-time 상한으로 사용하지 않음
 - 2026-07-17~09-17 실제 원본 공통 리플레이로 1,112개 수작업 시드를 교체하고 이후 LIVE 누적까지 연결(WP-120)
-- 종목 상세 가격 API·FE 연결(WP-124). yfinance 적재기(WP-64)는 있으나 `/stocks/{ticker}/prices`와 로컬 가격 데이터는 없음
+- ~~종목 상세 가격 API·FE 연결~~ → **완료** (2026-09-18, WP-124). 시연 44종목 55,176행을 적재하고 차트·이슈 마커 E2E를 검증함
 
 **운영**
 
