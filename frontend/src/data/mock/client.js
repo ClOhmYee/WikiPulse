@@ -135,6 +135,8 @@ function stockCard(value) {
     exchange: value.market,
     sector: value.sector,
     issueCount: issuesForTicker(value.symbol).length,
+    // mock 은 가격을 지어내지 않는다(getStockPrices 도 빈 구간) — 계약 모양만 맞춘다.
+    lastClose: null,
   };
 }
 const handlers = {

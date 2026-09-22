@@ -356,8 +356,8 @@ export default function StockDirectory({
         )}
       </section>
       <p className="st-data-note">
-        가격과 등락률은 제공되지 않았습니다. 종목의 연결 설명은 관련 이슈에서
-        확인하세요.
+        가격은 최신 거래일 종가이며, 없는 종목은 "미제공"으로 표시됩니다. 등락률은
+        제공되지 않았습니다. 종목의 연결 설명은 관련 이슈에서 확인하세요.
       </p>
     </div>
   );

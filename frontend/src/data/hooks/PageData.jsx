@@ -13,6 +13,13 @@ import { useAsyncResource } from "./useAsyncResource.js";
 import { EmptyState } from "../../components/ui/EmptyState";
 
 const Context = createContext(null);
+// 종목 탐색은 "관련 이슈가 있는 종목만"을 기본 ON 으로 둔다(WP-189) — 알파벳순
+// 기본이면 A·AA… 만 보여 매칭·가격 있는 종목(BA·DAL 등)이 첫 페이지에 안 뜬다.
+const defaultParams = (resource) => ({
+  offset: 0,
+  limit: 20,
+  ...(resource === "stocks" ? { hasIssues: true } : {}),
+});
 export function usePageData() {
   const data = useContext(Context);
   if (!data)
@@ -30,14 +37,14 @@ export function PageDataBoundary({
   const routeIdentity = JSON.stringify({ resource, id });
   const [queryState, setQueryState] = useState({
     routeIdentity,
-    params: { offset: 0, limit: 20 },
+    params: defaultParams(resource),
   });
   const listParams = useMemo(
     () =>
       queryState.routeIdentity === routeIdentity
         ? queryState.params
-        : { offset: 0, limit: 20 },
-    [queryState, routeIdentity],
+        : defaultParams(resource),
+    [queryState, routeIdentity, resource],
   );
   const key = JSON.stringify({
     resource,
@@ -74,7 +81,7 @@ export function PageDataBoundary({
         const previous =
           current.routeIdentity === routeIdentity
             ? current.params
-            : { offset: 0, limit: 20 };
+            : defaultParams(resource);
         const partial =
           typeof update === "function" ? update(previous) : update;
         return {
@@ -88,7 +95,7 @@ export function PageDataBoundary({
         };
       });
     },
-    [routeIdentity, snapshotTs, sourceSnapshots],
+    [routeIdentity, snapshotTs, sourceSnapshots, resource],
   );
   const value = useMemo(
     () =>

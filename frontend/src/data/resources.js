@@ -112,7 +112,9 @@ export function stockView(raw, eventId) {
     description: availableText(raw.businessSummary),
     cik: raw.cik ?? null,
     issueCount: raw.issueCount ?? null,
-    price: null,
+    // 목록 카드의 최신 종가(WP-189). 상세는 /prices 로 따로 받으므로 여기선
+    // lastClose 만 채운다. 가격 없는 종목은 null → priceLabel 이 "미제공"을 찍는다.
+    price: optionalNumber(raw.lastClose),
     change: null,
     changePercent: null,
     currency: null,

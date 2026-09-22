@@ -40,7 +40,10 @@ public interface StockRepository extends JpaRepository<Stock, String> {
                    s.sector AS sector,
                    (SELECT count(DISTINCT cs.cluster_id) FROM cluster_stock cs
                      JOIN issue_cluster c ON c.id = cs.cluster_id
-                    WHERE cs.ticker = s.ticker AND cs.verified AND c.status <> 'DISCARDED') AS issueCount
+                    WHERE cs.ticker = s.ticker AND cs.verified AND c.status <> 'DISCARDED') AS issueCount,
+                   (SELECT sp.close FROM stock_price sp
+                     WHERE sp.ticker = s.ticker
+                     ORDER BY sp.trade_date DESC LIMIT 1) AS lastClose
             FROM stock s
             WHERE (:q IS NULL OR lower(s.name) LIKE :q OR lower(s.ticker) LIKE :q)
               AND (:sector IS NULL OR s.sector = :sector)

@@ -239,10 +239,12 @@ DB `CHECK` 제약과 **같은 값을 그대로** 쓴다. 번역하지 않는다.
 
 ```json
 { "data": [ { "ticker": "NVDA", "name": "NVIDIA Corporation", "exchange": "NASDAQ",
-              "sector": "Technology", "issueCount": 2 } ] }
+              "sector": "Technology", "issueCount": 2, "lastClose": 201.15 } ] }
 ```
 
 `businessSummary`는 목록에 넣지 않는다 — 종목당 수천 자라 5,100건 목록이 수 MB가 된다.
+
+`lastClose`는 최신 거래일 종가(가격 컬럼용, WP-189)다. 일봉이 없는 종목은 `null`(FE는 "미제공"으로 표시).
 
 ### `GET /api/v1/stocks/{ticker}`
 
