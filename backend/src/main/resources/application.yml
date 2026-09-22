@@ -99,6 +99,12 @@ wikipulse:
       top-per-snapshot: ${WIKIPULSE_MATCHING_SUMMARY_TOPPERSNAPSHOT:10}
       # 🔴 scheduler.source 와 **같은 값**이어야 한다. 근거는 그쪽 주석.
       source: ${WIKIPULSE_MATCHING_SUMMARY_SOURCE:}
+      # 같은 model 로 요약 저장에 실패해도 되는 횟수 (WP-182).
+      # 🔴 top-per-snapshot 은 이걸 못 막는다 — 그건 "몇 개를 고르나"이고 이건 "같은 것을
+      #    몇 번 시도하나"다. 저장 못 하는 클러스터는 issue_report 가 계속 비어 매 폴 다시
+      #    집히고 LLM 은 매번 호출된다. 2026-09-22 운영에서 51분에 5,414 크레딧이 이렇게 샜다.
+      # 0 이하 = 무제한. ⚠️ 켜지 말 것 — 이 이슈 이전 동작으로 돌아간다.
+      max-attempts: ${WIKIPULSE_MATCHING_SUMMARY_MAXATTEMPTS:3}
 
 # 외부 호출 신뢰성 계층 (WP-66). named instance gateway / wikipedia.
 # 전송 계층 실패만 다룬다(타임아웃·5xx·429·연결오류·회로개방). 스키마 검증·attempt_count·

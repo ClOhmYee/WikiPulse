@@ -59,13 +59,45 @@ public class IssueSummarizer {
     }
 
     /**
+     * 요약이 저장되지 못한 이유 (WP-182).
+     *
+     * <p>🔴 <b>둘을 구분해야 한다.</b> 둘 다 "저장 안 함"으로 끝나지만 원인과 대책이 다르다 —
+     * 근거 부족은 대표 텍스트가 빈약해서 모델이 정직하게 거절한 것이고(입력을 고쳐야 풀린다),
+     * 스키마 위반은 프롬프트·모델 문제다. 원장에 같은 값으로 남기면 나중에 구분할 수 없다.
+     *
+     * <p>전송 실패는 여기 없다 — 그건 {@link UpstreamUnavailableException} 으로 전파되고
+     * 재시도해야 하는 일시 장애다.
+     */
+    public enum Failure {
+        /** 요약 성공. */
+        NONE,
+        /** 모델이 {@code sufficient_context=false} 로 근거 부족을 신고했다. */
+        INSUFFICIENT_CONTEXT,
+        /** 정정 1회 후에도 응답이 스키마를 지키지 않았다. */
+        SCHEMA_VIOLATION
+    }
+
+    /** 요약 결과. {@code summary} 가 비면 {@code failure} 가 왜 비었는지 말한다. */
+    public record Outcome(Optional<String> summary, Failure failure) {
+
+        static Outcome ok(String summaryKo) {
+            return new Outcome(Optional.of(summaryKo), Failure.NONE);
+        }
+
+        static Outcome failed(Failure failure) {
+            return new Outcome(Optional.empty(), failure);
+        }
+    }
+
+    /**
      * 클러스터를 요약한다.
      *
      * @return 근거가 충분하고 스키마를 지킨 한국어 요약. 근거 부족(sufficient_context=false)이거나
-     *     정정 1회까지도 스키마 위반이면 {@link Optional#empty()} — 호출자는 저장하지 않는다
+     *     정정 1회까지도 스키마 위반이면 빈 요약 + 그 이유({@link Failure}) — 호출자는 저장하지
+     *     않고 <b>시도를 원장에 남겨</b> 무한 재시도를 끊는다 (WP-182)
      * @throws UpstreamUnavailableException 전송 실패 (-66) — 호출자가 미확정 유지로 처리
      */
-    public Optional<String> summarize(Input input) {
+    public Outcome summarize(Input input) {
         List<Map<String, String>> messages = new ArrayList<>();
         messages.add(message("user", buildUserMessage(input)));
 
@@ -76,9 +108,9 @@ public class IssueSummarizer {
                 SummaryResponse resp = SummaryResponse.fromJson(node);
                 if (!resp.sufficientContext()) {
                     log.info("요약 근거 부족 — 저장 건너뜀 (sufficient_context=false)");
-                    return Optional.empty();
+                    return Outcome.failed(Failure.INSUFFICIENT_CONTEXT);
                 }
-                return Optional.of(resp.summaryKo());
+                return Outcome.ok(resp.summaryKo());
             } catch (IOException e) {
                 if (attempt == 0) {
                     appendCorrection(messages, raw, "JSON 파싱 실패: " + e.getMessage());
@@ -90,7 +122,7 @@ public class IssueSummarizer {
             }
         }
         log.warn("요약 스키마 위반 — 정정 1회 후에도 실패");
-        return Optional.empty();
+        return Outcome.failed(Failure.SCHEMA_VIOLATION);
     }
 
     private void appendCorrection(List<Map<String, String>> messages, String rawAssistant, String problem) {
