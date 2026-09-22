@@ -104,6 +104,18 @@ class PageviewHourly:
     title: str      # canonical 공백형. 덤프 원형(밑줄)이 아니다 — WP-79
     ts_hour: str    # ISO "YYYY-MM-DDTHH:00:00" (UTC)
     views: int
+    #: 그중 모바일(`en.m`). 🔴 **합산에 포함된 부분집합이다** — `views` 에서 빼지 않는다.
+    #: ~~데스크톱·모바일을 합치고 버렸다~~ → 보존 (2026-09-22, WP-210).
+    #: 봇 트래픽이 데스크톱 단일 채널로 오기 때문이다. `Roblox` 2026-08-10 은 하루
+    #: 478만 조회(674배)인데 모바일이 0.1% 였다(평소 60%). 반대로 진짜 사건은
+    #: 52~64% 다 — 골든데이 `Air India Flight 171` 63.1%. 겹치는 구간이 없다.
+    #: 근거: `ai/spec-evidence/gate-review/RESULT.md`.
+    mobile_views: int = 0
+
+    @property
+    def mobile_ratio(self) -> float | None:
+        """모바일 비중 0.0~1.0. `views` 가 0 이면 None — 0 으로 두면 봇으로 오해된다."""
+        return self.mobile_views / self.views if self.views else None
 
 
 def projects_for(wiki: str) -> frozenset[str]:
@@ -147,8 +159,8 @@ def filename_hour(ts_hour: str) -> tuple[str, str]:
     return end.strftime("%Y%m%d"), end.strftime("%H")
 
 
-def parse_row(line: str, projects: frozenset[str]) -> tuple[str, int] | None:
-    """공백 4컬럼 한 줄 → (canonical title, views). 대상 project·ns0 가 아니면 None.
+def parse_row(line: str, projects: frozenset[str]) -> tuple[str, int, bool] | None:
+    """공백 4컬럼 한 줄 → (canonical title, views, is_mobile). 대상 project·ns0 가 아니면 None.
 
     컬럼 수가 4가 아니거나 조회수가 정수가 아니면 SchemaMismatch.
 
@@ -173,7 +185,9 @@ def parse_row(line: str, projects: frozenset[str]) -> tuple[str, int] | None:
         # `_` · `__` 같은 행이 실제로 있다(2026-09-18 04:00Z 파일에 5회). canonical 을
         # 거치면 빈 문자열이 되는데, 그대로 두면 제목이 빈 wiki_page 행이 생긴다.
         return None
-    return canonical, views
+    # ⚠️ 모바일 판정은 project 코드 **접미사**로 한다 (`en.m`·`de.m`…). `en` 에 붙는
+    #    다른 변종(`en.zero` 등)이 생겨도 데스크톱으로 오분류되지 않게 `.m` 만 본다.
+    return canonical, views, project.endswith(".m")
 
 
 def aggregate(
@@ -183,9 +197,12 @@ def aggregate(
     *,
     titles: frozenset[str] | None = None,
 ) -> Iterator[PageviewHourly]:
-    """한 시간 파일을 (wiki, title, ts_hour, views) 로 합산한다.
+    """한 시간 파일을 (wiki, title, ts_hour, views, mobile_views) 로 합산한다.
 
     데스크톱(`en`)과 모바일(`en.m`)이 한 문서당 각각 한 행이라 합쳐진다.
+    🔴 **합치되 모바일 몫을 따로 남긴다** (WP-210). 예전에는 합산만 하고
+    버렸는데, 그 비율이 봇 트래픽과 실제 사건을 가르는 유일한 신호다. 여기서 버리면
+    다시 얻으려고 AQS 를 문서마다 때려야 한다 — 같은 파일 안에 이미 있는 값이다.
 
     `titles` 를 주면 그 문서만 남긴다(canonical 공백형으로 비교). ⚠️ **전체를 그대로
     적재하지 않는 이유**: enwiki ns0 만 시간당 약 190만 행이라 하루 4,500만 행이고,
@@ -195,16 +212,20 @@ def aggregate(
     """
     projects = projects_for(wiki)
     acc: dict[str, int] = {}
+    mobile: dict[str, int] = {}
     for line in lines:
         if not line.strip():
             continue
         parsed = parse_row(line, projects)
         if parsed is None:
             continue
-        title, views = parsed
+        title, views, is_mobile = parsed
         if titles is not None and title not in titles:
             continue
         acc[title] = acc.get(title, 0) + views
+        if is_mobile:
+            mobile[title] = mobile.get(title, 0) + views
 
     for title, views in acc.items():
-        yield PageviewHourly(wiki=wiki, title=title, ts_hour=ts_hour, views=views)
+        yield PageviewHourly(wiki=wiki, title=title, ts_hour=ts_hour, views=views,
+                             mobile_views=mobile.get(title, 0))
