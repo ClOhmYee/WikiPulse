@@ -1,0 +1,129 @@
+# LIVE 상주 서비스 셋 — 서비스(기본) EC2 (WP-196).
+#
+# 🔴 **이 파일은 실물을 기술한 것이지 새로 설계한 것이 아니다.**
+#    2026-09-22 현재 세 컨테이너가 수동 `docker run` 으로 떠 있었고 어디에도 기록이
+#    없었다. `docker inspect` 로 복원해 여기 옮긴다. 값을 "고치지 않았다" — 지금
+#    돌고 있는 그대로다. 고칠 것이 있으면 별건으로 하고, 먼저 현실을 적는다.
+#
+# 🔴 **왜 이게 필요했나.** 2026-09-22 에 WP-127(조회수 한 시간 밀림) 수정이
+#    develop 에 머지됐는데 LIVE 는 24시간 동안 옛 코드로 돌았다. 배포 경로가 없어서
+#    아무도 몰랐고, 그 사이 `spike_candidate` 가 56,940건까지 쌓였다.
+#    사람이 손으로 파일을 복사하고 컨테이너를 재시작해서야 풀렸다 — WP-194.
+#
+# ⚠️ **코드는 이미지가 아니라 bind mount 에서 온다.** 그래서 이미지를 다시 안 빌드해도
+#    파일만 바꾸고 재시작하면 반영된다. 반대로 말하면 **서버 디렉터리가 저장소보다
+#    낡아도 아무 신호가 없다.** 그 감지는 이 파일이 아니라 배포 경로가 할 일이다.
+#
+# ⚠️ `infra/live-cycle/` 은 WP-135 가 만든 **다른 정의**다. 빌드 이미지·
+#    `wikipulse-net`·named volume 을 쓰는데 실물은 그걸 안 쓴다. 지우지 않고 남겨
+#    둔다 — 어느 쪽으로 갈지는 이 이슈에서 정하고, 그 전에 실물을 잃지 않는 것이
+#    먼저다.
+
+name: wikipulse-live
+
+x-logging: &bounded-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+# 🔴 세 서비스가 **같은 이미지·같은 마운트**를 쓴다. 이미지는 파이썬 런타임일 뿐이고
+#    (docker/spark/Dockerfile — 파이썬 3.11 고정, WP-136) 실제 코드는 아래
+#    마운트에서 온다.
+# ⚠️ 그래서 파일을 바꾸면 **셋 다** 다음 재시작에서 새 코드를 쓴다. 하나만 고치려고
+#    바꿔도 나머지 둘이 따라온다 — 의도한 시점이 아닐 수 있다.
+x-live-common: &live-common
+  image: ${LIVE_IMAGE:-wikipulse-spark-standalone:local}
+  working_dir: /opt/app
+  init: true
+  restart: ${RESTART_POLICY:-unless-stopped}
+  networks: [postgres]
+  volumes:
+    - ${LIVE_APP_DIR:-/home/deploy/wikipulse-local-test/data-pipeline}:/opt/app
+  logging: *bounded-logging
+
+networks:
+  # ⚠️ `wikipulse-net` 이 아니다. 실물이 `postgres_default` 에 붙어 있고, 거기서
+  #    `postgres:5432` 로 DB 에 닿는다. 두 네트워크가 서버에 다 존재하므로 이름을
+  #    잘못 쓰면 **에러 없이 DNS 만 실패**한다.
+  postgres:
+    external: true
+    name: ${LIVE_NETWORK:-postgres_default}
+
+services:
+  # 편집 스트림 → 시간 윈도우 → spike_candidate.
+  #
+  # 🔴 **데이터 EC2 의 `wikipulse-edit-stream`(infra/pipeline) 과 다른 인스턴스다.**
+  #    같은 토픽을 읽지만 역할이 갈린다:
+  #      데이터 EC2   SINK=console  SLIDE_SIZE=5m   CHECKPOINT_DIR=hdfs://...  — 출력만
+  #      여기         SINK=spike    SLIDE_SIZE=1h   체크포인트 없음            — DB 에 쓴다
+  #    체크포인트가 겹치지 않아 오프셋을 서로 밟지는 않는다(2026-09-22 확인).
+  #
+  # 🔴 **SLIDE_SIZE 는 WINDOW_SIZE 와 같아야 한다** (정각 tumbling). 조회수가 시간
+  #    버킷이라 윈도우 시작이 정각이어야 1:1 로 붙는다. 5분 슬라이드면 문서 하나가
+  #    시간당 대기 12건을 만들고 그중 정각 하나만 확정된다 — 2026-09-18 실측에서
+  #    문서 2개가 24건을 만들었고 tumbling 으로 바꾸니 2건이 됐다.
+  #    ⚠️ SINK 와 SLIDE_SIZE 는 **짝이다.** SINK 만 spike 로 바꾸면 그 12배가 터진다.
+  edit-stream:
+    <<: *live-common
+    container_name: wikipulse-live-edit-stream
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:?Set POSTGRES_USER in .env}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}@postgres:5432/${POSTGRES_DB:-wikipulse}
+      KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS:-192.0.2.10:9092}
+      KAFKA_TOPIC: ${KAFKA_TOPIC:-wiki.edits}
+      SINK: spike
+      WINDOW_SIZE: 1 hour
+      SLIDE_SIZE: 1 hour
+      TRIGGER_INTERVAL: 30 seconds
+      PYSPARK_PYTHON: python3
+      PYSPARK_DRIVER_PYTHON: python3
+    command:
+      - spark-submit
+      - --packages
+      - org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.3
+      - --conf
+      - spark.jars.ivy=/tmp/ivy
+      - streaming/edit_windows.py
+
+  # 대기 중인 윈도우의 조회수만 받아 재판정한다.
+  #
+  # ⚠️ 한 주기에 **가장 오래된 N시간**을 고른다. 그 시간의 후보가 영영 안 풀리면
+  #    큐가 맨 앞에서 막히고 뒤가 통째로 굶는다 — 2026-09-22 에 실제로 24시간
+  #    그랬다(WP-194). 조회수와 후보의 시각이 어긋나면 이 모양이 된다.
+  live-cycle:
+    <<: *live-common
+    container_name: wikipulse-live-cycle
+    cpus: 1.0
+    mem_limit: 1g
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:?Set POSTGRES_USER in .env}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}@postgres:5432/${POSTGRES_DB:-wikipulse}
+      # 🔴 Wikimedia 는 연락처 없는 User-Agent 를 차단한다.
+      CONTACT_EMAIL: ${CONTACT_EMAIL:?Set CONTACT_EMAIL in .env}
+      PYSPARK_PYTHON: python3
+      PYSPARK_DRIVER_PYTHON: python3
+    command:
+      - python3
+      - -m
+      - spike.live_cycle
+      - --loop
+      - --interval
+      - "${LIVE_CYCLE_INTERVAL:-300}"
+      - --cache
+      - /opt/app/data/live-cache
+      - --out
+      - /opt/app/data/live-pageview
+
+  # spike → 클러스터 스냅샷. cluster-loop.sh 가 주기를 돈다.
+  #
+  # ⚠️ `--creation-index` 경로에 스냅샷 월(2026-08)이 박혀 있다. 달이 바뀌면 사람이
+  #    고쳐야 한다 — 안 고치면 조용히 옛 생성일로 판정한다.
+  # ⚠️ `--clickstream-root` 는 완료 월 규칙을 타므로 당월 덤프는 안 쓴다.
+  live-cluster:
+    <<: *live-common
+    container_name: wikipulse-live-cluster
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:?Set POSTGRES_USER in .env}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}@postgres:5432/${POSTGRES_DB:-wikipulse}
+      CLUSTER_LOOP_INTERVAL: "${CLUSTER_LOOP_INTERVAL:-300}"
+      PYSPARK_PYTHON: python3
+      PYSPARK_DRIVER_PYTHON: python3
+    command: ["bash", "cluster-loop.sh"]
