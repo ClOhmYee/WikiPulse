@@ -48,7 +48,7 @@ PAGEVIEW_HOURLY_BASE = "https://dumps.wikimedia.org/other/pageviews"
 DEFAULT_SHARD_RECORDS = 500_000
 
 #: `page_view_hourly` 는 (page_id, ts_hour) 가 PK 다(V1). 같은 시간을 다시 받으면 값만 갱신한다.
-#: `mobile_views` 는 V15 (WP-210) — views 에 포함된 부분집합이다.
+#: `mobile_views` 는 V16 (WP-210) — views 에 포함된 부분집합이다.
 UPSERT_VIEW_SQL = """
 INSERT INTO page_view_hourly (page_id, ts_hour, views, mobile_views)
 VALUES (%s, %s, %s, %s)
