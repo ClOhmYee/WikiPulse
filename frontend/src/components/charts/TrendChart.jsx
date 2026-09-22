@@ -2,7 +2,6 @@ import { useEffect, useId, useRef, useState } from "react";
 import { formatNumber } from "../../lib/format";
 export function TrendChart({
   data = [],
-  isExample = false,
   valueKey = "edits",
   label = "편집 추이",
   color = "#86c9c4",
@@ -224,40 +223,40 @@ export function TrendChart({
               />
             )}
             {visibleMarkers.map(({ marker, mx }) => {
-                const node = (
-                  <>
-                    <line
-                      x1={mx}
-                      x2={mx}
-                      y1={top}
-                      y2={y(min)}
-                      stroke="#dbb057"
-                      strokeWidth="1.5"
-                      strokeDasharray="2 3"
-                    />
-                    <circle
-                      cx={mx}
-                      cy={top}
-                      r="4"
-                      fill="#dbb057"
-                      stroke="#0b141b"
-                      strokeWidth="1.5"
-                    />
-                    <title>{`${marker.date} · ${marker.label}`}</title>
-                  </>
-                );
-                return marker.href ? (
-                  <a
-                    key={marker.key ?? marker.href}
-                    href={marker.href}
-                    aria-label={`이슈 ${marker.label} (${marker.date})`}
-                  >
-                    {node}
-                  </a>
-                ) : (
-                  <g key={marker.key ?? marker.date}>{node}</g>
-                );
-              })}
+              const node = (
+                <>
+                  <line
+                    x1={mx}
+                    x2={mx}
+                    y1={top}
+                    y2={y(min)}
+                    stroke="#dbb057"
+                    strokeWidth="1.5"
+                    strokeDasharray="2 3"
+                  />
+                  <circle
+                    cx={mx}
+                    cy={top}
+                    r="4"
+                    fill="#dbb057"
+                    stroke="#0b141b"
+                    strokeWidth="1.5"
+                  />
+                  <title>{`${marker.date} · ${marker.label}`}</title>
+                </>
+              );
+              return marker.href ? (
+                <a
+                  key={marker.key ?? marker.href}
+                  href={marker.href}
+                  aria-label={`이슈 ${marker.label} (${marker.date})`}
+                >
+                  {node}
+                </a>
+              ) : (
+                <g key={marker.key ?? marker.date}>{node}</g>
+              );
+            })}
           </>
         )}
         {data.map((item, i) => (
@@ -311,11 +310,7 @@ export function TrendChart({
           </span>
         )}
         <span className="wp-muted">
-          {isPrice
-            ? `세로축 확대${isExample ? " · 예시" : ""}`
-            : isExample
-              ? "예시 데이터"
-              : "제공된 데이터"}
+          {isPrice ? "세로축 확대" : "제공된 데이터"}
         </span>
       </figcaption>
     </figure>

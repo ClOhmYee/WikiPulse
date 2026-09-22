@@ -131,11 +131,6 @@ export default function EventPage({
               {formatDate(event.snapshotTs)} 기준
             </time>
             <IssueState status={event.status} />
-            <span>
-              {isExample
-                ? "이벤트 데이터 예시"
-                : "이벤트 데이터 · 출처 확인 필요"}
-            </span>
           </div>
         </div>
         <button
@@ -397,10 +392,8 @@ export default function EventPage({
               <div className="dt-section-intro">
                 <h2>변화가 이어진 순서</h2>
                 <p>
-                  최근 기록부터 편집 신호와 소식을 살펴보세요.{" "}
-                  {isExample
-                    ? "모든 시점과 설명은 데모 예시입니다."
-                    : "각 기록의 기준 시각과 출처를 확인해 주세요."}
+                  최근 기록부터 편집 신호와 소식을 살펴보세요. 각 기록의 기준
+                  시각과 출처를 확인해 주세요.
                 </p>
               </div>
               <Timeline entries={timeline} articles={articles} />

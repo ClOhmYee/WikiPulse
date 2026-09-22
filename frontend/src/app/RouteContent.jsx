@@ -16,7 +16,25 @@ export default function RouteContent({
   onToggleEvent,
   onToggleStock,
   onSource,
+  member,
+  onLogin,
 }) {
+  if (!member && ["/saved", "/mypage"].includes(pathname))
+    return (
+      <EmptyState
+        title="로그인이 필요합니다"
+        description="로그인하고 내 정보와 보관함을 확인해 보세요."
+        action={
+          <button
+            className="wp-button"
+            data-variant="primary"
+            onClick={onLogin}
+          >
+            로그인
+          </button>
+        }
+      />
+    );
   const parts = pathname.split("/").filter(Boolean);
   const separator = route.indexOf("?");
   const queryParams = new URLSearchParams(
@@ -56,8 +74,7 @@ export default function RouteContent({
         onToggleStock={onToggleStock}
       />
     );
-  else if (["/mypage", "/login", "/signup"].includes(pathname))
-    content = <AccountPage page={parts[0]} />;
+  else if (pathname === "/mypage") content = <AccountPage member={member} />;
   else if (parts[0] === "stocks" && parts.length <= 2)
     content = (
       <StocksPage

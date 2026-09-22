@@ -1,5 +1,9 @@
+import { authenticate } from "./helpers/auth.js";
 import { test, expect } from "@playwright/test";
 import { mockClient } from "../src/data/mock/client.js";
+test.beforeEach(async ({ page }) => {
+  await authenticate(page);
+});
 const issue = (await mockClient.getIssue("iran-hormuz-2025")).data;
 
 test("missing stored IDs remain removable and valid saved entries survive", async ({
