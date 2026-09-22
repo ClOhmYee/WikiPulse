@@ -1,11 +1,7 @@
 import { ArrowRight, Bookmark } from "lucide-react";
 import { CategoryTag } from "../ui/CategoryTag";
 import { IssueState } from "./IssueState";
-import {
-  metricLabel,
-  sourceLabel,
-  timestampLabel,
-} from "../../pages/event/presentation.js";
+import { metricLabel, timestampLabel } from "../../pages/event/presentation.js";
 export function EventRow({ event, saved, onToggle, category }) {
   return (
     <article className="event-row">
@@ -24,7 +20,6 @@ export function EventRow({ event, saved, onToggle, category }) {
           <time dateTime={event.snapshotTs || undefined}>
             {timestampLabel(event.snapshotTs)}
           </time>
-          <span>{sourceLabel(event.source)}</span>
           <IssueState status={event.status} />
         </div>
       </div>

@@ -8,9 +8,22 @@ import {
   kstDate,
   closestSnapshot,
   calendarDays,
+  timelineSnapshots,
 } from "../src/data/pulse/time.js";
 import { createApiClient } from "../src/data/api/client.js";
 import { createLayoutEngine, nodeRadius } from "../src/pages/pulse/layout.js";
+
+test("timeline spans sources chronologically and resolves overlapping instants", () => {
+  const older = { source: "replay", snapshotTs: "2025-06-01T00:00:00Z" };
+  const live = { source: "live", snapshotTs: "2026-09-21T00:00:00Z" };
+  const duplicate = {
+    source: "replay",
+    snapshotTs: "2026-09-21T09:00:00+09:00",
+  };
+  assert.deepEqual(timelineSnapshots([live, duplicate, older]), [older, live]);
+  assert.deepEqual(timelineSnapshots([older, duplicate, live]), [older, live]);
+  assert.deepEqual(timelineSnapshots([]), []);
+});
 
 test("KST dates, missing dates, NEW boundary and real timestamp snapping", () => {
   assert.equal(kstDate("2025-06-23T15:00:00Z"), "2025-06-24");

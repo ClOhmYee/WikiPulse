@@ -29,7 +29,7 @@ export function describeSource(meta) {
   if (!meta)
     return {
       label: "출처 확인 중",
-      description: "데이터를 불러오면 출처와 기준 시각을 표시합니다.",
+      description: "데이터를 불러오는 중입니다.",
     };
   if (meta?.dataMode === "mock")
     return {
@@ -40,6 +40,6 @@ export function describeSource(meta) {
   return {
     label: "API 데이터",
     description:
-      "서버가 제공한 이슈와 종목 정보입니다. 표시된 출처와 스냅샷 시각을 확인해 주세요. API 연결만으로 실시간 수집이나 AI 검증 완료를 뜻하지 않습니다.",
+      "서버가 제공한 이슈와 종목 정보입니다. 각 이슈의 기준 시각과 분석 상태를 확인해 주세요.",
   };
 }

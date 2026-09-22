@@ -773,23 +773,6 @@
   flex-wrap: wrap;
   margin: 6px 0 13px;
 }
-.explore-date {
-  text-align: right;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  flex-shrink: 0;
-}
-.explore-date span {
-  color: #8fa7b1;
-  font-size: 10px;
-}
-.explore-date strong {
-  font-size: 13px;
-  font-weight: 450;
-  font-variant-numeric: tabular-nums;
-  letter-spacing: 0.025em;
-}
 .explore-toolbar {
   display: flex;
   align-items: center;
@@ -1589,9 +1572,6 @@
   }
   .wp-empty p {
     font-size: 12px;
-  }
-  .explore-date {
-    display: none;
   }
   .explore-toolbar {
     gap: 10px;

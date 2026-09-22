@@ -4,11 +4,7 @@ import { usePageData } from "../../data/hooks/PageData";
 import { EventRow } from "../../components/event/EventRow";
 import { Pagination } from "../../components/event/IssueState";
 import { EmptyState } from "../../components/ui/EmptyState";
-import {
-  ISSUE_STATUS_LABELS,
-  sourceLabel,
-  timestampLabel,
-} from "../event/presentation.js";
+import { ISSUE_STATUS_LABELS } from "../event/presentation.js";
 export default function ExplorePage({
   initialQuery = "",
   savedEvents,
@@ -17,7 +13,6 @@ export default function ExplorePage({
   const {
     events,
     getCategory,
-    meta,
     listParams,
     setListParams,
     pagination,
@@ -43,18 +38,6 @@ export default function ExplorePage({
           <p className="wp-subtitle">
             흩어진 문서의 움직임에서, 하나의 사건을 발견하세요.
           </p>
-        </div>
-        <div className="explore-date">
-          <span>데이터 기준 시각</span>
-          {Object.keys(meta.sourceSnapshots || {}).length ? (
-            Object.entries(meta.sourceSnapshots).map(([source, snapshotTs]) => (
-              <strong key={source}>
-                {sourceLabel(source)} · {timestampLabel(snapshotTs)}
-              </strong>
-            ))
-          ) : (
-            <strong>{timestampLabel(meta.snapshotTs)}</strong>
-          )}
         </div>
       </div>
       <div className="explore-toolbar">
@@ -96,9 +79,8 @@ export default function ExplorePage({
         </div>
       </div>
       <p className="data-scope" id="issue-search-scope">
-        제목 검색은 현재 페이지에 표시된 이슈에서 찾습니다. 이슈는 급증 점수가
-        높은 순서로 표시됩니다. 모든 출처는 실시간·과거 각각의 최신 데이터를
-        함께 표시합니다.
+        제목 검색은 현재 페이지에 표시된 이슈에서 찾습니다. 이슈는 기준 시각이
+        최신인 순서로 표시됩니다.
       </p>
       {loading && (
         <p role="status" className="data-scope">
@@ -122,21 +104,6 @@ export default function ExplorePage({
                 {label}
               </option>
             ))}
-          </select>
-        </label>
-        <label>
-          데이터 출처
-          <select
-            className="wp-select"
-            aria-label="데이터 출처"
-            value={listParams.source || ""}
-            onChange={(e) =>
-              setListParams({ source: e.target.value || undefined })
-            }
-          >
-            <option value="">모든 출처</option>
-            <option value="live">실시간 수집</option>
-            <option value="replay">과거 재구성</option>
           </select>
         </label>
         <button
@@ -168,7 +135,7 @@ export default function ExplorePage({
           description={
             query
               ? "검색어를 바꾸거나 다른 페이지에서 찾아보세요."
-              : "AI 검증 상태나 데이터 출처를 바꿔 보세요."
+              : "분석 상태를 바꿔 보세요."
           }
           action={
             <button
@@ -177,7 +144,6 @@ export default function ExplorePage({
                 setQuery("");
                 setListParams({
                   status: undefined,
-                  source: undefined,
                   offset: 0,
                 });
               }}
