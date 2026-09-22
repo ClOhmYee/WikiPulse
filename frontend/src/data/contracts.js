@@ -7,6 +7,7 @@
  * @typedef {{data: T, meta?: {snapshotTs?: string, pagination?: Pagination}}} DataResponse
  * @typedef {Object} DataClient
  * @property {string} dataSource
+ * @property {(params?: object, options?: RequestOptions) => Promise<DataResponse<object>>} getIssueRankings
  * @property {(params?: ListParams, options?: RequestOptions) => Promise<DataResponse<object[]>>} listIssues
  * @property {(id: string, options?: RequestOptions) => Promise<DataResponse<object>>} getIssue
  * @property {(id: string, params?: {limit?: number}, options?: RequestOptions) => Promise<DataResponse<object[]>>} listIssueStocks

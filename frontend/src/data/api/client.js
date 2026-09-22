@@ -9,6 +9,7 @@ import {
   relatedStock,
 } from "./adapters.js";
 import { validateMap, validateSnapshots } from "../pulse/contract.js";
+import { validateRankings } from "../rankings.js";
 
 /** @returns {import('../contracts.js').DataClient} */
 export function createApiClient(baseURL, fetcher) {
@@ -22,6 +23,8 @@ export function createApiClient(baseURL, fetcher) {
     });
   return {
     dataSource: "api",
+    getIssueRankings: async (params = {}, options) =>
+      validateRankings(await request("/issues/rankings", params, options)),
     listIssues: (params = {}, options) =>
       list("/issues", params, options, issueCard, true),
     getIssue: async (id, options) =>
