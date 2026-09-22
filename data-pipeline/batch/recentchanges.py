@@ -78,6 +78,20 @@ RETRY_ON_429 = 6
 #: 수집할 필드. `flags` 가 봇 판정을 준다 — 빼면 이 수집물이 쓸모없어진다.
 RC_PROPS = "timestamp|user|userid|flags|title|ids|sizes"
 
+#: 기본 수집 타입. 편집 신호는 이 둘이다.
+RC_TYPES_DEFAULT = "edit|new"
+
+#: 🔴 **`edit|new` 는 문서 이동을 놓친다** (2026-09-22 실측, WP-164).
+#:    이동 하나가 revision 두 개(원본의 null revision + 대상 문서)를 만드는데 RC 는
+#:    그걸 `log` 로 준다. 이음매 대조에서 덤프에만 있던 33건이 **전부 이동**이었고
+#:    봇은 0건 — 사람 편집이 통째로 빠진다. 같은 창을 `rctype=log` 로 조회하면
+#:    move 14건이 나오고 그 revid 가 누락분과 일치한다.
+#:    같은 창에 delete 13건도 있다. 삭제된 문서의 편집이 RC 에서 사라지는 것은
+#:    별개 경로라 이 스위치로 해결되지 않는다.
+#: ⚠️ `log` 를 받을 때는 `loginfo` 가 필요하다. 없으면 logtype·대상 제목을 못 읽어
+#:    이동 전후를 이을 수 없다.
+RC_LOG_PROPS = "loginfo"
+
 
 class HourFailed(RuntimeError):
     """그 시간만 실패. 전체 수집은 계속한다."""
@@ -110,13 +124,19 @@ def _fetch(params: dict) -> tuple[dict, int]:
     raise HourFailed("unreachable")
 
 
-def fetch_hour(start: datetime, delay: float = CALL_DELAY_SEC) -> tuple[list[dict], int, int]:
+def props_for(types: str) -> str:
+    """수집 타입에 맞는 rcprop. log 를 받으면 loginfo 를 더한다 (위 ⚠️)."""
+    return f"{RC_PROPS}|{RC_LOG_PROPS}" if "log" in types.split("|") else RC_PROPS
+
+
+def fetch_hour(start: datetime, delay: float = CALL_DELAY_SEC,
+               types: str = RC_TYPES_DEFAULT) -> tuple[list[dict], int, int]:
     """한 시간치 전부. (행, 호출 수, 429 횟수). 끝 경계는 배타로 자른다."""
     end = start + timedelta(hours=1)
     base = {
         "action": "query", "list": "recentchanges", "rcnamespace": "0",
         "rcdir": "newer", "rcstart": start.strftime(TS), "rcend": end.strftime(TS),
-        "rclimit": PAGE_LIMIT, "rcprop": RC_PROPS, "rctype": "edit|new",
+        "rclimit": PAGE_LIMIT, "rcprop": props_for(types), "rctype": types,
     }
     by_id: dict[int, dict] = {}
     cont, calls, throttled = {}, 0, 0
@@ -161,7 +181,7 @@ def hours(start: datetime, end: datetime):
 
 
 def collect(start: datetime, end: datetime, root: Path,
-            delay: float = CALL_DELAY_SEC) -> int:
+            delay: float = CALL_DELAY_SEC, types: str = RC_TYPES_DEFAULT) -> int:
     manifest = root / "manifest.jsonl"
     root.mkdir(parents=True, exist_ok=True)
     planned = list(hours(start, end))
@@ -177,7 +197,7 @@ def collect(start: datetime, end: datetime, root: Path,
             skipped += 1
             continue
         try:
-            rows, calls, throttled = fetch_hour(hour, delay)
+            rows, calls, throttled = fetch_hour(hour, delay, types)
         except HourFailed as exc:
             failed += 1
             print(f"  [{index}/{len(planned)}] {hour:%Y-%m-%d %H}Z 실패: {exc}",
@@ -261,6 +281,9 @@ def main() -> int:
     parser.add_argument("--start", default="2026-09-01T02:00:00Z")
     parser.add_argument("--end", default="2026-09-18T00:00:00Z")
     parser.add_argument("--out", default="data/recentchanges-164")
+    parser.add_argument("--types", default=RC_TYPES_DEFAULT,
+                        help="rctype. 기본 edit|new. 이동 보충 수집은 log "
+                             "(🔴 다른 --out 으로 받는다 — 레코드 모양이 다르다)")
     parser.add_argument("--delay", type=float, default=CALL_DELAY_SEC,
                         help="호출 사이 간격(초). 낮추면 429 가 늘어 되레 느리다")
     parser.add_argument("--verify", action="store_true",
@@ -274,7 +297,7 @@ def main() -> int:
     root = Path(args.out)
     if args.verify:
         return verify(start, end, root)
-    return collect(start, end, root, args.delay)
+    return collect(start, end, root, args.delay, args.types)
 
 
 if __name__ == "__main__":

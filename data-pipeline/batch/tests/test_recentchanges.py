@@ -243,3 +243,22 @@ def _env() -> dict:
     import os
 
     return dict(os.environ)
+
+
+# ------------------------------------------------- 이동 보충 수집 (WP-164)
+
+def test_log_을_받을_때만_loginfo_를_더한다():
+    """loginfo 가 없으면 logtype·대상 제목을 못 읽어 이동 전후를 못 잇는다."""
+    from batch.recentchanges import RC_PROPS, RC_TYPES_DEFAULT, props_for
+
+    assert props_for(RC_TYPES_DEFAULT) == RC_PROPS
+    assert props_for("log").endswith("|loginfo")
+    assert props_for("edit|new|log").endswith("|loginfo")
+
+
+def test_type_이름이_부분일치로_오인되지_않는다():
+    """'log' 가 다른 타입 이름의 부분 문자열이어도 켜지면 안 된다."""
+    from batch.recentchanges import RC_PROPS, props_for
+
+    assert props_for("categorize") == RC_PROPS
+    assert props_for("edit|new") == RC_PROPS
