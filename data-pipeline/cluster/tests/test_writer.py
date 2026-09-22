@@ -19,7 +19,7 @@ from cluster.snapshot import build_snapshot as _build_snapshot
 def build_snapshot(*args, **kwargs):
     """writer 는 멤버·간선이 있는 스냅샷을 저장해야 하므로 legacy expansion 을 켠다.
 
-    -186 에서 CORE 가 정본이 되며 `expansion` 기본값이 False 가 됐다. 여기 관심사는
+    -161 에서 CORE 가 정본이 되며 `expansion` 기본값이 False 가 됐다. 여기 관심사는
     **저장 계약**(멱등·제약·CASCADE)이지 멤버 게이트가 아니라, 간선까지 있는 입력을
     만들려고 레이어를 켠다. CORE 기본 경로의 저장은 `test_snapshot_core.py` 가 본다.
     """

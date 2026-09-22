@@ -23,7 +23,7 @@ PostgreSQL 에 저장한다. 버블맵 조회 API(WP-74)가 이 산출물을 읽
 pytest cluster/tests        # Docker 불필요(pgserver 번들 PostgreSQL)
 ```
 
-## 클러스터링 정본 (WP-186, 2026-09-22 확정) — **두 단계**
+## 클러스터링 정본 (WP-161, 2026-09-22 확정) — **두 단계**
 
 ```
 spike 후보
@@ -88,7 +88,7 @@ driver 에 상한도 중복 제거도 없다~~ → **ROOT SELECTION 이 그 자�
 보장되지 않고, non-root 멤버는 `window_start`·`window_end` 가 없어 프론트 계약
 (`contract.js` 의 `metric window`)에 걸려 **펄스맵이 통째로 안 그려진다.**
 2026-09-22 preview 에서 baseline 5,120 클러스터가 그 이유로 렌더에서 탈락했다.
-아래 서술은 그 레이어의 계약이며 규칙 자체는 -186 에서 바뀌지 않았다.
+아래 서술은 그 레이어의 계약이며 규칙 자체는 -161 에서 바뀌지 않았다.
 
 
 - **루트 씨드**(`is_seed=true`) = 조회수 최종 관문을 직접 통과한 문서. 각 루트 씨드가 클러스터를 연다.

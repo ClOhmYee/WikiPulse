@@ -285,7 +285,7 @@ def load_seeds_from_spike(
         cur.execute(SELECT_SEEDS_SQL, (source, snapshot_ts))
         rows = cur.fetchall()
 
-    # ROOT SELECTION (WP-137 → -186 에서 MVP 정본 1단계). None 이면 컷이 꺼진
+    # ROOT SELECTION (WP-137 → -161 에서 MVP 정본 1단계). None 이면 컷이 꺼진
     # 것이라 전부 통과한다 — 🔴 빈 집합(아무것도 안 고름)과 구분해야 한다.
     # `not selection` 으로 쓰면 "컷을 켰는데 이 시점에 0개" 가 "컷 없음" 으로 뒤집힌다.
     if selection is not None:
@@ -321,7 +321,7 @@ def load_seeds_from_spike(
             view_baseline=view_baseline,
             completeness=_completeness(views),
             # CORE 의 as-of 링크 앵커 (V9). 없으면 링크를 안 쓰고 singleton 으로 둔다 —
-            # 현재 판으로 폴백하지 않는다 (WP-186).
+            # 현재 판으로 폴백하지 않는다 (WP-161).
             max_rev_id=max_rev_id,
         ))
     return seeds
@@ -842,7 +842,7 @@ def load_root_links(
     fetcher=None,
     log=None,
 ) -> dict[int, set[str]]:
-    """CORE 입력 — root 별 as-of strict 아웃링크 집합 (WP-186).
+    """CORE 입력 — root 별 as-of strict 아웃링크 집합 (WP-161).
 
     `spike.max_rev_id` 를 앵커로 `page_asof_links`(V12) 캐시를 먼저 보고, 없는 것만
     받아 캐시에 넣는다. revision 단위 캐시라 만료가 없다.
@@ -899,10 +899,10 @@ def build_snapshot_at(
     link_fetcher=None,
     log=None,
 ) -> Snapshot:
-    """한 시점의 스냅샷을 생산한다(저장 안 함). 로직은 전부 -75·-186 자산이다.
+    """한 시점의 스냅샷을 생산한다(저장 안 함). 로직은 전부 -75·-161 자산이다.
 
     `root_grouping=True`(기본) 면 CORE 로 root 를 묶는다. `expansion=False`(기본) 면
-    멤버는 root 뿐이다 — 현재 MVP 정본 경로다(WP-186).
+    멤버는 root 뿐이다 — 현재 MVP 정본 경로다(WP-161).
 
     🔴 **`source` 하나가 입력 필터이자 산출물 라벨이다.** 읽는 씨드(`spike.source`),
     이전 감지 이력(`issue_cluster.source`), 붙는 라벨(`Snapshot.source`) 이 같은 값에서
@@ -1001,7 +1001,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     p.add_argument("--until", type=_parse_ts, help="시점 범위 끝(포함)")
     p.add_argument("--dry-run", action="store_true", help="저장 없이 생산만")
 
-    # --- ROOT SELECTION (WP-137 → -186 에서 MVP 정본 1단계) -----------
+    # --- ROOT SELECTION (WP-137 → -161 에서 MVP 정본 1단계) -----------
     # 🔴 **기본이 켜짐이다.** spike 전량을 클러스터링에 넣으면 CORE 가 giant 를 만든다
     #    (2026-09-22 실측: 162,775 root → max 63 · 20+ giant 59).
     p.add_argument("--root-limit-per-snapshot", type=int,
@@ -1012,10 +1012,10 @@ def build_arg_parser() -> argparse.ArgumentParser:
                    help=f"같은 문서를 다시 root 로 고르기까지 비울 시간(되돌아보는 창, "
                         f"기본 {DEFAULT_COOLDOWN_HOURS}). 0 이면 쿨다운 없음")
 
-    # --- CORE (WP-186, MVP 정본) -------------------------------------
+    # --- CORE (WP-161, MVP 정본) -------------------------------------
     # 🔴 **기본이 켜짐이다.** 이게 지금 제품 규칙이다.
     p.add_argument("--no-root-grouping", dest="root_grouping", action="store_false",
-                   help="CORE grouping 을 끈다 — root 1개 = 클러스터 1개(-186 이전 동작). "
+                   help="CORE grouping 을 끈다 — root 1개 = 클러스터 1개(-161 이전 동작). "
                         "비상용이며 평소에 쓰지 않는다")
     # 🔴 **as-of 링크는 캐시가 기본이다.** 수집은 명시적으로 켠다 — 리플레이 한 판이
     #    root 수만큼(실측 22,080) 요청을 낼 수 있어서, 실수로 켜지면 위키미디어를
@@ -1026,7 +1026,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     p.add_argument("--link-workers", type=int, default=4,
                    help="--fetch-links 동시 요청 수 (기본 4)")
 
-    # --- LEGACY expansion (기본 OFF, WP-186) --------------------------
+    # --- LEGACY expansion (기본 OFF, WP-161) --------------------------
     # 🔴 켜면 CORE component 의 각 root 에 Clickstream 이웃이 붙는다. PoC 5 에서 검증한
     #    분포가 보장되지 않고, non-root 멤버는 window_start/end 가 없어 프론트 계약
     #    (`contract.js` 의 metric window)에 걸려 **펄스맵이 통째로 안 그려진다.**
@@ -1063,10 +1063,10 @@ def main(argv: list[str] | None = None) -> int:
         print("--snapshot-ts 와 --since/--until 은 같이 못 쓴다.", file=sys.stderr)
         return 2
     # 🔴 expansion 을 안 켠 채 이웃 인자를 주면 막는다. 그냥 무시하면 "붙였는데 왜
-    #    멤버가 없지" 로 한참을 헤맨다 — -186 에서 기본이 꺼짐으로 바뀐 걸 모르면
+    #    멤버가 없지" 로 한참을 헤맨다 — -161 에서 기본이 꺼짐으로 바뀐 걸 모르면
     #    조용히 씨드 단독 결과만 나온다.
     if args.clickstream_root and not args.expansion:
-        print("--clickstream-root 는 --expansion 과 함께 준다. CORE 정본(-186)은 "
+        print("--clickstream-root 는 --expansion 과 함께 준다. CORE 정본(-161)은 "
               "root 멤버만 쓰므로 expansion 없이는 이웃이 붙지 않는다.", file=sys.stderr)
         return 2
     # 🔴 한쪽만 주면 막는다. Clickstream 만 주면 생성일이 전부 미상이 되어 창 게이트가

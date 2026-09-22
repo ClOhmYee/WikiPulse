@@ -1,4 +1,4 @@
-"""CORE — 같은 스냅샷의 급증 root 를 사건 단위 component 로 묶는다 (WP-186).
+"""CORE — 같은 스냅샷의 급증 root 를 사건 단위 component 로 묶는다 (WP-161).
 
 MVP 정본 규칙. **여기서 끝이다** — 이 모듈이 낸 component 가 곧 issue cluster 이고,
 그 안의 root 가 곧 cluster_member 다.

@@ -1,4 +1,4 @@
--- as-of revision 아웃링크 캐시 (WP-186, CORE 클러스터링)
+-- as-of revision 아웃링크 캐시 (WP-161, CORE 클러스터링)
 --
 -- ⚠️ ~~V11~~ → V12 로 리넘버 (2026-09-22). develop 에 `V11__issue_summary_attempt.sql`
 --    이 먼저 머지돼 같은 번호가 둘이 됐다. `db/apply_migrations.py` 의 원장 키가
@@ -42,7 +42,7 @@ CREATE TABLE page_asof_links (
 );
 
 COMMENT ON TABLE page_asof_links IS
-    'revision 단위 as-of 아웃링크 캐시. CORE 클러스터링(WP-186)의 입력. '
+    'revision 단위 as-of 아웃링크 캐시. CORE 클러스터링(WP-161)의 입력. '
     'oldid 의 wikitext 는 불변이라 만료가 없다.';
 
 COMMENT ON COLUMN page_asof_links.rev_id IS

@@ -1,6 +1,6 @@
 """ROOT SELECTION — `spike` 후보 중 클러스터링에 넣을 root 를 고른다.
 
-MVP 정본 클러스터링은 **두 단계**다 (2026-09-22 확정, WP-186).
+MVP 정본 클러스터링은 **두 단계**다 (2026-09-22 확정, WP-161).
 
     1. ROOT SELECTION   이 모듈. spike 후보 → 시점당 20 root (views DESC, 24h 쿨다운)
     2. CORE GROUPING    `rootgraph.py`. as-of direct link → component → focus → D2
@@ -12,7 +12,7 @@ MVP 정본 클러스터링은 **두 단계**다 (2026-09-22 확정, WP-186).
 출처
     WP-137 의 `cluster/seed_selection.py` 를 가져왔다. 선택 로직(`select`)은
     **규칙을 바꾸지 않았다** — 고정 2개월 산출물 22,080 root 를 만든 바로 그 코드이고,
-    `(snapshot_ts, page_id)` 집합이 정확히 일치하는 것을 실측으로 확인했다(-186).
+    `(snapshot_ts, page_id)` 집합이 정확히 일치하는 것을 실측으로 확인했다(-161).
     바뀐 것은 이름(`seed_` → `root_`), **기본값이 켜짐이 된 것**, 그리고 아래 두 가지
     보강(입력 재정렬·증분 실행 쿨다운 이어받기)뿐이다.
 
@@ -53,7 +53,7 @@ MVP 정본 클러스터링은 **두 단계**다 (2026-09-22 확정, WP-186).
 순서
     쿨다운은 앞 시점의 선택 결과를 본다. 처리 순서는 **시각 오름차순 → 조회수
     내림차순(NULL 뒤) → page_id 오름차순** 이고, `SELECT_ROOT_RANKING_SQL` 의 ORDER BY
-    가 그 순서를 준다. ⚠️ `select()` 는 받은 행을 **다시 정렬한다**(-186) — 호출자가
+    가 그 순서를 준다. ⚠️ `select()` 는 받은 행을 **다시 정렬한다**(-161) — 호출자가
     ORDER BY 를 빠뜨려도 조용히 다른 root 가 뽑히지 않게 하려는 것이다.
 
 문서 동일성은 `page_id` 다
@@ -102,7 +102,7 @@ SELECT cm.page_id, max(ic.snapshot_ts)
 
 @dataclass(frozen=True)
 class RootSelectionConfig:
-    """ROOT SELECTION 설정. **기본이 켜짐이다** (-186 에서 MVP 정본이 됐다).
+    """ROOT SELECTION 설정. **기본이 켜짐이다** (-161 에서 MVP 정본이 됐다).
 
     limit_per_snapshot: 한 시점에 고를 root 수 상한. None 이면 제한 없음.
     cooldown_hours    : 같은 문서를 다시 고르기까지 비울 시간. 0 이면 쿨다운 없음.

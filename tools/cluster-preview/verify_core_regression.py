@@ -1,6 +1,6 @@
 """전체 1,104 스냅샷 회귀 — **production 경로만** 써서 PoC 5 결과를 재현하는지 본다.
 
-검사하는 것은 두 단계 전부다 (WP-186).
+검사하는 것은 두 단계 전부다 (WP-161).
 
     1. ROOT SELECTION   `cluster.root_selection.load_selection` — spike → 시점당 20 root
     2. CORE GROUPING    `cluster.driver.build_snapshot_at` → `cluster.snapshot.build_snapshot`

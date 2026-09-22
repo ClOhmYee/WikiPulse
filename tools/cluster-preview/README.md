@@ -51,7 +51,7 @@ docker compose -f tools/cluster-preview/compose.preview.yml up -d
 DB 는 이 compose 가 만들지 않는다. 이미 떠 있는 `wikipulse-cluster-preview-pg` 에
 `wikipulse-preview-net` 으로 붙는다.
 
-## 전체 회귀 검증 (WP-186) — ROOT SELECTION + CORE
+## 전체 회귀 검증 (WP-161) — ROOT SELECTION + CORE
 
 production 코드가 두 단계를 관통해 PoC 5 결과를 그대로 내는지 매번 대조한다.
 root 집합 exact match 와 분포 11개 항목·대표 사건 8건을 전부 본다. 어긋나면 종료 코드가 0이 아니다.

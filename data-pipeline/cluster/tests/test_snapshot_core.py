@@ -1,4 +1,4 @@
-"""CORE 기본 경로 — root grouping 이 Cluster/Member 로 옮겨지는지 (WP-186).
+"""CORE 기본 경로 — root grouping 이 Cluster/Member 로 옮겨지는지 (WP-161).
 
 `test_rootgraph.py` 가 그래프 규칙을, 여기는 **계약 변환**을 본다:
 멤버는 root 뿐인가 · lead/label/issue_key 는 무엇인가 · pulse/hot 은 어떻게 합쳐지는가 ·

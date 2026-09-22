@@ -1,4 +1,4 @@
-"""as-of revision 의 direct Wikipedia link 수집·캐시 (WP-186).
+"""as-of revision 의 direct Wikipedia link 수집·캐시 (WP-161).
 
 CORE 클러스터링(`rootgraph.py`)의 유일한 입력 신호다.
 

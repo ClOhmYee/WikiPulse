@@ -3,7 +3,7 @@
 Spark·DB 없이 테스트된다. 실 데이터 소스는 driver.py 가 배선한다.
 
 ═══════════════════════════════════════════════════════════════════════════
-MVP 정본 = CORE (WP-186, 2026-09-22 확정)
+MVP 정본 = CORE (WP-161, 2026-09-22 확정)
 ═══════════════════════════════════════════════════════════════════════════
 
     같은 스냅샷의 spike root
@@ -470,7 +470,7 @@ def _build_cluster(
         members=tuple(members),
         edges=tuple(edges),
         # 🔴 **lead root 의 제목이 이슈 이름이다.** ~~`None`~~ → 제목
-        # (2026-09-20, WP-149. -186 에서 seed → lead root).
+        # (2026-09-20, WP-149. -161 에서 seed → lead root).
         #
         # ⚠️ 아무도 채우지 않아서 계속 NULL 이었다. 파이프라인 어디에도 `label` 을 쓰는
         # UPDATE 가 없는데(백엔드 `matching` 포함) 프론트 `PulseCluster.jsx` 는
@@ -499,7 +499,7 @@ def _expand_seed(
 
     🔴 **CORE 기본 경로에서는 호출되지 않는다** (`neighbors`·`relations` 가 비어 있다).
     `build_snapshot(expansion=True)` 일 때만 실제로 뭔가 붙는다. 규칙은 -51·-77·-115
-    그대로이며 이번 -186 에서 한 줄도 바뀌지 않았다.
+    그대로이며 이번 -161 에서 한 줄도 바뀌지 않았다.
     """
     snapshot_date = snapshot_ts.date()
 
@@ -636,7 +636,7 @@ def build_snapshot(
     (`asof_links.link_key` 정규화). 이게 CORE 의 유일한 입력 신호다.
 
     - `root_links=None` 이면 grouping 을 하지 않는다 — root 하나가 클러스터 하나가 되는
-      -186 이전 동작이다. 🔴 **링크를 못 구했을 때 쓰는 값이 아니다.** 그 경우는 해당
+      -161 이전 동작이다. 🔴 **링크를 못 구했을 때 쓰는 값이 아니다.** 그 경우는 해당
       root 만 빈 집합으로 넘긴다(그 root 가 singleton 이 된다). 여기에 None 을 넘기면
       스냅샷 전체의 grouping 이 조용히 꺼진다.
     - `expansion=False`(기본)면 멤버는 root 뿐이다. `neighbors`·`wikidata` 는 무시된다.

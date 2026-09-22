@@ -1,4 +1,4 @@
-"""ROOT SELECTION 회귀 (WP-137 → -186 에서 MVP 정본 1단계).
+"""ROOT SELECTION 회귀 (WP-137 → -161 에서 MVP 정본 1단계).
 
 🔴 이 단계는 `spike` 를 바꾸지 않는다 — 고르기만 한다. 그래서 검사도 "무엇이 선택됐나"
 만 본다. 임계·공식 검사는 `spike/tests/test_detector.py` 쪽이다.

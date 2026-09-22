@@ -96,7 +96,7 @@ def spike_row(page_id=398, wiki="enwiki", title="Hurricane Milton",
     `source` 는 조회 컬럼이 아니라 대역 테이블의 태그다 — `FakeCursor` 가 그걸로 거르고
     드라이버에는 앞 12개만 넘긴다(실 질의가 내는 컬럼 수와 같다).
 
-    `max_rev_id` 는 V9 증거 컬럼이자 CORE 의 as-of 링크 앵커다 (WP-186).
+    `max_rev_id` 는 V9 증거 컬럼이자 CORE 의 as-of 링크 앵커다 (WP-161).
 
     기본값은 canary 실측(2025-06-12 `Air India Flight 171`)을 따랐다 — 신규 문서라
     기준선 표본이 없어 `view_baseline`·`view_ratio` 가 NULL 이고 조회수 원값만 있다.

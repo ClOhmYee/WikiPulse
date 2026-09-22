@@ -1,4 +1,4 @@
-"""CORE 정본 경로 DB 왕복 (WP-186). 진짜 PostgreSQL(pgserver).
+"""CORE 정본 경로 DB 왕복 (WP-161). 진짜 PostgreSQL(pgserver).
 
 `spike` + `page_asof_links`(V12) → `cluster.driver.run` → `issue_cluster` 까지가
 실제 스키마·제약을 통과하는지, 두 번 돌려도 안 늘어나는지 본다.

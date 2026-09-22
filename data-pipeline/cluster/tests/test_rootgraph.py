@@ -1,4 +1,4 @@
-"""CORE 순수 로직 회귀 (WP-186). 네트워크·DB 없음.
+"""CORE 순수 로직 회귀 (WP-161). 네트워크·DB 없음.
 
 `data/core_snapshots.json` 은 실제 replay 스냅샷 5개의 root 와 as-of strict 링크에서
 **CORE 계산에 실제로 쓰이는 것만** 뽑아 둔 것이다.
