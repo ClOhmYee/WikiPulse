@@ -56,6 +56,13 @@ public class IssueSummaryWorker {
         for (Long clusterId : clusterIds) {
             try {
                 service.processCluster(clusterId);
+            } catch (BudgetExceededException e) {
+                // 🔴 전송 실패가 아니다 (WP-191). ERROR + 스택트레이스로 찍으면
+                //    진짜 장애와 섞여 "왜 요약이 안 붙지" 를 뒤지게 된다.
+                //    남은 클러스터도 같은 벽에 부딪히므로 루프를 끊는다.
+                log.warn("요약 예산 소진 — 이번 폴을 여기서 멈춘다 ({}). 처리 {}/{}건",
+                        e.getMessage(), clusterIds.indexOf(clusterId), clusterIds.size());
+                return;
             } catch (RuntimeException e) {
                 // 전송 실패·기타 런타임 오류. 이미 올린 상태·요약은 커밋됐고 클러스터는 VERIFYING 으로 남는다.
                 log.error("요약 실패 cluster={}, 건너뜀", clusterId, e);

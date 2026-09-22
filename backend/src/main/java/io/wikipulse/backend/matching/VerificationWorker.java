@@ -47,6 +47,13 @@ public class VerificationWorker {
         for (Long clusterId : clusterIds) {
             try {
                 service.verifyCluster(clusterId);
+            } catch (BudgetExceededException e) {
+                // 🔴 전송 실패가 아니다 (WP-191). 판정한 후보는 커밋됐고 나머지는
+                //    PENDING 으로 남아 다음 날 이어진다 — 상태로는 전송 실패와 같지만
+                //    원인이 달라 로그에서 갈라 둔다.
+                log.warn("검증 예산 소진 — 이번 폴을 여기서 멈춘다 ({}). 처리 {}/{}건",
+                        e.getMessage(), clusterIds.indexOf(clusterId), clusterIds.size());
+                return;
             } catch (RuntimeException e) {
                 // 전송 실패·기타 런타임 오류. 판정한 후보는 커밋됐고 나머지는 PENDING 으로 남는다.
                 log.error("검증 실패 cluster={}, 건너뜀", clusterId, e);

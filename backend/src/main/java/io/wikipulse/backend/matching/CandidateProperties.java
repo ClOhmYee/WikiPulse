@@ -27,6 +27,7 @@ public class CandidateProperties {
     private final Scheduler scheduler = new Scheduler();
     private final Verification verification = new Verification();
     private final Summary summary = new Summary();
+    private final Budget budget = new Budget();
 
     public int getEmbeddingTopK() {
         return embeddingTopK;
@@ -70,6 +71,60 @@ public class CandidateProperties {
 
     public Summary getSummary() {
         return summary;
+    }
+
+    public Budget getBudget() {
+        return budget;
+    }
+
+    /**
+     * 하루에 쓸 수 있는 LLM 호출 수 (WP-191).
+     *
+     * <p>🔴 <b>이미 있는 상한들과 축이 다르다.</b> {@code top-per-snapshot} 은 스냅샷당,
+     * {@code summary.max-attempts} 는 클러스터당이고 이건 <b>하루에</b> 몇 번이다. 셋 다 필요하다.
+     *
+     * <p><b>크레딧이 아니라 호출 수로 묶는 이유</b> — 크레딧은 GATEWAY {@code key-info} 를 주기적으로
+     * 읽어야 하는데 값이 지연되고 소액 호출은 델타가 0 으로 반올림된다(-170 실측). 호출 수는
+     * 원자적으로 셀 수 있어 상한이 정확히 동작한다.
+     *
+     * <p><b>환산</b> (2026-09-21, -170 실측):
+     * <ul>
+     *   <li>검증 {@code gpt-5.4-nano} 단건 — 이슈 하나(후보 15개)에 <b>134 크레딧</b> ≈ 호출당 9</li>
+     *   <li>요약 Sonnet — 1회 <b>41~62 크레딧</b></li>
+     * </ul>
+     * ⚠️ -168 본문의 "검증이 요약의 10배"는 nano 전환(-172) <b>이전</b> 값이다. 지금은
+     * 이슈당 검증 134 · 요약 약 52 로 2~3배다.
+     */
+    public static class Budget {
+        /**
+         * 하루 요약 호출 상한. 기본 100 ≈ 5,200 크레딧/일.
+         * 골든데이 하루가 요약 61회라 여유가 있다(-165 실측).
+         */
+        private int summaryCalls = 100;
+
+        /**
+         * 하루 검증 호출 상한. 기본 300 ≈ 2,700 크레딧/일(nano).
+         *
+         * <p>🔴 <b>요약과 나눈다.</b> 한 통으로 묶으면 검증이 요약을 굶는다 — 이슈 하나당
+         * 검증은 후보 수만큼 호출되고 요약은 1회다.
+         */
+        private int verificationCalls = 300;
+
+        public int getSummaryCalls() {
+            return summaryCalls;
+        }
+
+        public void setSummaryCalls(int summaryCalls) {
+            this.summaryCalls = summaryCalls;
+        }
+
+        public int getVerificationCalls() {
+            return verificationCalls;
+        }
+
+        public void setVerificationCalls(int verificationCalls) {
+            this.verificationCalls = verificationCalls;
+        }
     }
 
     /** 대표 텍스트 도입부 출처. 명세 §6.2 — prop=extracts&exintro&explaintext, 리다이렉트 추적. */

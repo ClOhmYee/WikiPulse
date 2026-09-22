@@ -106,9 +106,11 @@ public class GatewayVerificationClient {
 
     private final RestClient client;
     private final CandidateProperties.Gateway gateway;
+    private final LlmBudget budget;
 
-    public GatewayVerificationClient(CandidateProperties props) {
+    public GatewayVerificationClient(CandidateProperties props, LlmBudget budget) {
         this.gateway = props.getGateway();
+        this.budget = budget;
         // 🔴 타임아웃 필수 — 없으면 소켓 hang 이 단일 워커 스레드를 영구 정지시킨다.
         // 정적 RestClient.builder 는 Boot 의 spring.http.client 자동설정을 안 타므로 여기서 명시한다.
         SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
@@ -133,6 +135,9 @@ public class GatewayVerificationClient {
     @CircuitBreaker(name = "gateway")
     @Retry(name = "gateway", fallbackMethod = "completeFallback")
     public String complete(String system, List<Map<String, String>> messages) {
+        // 🔴 예산은 전송 **전에** 깎는다 (WP-191). 응답을 받고 나서 세면 실패한
+        //    호출이 안 세어지는데, GATEWAY 는 실패한 호출에도 크레딧을 쓴다.
+        budget.consume(LlmBudget.VERIFICATION);
         return call(system, messages, gateway.getVerificationModel(), gateway.getVerificationMaxTokens());
     }
 
@@ -146,6 +151,7 @@ public class GatewayVerificationClient {
     @CircuitBreaker(name = "gateway")
     @Retry(name = "gateway", fallbackMethod = "completeFallback")
     public String completeForSummary(String system, List<Map<String, String>> messages) {
+        budget.consume(LlmBudget.SUMMARY);
         return call(system, messages, gateway.getSummaryModel(), gateway.getSummaryMaxTokens());
     }
 
@@ -266,6 +272,11 @@ public class GatewayVerificationClient {
     private String completeFallback(String system, List<Map<String, String>> messages, Throwable t) {
         if (t instanceof IllegalStateException ise) {
             throw ise; // 키 부재·스키마: −66 소관 아님 → 원형 유지.
+        }
+        // 🔴 예산 초과도 −66 전송 실패가 아니다 (WP-191). 여기서 감싸면 로그에서
+        //    "GATEWAY 가 죽었다" 와 "우리가 오늘 그만 쓴다" 가 구분되지 않는다.
+        if (t instanceof BudgetExceededException budgetExceeded) {
+            throw budgetExceeded;
         }
         throw new UpstreamUnavailableException(
                 "GATEWAY 검증 호출 불가 (" + t.getClass().getSimpleName() + ")", t);
