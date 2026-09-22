@@ -129,11 +129,21 @@ export function validateMap(body, requested = {}) {
         "viewBaseline",
       ])
         requireContract(nullable(number, node[field]), field);
+      // CORE(-161) 이전 expansion 산출물은 non-root 멤버에 집계 구간이 없다. 노드
+      // 하나 때문에 스냅샷 전체를 버리면 2026-09-21 LIVE 6개처럼 정상 root 까지
+      // 같이 사라지므로, `unavailable` 에 한해 두 값이 **모두** 없을 때만 건너뛴다.
+      // 🔴 노드를 빼지도, 없는 구간을 만들어 채우지도 않는다 — memberCount 계약이
+      //    깨지고 과거 지표가 조작된다. 한쪽만 null 인 조합은 그대로 reject 다.
+      const windowOmitted =
+        node.completeness === "unavailable" &&
+        node.windowStart === null &&
+        node.windowEnd === null;
       requireContract(
-        time(node.windowStart) &&
-          time(node.windowEnd) &&
-          Date.parse(node.windowStart) < Date.parse(node.windowEnd) &&
-          Date.parse(node.windowEnd) <= Date.parse(meta.snapshotTs),
+        windowOmitted ||
+          (time(node.windowStart) &&
+            time(node.windowEnd) &&
+            Date.parse(node.windowStart) < Date.parse(node.windowEnd) &&
+            Date.parse(node.windowEnd) <= Date.parse(meta.snapshotTs)),
         "metric window",
       );
     }
