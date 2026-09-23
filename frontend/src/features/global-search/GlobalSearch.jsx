@@ -1,6 +1,6 @@
 import { useGlobalSearch } from "./useGlobalSearch";
 import { useEffect, useRef, useState } from "react";
-import { Search, Layers3, X, ArrowDownLeft } from "lucide-react";
+import { Search, X, ArrowDownLeft } from "lucide-react";
 export default function GlobalSearch({ searchRef }) {
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
@@ -9,7 +9,8 @@ export default function GlobalSearch({ searchRef }) {
   const search = query.trim().toLowerCase();
   const { data, loading, error, reload } = useGlobalSearch(query);
   const kinds = {
-    stock: { path: "stocks", icon: Layers3 },
+    issue: { path: "issues", label: "이슈" },
+    stock: { path: "stocks", label: "종목" },
   };
   const results = (data || [])
     .filter((item) => kinds[item.kind])
@@ -17,7 +18,6 @@ export default function GlobalSearch({ searchRef }) {
       ...item,
       id: `${item.kind}-${item.id}`,
       href: `#/${kinds[item.kind].path}/${encodeURIComponent(item.kind === "stock" ? String(item.id).toUpperCase() : item.id)}`,
-      icon: kinds[item.kind].icon,
     }));
   const close = () => {
     setOpen(false);
@@ -67,7 +67,7 @@ export default function GlobalSearch({ searchRef }) {
             close();
           }
         }}
-        aria-label="빠른 종목 검색"
+        aria-label="통합 검색"
         role="combobox"
         aria-autocomplete="list"
         aria-expanded={open && !!search}
@@ -75,13 +75,12 @@ export default function GlobalSearch({ searchRef }) {
         aria-activedescendant={
           active >= 0 && results[active] ? results[active].id : undefined
         }
-        placeholder="종목명, 티커 검색"
+        placeholder="이슈, 종목명, 티커 검색"
       />
-      <kbd>Ctrl K</kbd>
       {query && (
         <button
           className="wp-icon-button"
-          aria-label="빠른 종목 검색 지우기"
+          aria-label="통합 검색 지우기"
           onClick={close}
         >
           <X size={14} />
@@ -92,7 +91,7 @@ export default function GlobalSearch({ searchRef }) {
           className="global-search__results"
           role="listbox"
           id="global-search-results"
-          aria-label="빠른 종목 검색 결과"
+          aria-label="통합 검색 결과"
         >
           {loading ? (
             <div className="global-search__empty" role="status">
@@ -116,7 +115,9 @@ export default function GlobalSearch({ searchRef }) {
                 onMouseEnter={() => setActive(i)}
                 onClick={close}
               >
-                <item.icon size={18} />
+                <span className="global-search__kind">
+                  {kinds[item.kind].label}
+                </span>
                 <span>
                   <strong>{item.title}</strong>
                   <small>{item.detail}</small>
@@ -127,7 +128,7 @@ export default function GlobalSearch({ searchRef }) {
           ) : (
             <div className="global-search__empty">
               “{query}”에 대한 결과가 없습니다.
-              <small>다른 종목명 또는 티커를 입력해 보세요.</small>
+              <small>다른 이슈명, 종목명 또는 티커를 입력해 보세요.</small>
             </div>
           )}
           <div className="global-search__hint">

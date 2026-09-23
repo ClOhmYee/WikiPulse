@@ -16,7 +16,7 @@ test("onboarding exits into the workspace and releases scroll state", async ({
   await page.goto("/");
   await page.getByRole("link", { name: "탐색 시작하기" }).click();
   await expect(
-    page.getByRole("heading", { name: "세상의 변화가 모이는 곳" }),
+    page.getByRole("textbox", { name: "사건 검색", exact: true }),
   ).toBeVisible();
   await expect(page.locator("html")).not.toHaveClass(/scene-snap-enabled/);
 });
@@ -127,25 +127,40 @@ test("mock data cannot be saved to a real account", async ({ page }) => {
   ).toBeVisible();
 });
 
-test("quick stock search supports keyboard selection and empty recovery", async ({
+test("unified search supports stock selection and empty recovery", async ({
   page,
 }) => {
   await page.goto("/#/issues");
   await page.keyboard.press("Control+k");
   const search = page.getByRole("combobox", {
-    name: "빠른 종목 검색",
+    name: "통합 검색",
     exact: true,
   });
   await expect(search).toBeFocused();
-  await search.fill("NVDA");
-  await expect(page.getByRole("listbox").getByRole("option")).toHaveCount(1);
-  await page.keyboard.press("ArrowDown");
-  await page.keyboard.press("Enter");
-  await expect(page).toHaveURL(/#\/stocks\/NVDA$/);
   await search.fill("no-such-stock-xyz");
   await expect(page.getByRole("listbox")).toContainText("결과가 없습니다");
   await page.keyboard.press("Escape");
   await expect(page.getByRole("listbox")).toHaveCount(0);
+  await page.keyboard.press("Control+k");
+  await search.fill("NVDA");
+  await expect(page.getByRole("listbox").getByRole("option")).toHaveCount(1);
+  await expect(page.getByRole("listbox").getByRole("option")).toContainText(
+    "종목",
+  );
+  await page.keyboard.press("ArrowDown");
+  await page.keyboard.press("Enter");
+  await expect(page).toHaveURL(/#\/stocks\/NVDA$/);
+});
+
+test("unified search marks an issue result and opens it", async ({ page }) => {
+  await page.goto("/#/issues");
+  const search = page.getByRole("combobox", { name: "통합 검색", exact: true });
+  await search.fill("디지털 자산");
+  const results = page.getByRole("listbox").getByRole("option");
+  await expect(results).toHaveCount(1);
+  await expect(results).toContainText("이슈");
+  await results.click();
+  await expect(page).toHaveURL(/#\/issues\//);
 });
 
 test("compact pages keep the supported data within a 390px viewport", async ({

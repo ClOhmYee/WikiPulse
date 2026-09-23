@@ -215,17 +215,13 @@ test("full-year slider, month boundaries and archived report -> stock journey", 
   await expect(map).toHaveAttribute("data-snapshot", timestamp("2025-09-01"));
   await expect(page.getByRole("button", { name: "이전 시점" })).toBeDisabled();
   for (const date of ["2025-10-01", "2025-12-31", "2026-01-01", "2026-06-10"]) {
-    await page
-      .getByRole("combobox", { name: "스냅샷 날짜" })
-      .selectOption(date);
+    await page.getByLabel("캘린더에서 날짜 선택").fill(date);
     await expect(page.locator(".pulse-layout")).toHaveAttribute(
       "data-snapshot",
       timestamp(date),
     );
   }
-  await page
-    .getByRole("combobox", { name: "스냅샷 날짜" })
-    .selectOption("2026-01-01");
+  await page.getByLabel("캘린더에서 날짜 선택").fill("2026-01-01");
   await slider.focus();
   await page.keyboard.press("ArrowLeft");
   await expect(page.locator(".pulse-layout")).toHaveAttribute(
@@ -245,9 +241,7 @@ test("full-year slider, month boundaries and archived report -> stock journey", 
   await expect(page.locator(".pulse-notice")).toContainText(
     "선택한 이슈가 이 시점에 없어",
   );
-  await page
-    .getByRole("combobox", { name: "스냅샷 날짜" })
-    .selectOption("2025-09-01");
+  await page.getByLabel("캘린더에서 날짜 선택").fill("2025-09-01");
   await page
     .locator(".pulse-cluster-list button")
     .filter({ hasText: "호르무즈" })
@@ -275,6 +269,31 @@ test("full-year slider, month boundaries and archived report -> stock journey", 
     page.getByRole("heading", { level: 1, name: "베이커 휴스" }),
   ).toBeVisible();
   expect(errors).toEqual([]);
+});
+
+test("search and category controls align, and the calendar precedes the selected time", async ({
+  page,
+}) => {
+  await page.goto("/#/pulse");
+  const searchBounds = await page
+    .locator(".pulse-controls .wp-search")
+    .boundingBox();
+  const otherBounds = await page
+    .getByRole("button", { name: "기타", exact: true })
+    .boundingBox();
+  expect(searchBounds.x + searchBounds.width).toBeCloseTo(
+    otherBounds.x + otherBounds.width,
+    1,
+  );
+  const calendarBounds = await page
+    .locator(".pulse-timeline__calendar")
+    .boundingBox();
+  const selectedTimeBounds = await page
+    .locator(".pulse-timeline__selection strong")
+    .boundingBox();
+  expect(calendarBounds.x + calendarBounds.width).toBeLessThanOrEqual(
+    selectedTimeBounds.x,
+  );
 });
 
 test("dense map selection, filtering and desktop/mobile handoff", async ({
