@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from datetime import date, datetime, timedelta, timezone
 
-from spike.baseline_from_views import read_views, run, window_bounds
+from spike.baseline_from_views import batches_by_page, read_views, run, window_bounds
 
 UTC = timezone.utc
 
@@ -33,6 +33,12 @@ class FakeCursor:
     def fetchall(self):
         return self.rows
 
+    def __iter__(self):
+        return iter(self.rows)
+
+    def fetchone(self):
+        return (1,)
+
     def executemany(self, sql, seq):
         self.executed.append((sql, list(seq)))
 
@@ -42,7 +48,9 @@ class FakeConn:
         self.cur = FakeCursor(list(rows))
         self.commits = 0
 
-    def cursor(self):
+    def cursor(self, name=None, withhold=False):
+        if name is not None:
+            self.named = (name, withhold)
         return self.cur
 
     def commit(self):
@@ -120,3 +128,28 @@ def test_관측이_없으면_아무것도_안_쓴다():
     s = run(conn, as_of=date(2026, 9, 22))
     assert (s["rows"], s["written"]) == (0, 0)
     assert conn.commits == 0
+
+
+# ---------------------------------------------------------------- 나눠 읽기
+
+def test_서버_커서로_읽고_커밋해도_안_닫힌다():
+    """🔴 28일이 차면 1,170만 관측이다. 한꺼번에 올리면 live-cycle 이 OOM 으로 죽고
+    조회수 적재까지 같이 멈춘다. 묶음마다 커밋하므로 withhold 가 없으면 첫 커밋에서
+    커서가 닫힌다."""
+    conn = FakeConn([])
+    list(read_views(conn, "enwiki", date(2026, 9, 22)))
+    assert conn.named[1] is True
+
+
+def test_문서_경계에서만_끊는다():
+    """🔴 한 문서가 두 묶음에 걸치면 슬롯이 반쪽 표본으로 덮어써진다 — 에러는 없다."""
+    obs = [{"wiki": "enwiki", "title": t} for t in ["A", "A", "B", "B", "B", "C"]]
+    batches = list(batches_by_page(obs, batch_pages=1))
+    assert [[o["title"] for o in b] for b in batches] == [["A", "A"], ["B", "B", "B"], ["C"]]
+
+
+def test_묶어도_결과는_한꺼번에와_같다():
+    rows = [view_row(d, 14, 100 + d, title=t) for t in ("A", "B", "C") for d in (19, 20, 21)]
+    one = run(FakeConn(rows), as_of=date(2026, 9, 22), dry_run=True, batch_pages=10)
+    many = run(FakeConn(rows), as_of=date(2026, 9, 22), dry_run=True, batch_pages=1)
+    assert one == many == {"observations": 9, "rows": 3, "thin": 3, "written": 0}

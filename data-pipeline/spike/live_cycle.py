@@ -21,6 +21,14 @@ WP-127(시간별 적재)·-128(대기 보관·재판정)으로 부품은 있었�
     공개된다 (실측 125~153분 — 2026-09-18 4구간 · 2026-09-21 5구간). 그 전에 받으면 404 라
     헛다운로드가 된다 — `AVAILABLE_AFTER_HOURS` 만큼 지난 시간만 시도한다.
 
+하루 한 번 (WP-212)
+
+    4. `page_baseline` 을 `page_view_hourly` 이력으로 다시 굴린다  (spike.baseline_from_views)
+
+    `--min-views` 로 하한 적재를 켰을 때만 돈다 — 후보만 적재하면 문서별 이력이 안 쌓여
+    기준선이 영영 얇다. 별도 cron 대신 여기 둔 이유는 이 컨테이너가 이미 advisory lock
+    을 잡고 도는 유일한 상주 프로세스라서다(수동 `docker run` 을 하나 더 늘리지 않는다, -196).
+
 ⚠️ **중복 실행을 막는다.** 두 주기가 겹치면 같은 45 MB 파일을 두 번 받는다. 적재·재판정은
     멱등이라 결과는 같지만 러너가 서비스 EC2(t3 버스트)라 낭비다. PostgreSQL advisory lock
     으로 막는다 — 파일 락과 달리 여러 호스트에서 돌려도 하나만 잡는다.
@@ -39,7 +47,8 @@ from pathlib import Path
 
 from batch.pageview_hourly_ingest import ingest_hour, prune_cache
 
-from .candidate_store import CandidateStore
+from . import baseline_from_views
+from .candidate_store import DEFAULT_EXPIRE_HOURS, CandidateStore
 from .recheck import RecheckSummary, recheck
 
 log = logging.getLogger("spike.live_cycle")
@@ -55,6 +64,21 @@ AVAILABLE_AFTER_HOURS = 3
 
 #: 한 주기에 받을 시간 파일 수 상한. 밀린 구간을 따라잡되 한 주기가 무한정 길어지지 않게.
 DEFAULT_MAX_HOURS = 6
+
+#: 기준선 창의 끝을 대기 만료만큼 늦춘다 (WP-212).
+#: 🔴 `page_baseline` 은 판본이 하나뿐이고 재판정은 **그 시점 기준선**을 다시 읽는다.
+#:    창에 아직 대기 중인 윈도우의 날이 들어가면 급등 자신이 기준선에 섞이는데, EWMA 는
+#:    최근 날에 가중치가 가장 커서 배수가 **에러 없이** 깎인다 — 진짜 급등이 폐기된다.
+#:    대기는 `first_seen_at`(≈ 윈도우 끝) 부터 `DEFAULT_EXPIRE_HOURS`(36시간) 안에 끝난다.
+#:    윈도우 1시간 + 여유 1시간을 더해 그만큼 뺀 날의 **전날**까지만 쓰면, 살아 있는 어떤
+#:    대기의 날도 창 밖이다. 최신 2~3일이 빠지지만 반감기가 14일이라 영향이 작다.
+BASELINE_LAG_HOURS = DEFAULT_EXPIRE_HOURS + 2
+
+
+def baseline_as_of(now: datetime):
+    """지금 기준선을 굴린다면 창의 끝(포함)이 될 날. 위 `BASELINE_LAG_HOURS` 참고."""
+    return (now - timedelta(hours=BASELINE_LAG_HOURS)).date() - timedelta(days=1)
+
 
 #: advisory lock 키. 이 숫자 자체에 뜻은 없고 다른 잡과 안 겹치기만 하면 된다.
 LOCK_KEY = 15_21_609
@@ -146,6 +170,32 @@ def run_once(
     return summary
 
 
+def maybe_refresh_baseline(conn, *, now: datetime, last_as_of, wiki: str = "enwiki"):
+    """`baseline_as_of(now)` 가 지난번과 다르면 기준선을 한 번 굴린다. 새 as_of 를 돌려준다.
+
+    하루에 한 번 날이 바뀔 때만 돈다. 프로세스를 재시작하면 `last_as_of` 가 비어 한 번 더
+    도는데, upsert 라 멱등이다.
+
+    🔴 실패해도 조회수 적재·재판정을 막지 않는다 — 기준선이 하루 늦는 것은 fallback 이
+    받아 주지만, 적재가 멈추면 이력 자체가 끊긴다. 실패하면 as_of 를 갱신하지 않아
+    다음 주기가 다시 시도한다.
+    """
+    as_of = baseline_as_of(now)
+    if as_of == last_as_of:
+        return last_as_of
+    started = time.monotonic()
+    try:
+        s = baseline_from_views.run(conn, wiki=wiki, as_of=as_of)
+    except Exception:
+        conn.rollback()
+        log.exception("기준선 실패 (as_of=%s) — 다음 주기에 다시 시도한다", as_of)
+        return last_as_of
+    log.info("기준선 as_of=%s · 관측 %s → %s행 (표본 7일 미만 %s) · 적재 %s · %.1fs",
+             as_of, f"{s['observations']:,}", f"{s['rows']:,}", f"{s['thin']:,}",
+             f"{s['written']:,}", time.monotonic() - started)
+    return as_of
+
+
 def try_lock(conn) -> bool:
     """advisory lock 을 잡는다. 이미 다른 주기가 돌고 있으면 False.
 
@@ -175,6 +225,9 @@ def build_arg_parser() -> argparse.ArgumentParser:
     #    (WP-212) — `page_baseline` 을 만들 이력이 그래야 쌓인다.
     #    ⚠️ 행이 는다: 하한 50 이면 시간당 약 17,400행, 28일 약 1,170만 행 (실측).
     #    ⚠️ 덤프를 한 번 더 읽어 약 10초가 더 걸린다.
+    # 기본은 하한 적재와 같이 켜진다 — 하한 없이는 이력이 안 쌓여 굴려도 전부 얇다.
+    p.add_argument("--no-baseline", action="store_true",
+                   help="하루 한 번 기준선 굴리기를 끈다 (WP-212)")
     p.add_argument("--min-views", type=int,
                    default=(int(os.environ["PAGEVIEW_MIN_VIEWS"])
                             if os.environ.get("PAGEVIEW_MIN_VIEWS") else None),
@@ -200,6 +253,9 @@ def main(argv: list[str] | None = None) -> int:
         if not try_lock(conn):
             log.warning("다른 주기가 돌고 있다 — 이번 주기는 건너뛴다")
             return 0
+        refresh_baseline = (args.min_views is not None and not args.no_baseline
+                            and not args.dry_run)
+        last_as_of = None
         while True:
             try:
                 summary = run_once(conn, source=args.source, cache_dir=cache_dir,
@@ -214,6 +270,10 @@ def main(argv: list[str] | None = None) -> int:
                 log.exception("주기 실패 — 다음 주기에 다시 시도한다")
                 if not args.loop:
                     return 1
+            if refresh_baseline:
+                last_as_of = maybe_refresh_baseline(
+                    conn, now=datetime.now(timezone.utc), last_as_of=last_as_of,
+                    wiki=args.wiki)
             if not args.loop:
                 return 0
             time.sleep(args.interval)
