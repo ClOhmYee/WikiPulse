@@ -22,6 +22,62 @@ const member = {
   email: "reader@example.com",
 };
 const nav = (page) => page.getByRole("navigation", { name: "주 메뉴" });
+const deferred = () => {
+  let resolve;
+  const promise = new Promise((done) => {
+    resolve = done;
+  });
+  return { promise, resolve };
+};
+
+for (const action of ["login", "logout"]) {
+  test(`focus during ${action} cannot restore the previous account state`, async ({
+    page,
+  }) => {
+    let restoring = 0;
+    const started = deferred();
+    const release = deferred();
+    await page.route("**/api/v1/me", (route) => {
+      restoring++;
+      return route.fulfill(
+        action === "logout"
+          ? { json: { data: member } }
+          : { status: 401, json: { error: { code: "UNAUTHORIZED" } } },
+      );
+    });
+    await page.route(`**/api/v1/auth/${action}`, async (route) => {
+      started.resolve();
+      await release.promise;
+      await route.fulfill(
+        action === "login" ? { json: { data: { member } } } : { status: 204 },
+      );
+    });
+    await page.goto(action === "login" ? "/#/login" : "/#/issues");
+    await expect(nav(page).getByRole("link")).toHaveCount(
+      action === "login" ? 3 : 5,
+    );
+    if (action === "login") {
+      await fillLogin(page);
+      await page
+        .getByRole("dialog")
+        .getByRole("button", { name: "로그인", exact: true })
+        .click();
+    } else {
+      await page.getByRole("button", { name: "로그아웃" }).click();
+    }
+    await started.promise;
+    const count = restoring;
+    await page.evaluate(() => {
+      window.dispatchEvent(new Event("focus"));
+      document.dispatchEvent(new Event("visibilitychange"));
+    });
+    release.resolve();
+    await expect(nav(page).getByRole("link")).toHaveCount(
+      action === "login" ? 5 : 3,
+    );
+    expect(restoring).toBe(count);
+  });
+}
 async function fillLogin(page) {
   await page.getByLabel("이메일", { exact: true }).fill(member.email);
   await page.getByLabel("비밀번호", { exact: true }).fill("test-password");

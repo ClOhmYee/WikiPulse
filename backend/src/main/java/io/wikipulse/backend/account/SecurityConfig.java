@@ -2,6 +2,7 @@ package io.wikipulse.backend.account;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.FilterChain;
+import jakarta.servlet.DispatcherType;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -56,6 +57,8 @@ public class SecurityConfig {
             .requestCache(c -> c.disable())
             .formLogin(c -> c.disable()).httpBasic(c -> c.disable())
             .authorizeHttpRequests(c -> c
+                // Container error dispatch must retain the original server error status.
+                .dispatcherTypeMatchers(DispatcherType.ERROR).permitAll()
                 .requestMatchers("/api/v1/me", "/api/v1/me/**").authenticated()
                 .requestMatchers(HttpMethod.GET, "/api/v1/**", "/actuator/health").permitAll()
                 .requestMatchers(HttpMethod.POST, "/api/v1/auth/signup", "/api/v1/auth/login").permitAll()

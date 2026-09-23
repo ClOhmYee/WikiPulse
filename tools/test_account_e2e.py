@@ -158,6 +158,14 @@ def main():
         start()
         base = f"http://127.0.0.1:{backend_port}/api/v1"
         alice, bob, guest = Client(base), Client(base), Client(base)
+        # An infrastructure failure must remain 500, not become a misleading login prompt.
+        with psycopg.connect(dsn, autocommit=True) as db:
+            db.execute("ALTER TABLE spring_session RENAME TO unavailable_session")
+            try:
+                Client(base).call("/auth/csrf", expected=500)
+            finally:
+                db.execute("ALTER TABLE unavailable_session RENAME TO spring_session")
+        Client(base.removesuffix("/api/v1")).call("/error", expected=401)
         guest.call("/me", expected=401)
         guest.call("/me/bookmarks", expected=401)
         guest.call("/stocks?limit=1")
