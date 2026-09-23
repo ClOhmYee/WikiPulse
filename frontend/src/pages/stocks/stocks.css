@@ -1,8 +1,8 @@
 .st-page {
-  --st-muted: #9cafb6;
-  --st-paper: #f3f7f7;
-  --st-teal: #86c9c4;
-  --st-gold: #dbb057;
+  --st-muted: var(--theme-muted, #9cafb6);
+  --st-paper: var(--theme-text, #f3f7f7);
+  --st-teal: var(--theme-accent, #86c9c4);
+  --st-gold: var(--theme-accent, #dbb057);
 }
 .st-page h1 {
   font-size: 32px;
@@ -71,8 +71,8 @@
   align-items: center;
   gap: 12px;
   padding: 18px 0;
-  border-top: 1px solid #24313a;
-  border-bottom: 1px solid #24313a;
+  border-top: 1px solid var(--theme-border, #24313a);
+  border-bottom: 1px solid var(--theme-border, #24313a);
   color: var(--st-teal);
 }
 .st-event-context p {
@@ -112,8 +112,8 @@
   min-width: 240px;
   flex: 1;
   padding: 0 14px;
-  background: #0b141b;
-  border: 1px solid #24313a;
+  background: var(--theme-surface, #0b141b);
+  border: 1px solid var(--theme-border, #24313a);
   border-radius: 10px;
   color: var(--st-muted);
 }
@@ -214,12 +214,12 @@
   min-height: 34px;
   border: 0;
   color: var(--st-muted);
-  background: #050a0f;
+  background: var(--theme-surface, #050a0f);
   font-size: 12px !important;
   cursor: pointer;
 }
 .st-directory-list {
-  border-top: 1px solid #34434c;
+  border-top: 1px solid var(--theme-border, #34434c);
 }
 .st-list-head {
   display: grid;
@@ -228,7 +228,7 @@
     90px 110px 44px;
   gap: 24px;
   padding: 15px 18px;
-  border-bottom: 1px solid #24313a;
+  border-bottom: 1px solid var(--theme-border, #24313a);
   color: var(--st-muted);
   font-size: 11px;
 }
@@ -251,11 +251,11 @@
   align-items: center;
   column-gap: 24px;
   padding: 22px 18px;
-  border-bottom: 1px solid #24313a;
+  border-bottom: 1px solid var(--theme-border, #24313a);
   transition: background 180ms ease;
 }
 .st-stock-row:hover {
-  background: #0b141b;
+  background: var(--theme-surface, #0b141b);
 }
 .st-stock-identity {
   display: flex;
@@ -273,9 +273,9 @@
   place-items: center;
   width: 44px;
   height: 44px;
-  border: 1px solid #314b52;
+  border: 1px solid var(--theme-border, #314b52);
   border-radius: 12px;
-  background: #0e2027;
+  background: var(--theme-soft, #0e2027);
   color: var(--st-teal);
   font-size: 14px;
   font-weight: 600;
@@ -299,7 +299,7 @@
 .st-company-name {
   display: block;
   margin-top: 4px;
-  color: #bfcdd1;
+  color: var(--theme-text, #bfcdd1);
   font-size: 12px;
   line-height: 1.5;
   overflow-wrap: anywhere;
@@ -320,7 +320,7 @@
   gap: 8px;
 }
 .st-sector {
-  color: #c1d0d4;
+  color: var(--theme-text, #c1d0d4);
   font-size: 11px;
 }
 .st-relation-label {
@@ -335,7 +335,7 @@
   width: 2px;
   height: 2px;
   border-radius: 50%;
-  background: #607b85;
+  background: var(--theme-accent, #607b85);
 }
 .st-row-context p {
   display: -webkit-box;
@@ -365,7 +365,7 @@
   font-size: 11px;
 }
 .st-event-count svg {
-  color: #8ea7b0;
+  color: var(--theme-muted, #8ea7b0);
 }
 .st-event-count:hover {
   color: var(--st-teal);
@@ -390,10 +390,10 @@
   font-variant-numeric: tabular-nums;
 }
 .st-price-change[data-direction="up"] {
-  color: #8bcec2;
+  color: var(--theme-success, #8bcec2);
 }
 .st-price-change[data-direction="down"] {
-  color: #dfaa95;
+  color: var(--theme-warning, #dfaa95);
 }
 .st-mobile-price-label {
   display: none;
@@ -406,7 +406,7 @@
 .st-save[data-saved="true"],
 .st-save-full[data-saved="true"] {
   color: var(--st-gold);
-  border-color: #806a3c;
+  border-color: var(--theme-border, #806a3c);
 }
 .st-data-note {
   margin: 24px 0 0;
@@ -446,12 +446,12 @@
   font-size: 12px;
 }
 .st-detail-meta strong {
-  color: #cfdcde;
+  color: var(--theme-text, #cfdcde);
   font-weight: 500;
 }
 .st-detail-meta > span {
   padding-left: 12px;
-  border-left: 1px solid #31404a;
+  border-left: 1px solid var(--theme-border, #31404a);
 }
 .st-save-full {
   min-height: 43px;
@@ -470,7 +470,7 @@
   grid-template-columns: minmax(0, 1fr) 320px;
   gap: 54px;
   align-items: start;
-  border-top: 1px solid #24313a;
+  border-top: 1px solid var(--theme-border, #24313a);
   padding-top: 32px;
 }
 .st-events-heading {
@@ -521,7 +521,7 @@
   bottom: -12px;
   left: 5px;
   width: 1px;
-  background: #2a3b44;
+  background: var(--theme-soft, #2a3b44);
 }
 .st-timeline-event:last-child {
   padding-bottom: 0;
@@ -549,7 +549,7 @@
   height: 9px;
   border: 2px solid var(--st-teal);
   border-radius: 50%;
-  background: #050a0f;
+  background: var(--theme-surface, #050a0f);
 }
 .st-event-body {
   position: relative;
@@ -610,8 +610,8 @@
 .st-relationship {
   margin-top: 20px;
   padding: 17px 0 18px;
-  border-top: 1px solid #263640;
-  border-bottom: 1px solid #263640;
+  border-top: 1px solid var(--theme-border, #263640);
+  border-bottom: 1px solid var(--theme-border, #263640);
 }
 .st-relationship-heading {
   display: flex;
@@ -649,17 +649,17 @@
 .st-relation-path li span {
   padding: 5px 8px;
   border-radius: 4px;
-  background: #14242b;
-  color: #badbd7;
+  background: var(--theme-soft, #14242b);
+  color: var(--theme-text, #badbd7);
   font-size: 11px;
   line-height: 1.5;
 }
 .st-relation-path svg {
-  color: #879fa8;
+  color: var(--theme-muted, #879fa8);
 }
 .st-relationship > p {
   margin: 0;
-  color: #b5c5cb;
+  color: var(--theme-muted, #b5c5cb);
   font-size: 12px;
   line-height: 1.85;
 }
@@ -673,15 +673,15 @@
   font-size: 12px;
 }
 .st-read-event:hover {
-  color: #b7e3df;
+  color: var(--theme-success, #b7e3df);
 }
 .st-stock-aside {
   min-width: 0;
 }
 .st-price-panel {
   padding: 23px 22px 18px;
-  background: #0b141b;
-  border: 1px solid #24313a;
+  background: var(--theme-surface, #0b141b);
+  border: 1px solid var(--theme-border, #24313a);
   border-radius: 14px;
 }
 .st-price-title {
@@ -733,15 +733,15 @@
 }
 .st-chart-ranges button:hover {
   color: var(--st-paper);
-  background: #17262f;
+  background: var(--theme-soft, #17262f);
 }
 .st-chart-ranges button[data-active="true"] {
-  background: #283028;
-  color: #e3c78d;
+  background: var(--theme-soft, #283028);
+  color: var(--theme-accent, #e3c78d);
 }
 .st-chart-note {
   margin: 12px 0 0;
-  border-top: 1px solid #24313a;
+  border-top: 1px solid var(--theme-border, #24313a);
   padding-top: 13px;
   color: var(--st-muted);
   font-size: 10px;
@@ -795,8 +795,8 @@
   gap: 18px;
   margin-top: 30px;
   padding: 20px 2px;
-  border-top: 1px solid #24313a;
-  color: #d8e6e8;
+  border-top: 1px solid var(--theme-border, #24313a);
+  color: var(--theme-text, #d8e6e8);
   font-size: 12px;
 }
 .st-discover-more small {

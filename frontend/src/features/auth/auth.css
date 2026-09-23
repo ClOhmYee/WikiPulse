@@ -22,7 +22,7 @@
 }
 .auth-modal #auth-description {
   margin-top: 8px;
-  color: #afc0c8;
+  color: var(--theme-muted, #afc0c8);
 }
 .auth-modal form {
   margin-top: 28px;
@@ -44,9 +44,9 @@
   width: 100%;
   min-height: 44px;
   padding: 10px 12px;
-  border: 1px solid #5b707b;
+  border: 1px solid var(--theme-border, #5b707b);
   border-radius: 6px;
-  background: #070e14;
+  background: var(--theme-surface, #070e14);
   font: inherit;
 }
 .auth-submit {
@@ -61,10 +61,10 @@
   font-size: 13px;
 }
 .auth-error {
-  color: #ffb4ab;
+  color: var(--theme-warning, #ffb4ab);
 }
 .auth-message {
-  color: #8fe0c8;
+  color: var(--theme-success, #8fe0c8);
 }
 .auth-switch {
   display: flex;
@@ -73,7 +73,7 @@
   align-items: center;
   gap: 8px;
   margin-top: 22px;
-  color: #afc0c8;
+  color: var(--theme-muted, #afc0c8);
   font-size: 13px;
 }
 .auth-switch button {

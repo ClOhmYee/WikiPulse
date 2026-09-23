@@ -6,6 +6,7 @@ import "@fontsource/barlow-condensed/600.css";
 import "@fontsource/barlow-condensed/700.css";
 import App from "./app/App";
 import "./pages/onboarding/onboarding.css";
+import "./styles/theme.css";
 
 createRoot(document.getElementById("root")).render(
   <StrictMode>

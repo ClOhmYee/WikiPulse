@@ -1,6 +1,6 @@
 import { memo, useMemo } from "react";
 import { isNewIssue } from "../../data/pulse/time.js";
-import { NEON_COLORS, neonColor } from "./neonTheme.js";
+import { NEON_COLORS, LIGHT_COLORS, neonColor } from "./neonTheme.js";
 import { MAP_SCALE, DEFAULT_ZOOM } from "./useMapCamera.js";
 import DocumentLabels from "./DocumentLabels.jsx";
 import { overviewRadius, overviewTitle } from "./clusterOverview.js";
@@ -105,7 +105,10 @@ export default memo(function PulseCluster({
       data-issue-key={cluster.issueKey}
       data-rank={cluster.rank}
       data-selected={active}
-      style={{ "--cluster-color": color }}
+      style={{
+        "--cluster-color": `var(--theme-cluster-color, ${color})`,
+        "--cluster-light-color": LIGHT_COLORS[category],
+      }}
       onPointerMove={trackClusterOrbit}
     >
       <g

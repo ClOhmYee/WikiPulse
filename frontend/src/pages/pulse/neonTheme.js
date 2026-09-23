@@ -14,3 +14,17 @@ export const NEON_COLORS = {
 
 export const neonColor = (category) =>
   NEON_COLORS[category] || NEON_COLORS.other;
+
+// Pastel counterparts retain the dark map's layers, geometry and effects.
+export const LIGHT_COLORS = {
+  politics: "#c2ade3",
+  world: "#b5bfe9",
+  society: "#acdbe4",
+  economy: "#e7c994",
+  technology: "#a7c9f0",
+  science: "#cbdba6",
+  culture: "#e3b3d0",
+  sports: "#acd8ca",
+  environment: "#a9d9d0",
+  other: "#bbcadb",
+};

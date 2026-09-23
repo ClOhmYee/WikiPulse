@@ -4,6 +4,21 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#050a0f" />
+    <script>
+      // Apply before first paint; the introduction always retains its dark world.
+      const workspace = location.hash.replace(/^#/, "").split("?")[0];
+      let preference = "light";
+      try {
+        if (localStorage.getItem("wikipulse.theme") === "dark")
+          preference = "dark";
+      } catch {
+        /* White remains the default when storage is unavailable. */
+      }
+      const light = workspace && workspace !== "/" && preference === "light";
+      document.documentElement.dataset.theme = light ? "light" : "dark";
+      if (light)
+        document.querySelector('meta[name="theme-color"]').content = "#f3f7ff";
+    </script>
     <link rel="icon" type="image/png" href="/wikipulse-icon.png" />
     <meta
       name="description"

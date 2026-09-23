@@ -26,7 +26,7 @@
   flex-wrap: wrap;
   gap: 8px 22px;
   margin-top: 16px;
-  color: #acbdc5;
+  color: var(--theme-muted, #acbdc5);
   font-size: 11px;
 }
 .pulse-reading-guide b {
@@ -312,12 +312,12 @@
   font-weight: 650;
 }
 .pulse-badge--hot {
-  color: #ffbf9e;
-  background: #402c23;
+  color: var(--theme-warning, #ffbf9e);
+  background: var(--theme-soft, #402c23);
 }
 .pulse-badge--new {
-  color: #a4e0d5;
-  background: #163b39;
+  color: var(--theme-success, #a4e0d5);
+  background: var(--theme-soft, #163b39);
 }
 .pulse-metrics {
   display: grid;
@@ -349,7 +349,7 @@
   border: 0;
   border-radius: 4px;
   background: transparent;
-  color: #c6d9de;
+  color: var(--theme-text, #c6d9de);
   cursor: pointer;
   font: inherit;
   font-size: 12px;
@@ -365,8 +365,8 @@
 }
 .pulse-document:hover,
 .pulse-document[aria-pressed="true"] {
-  background: #173038;
-  color: #c6eeea;
+  background: var(--theme-soft, #173038);
+  color: var(--theme-accent, #c6eeea);
 }
 .pulse-node-detail {
   padding-top: 12px;
@@ -406,7 +406,7 @@
   background: transparent;
   border: 1px solid var(--wp-border);
   border-radius: 5px;
-  color: #b9cbd0;
+  color: var(--theme-muted, #b9cbd0);
   padding: 8px 10px;
   font: inherit;
   font-size: 11px;
@@ -499,7 +499,7 @@
 .pulse-timeline__ticks i {
   position: absolute;
   height: 5px;
-  border-left: 1px solid #677e89;
+  border-left: 1px solid var(--theme-border, #677e89);
 }
 .pulse-timeline__labels {
   display: flex;
@@ -570,7 +570,7 @@
   min-width: 0;
   height: 740px;
   min-height: 0;
-  background: #040b17;
+  background: var(--theme-surface, #040b17);
   isolation: isolate;
 }
 .document-map__caption {
@@ -585,11 +585,11 @@
 .document-map__caption strong {
   font-size: 13px;
   font-weight: 500;
-  color: #d5e5e8;
+  color: var(--theme-text, #d5e5e8);
 }
 .document-map__caption span {
   font-size: 10px;
-  color: #9cafb6;
+  color: var(--theme-muted, #9cafb6);
 }
 .document-map > svg {
   width: 100%;
@@ -607,7 +607,7 @@
   cursor: grabbing;
 }
 .document-cluster__boundary {
-  fill: #081428;
+  fill: var(--theme-on-accent, #081428);
   fill-opacity: 0.16;
   stroke: var(--cluster-color);
   stroke-opacity: 0.38;
@@ -632,7 +632,7 @@
 }
 .document-map[data-overview="true"] .document-cluster__summary-title {
   display: block;
-  fill: #e2f1ff;
+  fill: var(--theme-text, #e2f1ff);
   font-weight: 600;
   pointer-events: none;
 }
@@ -647,7 +647,7 @@
 .document-map[data-overview="true"]
   .document-cluster[data-selected="true"]
   .document-cluster__summary-circle {
-  stroke: #e5f6ff;
+  stroke: var(--theme-text, #e5f6ff);
   stroke-width: 2.5;
   stroke-opacity: 1;
 }
@@ -694,16 +694,16 @@
 .document-cluster
   > [role="button"]:focus-visible
   > .document-cluster__boundary {
-  stroke: #e5f6ff;
+  stroke: var(--theme-text, #e5f6ff);
   stroke-width: 3;
   stroke-opacity: 1;
 }
 .document-cluster__title {
   font-size: 17px;
   font-weight: 500;
-  fill: #e2f1ff;
+  fill: var(--theme-text, #e2f1ff);
   paint-order: stroke;
-  stroke: #040b17;
+  stroke: var(--theme-on-accent, #040b17);
   stroke-linejoin: round;
 }
 .document-cluster__badge {
@@ -717,7 +717,7 @@
   opacity: calc(0.3 + var(--scan-strength, 0) * 0.65);
 }
 .document-edges line[data-highlighted="true"] {
-  stroke: #deeee9;
+  stroke: var(--theme-text, #deeee9);
   opacity: 1;
 }
 .document-node__body {
@@ -741,7 +741,7 @@
 }
 .document-node:hover .document-node__body,
 .document-node:focus-visible .document-node__body {
-  stroke: #e5f6ff;
+  stroke: var(--theme-text, #e5f6ff);
   stroke-width: 2.5;
 }
 .document-node__hit {
@@ -749,11 +749,11 @@
   stroke: transparent;
 }
 .document-node__seed {
-  fill: #f3f7f7;
+  fill: var(--theme-text, #f3f7f7);
   pointer-events: none;
 }
 .document-node[data-selected="true"] .document-node__body {
-  stroke: #f3f7f7;
+  stroke: var(--theme-text, #f3f7f7);
   stroke-width: 3;
   filter: drop-shadow(0 0 5px var(--cluster-color));
 }
@@ -766,17 +766,17 @@
   stroke-dasharray: 3 2;
 }
 .document-label {
-  fill: #e2f1ff;
+  fill: var(--theme-text, #e2f1ff);
   font-size: 12px;
   pointer-events: none;
   paint-order: stroke;
-  stroke: #040b17;
+  stroke: var(--theme-on-accent, #040b17);
   stroke-width: 4px;
   stroke-linejoin: round;
 }
 .document-label-callout rect,
 .document-cluster__title-box {
-  fill: #07101f;
+  fill: var(--theme-on-accent, #07101f);
   stroke: var(--cluster-color);
   stroke-width: 1;
 }
@@ -813,7 +813,7 @@
   text-overflow: ellipsis;
   text-align: center;
   line-height: 1.15;
-  color: #e2f1ff;
+  color: var(--theme-text, #e2f1ff);
 }
 .pulse-scan {
   pointer-events: none;
@@ -821,7 +821,7 @@
 .pulse-scan__wave,
 .pulse-scan__echo {
   opacity: 0;
-  stroke: #55ddff;
+  stroke: var(--theme-success, #55ddff);
   stroke-width: 1.25;
 }
 .pulse-scan__echo {
@@ -835,13 +835,13 @@
   gap: 14px;
   padding: 16px 20px;
   border-top: 1px solid rgb(100 171 232 / 10%);
-  background: #050e1c;
+  background: var(--theme-surface, #050e1c);
 }
 .document-map__legend {
   display: flex;
   flex-wrap: wrap;
   gap: 9px 16px;
-  color: #b2c6ce;
+  color: var(--theme-muted, #b2c6ce);
   font-size: 10px;
 }
 .document-map__legend span {
@@ -851,7 +851,7 @@
 }
 .document-map__legend i {
   width: 18px;
-  border-top: 2px solid #61b6dc;
+  border-top: 2px solid var(--theme-accent, #61b6dc);
 }
 .document-map__legend .is-dashed {
   border-top-style: dashed;
@@ -860,7 +860,7 @@
   width: 5px;
   height: 5px;
   border-radius: 50%;
-  background: #f3f7f7;
+  background: var(--theme-hover, #f3f7f7);
 }
 .document-map__controls {
   display: flex;
@@ -869,15 +869,15 @@
 .document-map__controls button {
   width: 36px;
   height: 36px;
-  color: #adcfe8;
+  color: var(--theme-accent, #adcfe8);
 }
 .document-map__controls button:hover:not(:disabled) {
-  color: #c7f5ff;
-  background: #11283e;
+  color: var(--theme-success, #c7f5ff);
+  background: var(--theme-soft, #11283e);
 }
 .document-map__controls button:focus-visible,
 .document-map > svg:focus-visible:not([data-pointer-focus="true"]) {
-  outline: 2px solid #82e4ff;
+  outline: 2px solid var(--theme-accent, #82e4ff);
   outline-offset: -3px;
 }
 .document-map__scan-control {

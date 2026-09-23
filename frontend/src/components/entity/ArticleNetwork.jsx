@@ -17,7 +17,7 @@ export function ArticleNetwork({ articles = [], selectedId, onSelect }) {
               y1="110"
               x2={280 + Math.cos(angle) * 170}
               y2={110 + Math.sin(angle) * 78}
-              stroke="#416565"
+              stroke="var(--theme-control-border, #416565)"
               strokeWidth="1"
             />
           );
@@ -33,15 +33,19 @@ export function ArticleNetwork({ articles = [], selectedId, onSelect }) {
                 cx={x}
                 cy={y}
                 r={i === 0 ? 19 : 8}
-                fill={selectedId === article.id ? "#dbb057" : "#86c9c4"}
+                fill={
+                  selectedId === article.id
+                    ? "var(--gold, #dbb057)"
+                    : "var(--teal, #86c9c4)"
+                }
                 fillOpacity={i === 0 ? ".2" : ".8"}
-                stroke="#86c9c4"
+                stroke="var(--teal, #86c9c4)"
               />
               <text
                 x={x}
                 y={y + (i === 0 ? 39 : 24)}
                 textAnchor="middle"
-                fill="#dce7e8"
+                fill="var(--theme-text, #dce7e8)"
                 fontSize="12"
               >
                 {article.name}
