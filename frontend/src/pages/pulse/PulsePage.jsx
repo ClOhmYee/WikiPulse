@@ -3,8 +3,8 @@ import { Search, X } from "lucide-react";
 import { dataClient } from "../../data/index.js";
 import { useAsyncResource } from "../../data/hooks/useAsyncResource.js";
 import { issueCategories } from "../../data/categories.js";
+import { searchableTitles } from "../../data/titles.js";
 import {
-  calendarDays,
   kstDate,
   kstTimestamp,
   snapshotKey,
@@ -80,7 +80,8 @@ export default function PulsePage({ savedEvents, onToggleEvent, onSource }) {
       (clusters || []).filter(
         (v) =>
           (category === "all" || v.category === category) &&
-          `${v.label} ${v.summary || ""} ${v.nodes.map((n) => n.title).join(" ")}`
+          // 한국어로 보이는 제목은 한국어로도 검색돼야 한다. 영문 원문도 계속 색인한다.
+          `${v.label} ${v.summary || ""} ${v.nodes.map(searchableTitles).join(" ")}`
             .toLowerCase()
             .includes(query.trim().toLowerCase()),
       ) || [],
@@ -104,7 +105,16 @@ export default function PulsePage({ savedEvents, onToggleEvent, onSource }) {
     }
     setExpanded((value) => !value);
   }
-  const days = calendarDays(items);
+  function selectDate(date) {
+    const dateSnapshots = items.filter(
+      (item) => kstDate(item.snapshotTs) === date,
+    );
+    if (dateSnapshots.length) {
+      selectTime(dateSnapshots.at(-1));
+    } else {
+      setNotice(`${date}에는 저장된 스냅샷이 없습니다.`);
+    }
+  }
   const categoryFilters = (
     <div
       className="wp-filter-chips pulse-filters"
@@ -131,18 +141,11 @@ export default function PulsePage({ savedEvents, onToggleEvent, onSource }) {
       selected={target}
       latest={latest}
       onSelect={selectTime}
+      onDateSelect={selectDate}
     />
   );
   return (
     <div className="wp-page pulse-page">
-      <div className="wp-page-header">
-        <div>
-          <h1>세상의 변화가 모이는 곳</h1>
-          <p className="wp-subtitle">
-            시간을 따라, 이슈를 이루는 문서의 연결을 살펴보세요.
-          </p>
-        </div>
-      </div>
       {index.loading ? (
         <p role="status">선택 가능한 시점을 불러오는 중입니다.</p>
       ) : index.error ? (
@@ -162,52 +165,29 @@ export default function PulsePage({ savedEvents, onToggleEvent, onSource }) {
         </div>
       ) : (
         <>
-          <div className="pulse-toolbar">
-            <label className="wp-search">
-              <Search size={17} />
-              <input
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                placeholder="이슈, 문서 검색"
-                aria-label="사건 검색"
-              />
-              {query && (
-                <button
-                  className="wp-icon-button"
-                  onClick={() => setQuery("")}
-                  aria-label="검색어 지우기"
-                >
-                  <X size={16} />
-                </button>
-              )}
-            </label>
-            <label className="pulse-date">
-              날짜
-              <select
-                aria-label="스냅샷 날짜"
-                value={kstDate(target.snapshotTs)}
-                onChange={(e) =>
-                  selectTime(
-                    items
-                      .filter((v) => kstDate(v.snapshotTs) === e.target.value)
-                      .at(-1),
-                  )
-                }
-              >
-                {days.map((day) => (
-                  <option
-                    value={day.value}
-                    key={day.value}
-                    disabled={!day.available}
+          <div className="pulse-controls">
+            <div className="pulse-toolbar">
+              <label className="wp-search">
+                <Search size={17} />
+                <input
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  placeholder="이슈, 문서 검색"
+                  aria-label="사건 검색"
+                />
+                {query && (
+                  <button
+                    className="wp-icon-button"
+                    onClick={() => setQuery("")}
+                    aria-label="검색어 지우기"
                   >
-                    {day.value}
-                    {day.available ? "" : " · 데이터 없음"}
-                  </option>
-                ))}
-              </select>
-            </label>
+                    <X size={16} />
+                  </button>
+                )}
+              </label>
+            </div>
+            {categoryFilters}
           </div>
-          {categoryFilters}
           <div className="pulse-reading-guide">
             <span>
               <b>NEW</b> {map.data?.meta.newWindowHours || 24}시간 내 최초 감지
@@ -215,11 +195,7 @@ export default function PulsePage({ savedEvents, onToggleEvent, onSource }) {
             <span>노드 크기 = 공통 척도의 급증도</span>
           </div>
           <p className="data-scope">
-            중앙에는 이슈 급증 점수가 높은 클러스터가 배치됩니다. AI 검증 상태와
-            탐지 신호의 충족 여부는 별개입니다. 점수는 편집 배수나 확률이
-            아닙니다.
-            {map.data?.meta.scoreVersion &&
-              ` 점수 척도 ${map.data.meta.scoreVersion}`}
+            중앙에는 이슈 급증 점수가 높은 클러스터가 배치됩니다.
           </p>
           {!expanded && timeline}
           <PulseMapFrame

@@ -16,6 +16,11 @@ export function makeStressMap() {
       pageId: `page-${i}-${n}`,
       wiki: "enwiki",
       title: `검증 문서 ${i + 1}-${n + 1}`,
+      // ko 있음/없음을 한 스냅샷에 섞어 둔다 — 계약 검증이 두 경로를 다 지나야 한다.
+      // 실측상 클러스터 편입 문서의 절반 가까이가 ko 판이 없다(2026-09-22).
+      titleKo: n % 2 === 0 ? `검증 문서 한국어 ${i + 1}-${n + 1}` : null,
+      // ko 도 번역도 없는 노드를 남겨 영문 폴백 경로까지 계약 검증이 지나게 한다.
+      titleKoFallback: n % 3 === 0 ? `검증 문서 번역 ${i + 1}-${n + 1}` : null,
       isSeed: n === 0,
       editCount: 20 + n,
       views: 2000 + n * 200,

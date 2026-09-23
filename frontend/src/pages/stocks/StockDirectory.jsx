@@ -125,13 +125,13 @@ export default function StockDirectory({
         <div>
           <h1>
             {activeEvent
-              ? "이 사건과 연결된 종목"
-              : "종목에서 사건의 맥락을 찾으세요."}
+              ? "연결 종목"
+              : "종목 탐색"}
           </h1>
           <p className="wp-subtitle">
             {activeEvent
               ? activeEvent.title
-              : "기업 이름 너머, 산업과 공급망을 따라 연결된 사건을 살펴보세요."}
+              : "종목과 관련 이슈를 확인하세요."}
           </p>
         </div>
         <span className="st-directory-total">

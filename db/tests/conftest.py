@@ -33,9 +33,8 @@ psycopg = pytest.importorskip("psycopg", reason="psycopg 미설치 — 스키마
 #      docker compose up -d postgres
 #      WIKIPULSE_TEST_DSN=postgresql://wikipulse:wikipulse@localhost:5432/wikipulse pytest
 #
-# 🔴 이 경로는 마이그레이션을 적재하지 않는다 — 준 DB 에 이미 있다고 본다(compose 의
-#    postgres 이미지가 최초 기동 때 db/migrations 를 넣는다). 스키마를 고쳤으면
-#    `docker compose down -v` 후 다시 띄운다.
+# 이 경로는 마이그레이션을 적재하지 않는다. 먼저 compose의 migrate 서비스를 실행한다.
+# 기존 이력 없는 볼륨의 적용 버전 등록 절차는 docker/README.md를 참고한다.
 EXTERNAL_DSN = os.environ.get("WIKIPULSE_TEST_DSN")
 
 if not EXTERNAL_DSN:

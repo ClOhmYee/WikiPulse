@@ -33,6 +33,13 @@ nullable.data.clusters[0].label = null;
 nullable.data.clusters[0].issueKey = null;
 validate("MapResponse", nullable);
 validateMap(nullable);
+// titleKo 는 표시 전용 선택 필드다 — 필드가 아예 없어도(구버전 백엔드) 계약을 지켜야 한다.
+// 🔴 영문 title 은 그대로 남는다. 두 경로 모두 통과해야 화면이 ko/영문 어느 쪽으로도 선다.
+const omittedTitleKo = structuredClone(stress);
+for (const cluster of omittedTitleKo.data.clusters)
+  for (const node of cluster.nodes) delete node.titleKo;
+validate("MapResponse", omittedTitleKo);
+validateMap(omittedTitleKo);
 console.log(
   `Pulse DTO: ${snapshots.data.length} snapshots + 500-node/1000-edge stress graph, null label/identity and omitted dataMode validated. No live backend was called.`,
 );

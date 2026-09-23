@@ -11,7 +11,6 @@ docker compose up -d                        # postgres + kafka + backend + front
 docker compose --profile pipeline up -d     # producer·spark 까지
 docker compose --profile gdelt up -d        # GDELT 수집(HDFS namenode·datanode) 까지
 docker compose down                         # 정지 (데이터 유지)
-docker compose down -v                       # 정지 + 데이터 삭제 (스키마 재적재)
 ```
 
 `.env.example` 을 `.env` 로 복사해서 채운다 (`.env` 는 gitignore).
@@ -20,7 +19,8 @@ docker compose down -v                       # 정지 + 데이터 삭제 (스키
 
 | 서비스 | 포트 | 무엇 | 프로필 |
 | --- | --- | --- | --- |
-| postgres | 5432 | PostgreSQL 16 + pgvector. 스키마 자동 적재 | 기본 |
+| postgres | 5432 | PostgreSQL 16 + pgvector | 기본 |
+| migrate | — | DB 마이그레이션 완료 후 backend 시작 | 기본 |
 | kafka | 9092 | Kafka KRaft 단일 브로커 | 기본 |
 | backend | 8080 | Spring Boot. `ddl-auto=validate` | 기본 |
 | frontend | 5174 | Vite dev server | 기본 |
@@ -28,6 +28,31 @@ docker compose down -v                       # 정지 + 데이터 삭제 (스키
 | spark | — | edit_windows 스트리밍 | `pipeline` |
 | hdfs-namenode | 9870 | HDFS NameNode + WebHDFS 진입점 | `gdelt` |
 | hdfs-datanode | — | HDFS DataNode (단일) | `gdelt` |
+
+## DB 업그레이드와 로그인 (WP-211)
+
+`docker compose up -d --build`는 `migrate`가 성공한 뒤 백엔드를 시작한다.
+신규 DB는 전체 SQL을 버전 순서대로 적용하고, 이력이 있는 DB는 누락분만 적용한다.
+적용 SQL과 `schema_migration` 기록은 하나의 트랜잭션으로 처리한다.
+실패하면 `docker compose logs migrate`로 원인을 확인한다. 스키마 업그레이드에
+`down -v`를 사용하지 않는다. 기존 회원·저장 항목·세션을 보존한다.
+
+과거 initdb 방식으로 만든 볼륨에 `schema_migration`이 없으면 자동 추정을 하지 않고
+중단한다. 백업 후 DB 스키마와 당시 적용 기록을 대조해 **완전히 적용된 마지막 버전 N**을
+확인하고 아래 명령으로 한 번 이력을 등록한다. N은 최신 파일 번호가 아니다.
+예를 들어 V1~V14가 적용된 DB만 `--baseline 14`를 사용한다.
+
+```sh
+docker compose build postgres migrate backend frontend
+docker compose run --rm migrate --baseline N
+docker compose up -d
+```
+
+이후에는 `docker compose up -d --build`로 업그레이드한다. 이메일 정규화 충돌이나
+체크섬 불일치는 자동 수정하지 않는다. 원인을 해결한 뒤 재실행한다.
+호스트에서 백엔드를 직접 실행하는 경우에도 먼저 `docker compose run --rm migrate`를 실행한다.
+로컬 HTTP 쿠키는 `SESSION_COOKIE_SECURE=false`, 운영 HTTPS는 `true`를 사용한다.
+세션 유휴 만료 기본값은 `SESSION_TIMEOUT=24h`이다.
 
 ## 매칭·검증·요약 워커 (backend)
 
@@ -79,7 +104,7 @@ gdelt` 로 namenode·datanode 가 뜬다. `db/migrations` 처럼 무언가 자�
 - **파이썬 3.11 고정.** PySpark 3.5 는 3.12+ 에서 워커가 죽는다. 컨테이너가
   3.11 을 못박아 팀원이 3.13/3.14 를 깔아도 안 깨진다.
 - **PostgreSQL + pgvector 를 각자 안 깐다.** 이미지가 확장까지 들고 온다.
-  `db/migrations` 가 최초 기동 때 자동 적재돼 스키마가 항상 최신이다.
+  `migrate`가 신규 DB와 기존 볼륨 모두에 누락된 `db/migrations`를 적용한다.
 - **JDK·Gradle 을 각자 안 깐다.** 백엔드 이미지가 빌드·실행을 다 한다.
 - **시간대 문제 없음.** 임베디드 PG(pgserver)에서 겪던 TimeZone 오류가
   실 PostgreSQL 에는 없다. `TZ=UTC` 로 못박았다.

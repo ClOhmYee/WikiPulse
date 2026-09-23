@@ -1,4 +1,4 @@
-"""application.yml 의 WIKIPULSE_MATCHING_* 환경변수가 compose 에 다 적혀 있는지 본다.
+"""application.yml 의 WIKIPULSE_* 환경변수가 compose 에 다 적혀 있는지 본다.
 
 ⚠️ **같은 함정에 두 번 물려서 만들었다.** 노브를 더해 놓고 compose 에 안 적으면 `.env` 에
 값을 넣어도 컨테이너 안에 안 들어간다. 애플리케이션 기본값으로 조용히 떨어지므로
@@ -7,8 +7,20 @@
     WP-142  GATEWAY·워커 변수 누락
     WP-168  scheduler/summary SOURCE 누락 (머지 직전에 발견)
 
-🔴 대상은 WIKIPULSE_MATCHING_* 뿐이다. DATABASE_URL 처럼 compose 가 직접 값을 주는 것은
+⚠️ ~~WIKIPULSE_MATCHING_*~~ → **WIKIPULSE_*** 로 넓혔다 (2026-09-22, WP-205).
+   `wikipulse.page-title` 노브를 더하면서, 접두사가 MATCHING 으로 박혀 있어 **새 노브가
+   이 검사 밖에 있었다.** 검사는 통과하는데 정작 막으려던 그 실패가 그대로 가능한 상태였다
+   — 가드가 있다는 사실 자체가 오히려 확인을 건너뛰게 만든다. 앞으로 `wikipulse.*` 밑에
+   무엇을 더하든 자동으로 걸린다.
+
+⚠️ ~~WIKIPULSE_* 하나~~ → **WIKIPULSE_* · AZURE_TRANSLATOR_*** (2026-09-23, WP-205).
+   Azure 번역 폴백이 붙으면서 접두사가 둘이 됐다. 하나로 박아 두면 새 외부 서비스가
+   붙을 때마다 같은 방식으로 가드 밖으로 샌다.
+
+🔴 대상은 PREFIXES 로 시작하는 것뿐이다. DATABASE_URL 처럼 compose 가 직접 값을 주는 것은
    application.yml 의 플레이스홀더와 이름이 달라 여기 걸면 오탐이 된다.
+
+🔴 이 검사는 **이름만** 본다. 값(키)은 읽지도 출력하지도 않는다.
 
 의존성 없이 돈다:  py -3 tools/check_compose_env.py
 """
@@ -23,8 +35,12 @@ ROOT = pathlib.Path(__file__).resolve().parents[1]
 SOURCE_YML = ROOT / "backend/src/main/resources/application.yml"
 COMPOSES = [ROOT / "infra/service/compose.yaml", ROOT / "docker-compose.yml"]
 
-PREFIX = "WIKIPULSE_MATCHING_"
-PLACEHOLDER = re.compile(r"\$\{(" + PREFIX + r"[A-Z0-9_]+)")
+#: application.yml 이 플레이스홀더로 읽는 환경변수의 접두사들.
+#: ⚠️ 접두사를 하나로 박아 두면 새 축(외부 서비스)이 생길 때마다 가드 밖으로 샌다 —
+#:    WIKIPULSE_MATCHING_ 로 박혀 있어서 page-title 노브가 한 번 새었다(2026-09-22).
+PREFIXES = ("WIKIPULSE_", "AZURE_TRANSLATOR_")
+_ALTERNATION = "|".join(PREFIXES)
+PLACEHOLDER = re.compile(r"\$\{((?:" + _ALTERNATION + r")[A-Z0-9_]+)")
 
 
 def declared() -> set[str]:
@@ -33,14 +49,14 @@ def declared() -> set[str]:
 
 def forwarded(path: pathlib.Path) -> set[str]:
     # compose 는 `KEY: ${KEY:-기본값}` 꼴이라 좌변만 본다 — 좌변이 곧 컨테이너 안 이름이다.
-    return set(re.findall(r"^\s*(" + PREFIX + r"[A-Z0-9_]+)\s*:", path.read_text(encoding="utf-8"),
-                          re.MULTILINE))
+    return set(re.findall(r"^\s*((?:" + _ALTERNATION + r")[A-Z0-9_]+)\s*:",
+                          path.read_text(encoding="utf-8"), re.MULTILINE))
 
 
 def main() -> int:
     want = declared()
     if not want:
-        print(f"[FAIL] {SOURCE_YML.relative_to(ROOT)} 에서 {PREFIX}* 를 하나도 못 찾았다 — "
+        print(f"[FAIL] {SOURCE_YML.relative_to(ROOT)} 에서 {PREFIXES} 를 하나도 못 찾았다 — "
               "경로나 표기가 바뀐 것 같다. 이 검사가 무력화된 상태다.")
         return 1
 

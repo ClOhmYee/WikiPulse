@@ -58,7 +58,8 @@ public class StockCandidateWorker {
         List<Long> clusterIds = repository.pendingClusterIds(
                 props.getScheduler().getBatchSize(),
                 props.getScheduler().getTopPerSnapshot(),
-                props.getScheduler().getSource());
+                props.getScheduler().getSource(),
+                props.getScheduler().getSnapshotDays());
         if (clusterIds.isEmpty()) {
             return;
         }

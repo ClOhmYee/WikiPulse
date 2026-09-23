@@ -81,6 +81,9 @@ wikipulse:
       #    영원히 닿지 못한다. 특정 구간을 먼저 채우려면 replay 로 좁힌다.
       # 🔴 summary.source 와 **같은 값**이어야 한다 (top-per-snapshot 과 같은 제약).
       source: ${WIKIPULSE_MATCHING_SCHEDULER_SOURCE:}
+      # 대상을 이 UTC 날짜들의 스냅샷으로 좁힌다 (WP-215). 예: 2026-07-17,2026-07-25
+      # 빈 값이면 전체. 🔴 summary.snapshot-days 와 **같은 값**이어야 한다.
+      snapshot-days: ${WIKIPULSE_MATCHING_SCHEDULER_SNAPSHOT_DAYS:}
     # LLM 검증 워커 (WP-68, 명세 §6.3). 후보 생성 폴러와 별개로 켠다 —
     # PENDING 후보가 쌓인 뒤에 켠다.
     verification:
@@ -118,12 +121,39 @@ wikipulse:
       top-per-snapshot: ${WIKIPULSE_MATCHING_SUMMARY_TOPPERSNAPSHOT:10}
       # 🔴 scheduler.source 와 **같은 값**이어야 한다. 근거는 그쪽 주석.
       source: ${WIKIPULSE_MATCHING_SUMMARY_SOURCE:}
+      # 🔴 scheduler.snapshot-days 와 **같은 값**이어야 한다 (WP-215).
+      snapshot-days: ${WIKIPULSE_MATCHING_SUMMARY_SNAPSHOT_DAYS:}
       # 같은 model 로 요약 저장에 실패해도 되는 횟수 (WP-182).
       # 🔴 top-per-snapshot 은 이걸 못 막는다 — 그건 "몇 개를 고르나"이고 이건 "같은 것을
       #    몇 번 시도하나"다. 저장 못 하는 클러스터는 issue_report 가 계속 비어 매 폴 다시
       #    집히고 LLM 은 매번 호출된다. 2026-09-22 운영에서 51분에 5,414 크레딧이 이렇게 샜다.
       # 0 이하 = 무제한. ⚠️ 켜지 말 것 — 이 이슈 이전 동작으로 돌아간다.
       max-attempts: ${WIKIPULSE_MATCHING_SUMMARY_MAXATTEMPTS:3}
+  # 문서 표시용 한국어 제목 채우기 (V20). 매칭과 무관해 prefix 를 분리했다 —
+  # 매칭 폴러를 켜고 끄는 것과 독립으로 켜고 꺼야 한다.
+  # 🔴 기본 꺼짐. GATEWAY 와 달리 크레딧은 안 쓰지만(위키미디어 무료), 켜는 순간이 곧 백필 시작이다.
+  # 🔴 폴당 위키 요청 수는 batch-size / 50 이다 — langlinks 는 한 요청에 제목 50개까지고
+  #    51개부터는 잘림이 아니라 toomanyvalues 에러다(2026-09-22 실측).
+  #    기본 500 이면 폴당 10 요청으로 resilience4j wikipedia RateLimiter(초당 10)와 같은 자릿수다.
+  # 대상은 cluster_member 에 편입된 enwiki 문서 중 아직 조회 안 한 것뿐이다 —
+  #    wiki_page 전수(조회수 덤프가 만든 수백만 행)를 훑지 않는다.
+  page-title:
+    enabled: ${WIKIPULSE_PAGETITLE_ENABLED:false}
+    fixed-delay: PT10M
+    batch-size: ${WIKIPULSE_PAGETITLE_BATCHSIZE:500}
+    # 2단 폴백 — Azure Translator (en->ko). ko.wikipedia 대응 문서가 **없는** 문서만 번역한다.
+    # 🔴 키는 저장소에 넣지 않는다. 비어 있으면 번역 단계를 통째로 건너뛰고 영문으로 표시한다
+    #    — 기능이 깨지지 않는다. 운영에서만 AZURE_TRANSLATOR_KEY 를 주입한다.
+    # 🔴 번역 결과는 **표시·검색 전용**이다. ko.wikipedia 정식 제목이 아니므로 위키 링크를
+    #    이 값으로 만들지 않는다(title_ko 와 컬럼을 나눈 이유).
+    # F0 는 월 200만 자다. batch-size 를 위키 조회와 따로 두는 이유 — 번역만 쿼터를 쓴다.
+    azure:
+      key: ${AZURE_TRANSLATOR_KEY:}
+      endpoint: ${AZURE_TRANSLATOR_ENDPOINT:https://api.cognitive.microsofttranslator.com}
+      region: ${AZURE_TRANSLATOR_REGION:}
+      connect-timeout: 5s
+      read-timeout: 10s
+      batch-size: ${AZURE_TRANSLATOR_BATCHSIZE:200}
 
 # 외부 호출 신뢰성 계층 (WP-66). named instance gateway / wikipedia.
 # 전송 계층 실패만 다룬다(타임아웃·5xx·429·연결오류·회로개방). 스키마 검증·attempt_count·
@@ -144,6 +174,13 @@ resilience4j:
           - io.wikipulse.backend.matching.TransientUpstreamException
         # 🔴 HardUpstreamException(429·키만료·쿼터)은 여기 없다 → 재시도 안 함(공유 예산 보호).
       wikipedia:
+        max-attempts: 2
+        wait-duration: 500ms
+        retry-exceptions:
+          - io.wikipulse.backend.matching.TransientUpstreamException
+      # Azure Translator. 🔴 429 는 하드로 분류돼 여기 안 걸린다 — F0 는 쿼터 초과도 429 라
+      #    재시도하면 남은 월 쿼터를 더 태운다(GATEWAY 와 같은 이유).
+      azure:
         max-attempts: 2
         wait-duration: 500ms
         retry-exceptions:
@@ -169,6 +206,17 @@ resilience4j:
         permitted-number-of-calls-in-half-open-state: 2
         record-exceptions:
           - io.wikipulse.backend.matching.UpstreamTransportException
+      # 🔴 위키와 **분리된** 회로다. Azure 가 죽었다고 langlinks 조회까지 같이 막히면
+      #    1단 폴백마저 멈춘다.
+      azure:
+        sliding-window-type: COUNT_BASED
+        sliding-window-size: 10
+        minimum-number-of-calls: 5
+        failure-rate-threshold: 50
+        wait-duration-in-open-state: 60s
+        permitted-number-of-calls-in-half-open-state: 2
+        record-exceptions:
+          - io.wikipulse.backend.matching.UpstreamTransportException
   ratelimiter:
     instances:
       gateway:
@@ -182,6 +230,11 @@ resilience4j:
         limit-for-period: 10
         limit-refresh-period: 1s
         timeout-duration: 0
+      # F0 쿼터 폭주 상한. 초과 시 대기 없이 거부 -> 폴백 -> 대상은 미번역으로 남아 다음 폴.
+      azure:
+        limit-for-period: 10
+        limit-refresh-period: 1s
+        timeout-duration: 0
 
 # HTTPS in production; local HTTP tests explicitly opt out.
 server:
@@ -189,3 +242,4 @@ server:
     session:
       cookie:
         secure: ${SESSION_COOKIE_SECURE:true}
+

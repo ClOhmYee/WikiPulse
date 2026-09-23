@@ -36,10 +36,8 @@ export default function ExplorePage({
     <div className="wp-page explore-page" aria-busy={loading}>
       <div className="wp-page-header">
         <div>
-          <h1>사건을 탐색하세요</h1>
-          <p className="wp-subtitle">
-            흩어진 문서의 움직임에서, 하나의 사건을 발견하세요.
-          </p>
+          <h1>이슈 탐색</h1>
+          <p className="wp-subtitle">이슈를 검색하고 최신 흐름을 확인하세요.</p>
         </div>
       </div>
       <div className="explore-layout">

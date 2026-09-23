@@ -8,6 +8,9 @@ import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.Iterator;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
@@ -186,6 +189,117 @@ public class WikipediaExtractClient {
             return "";
         }
         return LeadSectionText.fromHtml(root.path("parse").path("text").asText(""));
+    }
+
+    /** {@code titles} 한 요청에 담을 수 있는 제목 수. 🔴 51개부터는 잘림이 아니라 에러다. */
+    public static final int TITLES_PER_REQUEST = 50;
+
+    /**
+     * 영문 제목 → ko.wikipedia 대응 제목 (표시 전용).
+     *
+     * <p>🔴 <b>표시명 조회다. 식별자를 만들지 않는다.</b> 결과는 {@code wiki_page.title_ko} 에만
+     * 들어가고 {@code title}(자연키·링크·조인)은 건드리지 않는다.
+     *
+     * <p><b>왜 이 클래스에 두나.</b> 같은 {@code en.wikipedia.org/w/api.php} 를 때리는데 클라이언트를
+     * 하나 더 만들면 named instance {@code wikipedia} 의 RateLimiter 가 둘로 갈려 위키미디어
+     * 입장에서는 초당 호출이 두 배가 된다 — 예절 상한이 상한 노릇을 못 한다. UA·타임아웃도
+     * 두 벌이 된다. 그래서 RestClient 를 공유한다.
+     *
+     * <p>🔴 <b>{@code redirects} 파라미터를 주지 않는다.</b> 주면 응답의 {@code pages[].title} 이
+     * 우리가 보낸 제목이 아니라 <b>리다이렉트 목적지</b>가 되어, A 문서에 B 문서의 한국어 이름이
+     * 붙는다. 2026-09-22 실측: {@code Effects of Hurricane Milton in Florida} → {@code Hurricane
+     * Milton}("허리케인 밀턴"), {@code 2025 Iran threat of Strait of Hormuz closure} →
+     * {@code Twelve-Day War}("12일 전쟁"). 값이 그럴듯해서 화면만 봐서는 틀린 줄 모른다.
+     * 파라미터를 빼면 리다이렉트 문서는 langlinks 없이 돌아와 그냥 미스가 되고, 화면은 영문으로
+     * 떨어진다 — MVP 는 이 보수적인 쪽을 택한다. 정밀 매핑은 후속 범위다.
+     *
+     * <p>⚠️ 다만 MediaWiki 는 {@code redirects} 와 무관하게 <b>정규화</b>는 한다
+     * ({@code Hurricane_Milton} → {@code Hurricane Milton}). 정규화는 같은 문서를 가리키는
+     * 표기 차이라 안전하므로 {@code query.normalized} 로 되매핑한다. 그 매핑에도 안 걸리는
+     * 제목은 미스로 둔다 — <b>추측해서 갖다 붙이지 않는다.</b>
+     *
+     * @param titles 최대 {@value #TITLES_PER_REQUEST} 개. 호출자가 쪼갠다
+     * @return ko 대응이 <b>있는</b> 제목만 담긴 맵. 없는 제목은 키 자체가 없다 —
+     *         "조회했고 없음"과 "조회 안 함"의 구분은 호출자(checked_at)가 한다
+     * @throws IllegalArgumentException 제목이 {@value #TITLES_PER_REQUEST} 개를 넘을 때
+     * @throws UpstreamUnavailableException 전송 실패 — 🔴 빈 맵으로 삼키지 않는다.
+     *         삼키면 위키 일시 장애 구간 문서가 "ko 없음"으로 굳어 영구히 영문이 된다
+     */
+    @RateLimiter(name = "wikipedia")
+    @CircuitBreaker(name = "wikipedia")
+    @Retry(name = "wikipedia", fallbackMethod = "koTitlesFallback")
+    public Map<String, String> koTitles(List<String> titles) {
+        if (titles.size() > TITLES_PER_REQUEST) {
+            throw new IllegalArgumentException(
+                    "titles 는 한 요청에 " + TITLES_PER_REQUEST + "개까지다: " + titles.size());
+        }
+        if (titles.isEmpty()) {
+            return Map.of();
+        }
+        String joined = String.join("|", titles);
+        JsonNode root;
+        try {
+            root = client.get()
+                    .uri(uriBuilder -> uriBuilder
+                            .queryParam("action", "query")
+                            .queryParam("prop", "langlinks")
+                            .queryParam("lllang", "ko")
+                            .queryParam("lllimit", "max")
+                            .queryParam("format", "json")
+                            .queryParam("formatversion", "2")
+                            .queryParam("titles", joined)
+                            .build())
+                    .retrieve()
+                    .body(JsonNode.class);
+        } catch (RestClientException e) {
+            throw UpstreamFailures.classify("Wikipedia", e, true); // 위키는 429 도 전이성
+        }
+        return parseKoTitles(root, titles);
+    }
+
+    /** 응답 → (보낸 제목 → ko 제목). 정규화만 되짚고 그 외 불일치는 버린다. 패키지 공개는 테스트용. */
+    static Map<String, String> parseKoTitles(JsonNode root, List<String> requested) {
+        if (root == null) {
+            return Map.of();
+        }
+        JsonNode query = root.path("query");
+
+        // 응답 제목(정규화된 형태) → ko. missing 문서·ko 없는 문서는 안 담긴다.
+        Map<String, String> byResponseTitle = new LinkedHashMap<>();
+        for (JsonNode page : query.path("pages")) {
+            JsonNode ko = page.path("langlinks").path(0).path("title");
+            if (!page.path("title").isTextual() || !ko.isTextual() || ko.asText().isBlank()) {
+                continue;
+            }
+            byResponseTitle.put(page.path("title").asText(), ko.asText());
+        }
+
+        // 보낸 제목 → 응답에서 쓰인 제목. normalized 가 없으면 그대로 쓴다.
+        Map<String, String> normalized = new LinkedHashMap<>();
+        for (JsonNode n : query.path("normalized")) {
+            if (n.path("from").isTextual() && n.path("to").isTextual()) {
+                normalized.put(n.path("from").asText(), n.path("to").asText());
+            }
+        }
+
+        Map<String, String> result = new LinkedHashMap<>();
+        for (String title : requested) {
+            String ko = byResponseTitle.get(normalized.getOrDefault(title, title));
+            if (ko != null) {
+                result.put(title, ko);
+            }
+        }
+        return result;
+    }
+
+    @SuppressWarnings("unused") // resilience4j 가 리플렉션으로 부른다.
+    private Map<String, String> koTitlesFallback(List<String> titles, Throwable t) {
+        if (t instanceof IllegalArgumentException e) {
+            throw e; // 우리 쪽 오용이다 — 전송 실패로 둔갑시키지 않는다.
+        }
+        throw new UpstreamUnavailableException(
+                "Wikipedia langlinks 호출 불가 (" + t.getClass().getSimpleName() + "): "
+                        + titles.size() + "건", t);
     }
 
     @SuppressWarnings("unused") // resilience4j 가 리플렉션으로 부른다.

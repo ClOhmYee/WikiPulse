@@ -37,8 +37,10 @@ WITH ranked AS (
            row_number() OVER (PARTITION BY snapshot_ts
                               ORDER BY pulse_score DESC, id ASC) AS rnk
       FROM issue_cluster
-     WHERE %(source)s::text IS NULL
-        OR source = %(source)s::text
+     WHERE (%(source)s::text IS NULL
+            OR source = %(source)s::text)
+       AND (%(days)s::date[] IS NULL
+            OR (snapshot_ts AT TIME ZONE 'UTC')::date = ANY (%(days)s::date[]))
 )
 SELECT r.id
   FROM ranked r
@@ -58,9 +60,9 @@ SELECT r.id
 """
 
 
-def _select(conn, top: int, limit: int = 100, source=None) -> list[int]:
+def _select(conn, top: int, limit: int = 100, source=None, days=None) -> list[int]:
     with conn.cursor() as cur:
-        cur.execute(_SELECT, {"top": top, "limit": limit, "source": source})
+        cur.execute(_SELECT, {"top": top, "limit": limit, "source": source, "days": days})
         return [row[0] for row in cur.fetchall()]
 
 
@@ -225,3 +227,32 @@ def test_순위는_좁힌_출처_안에서_매긴다(conn):
     second = _cluster(conn, score=1.0, source="replay", snapshot=snap)
 
     assert set(_select(conn, top=2, source="replay")) == {first, second}
+
+
+# ------------------------------------------------ 스냅샷 날짜 한정 (WP-215)
+
+def test_날짜를_주면_그_UTC_날짜_스냅샷만_고른다(conn):
+    demo = _cluster(conn, score=1.0, snapshot="2026-07-25T04:00:00+00:00")
+    kst_only = _cluster(conn, score=9.0, snapshot="2026-07-24T20:00:00+00:00")  # KST 07-25
+    other = _cluster(conn, score=9.0, snapshot="2026-09-01T00:00:00+00:00")
+
+    picked = _select(conn, top=0, days="{2026-07-17,2026-07-25}")
+
+    assert picked == [demo]
+    assert kst_only not in picked and other not in picked
+
+
+def test_날짜는_스냅샷을_통째로_골라_순위를_안_바꾼다(conn):
+    """상위 N 은 그 스냅샷 안에서 매긴다 — 날짜 한정이 순위 축을 흔들면 안 된다."""
+    snap = "2026-07-17T01:00:00+00:00"
+    high = _cluster(conn, score=9.0, snapshot=snap)
+    _cluster(conn, score=1.0, snapshot=snap)
+
+    assert _select(conn, top=1, days="{2026-07-17}") == [high]
+
+
+def test_날짜가_없으면_전체다(conn):
+    a = _cluster(conn, score=1.0, snapshot="2026-07-17T01:00:00+00:00")
+    b = _cluster(conn, score=1.0, snapshot="2026-09-01T00:00:00+00:00")
+
+    assert set(_select(conn, top=0, days=None)) == {a, b}

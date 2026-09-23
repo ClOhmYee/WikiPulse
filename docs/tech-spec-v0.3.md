@@ -66,7 +66,7 @@
 | Anthropic | `/v1/messages` + `web_search_20250305` | GATEWAY 경유. `x-api-key`. 중계 실동작 확인 (2026-09-07) |
 | Wikimedia | EventStreams SSE, `other/pageviews` 시간별 덤프, `pageview_complete` 일별 user 덤프, Clickstream | 운영 조회수 최종 관문은 시간별 덤프. 일별 user는 품질 검증. AQS 일별 API는 PoC용만. ⚠️ **연락처 없는 User-Agent는 차단된다.** `CONTACT_EMAIL` 필수 |
 | GDELT 2.0 GKG | 15분 파일 | ~~2025-06-13~07-04~~ → **2025-06-14 18:00~07-02 02:00 UTC 결손**(경계 이분 탐색 재확인, 2026-09-16, `docs/requirements-v0.3.md` §11) |
-| yfinance | `longBusinessSummary`, 일봉 | 비공식 API. 스로틀·스키마 변경 리스크 |
+| yfinance | `longBusinessSummary`, `sector`, 일봉 | 비공식 API. 스로틀·스키마 변경 리스크 |
 | SEC / NASDAQ Trader | 종목 마스터 | ⚠️ Wikidata로 티커를 받지 말 것 (`wdt:P249` 40건 함정) |
 
 ---
@@ -80,7 +80,7 @@ db/             PostgreSQL 스키마 정본 + pgserver 기반 스키마 테스�
 data-pipeline/  producer/  EventStreams SSE → Kafka
                 streaming/ Spark Structured Streaming (윈도우 집계)
                 spike/     급증 판정 수식 + 28일 기준선
-                stock/     종목 마스터·설명·임베딩 적재
+                stock/     종목 마스터·설명·임베딩·주가·산업 적재
                 docker-compose.yml  로컬 Kafka + Spark
 ai/             AI 파트 실험 코드 (issue-text-poc, stock-text-poc)
 docs/           명세·API·ERD·기술·협업 규칙
@@ -245,6 +245,7 @@ docker compose run --rm spark            # 윈도우 집계 잡
 - ~~replay 대표 텍스트를 현재 Wikipedia 도입부로 읽음~~ → **`page_intro`에서 `snapshot_ts` 이하 마지막 revision을 읽도록 구현** (2026-09-18, WP-129, V8). 현재 도입부 폴백은 금지하며 EC2·실제 replay 재검증은 하지 않음
 - ~~spike 조회수·기준선이 `cluster_member`에 전달되지 않고 상세 API가 최신 원시 행을 읽음~~ → **판정 수치 전달·`completeness` 결정·상세 고정값 조회 구현** (2026-09-18, WP-129, V7). `max_rev_id`·`last_edit_ts` 감사 필드도 V9로 추가. 로컬 회귀 테스트만 완료하고 EC2에서는 검증하지 않음
 - ~~실시간 이슈 요약 writer·상태 전이 미구현~~ → **백엔드 구현·EC2 실제 GATEWAY 실행 완료** (WP-119). 현재 워커는 꺼져 있고 재클러스터링 뒤 `issue_report`는 0건 (2026-09-22)
+- ~~화면이 영문 raw title만 표시~~ → **ko.wikipedia 표시명 구현** (2026-09-22, WP-205, V20). `wiki_page.title_ko`를 `cluster_member` 편입 enwiki 문서에 한해 `prop=langlinks&lllang=ko`로 1회 조회(50개/요청)해 채우고, `title`(영문)은 그대로 둔다. LIVE·replay 공통. 워커 `wikipulse.page-title.enabled` 기본 꺼짐이라 켜기 전에는 전량 영문이며 EC2 실행은 0회임. 리다이렉트 제목은 ko를 붙이지 않고 영문 폴백(정밀 매핑은 후속)
 
 **남은 설계·검증**
 

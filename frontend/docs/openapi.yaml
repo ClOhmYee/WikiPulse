@@ -538,6 +538,16 @@ components:
         title:
           type: string
           minLength: 1
+        titleKo:
+          type: string
+          minLength: 1
+          nullable: true
+          description: "표시 전용 ko.wikipedia 대응 제목. ko 문서가 없으면 null이고 화면은 title(영문)로 떨어진다. title을 대체하지 않으며 위키백과 링크·식별자는 계속 title을 쓴다."
+        titleKoFallback:
+          type: string
+          minLength: 1
+          nullable: true
+          description: "표시 전용 기계 번역 제목(Azure Translator, en->ko). ko.wikipedia 정식 제목이 아니므로 위키 링크에 쓰지 않는다. 표시 우선순위는 titleKo > titleKoFallback > title."
         isSeed:
           type: boolean
           description: >-
@@ -884,6 +894,16 @@ components:
           type: string
         title:
           type: string
+        titleKo:
+          type: string
+          minLength: 1
+          nullable: true
+          description: "표시 전용 ko.wikipedia 대응 제목. ko 문서가 없으면 null이고 화면은 title(영문)로 떨어진다. title을 대체하지 않으며 위키백과 링크·식별자는 계속 title을 쓴다."
+        titleKoFallback:
+          type: string
+          minLength: 1
+          nullable: true
+          description: "표시 전용 기계 번역 제목(Azure Translator, en->ko). ko.wikipedia 정식 제목이 아니므로 위키 링크에 쓰지 않는다. 표시 우선순위는 titleKo > titleKoFallback > title."
         weight:
           type: number
         isSeed:

@@ -1,4 +1,9 @@
-import { ChevronLeft, ChevronRight, RotateCcw } from "lucide-react";
+import {
+  CalendarDays,
+  ChevronLeft,
+  ChevronRight,
+  RotateCcw,
+} from "lucide-react";
 import {
   closestSnapshot,
   kstTime,
@@ -12,6 +17,7 @@ export default function PulseTimeline({
   selected,
   latest,
   onSelect,
+  onDateSelect,
   compact = false,
 }) {
   const index = snapshots.findIndex(
@@ -38,9 +44,25 @@ export default function PulseTimeline({
       aria-label="스냅샷 시간 탐색"
     >
       <div className="pulse-timeline__heading">
-        <div>
-          {!compact && <span className="wp-muted">선택 시점</span>}
-          <strong>{kstTimestamp(selected.snapshotTs)}</strong>
+        <div className="pulse-timeline__selection">
+          <label
+            className="pulse-timeline__calendar"
+            title="캘린더에서 날짜 선택"
+          >
+            <CalendarDays size={18} aria-hidden="true" />
+            <input
+              type="date"
+              aria-label="캘린더에서 날짜 선택"
+              min={kstDate(snapshots[0].snapshotTs)}
+              max={kstDate(snapshots.at(-1).snapshotTs)}
+              value={kstDate(selected.snapshotTs)}
+              onChange={(event) => onDateSelect(event.target.value)}
+            />
+          </label>
+          <div>
+            {!compact && <span className="wp-muted">선택 시점</span>}
+            <strong>{kstTimestamp(selected.snapshotTs)}</strong>
+          </div>
         </div>
         <button
           className="wp-text-button"

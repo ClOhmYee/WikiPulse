@@ -18,7 +18,7 @@ page.on("response", (response) => {
     errors.push(`${response.status()} ${response.url()}`);
 });
 const response = await page.goto("http://127.0.0.1:4174/#/pulse");
-await page.getByRole("heading", { name: "세상의 변화가 모이는 곳" }).waitFor();
+await page.getByRole("textbox", { name: "사건 검색", exact: true }).waitFor();
 await page.evaluate(() => document.fonts.ready);
 assert.equal(response.status(), 200);
 const directEntry = requests.filter((url) => /\.js(?:\?|$)/.test(url));
@@ -51,7 +51,7 @@ assert(
 await page.goto("http://127.0.0.1:4174/");
 await page.getByRole("link", { name: "탐색 시작하기" }).waitFor();
 await page.getByRole("link", { name: "탐색 시작하기" }).click();
-await page.getByRole("heading", { name: "세상의 변화가 모이는 곳" }).waitFor();
+await page.getByRole("textbox", { name: "사건 검색", exact: true }).waitFor();
 assert.deepEqual(errors, []);
 const result = {
   routes: routes.length + 2,

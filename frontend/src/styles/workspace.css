@@ -1,7 +1,7 @@
 .workspace {
   --wp-surface: #0b141b;
   --wp-raised: #101d25;
-  --wp-border: #24313a;
+  --wp-border: #3a515c;
   --wp-subtle: #7c939e;
   min-height: 100dvh;
   color: var(--paper);
@@ -228,13 +228,14 @@
 .workspace-breadcrumb {
   display: flex;
   align-items: center;
-  gap: 10px;
-  font-size: 11px;
+  gap: 12px;
+  font-size: 14px;
   color: #95a9b2;
   white-space: nowrap;
 }
 .workspace-breadcrumb span {
   color: #d5dfe2;
+  font-weight: 600;
 }
 .global-search {
   position: relative;
@@ -244,7 +245,18 @@
   width: 330px;
   max-width: 40%;
   margin-left: auto;
+  padding: 0 11px;
+  border: 1px solid var(--wp-border);
+  border-radius: 7px;
+  background: var(--wp-surface);
   color: var(--muted);
+  transition:
+    border-color 160ms ease,
+    background-color 160ms ease;
+}
+.global-search:focus-within {
+  border-color: var(--teal);
+  background: var(--wp-raised);
 }
 .global-search > input {
   min-width: 0;
@@ -255,14 +267,8 @@
   background: transparent;
   font-size: 13px;
 }
-.global-search > kbd {
-  font: inherit;
-  font-size: 10px;
-  padding: 1px 5px;
-  white-space: nowrap;
-  border: 1px solid #33434c;
-  border-radius: 4px;
-  color: #91a6af;
+.global-search > input:focus-visible {
+  outline: 0;
 }
 .global-search__results {
   position: absolute;
@@ -291,6 +297,19 @@
   flex-direction: column;
   min-width: 0;
   flex: 1;
+}
+.global-search__results > a > .global-search__kind {
+  display: inline-flex;
+  flex: 0 0 32px;
+  align-items: center;
+  justify-content: center;
+  min-height: 20px;
+  padding: 0 5px;
+  border: 1px solid #3c6667;
+  border-radius: 4px;
+  color: var(--teal);
+  font-size: 10px;
+  white-space: nowrap;
 }
 .global-search__results strong {
   font-size: 13px;
@@ -1333,7 +1352,7 @@
     gap: 18px;
   }
   .workspace-breadcrumb {
-    font-size: 10px;
+    font-size: 12px;
   }
   .wp-page {
     padding: 30px 25px 40px;
@@ -1495,9 +1514,6 @@
   }
   .global-search > input {
     font-size: 11px;
-  }
-  .global-search > kbd {
-    display: none;
   }
   .global-search__results {
     position: fixed;
