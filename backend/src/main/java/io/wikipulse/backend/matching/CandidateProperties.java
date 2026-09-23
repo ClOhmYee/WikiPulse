@@ -22,6 +22,12 @@ public class CandidateProperties {
     /** 이슈 대표 텍스트 전체 상한 (명세 §6.2, 2,000자). */
     private int maxChars = 2000;
 
+    /**
+     * LLM 검증·요약 입력 전체 상한 (WP-213). 임베딩 상한({@link #maxChars})과 따로 둔다 —
+     * LLM 에는 도입부 전체를 주므로 문서 3개면 약 6천 자다. 약 1,500 토큰.
+     */
+    private int llmMaxChars = 6000;
+
     private final Wikipedia wikipedia = new Wikipedia();
     private final Gateway gateway = new Gateway();
     private final Scheduler scheduler = new Scheduler();
@@ -51,6 +57,14 @@ public class CandidateProperties {
 
     public void setMaxChars(int maxChars) {
         this.maxChars = maxChars;
+    }
+
+    public int getLlmMaxChars() {
+        return llmMaxChars;
+    }
+
+    public void setLlmMaxChars(int llmMaxChars) {
+        this.llmMaxChars = llmMaxChars;
     }
 
     public Wikipedia getWikipedia() {
