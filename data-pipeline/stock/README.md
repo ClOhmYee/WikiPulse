@@ -3,6 +3,7 @@
 - `WP-33` 종목 마스터 (SEC + NASDAQ Trader → PostgreSQL)
 - `WP-34` 사업 설명 수집 + 임베딩 (yfinance → text-embedding-3-small → pgvector)
 - `WP-64` 주가 일봉 적재 + 일별 증분 갱신 (yfinance → stock_price)
+- `WP-204` 산업(sector) 수집 (yfinance info → stock.sector)
 
 명세: [docs/requirements-v0.3.md](../../docs/requirements-v0.3.md) §3.2 9번, §4, §5, §6
 
@@ -29,6 +30,7 @@ python -m stock.universe          # 1. 마스터 (약 5,400종목)
 python -m stock.summaries         # 2. 사업 설명
 python -m stock.embed             # 3. 임베딩
 python -m stock.prices            # 4. 주가 일봉 (첫 실행 5년, 이후 증분)
+python -m stock.sectors           # 5. 산업 (sector 가 NULL 인 종목만)
 
 python -m stock.universe --dry-run   # 적재 없이 개수만
 ```
@@ -114,6 +116,63 @@ sudo docker run --rm --network postgres_default \
 - 🔴 재실행하려면 위를 그대로 다시 돌린다 — `ON CONFLICT` upsert라 중복 행은 안 생긴다.
 - ⚠️ 검증 티커는 이슈 매칭 결과에 따라 늘어난다. 새 종목이 매칭되면 위 `--tickers`에 추가해
   다시 돌리거나, 전 종목 적재로 확장할지는 팀 결정이다(현재는 검증 티커 한정).
+
+## 산업 (sectors) — WP-204
+
+종목 탐색 목록·상세의 "산업" 칸이 `stock.sector` 다. V1 부터 컬럼은 있었지만 채우는
+코드가 없어 운영 DB 5,396종목이 전부 NULL 이었고 화면이 전부 "산업 미제공"이었다.
+
+```bash
+python -m stock.sectors                       # sector 가 NULL 인 전 종목
+python -m stock.sectors --tickers BA,DAL      # 그중 특정 종목만
+python -m stock.sectors --limit 20 --dry-run  # DB 안 건드리고 20종목만 시험
+```
+
+- **summaries 와 별도 모듈인 이유**: summaries 는 `business_summary IS NULL` 만 돈다.
+  운영 DB 는 설명이 이미 다 차 있어서 거기 끼우면 채울 종목이 대상에 안 들어온다.
+- **이어서**: `sector IS NULL` 인 종목만 돈다. 50종목마다 저장하고, 이미 채운 종목은
+  다시 안 부른다. `--tickers` 로 준 종목 중 이미 채워진 것·마스터에 없는 것은 따로 알린다.
+- **값**: `yf.Ticker(t).info["sector"]` 그대로(예: `Industrials`). 없거나 빈 문자열이면
+  NULL 로 둔다 — 화면에 "산업 미제공"이 뜨는 게 정상이다. `industry` 는 컬럼이 없어 안 받는다.
+- **실패 격리**: 한 종목이 예외면 그 종목만 건너뛴다. 하나도 못 받았는데 실패만 있으면
+  종료코드 1(야후 차단 의심).
+- **백엔드·FE 변경 없음**: `StockRepository` 가 이미 `s.sector` 를 select 하고 FE 가
+  그대로 표시한다. DB 에 값만 들어가면 재배포 없이 바로 보인다.
+
+## EC2 운영 DB 적재 (산업) — WP-204
+
+대상은 주가와 같은 **검증 티커 17개**(위 주가 절 참고). 로컬 실측(2026-09-23)에서
+17개 모두 yfinance `info` 에 sector 가 있었다 — 운영 실행 결과는 아래 결과 줄에 따로 적는다.
+
+⚠️ **`sectors.py` 는 새 파일이라 EC2 마운트 체크아웃에 먼저 올려야 한다.** 데이터
+파이프라인은 CI 배포 대상이 아니다(수동 관리). -204 를 develop 에 머지한 뒤
+`/home/deploy/wikipulse-local-test` 체크아웃을 갱신한다 — 인프라 작업이라 담당자와 조율한다.
+
+```bash
+# 1) 체크아웃 갱신 (develop 머지 후)
+ssh -i <로컬 pem 경로>/example-account.pem ubuntu@service.example.com \
+  'cd /home/deploy/wikipulse-local-test && git pull'
+
+# 2) 일회성 컨테이너로 적재. 비밀번호는 서버 안에서만 읽는다(주가 절과 같은 방식).
+ssh -i <로컬 pem 경로>/example-account.pem ubuntu@service.example.com '
+PGPW=$(sudo docker inspect postgres-postgres-1 --format "{{range .Config.Env}}{{println .}}{{end}}" | grep "^POSTGRES_PASSWORD=" | cut -d= -f2-)
+sudo docker run --rm --network postgres_default \
+  -v /home/deploy/wikipulse-local-test/data-pipeline:/opt/app -w /opt/app \
+  -e DATABASE_URL="postgresql://wikipulse:$PGPW@postgres-postgres-1:5432/wikipulse" \
+  wikipulse-spark-standalone:local \
+  sh -c "pip install -q yfinance \"psycopg[binary]\" && python -m stock.sectors --tickers ACM,AERO,ALK,BA,CAAP,CPA,DAL,DJT,FUBO,FUN,GRSD,MANU,MMYT,OKLO,OPBK,WH,YTRA"
+'
+```
+
+- **커버리지 확인(읽기 전용)**: `sudo docker exec postgres-postgres-1 psql -U wikipulse -d wikipulse -c
+  "SELECT count(*) FILTER (WHERE sector IS NOT NULL), count(*) FROM stock WHERE ticker IN
+  ('ACM','AERO','ALK','BA','CAAP','CPA','DAL','DJT','FUBO','FUN','GRSD','MANU','MMYT','OKLO','OPBK','WH','YTRA');"`
+- **화면 확인**: `GET https://service.example.com/api/v1/stocks?hasIssues=true` 의 `sector` 가 값으로
+  온다 → 종목 탐색에서 "산업 미제공" 대신 산업명(브라우저 하드 리프레시).
+- 결과: (운영 실행 후 기록)
+- 🔴 **되돌리기**: 운영 DB 에서 `UPDATE stock SET sector = NULL WHERE ticker IN (...17개...);`
+  — 이 스크립트가 쓰는 건 `sector`·`updated_at` 뿐이다(`updated_at` 은 되돌리지 않아도 된다).
+- 재실행은 안전하다 — 이미 채워진 종목은 건너뛴다.
 
 ## 규모 (2026-09-08 실측)
 
