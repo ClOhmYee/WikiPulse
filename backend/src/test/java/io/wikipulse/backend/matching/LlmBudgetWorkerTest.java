@@ -79,7 +79,7 @@ class LlmBudgetWorkerTest {
 
     @Test
     void 검증_예산이_소진되면_남은_클러스터를_시도하지_않는다() {
-        when(verificationRepository.clustersWithPending(anyInt())).thenReturn(List.of(1L, 2L, 3L));
+        when(verificationRepository.clustersWithPending(anyInt(), any(), any())).thenReturn(List.of(1L, 2L, 3L));
         when(verificationService.verifyCluster(2L))
                 .thenThrow(new BudgetExceededException(LlmBudget.VERIFICATION, 300));
 
@@ -90,8 +90,23 @@ class LlmBudgetWorkerTest {
     }
 
     @Test
+    void 검증_대상도_후보_생성과_같은_출처와_스냅샷으로_좁힌다() {
+        // 🔴 여태 검증 선택엔 한정이 없어서, 후보를 좁혀도 PENDING 이 있는 모든 클러스터가
+        //    id 순으로 예산을 가져갔다(WP-215).
+        props.getScheduler().setSource("replay");
+        props.getScheduler().setSnapshotDays("2026-07-17T22:00,2026-08-02T19:00");
+        when(verificationRepository.clustersWithPending(anyInt(), any(), any())).thenReturn(List.of());
+
+        verificationWorker().pollAndVerify();
+
+        verify(verificationRepository).clustersWithPending(
+                anyInt(), org.mockito.ArgumentMatchers.eq("replay"),
+                org.mockito.ArgumentMatchers.eq("2026-07-17T22:00,2026-08-02T19:00"));
+    }
+
+    @Test
     void 검증_전송실패는_다음_클러스터로_넘어간다() {
-        when(verificationRepository.clustersWithPending(anyInt())).thenReturn(List.of(1L, 2L, 3L));
+        when(verificationRepository.clustersWithPending(anyInt(), any(), any())).thenReturn(List.of(1L, 2L, 3L));
         when(verificationService.verifyCluster(2L))
                 .thenThrow(new UpstreamUnavailableException("GATEWAY 불가", new RuntimeException()));
 

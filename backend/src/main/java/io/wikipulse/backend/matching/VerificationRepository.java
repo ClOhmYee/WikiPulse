@@ -234,15 +234,33 @@ public class VerificationRepository {
     /**
      * 검증할 PENDING 후보가 있는, 버려지지 않은 클러스터 id. 최근 스냅샷부터.
      * 워커 폴러가 대상 클러스터를 고를 때 쓴다.
+     *
+     * <p>🔴 <b>후보 생성과 같은 범위(출처·스냅샷)로 좁힌다</b> (WP-215). 여태 이 선택에는
+     * 한정이 없어서, 후보 워커를 날짜로 좁혀도 검증은 PENDING 이 있는 <b>모든</b> 클러스터를
+     * id 순으로 집었다 — 2026-09-23 운영에서 날짜 필터를 넣기 전 골든데이 후보에 하루 예산
+     * 300회를 다 썼고, 이틀치 적재 뒤에도 시연 스냅샷보다 id 가 큰 다른 시각 이슈가 먼저
+     * 예산을 가져갈 구조였다. 빈 값이면 한정 없음(기존 동작).
+     *
+     * @param source {@code issue_cluster.source} 한정. 빈 값이면 전체
+     * @param snapshotDays 날짜·시각 한정({@link SnapshotDays}). 빈 값이면 전체
      */
-    public List<Long> clustersWithPending(int limit) {
+    public List<Long> clustersWithPending(int limit, String source, String snapshotDays) {
+        SnapshotDays.Scope scope = SnapshotDays.parse(snapshotDays);
         return jdbc.queryForList("""
                 SELECT DISTINCT c.id
                   FROM issue_cluster c
                   JOIN cluster_stock cs ON cs.cluster_id = c.id
                  WHERE c.status <> 'DISCARDED' AND cs.check_state = 'PENDING'
+                   AND (CAST(:source AS text) IS NULL OR c.source = CAST(:source AS text))
+                   AND ((CAST(:days AS date[]) IS NULL AND CAST(:times AS timestamptz[]) IS NULL)
+                        OR CAST(c.snapshot_ts AT TIME ZONE 'UTC' AS date) = ANY (CAST(:days AS date[]))
+                        OR c.snapshot_ts = ANY (CAST(:times AS timestamptz[])))
                  ORDER BY c.id DESC
                  LIMIT :limit
-                """, new MapSqlParameterSource("limit", limit), Long.class);
+                """, new MapSqlParameterSource()
+                .addValue("limit", limit)
+                .addValue("source", source == null || source.isBlank() ? null : source)
+                .addValue("days", scope.days())
+                .addValue("times", scope.times()), Long.class);
     }
 }

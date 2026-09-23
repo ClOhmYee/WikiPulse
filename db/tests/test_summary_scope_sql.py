@@ -39,8 +39,9 @@ WITH ranked AS (
       FROM issue_cluster
      WHERE (%(source)s::text IS NULL
             OR source = %(source)s::text)
-       AND (%(days)s::date[] IS NULL
-            OR (snapshot_ts AT TIME ZONE 'UTC')::date = ANY (%(days)s::date[]))
+       AND ((%(days)s::date[] IS NULL AND %(times)s::timestamptz[] IS NULL)
+            OR (snapshot_ts AT TIME ZONE 'UTC')::date = ANY (%(days)s::date[])
+            OR snapshot_ts = ANY (%(times)s::timestamptz[]))
 )
 SELECT id
   FROM ranked
@@ -66,11 +67,11 @@ SELECT id
 
 
 def _select(conn, top: int, limit: int = 100, model: str = MODEL,
-            source=None, max_attempts: int = 3, days=None) -> list[int]:
+            source=None, max_attempts: int = 3, days=None, times=None) -> list[int]:
     with conn.cursor() as cur:
         cur.execute(_SELECT,
                     {"top": top, "limit": limit, "model": model, "source": source,
-                     "maxAttempts": max_attempts, "days": days})
+                     "maxAttempts": max_attempts, "days": days, "times": times})
         return [row[0] for row in cur.fetchall()]
 
 
