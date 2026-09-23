@@ -79,24 +79,36 @@ def main():
     pg_port = server.get_postmaster_info().port
     dsn = psycopg.conninfo.make_conninfo(server.get_uri(), host="127.0.0.1", port=pg_port)
     migrations = sorted((ROOT / "db/migrations").glob("V*__*.sql"), key=lambda p: int(p.name.split("__")[0][1:]))
+    # The accounts migration owns the email normalization/collision guard this test exercises;
+    # everything before it is the populated pre-account schema, everything after it still has to
+    # land so the backend runs the E2E against the current schema.
+    accounts = next(p for p in migrations if p.name.startswith("V15__"))
+    before, after = migrations[:migrations.index(accounts)], migrations[migrations.index(accounts) + 1:]
     with psycopg.connect(dsn, autocommit=True) as db:
-        # Upgrade populated V14 schema; prove collision rejection leaves existing identities alone.
-        for migration in migrations:
-            if migration.name.startswith("V15__"):
-                break
+        # Upgrade populated pre-account schema; prove collision rejection leaves existing identities alone.
+        for migration in before:
             db.execute(migration.read_text(encoding="utf-8"))
         db.execute("INSERT INTO member(email,display_name) VALUES ('Legacy@example.com','Legacy'),('legacy@example.com','Collision')")
-        latest = next(p for p in migrations if p.name.startswith("V15__"))
         try:
             with db.transaction():
-                db.execute(latest.read_text(encoding="utf-8"))
+                db.execute(accounts.read_text(encoding="utf-8"))
             raise AssertionError("normalization collision was not rejected")
         except psycopg.errors.RaiseException:
             pass
         assert db.execute("SELECT count(*) FROM member").fetchone()[0] == 2
         db.execute("DELETE FROM member WHERE display_name='Collision'")
-        db.execute(latest.read_text(encoding="utf-8"))
+        db.execute(accounts.read_text(encoding="utf-8"))
         assert db.execute("SELECT email FROM member").fetchone()[0] == "Legacy@example.com"
+        # 🔴 Apply everything after the accounts migration too. Stopping here leaves `public` —
+        #    the schema the backend actually connects to — frozen at that version, so any later
+        #    migration is silently missing and only surfaces as a 500 when a query reads its
+        #    columns. Startup does not catch it: ddl-auto=validate only checks mapped entities,
+        #    and the affected tables (wiki_page) are read through native SQL.
+        #    WP-205 hit this first (V20's wiki_page.title_ko). V16 was already missing
+        #    and nobody noticed because no query read its columns.
+        # ⚠️ Driven by the file list, never a hardcoded version — V21, V22 follow automatically.
+        for migration in after:
+            db.execute(migration.read_text(encoding="utf-8"))
         # Second schema verifies a clean install without touching any external DB.
         db.execute("CREATE SCHEMA fresh_install; SET search_path=fresh_install,public")
         for migration in migrations:
