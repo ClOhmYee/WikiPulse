@@ -190,12 +190,55 @@ def parse_row(line: str, projects: frozenset[str]) -> tuple[str, int, bool] | No
     return canonical, views, project.endswith(".m")
 
 
+def safe_row_floor(wiki: str, min_views: int) -> int:
+    """`min_views` 를 넘을 수 있는 문서라면 **행 하나는 반드시 이 값 이상**이다.
+
+    한 문서는 project 수만큼의 행으로 나뉘어 온다(enwiki 는 `en`·`en.m` 둘). 합이
+    `min_views` 이상이면 비둘기집 원리로 그중 하나는 `ceil(min_views / project 수)`
+    이상이다. 그래서 그보다 작은 행만 버리면 **통과 대상은 하나도 안 샌다.**
+
+    🔴 상수로 박지 않는 이유: project 가 늘면 이 값도 같이 내려가야 한다. 박아 두면
+    새 project 가 생긴 날 조용히 문서를 잃는다.
+    """
+    projects = len(projects_for(wiki))
+    return -(-min_views // projects)          # 올림 나눗셈
+
+
+def scan_titles(lines: Iterable[str], wiki: str, *, min_views: int) -> frozenset[str]:
+    """1패스 — 행 하나라도 `safe_row_floor` 이상인 canonical 제목만 모은다.
+
+    ⚠️ **왜 두 번 읽나.** 한 시간 파일은 enwiki ns0 만 약 236만 행이다(2026-09-21
+    15:00Z 실측). 전부 dict 에 담으면 `live-cycle` 컨테이너 상한(1g)에 위험하다.
+    1패스로 제목을 좁히면(같은 시간 13,250개) 2패스 dict 이 작아진다.
+
+    🔴 **1패스에서 걸러 놓고 그 제목만 2패스로 정확히 합산해야 한다.** 1패스 결과를
+    그대로 합계로 쓰면 버려진 형제 행만큼 **조용히 적게** 나온다 — 예를 들어
+    데스크톱 40 · 모바일 70 인 문서는 70 으로 적재돼 하한 100 을 못 넘는다.
+    gzip 두 번 해제는 약 1초다(45MB 기준) — 메모리·정확성과 바꿀 만하다.
+    """
+    projects = projects_for(wiki)
+    floor = safe_row_floor(wiki, min_views)
+    keep: set[str] = set()
+    for line in lines:
+        if not line.strip():
+            continue
+        parsed = parse_row(line, projects)
+        if parsed is None:
+            continue
+        title, views, _is_mobile = parsed
+        if views >= floor:
+            keep.add(title)
+    return frozenset(keep)
+
+
 def aggregate(
     lines: Iterable[str],
     wiki: str,
     ts_hour: str,
     *,
     titles: frozenset[str] | None = None,
+    min_views: int | None = None,
+    candidates: frozenset[str] | None = None,
 ) -> Iterator[PageviewHourly]:
     """한 시간 파일을 (wiki, title, ts_hour, views, mobile_views) 로 합산한다.
 
@@ -209,6 +252,24 @@ def aggregate(
     고정 2개월이면 28억 행이다. 2단계 계약에서 조회수를 봐야 하는 건 1단계(사람 편집
     1건 이상)를 통과한 문서뿐이므로, 그 후보 집합으로 거르는 게 정상 경로다.
     필터 없이 부르면 전부 나온다 — 품질 측정·전수 비교용이다.
+
+    `min_views` 를 주면 **합계가 그 값 이상인 문서도 함께** 남긴다 (WP-212).
+    후보 집합만 남기면 `page_baseline` 을 만들 이력이 안 쌓이기 때문이다 — 기준선은
+    `(문서, 시간대)` 별로 28일치가 필요한데, "그 시간에 편집이 있던 날" 의 조회수만
+    있으면 `sample_days` 가 1 근처에서 멈춘다(`-162` 가 replay 에서 겪은 그 문제).
+
+    🔴 **세 인자의 역할이 다르다. 섞으면 조용히 틀린다.**
+
+        titles      **읽을** 제목 (합산 대상). `scan_titles()` 결과 ∪ 후보를 넘긴다
+        min_views   **남길** 하한. 합계가 이 값 미만이면 버린다
+        candidates  하한과 **무관하게 남길** 제목. 후보 대기가 여기 들어간다
+
+    ⚠️ `candidates` 가 따로 있는 이유: `titles` 는 이미 둘을 합친 집합이라, 그걸로
+    "후보라서 남긴다" 를 판정하면 **하한이 통째로 무력화된다** — 합산된 제목이 전부
+    `titles` 안에 있으니 아무것도 안 걸러진다. 실제로 테스트가 이걸 잡았다.
+
+    ⚠️ 후보 문서는 하한을 못 넘어도 남겨야 한다. 그 값으로 재판정을 해야 하고,
+    빠지면 그 대기가 영영 안 풀린다.
     """
     projects = projects_for(wiki)
     acc: dict[str, int] = {}
@@ -227,5 +288,12 @@ def aggregate(
             mobile[title] = mobile.get(title, 0) + views
 
     for title, views in acc.items():
+        # 🔴 하한은 **합계**로 본다. 행 단위로 보면 데스크톱 40 · 모바일 70 인 문서가
+        #    빠진다 — `scan_titles` 의 행 문턱은 후보를 좁히는 용도일 뿐이고,
+        #    통과 판정은 여기서 한 번만 한다.
+        if (min_views is not None
+                and views < min_views
+                and not (candidates is not None and title in candidates)):
+            continue
         yield PageviewHourly(wiki=wiki, title=title, ts_hour=ts_hour, views=views,
                              mobile_views=mobile.get(title, 0))

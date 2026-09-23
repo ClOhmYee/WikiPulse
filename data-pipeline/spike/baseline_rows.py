@@ -30,7 +30,7 @@ from __future__ import annotations
 from collections import defaultdict
 from collections.abc import Iterable
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, datetime, timezone
 
 from .ewma import DEFAULT_HALFLIFE_DAYS, Observation, ewma_mean_std
 
@@ -54,8 +54,20 @@ class BaselineRow:
     sample_days: int
 
 
-def _day(window_start: str) -> date:
-    """window_start "YYYY-MM-DDTHH:00:00" 에서 날짜만."""
+def _day(window_start: str | datetime | date) -> date:
+    """window_start 에서 날짜만. 문자열(-58 산출물)과 datetime(DB) 둘 다 받는다.
+
+    ⚠️ -58 산출물은 naive 문자열 "YYYY-MM-DDTHH:00:00" 이고 그 계약이 UTC 다.
+    DB 에서 읽어 오는 경로(`baseline_from_views`, WP-212)는 tz-aware
+    datetime 을 준다 — **UTC 로 맞춘 뒤** 날짜를 뗀다. 안 맞추면 KST 세션에서
+    9시간 밀려 슬롯이 통째로 어긋나는데 에러가 안 난다.
+    """
+    if isinstance(window_start, datetime):
+        if window_start.tzinfo is not None:
+            window_start = window_start.astimezone(timezone.utc)
+        return window_start.date()
+    if isinstance(window_start, date):
+        return window_start
     return date.fromisoformat(window_start[:10])
 
 

@@ -9,6 +9,8 @@ import pytest
 
 from batch.pageview import SchemaMismatch, UnsupportedWiki
 from batch.pageview_hourly import (
+    safe_row_floor,
+    scan_titles,
     PageviewHourly,
     aggregate,
     filename_hour,
@@ -17,6 +19,7 @@ from batch.pageview_hourly import (
     ts_hour_from_filename,
 )
 
+TS_HOUR = "2026-09-21T14:00:00"
 EN = projects_for("enwiki")
 
 
@@ -230,3 +233,71 @@ def test_m_접미사만_모바일로_센다():
     """⚠️ `en` 에 붙는 다른 변종이 생겨도 데스크톱으로 오분류되지 않게 `.m` 만 본다."""
     assert parse_row("en.m Water 5 0", EN)[2] is True
     assert parse_row("en Water 5 0", EN)[2] is False
+
+
+# ------------------------------- 기준선용 하한 (WP-212)
+
+def test_하한을_주면_후보가_아니어도_남는다():
+    """🔴 후보 문서만 남기면 page_baseline 을 만들 이력이 안 쌓인다."""
+    lines = ["en Popular_Doc 400 0", "en.m Popular_Doc 300 0", "en Tail_Doc 3 0"]
+    rows = list(aggregate(lines, "enwiki", TS_HOUR, titles=None, min_views=100))
+    assert [r.title for r in rows] == ["Popular Doc"]
+    assert rows[0].views == 700
+
+
+def test_하한과_후보는_OR_이다():
+    """🔴 대체가 아니다. 후보는 하한을 못 넘어도 남겨야 재판정이 된다 —
+    빠지면 그 대기가 영영 안 풀린다."""
+    lines = ["en Popular_Doc 400 0", "en Waiting_Doc 3 0", "en Other 5 0"]
+    waiting = frozenset({"Waiting Doc"})
+    scan = scan_titles(lines, "enwiki", min_views=100) | waiting
+    rows = list(aggregate(lines, "enwiki", TS_HOUR,
+                          titles=scan, min_views=100, candidates=waiting))
+    assert sorted(r.title for r in rows) == ["Popular Doc", "Waiting Doc"]
+
+
+def test_candidates_없이는_하한이_무력화되지_않는다():
+    """🔴 `titles` 로 후보 판정을 하면 합산된 제목이 전부 그 안이라 아무것도 안 걸러진다.
+
+    이 함정을 테스트가 실제로 잡았다 — `candidates` 를 따로 둔 이유다.
+    """
+    lines = ["en Tail_A 60 0", "en Tail_B 55 0"]
+    scan = scan_titles(lines, "enwiki", min_views=100)      # 둘 다 행 60·55 >= 50
+    assert scan == frozenset({"Tail A", "Tail B"})
+    rows = list(aggregate(lines, "enwiki", TS_HOUR, titles=scan, min_views=100))
+    assert rows == []                                       # 합계는 둘 다 100 미만
+
+
+def test_하한은_행이_아니라_합계로_본다():
+    """⚠️ 데스크톱 60 · 모바일 70 은 합 130 이라 통과해야 한다.
+    행 단위로 보면 둘 다 100 미만이라 빠진다."""
+    lines = ["en Split_Doc 60 0", "en.m Split_Doc 70 0"]
+    rows = list(aggregate(lines, "enwiki", TS_HOUR, titles=None, min_views=100))
+    assert [(r.title, r.views) for r in rows] == [("Split Doc", 130)]
+
+
+def test_하한이_없으면_기존_동작_그대로():
+    lines = ["en A 3 0", "en B 5 0"]
+    assert len(list(aggregate(lines, "enwiki", TS_HOUR))) == 2
+
+
+# --- 1패스 문턱 ---
+
+def test_1패스_문턱은_project_수로_나눈_올림이다():
+    """🔴 추측이 아니라 비둘기집 원리다. enwiki 는 `en`·`en.m` 둘이라 합이 100
+    이상이면 둘 중 하나가 반드시 50 이상이다."""
+    assert safe_row_floor("enwiki", 100) == 50
+    assert safe_row_floor("enwiki", 101) == 51
+
+
+def test_1패스는_문턱_넘는_행이_있는_제목만_남긴다():
+    lines = ["en Big 60 0", "en.m Small 8 0", "en Small 10 0", "en.m Only_Mobile 55 0"]
+    assert scan_titles(lines, "enwiki", min_views=100) == frozenset({"Big", "Only Mobile"})
+
+
+def test_1패스가_버린_문서는_합쳐도_하한에_못_미친다():
+    """문턱의 안전성을 값으로 고정한다 — 경계에서 새면 조용히 문서를 잃는다."""
+    floor = safe_row_floor("enwiki", 100)
+    lines = [f"en Edge {floor - 1} 0", f"en.m Edge {floor - 1} 0"]
+    assert scan_titles(lines, "enwiki", min_views=100) == frozenset()
+    assert (floor - 1) * 2 < 100

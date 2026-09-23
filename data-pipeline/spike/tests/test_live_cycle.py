@@ -109,8 +109,8 @@ def stub_cycle(monkeypatch):
     calls = {"ingest": [], "recheck": 0, "prune": []}
 
     def fake_ingest(ts_hour, wiki, cache_dir, out_root, *, titles, shard_records,
-                    dry_run, conn):
-        calls["ingest"].append((ts_hour, titles))
+                    dry_run, conn, min_views=None):
+        calls["ingest"].append((ts_hour, titles, min_views))
         return "pending" if ts_hour.endswith("T07:00:00") else "ok"
 
     def fake_recheck(conn, *, source="live", dry_run=False, **kwargs):
@@ -135,7 +135,7 @@ def test_대기_목록의_문서만_받는다(stub_cycle, tmp_path):
     summary = run_once(conn, cache_dir=tmp_path, out_root=tmp_path, now=NOW)
 
     assert stub_cycle["ingest"] == [
-        ("2026-09-18T05:00:00", frozenset({"Air India Flight 171", "Boeing 787"}))]
+        ("2026-09-18T05:00:00", frozenset({"Air India Flight 171", "Boeing 787"}), None)]
     assert (summary.hours_due, summary.hours_ingested, summary.titles) == (1, 1, 2)
 
 
@@ -197,3 +197,30 @@ def test_advisory_lock을_잡는다():
 
 def test_빈_요약도_읽힌다():
     assert "시간 0/0" in CycleSummary().format()
+
+
+# -------------------------------- 기준선용 하한 적재 (WP-212)
+
+def test_하한을_주면_적재로_넘어간다(stub_cycle, tmp_path):
+    """🔴 후보 문서만 받으면 `page_baseline` 을 만들 이력이 안 쌓인다.
+
+    기준선은 (문서, 시간대) 별 28일치가 필요한데, "그 시간에 편집이 있던 날" 의
+    조회수만 있으면 `sample_days` 가 1 근처에서 멈춘다 — `-162` 가 replay 에서
+    겪은 문제와 같은 것이다.
+    """
+    five = datetime(2026, 9, 18, 5, tzinfo=UTC)
+    conn = FakeConn([row(five, "Air India Flight 171")])
+
+    run_once(conn, cache_dir=tmp_path, out_root=tmp_path, now=NOW, min_views=50)
+
+    assert stub_cycle["ingest"][0][2] == 50
+
+
+def test_하한은_기본으로_안_걸린다(stub_cycle, tmp_path):
+    """기본값이 안 바뀌는 것을 고정한다 — 켜면 행이 는다(시간당 약 17,400)."""
+    five = datetime(2026, 9, 18, 5, tzinfo=UTC)
+    conn = FakeConn([row(five, "Doc")])
+
+    run_once(conn, cache_dir=tmp_path, out_root=tmp_path, now=NOW)
+
+    assert stub_cycle["ingest"][0][2] is None
