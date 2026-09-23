@@ -37,8 +37,10 @@ WITH ranked AS (
            row_number() OVER (PARTITION BY snapshot_ts
                               ORDER BY pulse_score DESC, id ASC) AS rnk
       FROM issue_cluster
-     WHERE %(source)s::text IS NULL
-        OR source = %(source)s::text
+     WHERE (%(source)s::text IS NULL
+            OR source = %(source)s::text)
+       AND (%(days)s::date[] IS NULL
+            OR (snapshot_ts AT TIME ZONE 'UTC')::date = ANY (%(days)s::date[]))
 )
 SELECT id
   FROM ranked
@@ -64,11 +66,11 @@ SELECT id
 
 
 def _select(conn, top: int, limit: int = 100, model: str = MODEL,
-            source=None, max_attempts: int = 3) -> list[int]:
+            source=None, max_attempts: int = 3, days=None) -> list[int]:
     with conn.cursor() as cur:
         cur.execute(_SELECT,
                     {"top": top, "limit": limit, "model": model, "source": source,
-                     "maxAttempts": max_attempts})
+                     "maxAttempts": max_attempts, "days": days})
         return [row[0] for row in cur.fetchall()]
 
 
@@ -266,3 +268,33 @@ def test_시도_상한이_0이하면_무제한이다(conn):
     _attempt(conn, cid, count=99)
 
     assert _select(conn, top=0, max_attempts=0) == [cid]
+
+
+# ------------------------------------------------ 스냅샷 날짜 한정 (WP-215)
+
+def test_날짜를_주면_그_UTC_날짜_스냅샷만_고른다(conn):
+    """시연일만 채운다. 날짜는 UTC 로 자른다 — KST 로 읽으면 전날 밤이 섞인다."""
+    demo = _cluster(conn, score=1.0, snapshot="2026-07-17T01:00:00+00:00")
+    late = _cluster(conn, score=1.0, snapshot="2026-07-17T23:00:00+00:00")
+    # KST 로는 07-17 이지만 UTC 로는 07-16 이다 → 빠져야 한다
+    kst_only = _cluster(conn, score=9.0, snapshot="2026-07-16T20:00:00+00:00")
+    other = _cluster(conn, score=9.0, snapshot="2026-09-01T00:00:00+00:00")
+
+    picked = set(_select(conn, top=0, days="{2026-07-17}"))
+
+    assert picked == {demo, late}
+    assert kst_only not in picked and other not in picked
+
+
+def test_날짜가_없으면_전체다(conn):
+    a = _cluster(conn, score=1.0, snapshot="2026-07-17T01:00:00+00:00")
+    b = _cluster(conn, score=1.0, snapshot="2026-09-01T00:00:00+00:00")
+
+    assert set(_select(conn, top=0, days=None)) == {a, b}
+
+
+def test_날짜와_출처를_함께_좁힌다(conn):
+    replay = _cluster(conn, score=1.0, snapshot="2026-07-25T04:00:00+00:00", source="replay")
+    _cluster(conn, score=1.0, snapshot="2026-07-25T04:00:00+00:00", source="live")
+
+    assert _select(conn, top=0, source="replay", days="{2026-07-17,2026-07-25}") == [replay]

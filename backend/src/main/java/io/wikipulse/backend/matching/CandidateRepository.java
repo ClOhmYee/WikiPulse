@@ -58,17 +58,25 @@ public class CandidateRepository {
      * 매기면 다른 출처가 순위 자리를 먹어 상한보다 적게 뽑힌다.
      *
      * @param topPerSnapshot 스냅샷당 {@code pulse_score} 상위 몇 개까지. 0 이하면 무제한
+     * <p>{@code snapshotDays} 는 대상을 그 UTC 날짜의 스냅샷으로 좁힌다(WP-215) —
+     * 시연일만 채울 때. 날짜는 스냅샷 전체를 고르므로 스냅샷 안의 순위에는 영향이 없다.
+     *
      * @param source {@code issue_cluster.source} 한정. {@code null}·빈 문자열이면 전체
+     * @param snapshotDays 쉼표 구분 UTC 날짜. {@code null}·빈 문자열이면 전체
      */
-    public List<Long> pendingClusterIds(int limit, int topPerSnapshot, String source) {
+    public List<Long> pendingClusterIds(int limit, int topPerSnapshot, String source,
+                                        String snapshotDays) {
         return jdbc.queryForList("""
                 WITH ranked AS (
                     SELECT id, status, issue_key, snapshot_ts,
                            row_number() OVER (PARTITION BY snapshot_ts
                                               ORDER BY pulse_score DESC, id ASC) AS rnk
                       FROM issue_cluster
-                     WHERE CAST(:source AS text) IS NULL
-                        OR source = CAST(:source AS text)
+                     WHERE (CAST(:source AS text) IS NULL
+                            OR source = CAST(:source AS text))
+                       AND (CAST(:days AS date[]) IS NULL
+                            OR CAST(snapshot_ts AT TIME ZONE 'UTC' AS date)
+                               = ANY (CAST(:days AS date[])))
                 )
                 SELECT r.id
                   FROM ranked r
@@ -88,7 +96,8 @@ public class CandidateRepository {
                 """, new MapSqlParameterSource()
                 .addValue("limit", limit)
                 .addValue("top", topPerSnapshot)
-                .addValue("source", blankToNull(source)), Long.class);
+                .addValue("source", blankToNull(source))
+                .addValue("days", SnapshotDays.toSqlArray(snapshotDays)), Long.class);
     }
 
     /** 설정에서 온 빈 문자열을 "한정 없음"(NULL)으로 읽는다 — 미설정 환경변수가 빈 값이라서다. */
