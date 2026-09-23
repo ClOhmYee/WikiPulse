@@ -8,7 +8,6 @@
 #   docker compose --profile pipeline up -d     # 파이프라인(producer·spark)까지
 #   docker compose --profile gdelt up -d        # GDELT 수집(HDFS namenode·datanode)까지
 #   docker compose down                         # 정지
-#   docker compose down -v                      # 정지 + 데이터 삭제(스키마 재적재)
 #
 # EC2 실물 구축(WP-26·-29·-28)과 별개다. 이건 개발용이라 전부 단일
 # 인스턴스·복제 1이고 운영 구성과 다르다. HDFS 도 개발용 단일 datanode 라
@@ -71,13 +70,27 @@ services:
       - kafka-data:/var/lib/kafka/data
 
   # ---------------------------------------------------------------- 서비스
+  migrate:
+    build:
+      context: ./docker/migrate
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-wikipulse}
+      POSTGRES_USER: ${POSTGRES_USER:-wikipulse}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in your local .env}
+    volumes:
+      - ./db:/db:ro
+    restart: "no"
+
   backend:
     build:
       context: ./backend
     container_name: wikipulse-backend
     depends_on:
-      postgres:
-        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
     environment:
       DATABASE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-wikipulse}
       DB_USER: ${POSTGRES_USER:-wikipulse}
@@ -175,8 +188,8 @@ services:
     container_name: wikipulse-live-cycle
     profiles: ["pipeline"]
     depends_on:
-      postgres:
-        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-wikipulse}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in your local .env}@postgres:5432/${POSTGRES_DB:-wikipulse}
       DUMP_CACHE: /data/cache
@@ -208,8 +221,8 @@ services:
     depends_on:
       kafka:
         condition: service_healthy
-      postgres:
-        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
     environment:
       KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       KAFKA_TOPIC: wiki.edits

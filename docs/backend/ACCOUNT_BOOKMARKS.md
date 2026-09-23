@@ -46,6 +46,8 @@ WP-211. 기존 로그인 UI MR !174가 병합된 develop에서 구현했다.
 - 예전 localStorage 항목은 읽어오거나 이전·삭제하지 않는다. 예시 데이터는 실계정에 저장하지 않는다.
 - 로그인 팝업 취소 시 저장 의도를 버린다. 가입 화면을 거쳐 로그인하면 원래 추가 요청을 한 번 수행한다.
 - 회원 변경·로그아웃 시 요청을 취소하고 개인 화면/저장 캐시를 비운다. 다른 탭의 계정 변경도 BroadcastChannel로 통지한다.
+- 로그인·로그아웃 중 focus/visibility에 의한 `/me` 복원을 중지하고, 이전 요청은 취소한다. 인증 상태 버전이 바뀐 응답은 적용하지 않는다.
+- 내부 ERROR 디스패치는 원래 서버 오류 상태를 유지한다. `/error` 직접 접근과 비인증 개인 API 접근은 계속 차단한다.
 
 ## 적용 순서
 
@@ -53,6 +55,9 @@ WP-211. 기존 로그인 UI MR !174가 병합된 develop에서 구현했다.
 2. 기존 `db/apply_migrations.py --grant-role <앱 역할>` 절차로 V15를 적용한다. 새 테이블·시퀀스 DML 권한도 확인한다. `spring.session.jdbc.initialize-schema=never`를 유지한다.
 3. 백엔드와 프론트엔드를 함께 배포한다. 같은 출처의 HTTPS 프록시와 Secure 쿠키를 확인한다. 로컬 Docker compose만 기본 false다.
 4. 로그인·저장·로그아웃 후 `/me` 401과 health를 점검한다. 이전 클라이언트의 Bearer 계약과 호환되지 않으므로 클라이언트 새로고침이 필요하다.
+
+로컬 Docker는 `migrate` 완료 후 백엔드를 시작한다. 기존 볼륨의 일회성 이력 등록과
+데이터 보존 업그레이드 명령은 [Docker 안내](../../docker/README.md#db-업그레이드와-로그인-WP-211)를 따른다.
 
 자동 병합·운영 배포는 하지 않는다. 롤백 시 V15 테이블을 삭제하지 말고 앱 버전만 되돌린다.
 이메일 인증, 재설정, 소셜 로그인, 회원정보 수정·탈퇴는 별도 범위다.
@@ -62,6 +67,8 @@ WP-211. 기존 로그인 UI MR !174가 병합된 develop에서 구현했다.
 ```sh
 cd backend && ./gradlew test bootJar && cd ..
 cd frontend && npm ci && npx playwright install chromium && cd ..
+uv run --with pgserver --with 'psycopg[binary]' python tools/test_local_migrations.py
+cd frontend && npx playwright test e2e/auth.spec.js && cd ..
 uv run --with pgserver --with 'psycopg[binary]' python tools/test_account_e2e.py --browser
 ```
 
@@ -70,7 +77,12 @@ Java 17이 필요하다. Windows에서는 `gradlew.bat`, `npm.cmd`를 사용한�
 workers는 모두 false다. 신규/업그레이드 스키마, 이메일 충돌, CSRF, 계정 격리,
 동시 저장, 서버·브라우저 재시작, 짧은 세션의 갱신·만료, 운영 쿠키 속성을 검증한다.
 쓰기 실패 화면만 HTTP 500을 주입하며 나머지 계정 브라우저 흐름은 실제 API다.
+서버 오류 회귀 검사는 임시 DB의 세션 테이블을 잠시 숨겨 실제 500을 발생시킨 뒤 복원한다.
 일반 `e2e/auth.spec.js`는 별도의 인터셉트 UI 회귀 검사다. 운영 실데이터 검증을 의미하지 않는다.
+
+2026-09-23 수정 검증: DB 업그레이드 6건, 인터셉트 인증 UI 6건, 실제 API 브라우저
+3건 및 HTTP 세션·CSRF·계정 격리 검사가 통과했다. 로컬 Docker도 재빌드한 뒤
+프론트엔드 프록시를 통한 가입·로그인·내 정보·로그아웃을 확인했다.
 
 기술 근거: [Spring Session JDBC](https://docs.spring.io/spring-session/reference/configuration/jdbc.html),
 [Spring Security 세션 관리](https://docs.spring.io/spring-security/reference/6.5/servlet/authentication/session-management.html).
