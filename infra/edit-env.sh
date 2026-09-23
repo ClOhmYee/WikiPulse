@@ -38,6 +38,14 @@ tmp=$(mktemp)
 trap "rm -f '$tmp'" EXIT
 cat "$target" > "$tmp"
 
+# 🔴 덧붙이기 전에 끝 줄바꿈을 보장한다 (WP-218). 마지막 줄에 줄바꿈이 없으면
+#    아래 `echo >>` 가 새 키를 그 줄 뒤에 이어 붙인다. 2026-09-23 운영 `.env` 가
+#    `WIKIPULSE_PAGETITLE_ENABLED=trueWIKIPULSE_MATCHING_...` 가 됐다 — 재생성했으면
+#    기존 키 값이 망가져 기능이 조용히 꺼졌다. 에러는 안 난다.
+if [ -s "$tmp" ] && [ -n "$(tail -c1 "$tmp")" ]; then
+    printf '\n' >> "$tmp"
+fi
+
 for pair in "$@"; do
     case "$pair" in
         *=*) ;;
