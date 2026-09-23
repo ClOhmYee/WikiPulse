@@ -43,10 +43,8 @@ export default function SavedPage({
     <div className="wp-page saved-page">
       <div className="wp-page-header">
         <div>
-          <h1>관심의 흐름을 이어가세요</h1>
-          <p className="wp-subtitle">
-            저장한 사건과 종목을 한곳에서 다시 살펴보세요.
-          </p>
+          <h1>보관함</h1>
+          <p className="wp-subtitle">저장한 이슈와 종목을 확인하세요.</p>
         </div>
         <Bookmark size={27} strokeWidth={1.3} />
       </div>

@@ -20,17 +20,28 @@ export function useGlobalSearch(query) {
         signal.addEventListener("abort", cancel, { once: true });
       });
       signal.throwIfAborted();
-      return (
-        await dataClient.listStocks(
-          { q: term, offset: 0, limit: 7 },
-          { signal },
-        )
-      ).data.map((stock) => ({
-        kind: "stock",
-        id: stock.ticker,
-        title: `${stock.ticker} · ${stock.name}`,
-        detail: [stock.exchange, stock.sector].filter(Boolean).join(" · "),
-      }));
+      const [issues, stocks] = await Promise.all([
+        dataClient.listIssues({ offset: 0, limit: 100 }, { signal }),
+        dataClient.listStocks({ q: term, offset: 0, limit: 7 }, { signal }),
+      ]);
+      const normalized = term.toLowerCase();
+      return [
+        ...issues.data
+          .filter((issue) => issue.label.toLowerCase().includes(normalized))
+          .slice(0, 7)
+          .map((issue) => ({
+            kind: "issue",
+            id: issue.id,
+            title: issue.label,
+            detail: `${issue.memberCount}개 문서`,
+          })),
+        ...stocks.data.map((stock) => ({
+          kind: "stock",
+          id: stock.ticker,
+          title: `${stock.ticker} · ${stock.name}`,
+          detail: [stock.exchange, stock.sector].filter(Boolean).join(" · "),
+        })),
+      ];
     },
     [term],
   );

@@ -4,7 +4,7 @@ export default function AccountPage({ member }) {
       <header className="wp-page-header">
         <div>
           <h1>마이페이지</h1>
-          <p className="wp-subtitle">내 정보와 저장한 관심사를 확인하세요.</p>
+          <p className="wp-subtitle">계정 정보와 저장한 항목을 확인하세요.</p>
         </div>
       </header>
       <section aria-label="내 정보">
