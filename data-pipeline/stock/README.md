@@ -132,10 +132,17 @@ python -m stock.sectors --limit 20 --dry-run  # DB 안 건드리고 20종목만 
   운영 DB 는 설명이 이미 다 차 있어서 거기 끼우면 채울 종목이 대상에 안 들어온다.
 - **이어서**: `sector IS NULL` 인 종목만 돈다. 50종목마다 저장하고, 이미 채운 종목은
   다시 안 부른다. `--tickers` 로 준 종목 중 이미 채워진 것·마스터에 없는 것은 따로 알린다.
-- **값**: `yf.Ticker(t).info["sector"]` 그대로(예: `Industrials`). 없거나 빈 문자열이면
+- **값**: `yf.Ticker(t).info["sector"]` 원문 그대로(예: `Industrials`). 없거나 빈 문자열이면
   NULL 로 둔다 — 화면에 "산업 미제공"이 뜨는 게 정상이다. `industry` 는 컬럼이 없어 안 받는다.
-- **실패 격리**: 한 종목이 예외면 그 종목만 건너뛴다. 하나도 못 받았는데 실패만 있으면
-  종료코드 1(야후 차단 의심).
+  - ⚠️ **어휘는 Yahoo(Morningstar) 11분류다. GICS 명칭이 아니다** — `Consumer Cyclical`·
+    `Healthcare`·`Financial Services`·`Communication Services` 등(GICS 는 Consumer Discretionary·
+    Health Care·Financials). 백엔드 `?sector=` 필터는 대소문자까지 **정확 일치**라 GICS 이름으로
+    치면 오류 없이 0건이다. 화면은 영문 원문을 그대로 보여 준다(FE 목 데이터의 한국어 라벨과 다르다).
+  - ⚠️ "없음" 종목은 NULL 로 남아 **재실행할 때마다 다시 부른다.** 전 종목을 돌리면 그만큼 헛호출이 생긴다.
+- **실패 격리**: 한 종목이 예외면 그 종목만 건너뛴다. 연속 25종목이 예외면 서킷 브레이커로
+  중단하고(받은 값은 저장), 브레이커가 걸렸거나 하나도 못 받았는데 실패가 있으면 종료코드 1.
+  - ⚠️ yfinance 1.7.0 은 없는 심볼에 예외 없이 sector 없는 dict 를 준다(2026-09-23 실측). 차단이
+    그런 형태로 오면 "없음"으로 세어지므로, 전부 "없음"이면 종료코드 0 이되 경고를 찍는다.
 - **백엔드·FE 변경 없음**: `StockRepository` 가 이미 `s.sector` 를 select 하고 FE 가
   그대로 표시한다. DB 에 값만 들어가면 재배포 없이 바로 보인다.
 
@@ -144,35 +151,76 @@ python -m stock.sectors --limit 20 --dry-run  # DB 안 건드리고 20종목만 
 대상은 주가와 같은 **검증 티커 17개**(위 주가 절 참고). 로컬 실측(2026-09-23)에서
 17개 모두 yfinance `info` 에 sector 가 있었다 — 운영 실행 결과는 아래 결과 줄에 따로 적는다.
 
-⚠️ **`sectors.py` 는 새 파일이라 EC2 마운트 체크아웃에 먼저 올려야 한다.** 데이터
-파이프라인은 CI 배포 대상이 아니다(수동 관리). -204 를 develop 에 머지한 뒤
-`/home/deploy/wikipulse-local-test` 체크아웃을 갱신한다 — 인프라 작업이라 담당자와 조율한다.
+### 1) 서버에 코드 올리기 (develop 머지 후)
+
+🔴 **`git pull` 하지 않는다.** `/home/deploy/wikipulse-local-test` 는 git 체크아웃이 아니라
+tarball 복사본이고(`infra/live/README.md`), 운영 `live-cycle`·`live-cluster`·`edit-stream` 이
+같은 디렉터리를 읽는다. 지금까지처럼 **파일 단위로 백업 후 복사**하고 md5 로 확인한다
+(`docs/next-steps-2026-09-23.md` §5 와 같은 방식). 인프라 작업이라 담당자와 조율한다.
+
+올릴 파일은 셋이다. 운영 컨테이너는 `stock/` 을 임포트하지 않는다(일회성 컨테이너만 쓴다).
+
+| 파일 | 왜 |
+| --- | --- |
+| `stock/sectors.py` | 신규 |
+| `stock/db.py` | `tickers_missing_sector`·`save_sectors` 두 함수 추가뿐 |
+| `stock/prices.py` | 내용 변경 없음. `sectors.py` 가 `_yahoo_symbol`·`select_targets` 를 임포트한다 — 서버 사본이 `_yahoo_symbol` 이전 판이면 ImportError 라서 develop 판과 md5 를 맞춘다 |
 
 ```bash
-# 1) 체크아웃 갱신 (develop 머지 후)
-ssh -i <로컬 pem 경로>/example-account.pem ubuntu@service.example.com \
-  'cd /home/deploy/wikipulse-local-test && git pull'
+# 로컬 저장소 루트에서. <로컬 pem 경로> 는 각자 바꾼다(개인 경로를 저장소에 박지 않는다).
+PEM=<로컬 pem 경로>/example-account.pem
+HOST=ubuntu@service.example.com
+DIR=/home/deploy/wikipulse-local-test/data-pipeline/stock
+TS=$(date -u +%Y%m%d-%H%M%S)
 
-# 2) 일회성 컨테이너로 적재. 비밀번호는 서버 안에서만 읽는다(주가 절과 같은 방식).
+# 서버 사본 백업 (sectors.py 는 신규라 없다)
+ssh -i "$PEM" "$HOST" "cd $DIR && for f in db.py prices.py; do cp -p \$f \$f.bak-204-$TS; done"
+# 복사 → md5 대조 (로컬 = 서버)
+scp -i "$PEM" data-pipeline/stock/sectors.py data-pipeline/stock/db.py data-pipeline/stock/prices.py "$HOST:$DIR/"
+md5sum data-pipeline/stock/{sectors,db,prices}.py
+ssh -i "$PEM" "$HOST" "cd $DIR && md5sum sectors.py db.py prices.py"
+```
+
+- 되돌리기(코드): `db.py`·`prices.py` 를 `*.bak-204-<TS>` 로 되돌리고 `sectors.py` 를 지운다.
+
+### 2) 적재
+
+일회성 컨테이너로 돈다. 비밀번호는 서버 안에서만 읽는다(주가 절과 같은 방식).
+yfinance 는 `requirements.txt` 와 같은 **1.7.0 으로 고정**한다 — 0.2.51 은 조용히 0행이었다.
+
+```bash
 ssh -i <로컬 pem 경로>/example-account.pem ubuntu@service.example.com '
 PGPW=$(sudo docker inspect postgres-postgres-1 --format "{{range .Config.Env}}{{println .}}{{end}}" | grep "^POSTGRES_PASSWORD=" | cut -d= -f2-)
 sudo docker run --rm --network postgres_default \
   -v /home/deploy/wikipulse-local-test/data-pipeline:/opt/app -w /opt/app \
   -e DATABASE_URL="postgresql://wikipulse:$PGPW@postgres-postgres-1:5432/wikipulse" \
   wikipulse-spark-standalone:local \
-  sh -c "pip install -q yfinance \"psycopg[binary]\" && python -m stock.sectors --tickers ACM,AERO,ALK,BA,CAAP,CPA,DAL,DJT,FUBO,FUN,GRSD,MANU,MMYT,OKLO,OPBK,WH,YTRA"
+  sh -c "pip install -q yfinance==1.7.0 \"psycopg[binary]==3.3.5\" && python -m stock.sectors --tickers ACM,AERO,ALK,BA,CAAP,CPA,DAL,DJT,FUBO,FUN,GRSD,MANU,MMYT,OKLO,OPBK,WH,YTRA"
 '
 ```
 
-- **커버리지 확인(읽기 전용)**: `sudo docker exec postgres-postgres-1 psql -U wikipulse -d wikipulse -c
-  "SELECT count(*) FILTER (WHERE sector IS NOT NULL), count(*) FROM stock WHERE ticker IN
-  ('ACM','AERO','ALK','BA','CAAP','CPA','DAL','DJT','FUBO','FUN','GRSD','MANU','MMYT','OKLO','OPBK','WH','YTRA');"`
-- **화면 확인**: `GET https://service.example.com/api/v1/stocks?hasIssues=true` 의 `sector` 가 값으로
-  온다 → 종목 탐색에서 "산업 미제공" 대신 산업명(브라우저 하드 리프레시).
+### 3) 확인
+
+- **커버리지(읽기 전용)** — SQL 에 작은따옴표가 있어 ssh 인자는 큰따옴표로 감싼다:
+
+```bash
+ssh -i <로컬 pem 경로>/example-account.pem ubuntu@service.example.com \
+  "sudo docker exec postgres-postgres-1 psql -U wikipulse -d wikipulse -c \"SELECT count(*) FILTER (WHERE sector IS NOT NULL) AS filled, count(*) FROM stock WHERE ticker IN ('ACM','AERO','ALK','BA','CAAP','CPA','DAL','DJT','FUBO','FUN','GRSD','MANU','MMYT','OKLO','OPBK','WH','YTRA');\""
+```
+
+- **화면**: `GET https://service.example.com/api/v1/stocks?hasIssues=true` 의 `sector` 가 값으로
+  온다 → 종목 탐색에서 "산업 미제공" 대신 산업명(브라우저 하드 리프레시). 백엔드 재배포는 필요 없다.
 - 결과: (운영 실행 후 기록)
-- 🔴 **되돌리기**: 운영 DB 에서 `UPDATE stock SET sector = NULL WHERE ticker IN (...17개...);`
-  — 이 스크립트가 쓰는 건 `sector`·`updated_at` 뿐이다(`updated_at` 은 되돌리지 않아도 된다).
-- 재실행은 안전하다 — 이미 채워진 종목은 건너뛴다.
+
+### 되돌리기 (데이터)
+
+🔴 이 스크립트가 쓰는 건 `sector`·`updated_at` 뿐이다(`updated_at` 은 되돌리지 않아도 된다).
+
+```sql
+UPDATE stock SET sector = NULL WHERE ticker IN ('ACM','AERO','ALK','BA','CAAP','CPA','DAL','DJT','FUBO','FUN','GRSD','MANU','MMYT','OKLO','OPBK','WH','YTRA');
+```
+
+재실행은 안전하다 — 이미 채워진 종목은 건너뛴다.
 
 ## 규모 (2026-09-08 실측)
 

@@ -30,6 +30,11 @@ from .prices import _yahoo_symbol, select_targets
 
 CHUNK = 50        # 이 개수마다 DB 에 저장. 중간에 죽어도 여기까지는 남는다
 THROTTLE = 0.2    # 종목 사이 간격(초). info 는 무거운 호출이라 몰아치지 않는다
+# 서킷 브레이커: 연속으로 이만큼 예외가 나면 야후 차단으로 보고 중단한다(prices 와
+# 같은 값). yfinance 1.7.0 은 재시도 후에도 429 면 YFRateLimitError 를 던진다.
+# "없음"(info 에 sector 가 없음)은 카운트하지 않는다 — 없는 심볼은 예외 없이
+# 1키 dict 를 주고(2026-09-23 실측), SPAC·워런트는 연속으로 나올 수 있다.
+CIRCUIT_BREAK = 25
 
 
 def sector_from_info(info) -> str | None:
@@ -63,6 +68,10 @@ def run(
                 print(f"마스터에 없어 제외: {', '.join(unknown)}", file=sys.stderr)
             if filled:
                 print(f"이미 산업이 있어 건너뜀: {', '.join(filled)}", file=sys.stderr)
+        # 조회 트랜잭션을 바로 닫는다. 안 닫으면 첫 저장까지(전부 "없음"이거나
+        # dry-run 이면 실행 내내) stock 에 락을 쥔 채 idle in transaction 으로 남아,
+        # 그 사이 도는 마이그레이션의 ALTER 를 막는다.
+        conn.commit()
         if not targets:
             print("산업을 받을 종목이 없다.", file=sys.stderr)
             return 0
@@ -70,38 +79,60 @@ def run(
         print(f"산업 수집 대상 {len(targets)}종목", file=sys.stderr)
         buffer: list[tuple[str, str]] = []
         got = miss = failed = 0
+        consecutive_failed = 0
+        tripped = False
 
         for i, ticker in enumerate(targets, 1):
             try:
                 sector = sector_from_info(yf.Ticker(_yahoo_symbol(ticker)).info)
             except Exception as exc:  # noqa: BLE001 — 그 종목만 건너뛴다
                 failed += 1
+                consecutive_failed += 1
                 print(f"  건너뜀 {ticker}: {exc}", file=sys.stderr)
-                sector = None
             else:
                 if sector:
                     got += 1
+                    consecutive_failed = 0
                     if not dry_run:
                         buffer.append((ticker, sector))
                 else:
                     miss += 1
 
-            if len(buffer) >= CHUNK or i == len(targets):
-                if buffer:
-                    db.save_sectors(conn, buffer)
-                    buffer.clear()
+            if len(buffer) >= CHUNK:
+                db.save_sectors(conn, buffer)
+                buffer.clear()
+            if i % CHUNK == 0 or i == len(targets):
                 print(
                     f"  {i}/{len(targets)}  확보 {got} · 없음 {miss} · 실패 {failed}",
                     file=sys.stderr,
                 )
+            if consecutive_failed >= CIRCUIT_BREAK:
+                tripped = True
+                print(
+                    f"서킷 브레이커: {consecutive_failed}종목 연속 실패 — 야후 차단 의심. "
+                    f"{i}/{len(targets)}에서 중단한다. --throttle 을 올려 나중에 재실행하라.",
+                    file=sys.stderr,
+                )
+                break
             time.sleep(throttle)
+
+        # 최종 저장은 루프 밖에서 무조건 한다 — 브레이커로 break 해도 받은 값이 남게.
+        if buffer:
+            db.save_sectors(conn, buffer)
+            buffer.clear()
 
     prefix = "[dry-run] 저장 안 함. " if dry_run else ""
     print(f"{prefix}산업 수집 완료: 확보 {got} · 없음 {miss} · 실패 {failed}", file=sys.stderr)
 
-    # 하나도 못 받았는데 실패만 있으면 야후 차단·네트워크 장애다. cron 이 성공으로
-    # 오인하지 않게 1 을 낸다. "없음"(info 에 sector 가 없는 종목)은 실패가 아니다.
-    if got == 0 and failed > 0:
+    # ⚠️ 차단이 예외가 아니라 빈 응답으로 오면 전부 "없음"으로 세어진다. 정상일 수도
+    # 있어(SPAC 만 남은 경우) 실패로 치지 않고 경고만 한다.
+    if got == 0 and failed == 0 and miss > 0:
+        print("전부 \"없음\"이다 — 대상이 정말 sector 가 없는 종목인지, 차단인지 확인하라.",
+              file=sys.stderr)
+
+    # 브레이커가 걸렸거나, 하나도 못 받았는데 실패가 있으면 야후 차단·네트워크 장애다.
+    # cron 이 성공으로 오인하지 않게 1 을 낸다. "없음"은 실패가 아니다.
+    if tripped or (got == 0 and failed > 0):
         print("대량 실패 의심(야후 차단·네트워크 장애). 종료코드 1.", file=sys.stderr)
         return 1
     return 0

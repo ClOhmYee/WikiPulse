@@ -66,7 +66,7 @@
 | Anthropic | `/v1/messages` + `web_search_20250305` | GATEWAY 경유. `x-api-key`. 중계 실동작 확인 (2026-09-07) |
 | Wikimedia | EventStreams SSE, `other/pageviews` 시간별 덤프, `pageview_complete` 일별 user 덤프, Clickstream | 운영 조회수 최종 관문은 시간별 덤프. 일별 user는 품질 검증. AQS 일별 API는 PoC용만. ⚠️ **연락처 없는 User-Agent는 차단된다.** `CONTACT_EMAIL` 필수 |
 | GDELT 2.0 GKG | 15분 파일 | ~~2025-06-13~07-04~~ → **2025-06-14 18:00~07-02 02:00 UTC 결손**(경계 이분 탐색 재확인, 2026-09-16, `docs/requirements-v0.3.md` §11) |
-| yfinance | `longBusinessSummary`, 일봉 | 비공식 API. 스로틀·스키마 변경 리스크 |
+| yfinance | `longBusinessSummary`, `sector`, 일봉 | 비공식 API. 스로틀·스키마 변경 리스크 |
 | SEC / NASDAQ Trader | 종목 마스터 | ⚠️ Wikidata로 티커를 받지 말 것 (`wdt:P249` 40건 함정) |
 
 ---
@@ -80,7 +80,7 @@ db/             PostgreSQL 스키마 정본 + pgserver 기반 스키마 테스�
 data-pipeline/  producer/  EventStreams SSE → Kafka
                 streaming/ Spark Structured Streaming (윈도우 집계)
                 spike/     급증 판정 수식 + 28일 기준선
-                stock/     종목 마스터·설명·임베딩 적재
+                stock/     종목 마스터·설명·임베딩·주가·산업 적재
                 docker-compose.yml  로컬 Kafka + Spark
 ai/             AI 파트 실험 코드 (issue-text-poc, stock-text-poc)
 docs/           명세·API·ERD·기술·협업 규칙
