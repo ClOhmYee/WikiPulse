@@ -224,3 +224,61 @@ def test_하한은_기본으로_안_걸린다(stub_cycle, tmp_path):
     run_once(conn, cache_dir=tmp_path, out_root=tmp_path, now=NOW)
 
     assert stub_cycle["ingest"][0][2] is None
+
+
+# -------------------------------- 하루 한 번 기준선 (WP-212)
+
+from datetime import date  # noqa: E402
+
+from spike.live_cycle import (  # noqa: E402
+    BASELINE_LAG_HOURS, baseline_as_of, maybe_refresh_baseline)
+from spike.candidate_store import DEFAULT_EXPIRE_HOURS  # noqa: E402
+
+
+def test_기준선_창은_살아_있는_대기의_날을_안_덮는다():
+    """🔴 급등 자신이 기준선에 섞이면 EWMA 최근 가중 때문에 배수가 깎여 진짜 급등이
+    폐기된다. 만료 직전 대기(윈도우 끝 + 36시간)의 날보다 as_of 가 반드시 앞선다."""
+    for minute in range(0, 24 * 60, 7):
+        now = datetime(2026, 9, 23, tzinfo=UTC) + timedelta(minutes=minute)
+        # 아직 안 만료된 가장 오래된 대기의 윈도우 시작
+        oldest_pending = now - timedelta(hours=DEFAULT_EXPIRE_HOURS + 1)
+        assert baseline_as_of(now) < oldest_pending.date(), now
+
+
+def test_기준선_지연은_만료보다_길다():
+    assert BASELINE_LAG_HOURS > DEFAULT_EXPIRE_HOURS
+
+
+@pytest.fixture()
+def stub_baseline(monkeypatch):
+    calls = []
+
+    def fake_run(conn, *, wiki, as_of):
+        calls.append(as_of)
+        return {"observations": 10, "rows": 2, "thin": 2, "written": 2}
+
+    monkeypatch.setattr(live_cycle.baseline_from_views, "run", fake_run)
+    return calls
+
+
+def test_날이_바뀔_때만_기준선을_굴린다(stub_baseline):
+    conn = FakeConn()
+    first = maybe_refresh_baseline(conn, now=NOW, last_as_of=None)
+    again = maybe_refresh_baseline(conn, now=NOW + timedelta(hours=1), last_as_of=first)
+    next_day = maybe_refresh_baseline(conn, now=NOW + timedelta(days=1), last_as_of=again)
+
+    assert first == again == baseline_as_of(NOW)
+    assert next_day == first + timedelta(days=1)
+    assert stub_baseline == [first, next_day]      # 같은 날 두 번째는 안 돈다
+
+
+def test_기준선이_실패해도_주기를_안_죽이고_다음에_다시_한다(monkeypatch):
+    """🔴 기준선이 하루 늦는 건 fallback 이 받지만, 적재가 멈추면 이력이 끊긴다."""
+    def boom(conn, **kwargs):
+        raise RuntimeError("db gone")
+
+    monkeypatch.setattr(live_cycle.baseline_from_views, "run", boom)
+    conn = FakeConn()
+    prev = date(2026, 9, 1)
+    assert maybe_refresh_baseline(conn, now=NOW, last_as_of=prev) == prev
+    assert conn.rolled_back == 1

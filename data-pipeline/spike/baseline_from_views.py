@@ -31,6 +31,14 @@
   `detector` 가 얇은 기준선으로 보고 기존 fallback 을 쓴다. **중간에 깨지는 구간이
   없다** — 그래서 켜 두고 기다리면 된다.
 
+## 🔴 한 번에 다 읽지 않는다
+
+하한 50 이면 28일 창이 약 1,170만 관측이다(-212 실측 17,426행/시간). 파이썬 dict
+로 한꺼번에 올리면 수 GB 라, Kafka·Spark 와 같이 사는 16 GB EC2 에서 `live-cycle`
+이 OOM 으로 죽는다 — 그러면 조회수 적재까지 같이 멈춘다. 문서 순으로 정렬해 서버
+커서로 흘리고 **문서 경계에서만** 끊어 묶음마다 `build_rows` → upsert 한다. 한 문서의
+관측은 반드시 한 묶음에 들어가므로 결과는 한꺼번에 돌린 것과 같다.
+
 ## ⚠️ 입력이 없는 시간을 0 으로 채우지 않는다
 
 `page_view_hourly` 에 행이 없는 것은 "0회" 와 "안 받았다" 둘 다를 뜻할 수 있다
@@ -45,6 +53,7 @@ import argparse
 import logging
 import os
 import sys
+from collections.abc import Iterator
 from datetime import date, datetime, timedelta, timezone
 
 from .baseline_rows import BASELINE_WINDOW_DAYS, build_rows
@@ -64,7 +73,12 @@ SELECT p.wiki,
   JOIN wiki_page p ON p.id = v.page_id
  WHERE v.ts_hour > %s AND v.ts_hour <= %s
    AND p.wiki = %s
+ ORDER BY v.page_id
 """
+
+#: 한 묶음의 문서 수. 문서당 최대 24슬롯 × 28일 = 672 관측이라 5천 문서면 최악 340만 —
+#: 실제로는 하한 50 을 매시간 넘는 문서가 드물어 훨씬 작다.
+DEFAULT_BATCH_PAGES = 5_000
 
 
 def window_bounds(as_of: date, window_days: int = BASELINE_WINDOW_DAYS
@@ -89,9 +103,12 @@ def read_views(conn, wiki: str, as_of: date, window_days: int = BASELINE_WINDOW_
     기준선은 이 값에 영향받지 않는다.
     """
     start, end = window_bounds(as_of, window_days)
-    with conn.cursor() as cur:
+    # 🔴 서버 커서다 — 모듈 독스트링 "한 번에 다 읽지 않는다". `withhold` 는 묶음마다
+    #    커밋해도 커서가 살아 있게 한다(없으면 첫 커밋에서 커서가 닫힌다).
+    with conn.cursor(name="baseline_from_views", withhold=True) as cur:
+        cur.itersize = 10_000       # 기본 100 이면 1,170만 행에 왕복 11만 번이다
         cur.execute(SELECT_VIEWS_SQL, (start, end, wiki))
-        for wiki_name, title, ts_hour, hour_of_day, views in cur.fetchall():
+        for wiki_name, title, ts_hour, hour_of_day, views in cur:
             yield {
                 "wiki": wiki_name,
                 "title": title,
@@ -102,22 +119,42 @@ def read_views(conn, wiki: str, as_of: date, window_days: int = BASELINE_WINDOW_
             }
 
 
-def run(conn, *, wiki: str = "enwiki", as_of: date | None = None,
-        window_days: int = BASELINE_WINDOW_DAYS, dry_run: bool = False) -> dict:
-    as_of = as_of or datetime.now(timezone.utc).date()
-    observations = list(read_views(conn, wiki, as_of, window_days))
-    rows = build_rows(observations, as_of=as_of, window_days=window_days)
+def batches_by_page(observations, batch_pages: int) -> Iterator[list[dict]]:
+    """문서 순으로 들어온 관측을 **문서 경계에서만** 끊어 묶는다.
 
-    thin = sum(1 for r in rows if r.sample_days < 7)
-    summary = {
-        "observations": len(observations),
-        "rows": len(rows),
-        "thin": thin,
-        "written": 0,
-    }
-    if rows and not dry_run:
-        summary["written"] = load(conn, rows)
-        conn.commit()
+    🔴 입력이 (wiki, title) 로 모여 있어야 한다 — SQL 이 `ORDER BY page_id` 다. 한 문서가
+    두 묶음에 걸치면 슬롯 하나가 두 번 계산돼 뒤의 것이 앞의 것을 덮어쓰고, 표본이
+    반쪽인 기준선이 **에러 없이** 남는다.
+    """
+    batch: list[dict] = []
+    pages = 0
+    current = None
+    for obs in observations:
+        key = (obs["wiki"], obs["title"])
+        if key != current:
+            if pages >= batch_pages:
+                yield batch
+                batch, pages = [], 0
+            current = key
+            pages += 1
+        batch.append(obs)
+    if batch:
+        yield batch
+
+
+def run(conn, *, wiki: str = "enwiki", as_of: date | None = None,
+        window_days: int = BASELINE_WINDOW_DAYS, dry_run: bool = False,
+        batch_pages: int = DEFAULT_BATCH_PAGES) -> dict:
+    as_of = as_of or datetime.now(timezone.utc).date()
+    summary = {"observations": 0, "rows": 0, "thin": 0, "written": 0}
+    for batch in batches_by_page(read_views(conn, wiki, as_of, window_days),
+                                 batch_pages):
+        rows = build_rows(batch, as_of=as_of, window_days=window_days)
+        summary["observations"] += len(batch)
+        summary["rows"] += len(rows)
+        summary["thin"] += sum(1 for r in rows if r.sample_days < 7)
+        if rows and not dry_run:
+            summary["written"] += load(conn, rows)      # 묶음마다 커밋
     return summary
 
 
