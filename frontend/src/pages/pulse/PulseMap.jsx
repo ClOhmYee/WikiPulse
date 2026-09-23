@@ -54,8 +54,8 @@ export default function PulseMap({
   const [viewport, setViewport] = useState({ width: 0, height: 0 });
   const activateCluster = useCallback(
     (cluster) => {
+      onSelect(cluster.issueKey);
       if (current.current.zoom > OVERVIEW_ZOOM) {
-        onSelect(cluster.issueKey);
         return;
       }
       const svg = svgRef.current;
