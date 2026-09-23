@@ -78,3 +78,16 @@ def test_풀네임_없는_지역은_건너뛴다():
     # 풀네임(#-필드 index 1)이 비면 그 지역은 버린다.
     rec = parse_row(_row(c9="1##US#USFL#28#-81#FL"))
     assert rec.locations == ()
+
+
+# --- 기사 제목 (WP-221) --------------------------------------------
+
+
+def test_Extras_의_PAGE_TITLE_을_소문자로_읽는다():
+    rec = parse_row(_row(c26="<PAGE_TITLE>Nolan&#39;s The Odyssey &amp; IMAX</PAGE_TITLE>"
+                             "<AUTHORS>x</AUTHORS>"))
+    assert rec.title == "nolan's the odyssey & imax"
+
+
+def test_PAGE_TITLE_이_없으면_빈_문자열():
+    assert parse_row(_row(c26="")).title == ""

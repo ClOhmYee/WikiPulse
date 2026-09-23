@@ -134,6 +134,8 @@ class Derivation:
     themes: tuple[ScoredTerm, ...] = ()
     locations: tuple[ScoredTerm, ...] = ()
     rejected: tuple[tuple[str, str, str], ...] = ()
+    #: 테마·지역이 둘 다 실패해 대신 쓴 키워드 (WP-221). 비어 있으면 대체 안 함.
+    keywords: tuple[str, ...] = ()
 
 
 def _flatten(rejected: Mapping[tuple[str, str], str]) -> tuple[tuple[str, str, str], ...]:
@@ -157,6 +159,40 @@ def title_terms(title: str) -> tuple[str, ...]:
         t for t in tokens
         if t and not t.isdigit() and t not in STOPWORDS and len(t) >= MIN_THEME_TERM_LEN
     )
+
+
+#: 대체 키워드 최대 개수. 씨드가 많은 클러스터에서 술어가 넓어지는 걸 막는다.
+MAX_KEYWORDS = 3
+
+
+def title_keyword(title: str) -> str:
+    """위키 제목 → 키워드 구절. 괄호 한정어와 앞 관사를 떼고 소문자로.
+
+    `The Odyssey (2026 film)` → `odyssey`, `SummerSlam (2026)` → `summerslam`.
+    ⚠️ 앞 관사 `the` 를 떼는 이유: 기사 제목은 "Nolan's Odyssey…" 처럼 관사 없이
+    부르는 경우가 많다. 단어 경계 매칭이라 `the odyssey` 로 두면 그 기사들이 빠진다.
+    STOPWORDS 로만 된 구절·너무 짧은 구절은 빈 문자열(→ 버림).
+    """
+    phrase = re.sub(r"\([^)]*\)", " ", title).strip().lower()
+    phrase = re.sub(r"\s+", " ", phrase)
+    phrase = re.sub(r"^(the|a|an) ", "", phrase)
+    words = [w for w in re.split(r"[^0-9a-z]+", phrase) if w]
+    if not words or all(w in STOPWORDS or w.isdigit() for w in words):
+        return ""
+    return phrase if len(phrase) >= MIN_THEME_TERM_LEN else ""
+
+
+def _keyword_fallback(members: Sequence[Member]) -> tuple[str, ...]:
+    """씨드 멤버 제목을 키워드로. 씨드가 없으면 첫 멤버 하나."""
+    seeds = [m for m in members if m.is_seed] or list(members[:1])
+    out: list[str] = []
+    for member in seeds:
+        kw = title_keyword(member.title)
+        if kw and kw not in out:
+            out.append(kw)
+        if len(out) >= MAX_KEYWORDS:
+            break
+    return tuple(out)
 
 
 def _theme_candidates(
@@ -292,7 +328,20 @@ def derive(
     locations = pick(location_seen, max_locations)
 
     if not themes and not locations:
-        return Derivation(predicate=None, rejected=_flatten(rejected))
+        # 🔴 테마·지역으로 표현이 안 되는 이슈다(영화·공연·기업 문서). 여기서 멈추면 GDELT
+        #    경로가 통째로 0 이 된다 — 2026-09-23 시연 이슈 3개(The Odyssey · IMAX ·
+        #    SummerSlam)가 전부 이렇게 떨어졌고, 운영 후보는 100% 임베딩 단독이었다.
+        #    씨드 제목을 기사 제목·기관명 키워드로 쓴다(WP-221).
+        #    ⚠️ 이 축은 코퍼스 관측 여부를 여기서 못 본다(어휘 스캔이 제목을 안 센다).
+        #    조용한 0건·과대 매칭은 driver 가 집계 뒤 이슈 기사 수로 막는다.
+        keywords = _keyword_fallback(members)
+        if not keywords:
+            return Derivation(predicate=None, rejected=_flatten(rejected))
+        return Derivation(
+            predicate=IssuePredicate(keywords=keywords),
+            rejected=_flatten(rejected),
+            keywords=keywords,
+        )
 
     predicate = IssuePredicate(
         themes=tuple(t.term.upper() for t in themes),
@@ -314,6 +363,9 @@ def describe(derivation: Derivation) -> str:
     """
     if derivation.predicate is None:
         lines = ["술어 생성 실패 — 채택된 용어가 없다."]
+    elif derivation.keywords:
+        lines = [f"술어: 키워드[{' ∨ '.join(derivation.keywords)}] "
+                 "(테마·지역 실패 → 기사 제목·기관명 대체, WP-221)"]
     else:
         themes = " ∨ ".join(t.term.upper() for t in derivation.themes) or "(없음)"
         locations = " ∨ ".join(l.term for l in derivation.locations) or "(없음)"

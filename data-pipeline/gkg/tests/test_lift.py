@@ -185,3 +185,40 @@ def test_병합은_파일_회계도_합친다():
     merged = left.merge(right)
     assert merged.files == 5
     assert merged.empty_files == 1
+
+
+# --- 키워드 축 (WP-221) --------------------------------------------
+
+
+def _kw_rec(title="", orgs=()):
+    from gkg.parse import Record
+    return Record(doc_id="d", orgs=frozenset(orgs), themes=(), locations=(), title=title)
+
+
+def test_키워드만으로도_술어가_된다():
+    p = IssuePredicate(keywords=("summerslam",))
+    assert p.matches(_kw_rec(title="wwe summerslam 2026 results"))
+    assert not p.matches(_kw_rec(title="summer slam dunk contest"))
+
+
+def test_키워드는_기관명에서도_찾는다():
+    p = IssuePredicate(keywords=("imax",))
+    assert p.matches(_kw_rec(orgs=("imax corporation",)))
+
+
+def test_키워드는_단어_경계다():
+    # odyssey 가 odysseys 에 걸리면 무관한 복수형 기사가 이슈에 섞인다.
+    p = IssuePredicate(keywords=("odyssey",))
+    assert not p.matches(_kw_rec(title="three odysseys of the sea"))
+    assert p.matches(_kw_rec(title="nolan's odyssey opens"))
+
+
+def test_키워드는_다른_축과_AND():
+    p = IssuePredicate(themes=("HURRICANE",), keywords=("milton",))
+    from gkg.parse import Record
+    both = Record(doc_id="a", orgs=frozenset(), themes=("NATURAL_DISASTER_HURRICANE",),
+                  locations=(), title="hurricane milton landfall")
+    only_kw = Record(doc_id="b", orgs=frozenset(), themes=(), locations=(),
+                     title="milton keynes council")
+    assert p.matches(both)
+    assert not p.matches(only_kw)

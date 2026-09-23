@@ -45,18 +45,25 @@ class IssuePredicate:
 
     themes: tuple[str, ...] = ()
     locations: tuple[str, ...] = ()
+    #: 기사 제목·기관명에 **단어 경계**로 나오면 참 (WP-221). 축 안은 OR,
+    #: 다른 축과는 AND 다. 테마·지역으로 표현이 안 되는 이슈(영화·공연·기업 문서)용.
+    keywords: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
-        if not self.themes and not self.locations:
+        if not self.themes and not self.locations and not self.keywords:
             raise ValueError(
-                "IssuePredicate 는 themes 나 locations 중 최소 하나가 필요하다. "
-                "둘 다 비면 모든 기사가 이슈가 되어 lift 가 전부 1 이 된다."
+                "IssuePredicate 는 themes·locations·keywords 중 최소 하나가 필요하다. "
+                "모두 비면 모든 기사가 이슈가 되어 lift 가 전부 1 이 된다."
             )
         # frozen dataclass 라 object.__setattr__ 로 파생 캐시를 심는다.
         object.__setattr__(self, "_theme_terms", tuple(t.upper() for t in self.themes))
         object.__setattr__(
             self, "_location_res",
             tuple(re.compile(r"\b" + re.escape(l.lower()) + r"\b") for l in self.locations),
+        )
+        object.__setattr__(
+            self, "_keyword_res",
+            tuple(re.compile(r"\b" + re.escape(k.lower()) + r"\b") for k in self.keywords),
         )
 
     def matches(self, record: Record) -> bool:
@@ -67,6 +74,13 @@ class IssuePredicate:
         if self.locations:
             res = self._location_res
             if not any(pat.search(loc) for loc in record.locations for pat in res):
+                return False
+        if self.keywords:
+            res = self._keyword_res
+            # 🔴 단어 경계다 — `odyssey` 가 `odysseys` 에 걸리지 않게. 기관명은 이름마다
+            #    따로 본다(이어 붙이면 이름 사이에 가짜 경계가 생긴다).
+            if not any(pat.search(record.title) for pat in res) and not any(
+                    pat.search(org) for org in record.orgs for pat in res):
                 return False
         return True
 

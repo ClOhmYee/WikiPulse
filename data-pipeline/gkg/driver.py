@@ -62,6 +62,11 @@ from .predicate import Member, Vocabulary, derive, describe
 from .writer import persist_org_mentions
 
 
+#: 키워드 술어의 이슈 기사 하한 (WP-221). 이보다 적으면 lift 표본이 얇아 튄다.
+#: 2026-09-23 실측 — 시연 이슈의 키워드 기사는 하루 156~758건이었다.
+MIN_KEYWORD_ISSUE_DOCS = 20
+
+
 def env(name: str, default: str = "") -> str:
     return os.environ.get(name, default)
 
@@ -227,6 +232,9 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--location", action="append", default=[],
                    help="이슈 지역 단어경계 매칭(반복 가능). 예: florida. "
                         "생략하면 클러스터 멤버에서 뽑는다")
+    p.add_argument("--keyword", action="append", default=[],
+                   help="기사 제목·기관명 키워드(반복 가능, 단어 경계). 예: summerslam. "
+                        "테마·지역으로 표현 안 되는 이슈용(WP-221)")
     p.add_argument("--vocab-slots", type=int, default=0,
                    help="술어 생성용 어휘 스캔을 앞쪽 N 슬롯으로 제한(0=전부). "
                         "두 번째 스캔 비용을 줄이지만 min_support 가 표본에 비례해 빡빡해진다")
@@ -254,9 +262,10 @@ def build_parser() -> argparse.ArgumentParser:
 def run(args: argparse.Namespace) -> int:
     # 술어를 직접 주면 그대로 쓴다(override). 안 주면 클러스터 멤버에서 뽑는다
     # (WP-148) — 그러려면 멤버를 읽을 DB 가 필요하다.
-    manual = bool(args.theme or args.location)
+    manual = bool(args.theme or args.location or args.keyword)
     predicate = (
-        IssuePredicate(themes=tuple(args.theme), locations=tuple(args.location))
+        IssuePredicate(themes=tuple(args.theme), locations=tuple(args.location),
+                       keywords=tuple(args.keyword))
         if manual else None
     )
     if not manual and not args.database_url:
@@ -320,6 +329,19 @@ def run(args: argparse.Namespace) -> int:
 
     lifts = rank(agg, min_issue_count=args.min_issue_count, top=args.top)
     print(f"이슈 기사 {agg.n_issue:,} / 코퍼스 {agg.n_corpus:,} / 기관 {len(lifts):,}건")
+
+    # 🔴 키워드 술어(WP-221)는 만들 때 코퍼스 관측을 못 본다 — 여기서 결과로 본다.
+    #    너무 적으면 "관련 기관 없음"이 정상 결과처럼 저장되고, 너무 많으면 일반어라
+    #    lift 가 1 로 수렴한다. 둘 다 에러 없이 틀리므로 저장 전에 멈춘다.
+    if predicate.keywords:
+        too_few = agg.n_issue < MIN_KEYWORD_ISSUE_DOCS
+        too_many = agg.n_corpus and agg.n_issue > args.max_corpus_ratio * agg.n_corpus
+        if too_few or too_many:
+            why = (f"이슈 기사 {agg.n_issue} < {MIN_KEYWORD_ISSUE_DOCS}" if too_few else
+                   f"이슈 기사 {agg.n_issue} > 코퍼스의 {args.max_corpus_ratio:.0%}")
+            print(f"클러스터 {args.cluster_id}: 키워드 술어가 부적합 — {why}. 저장하지 않는다.",
+                  file=sys.stderr)
+            return 2
     if agg.empty_files:
         print(f"⚠️ 손상·빈 파일 {agg.empty_files}/{agg.files}건 — 코퍼스가 그만큼 "
               f"과소집계됐다(lift 신뢰 저하). 수집측 재적재 확인.", file=sys.stderr)

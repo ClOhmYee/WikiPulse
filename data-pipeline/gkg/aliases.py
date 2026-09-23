@@ -47,6 +47,14 @@ ALIASES: dict[str, str] = {
     "Cable News Network Inc": "WBD",
     "CNN": "WBD",
     "New York Post": "NWSA",
+    # 2026-09-23 시연일 키워드 술어 실측(WP-221) — 이슈 기사에서 lift 상위로 관찰.
+    #   The Odyssey(07-17): universal pictures 140.1 (이슈 32/코퍼스 56) · universal studios 129.8
+    #   IMAX(07-17):        universal pictures 127.4 (이슈 4/코퍼스 75)
+    #   SummerSlam(08-02):  espn 34.7 (이슈 27/코퍼스 351)
+    # 배급사·방송 브랜드라 법인명으로는 안 붙는다. 모회사가 마스터에 있다.
+    "Universal Pictures": "CMCSA",   # NBCUniversal → Comcast
+    "Universal Studios": "CMCSA",
+    "ESPN": "DIS",                   # Disney 소유
 }
 
 #: 단일 토큰 등 오탐 위험이 큰 정규화 키. ALIASES에 있어도 여기 있으면 등록하지 않는다.

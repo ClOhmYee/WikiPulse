@@ -163,7 +163,10 @@ def test_rejects_unobserved_term_so_predicate_never_selects_zero():
     ] * 5)
     result = derive([Member("Kryptonite Incident")], vocab)
 
-    assert result.predicate is None
+    # 관측 안 된 테마·지역은 술어에 들어가지 않는다. 그 자리는 키워드 대체가 맡고
+    # (WP-221), 0건 여부는 driver 가 집계 뒤에 막는다.
+    assert result.predicate.themes == () and result.predicate.locations == ()
+    assert result.predicate.keywords == ("kryptonite incident",)
     assert any("관측되지 않음" in why for _, _, why in result.rejected)
 
 
@@ -179,7 +182,8 @@ def test_rejects_too_generic_term_so_lift_does_not_flatten():
     vocab = Vocabulary.from_records(generic_corpus())
     result = derive([Member("Econ crisis")], vocab)  # 기본 가드 0.5, ECON 은 90%
 
-    assert result.predicate is None
+    assert "ECON" not in result.predicate.themes
+    assert result.predicate.keywords == ("econ crisis",)  # 대체 (WP-221)
     assert any("너무 일반적" in why for _, _, why in result.rejected)
 
 
@@ -216,7 +220,8 @@ def test_empty_corpus_returns_none_not_exception():
 def test_never_returns_empty_predicate():
     """`IssuePredicate` 는 양축이 비면 생성자에서 막는다 — 그 전에 None 으로 돌린다."""
     vocab = Vocabulary.from_records([rec("a", themes=("X",))] * 5)
-    result = derive([Member("Zzzz")], vocab)
+    # 키워드 대체(WP-221)도 못 만드는 제목 — 너무 짧다.
+    result = derive([Member("Zz")], vocab)
     assert result.predicate is None
     # 예외가 아니라 None 이어야 한다.
     with pytest.raises(ValueError):
@@ -316,4 +321,48 @@ def test_absolute_floor_still_applies_to_a_small_corpus():
     vocab = Vocabulary.from_records(corpus)
 
     result = derive([Member("Hurricane Milton")], vocab)  # 지지도 2 < min_support 3
-    assert result.predicate is None
+    # 얇은 테마는 술어에 안 들어간다. 남는 건 키워드 대체다(WP-221).
+    assert result.predicate.themes == ()
+    assert result.predicate.keywords == ("hurricane milton",)
+
+
+# --- 키워드 대체 (WP-221) ------------------------------------------
+
+from gkg.predicate import title_keyword  # noqa: E402
+
+
+def test_title_keyword_drops_qualifier_and_article():
+    assert title_keyword("The Odyssey (2026 film)") == "odyssey"
+    assert title_keyword("SummerSlam (2026)") == "summerslam"
+    assert title_keyword("IMAX") == "imax"
+    # 너무 짧거나 불용어뿐이면 버린다.
+    assert title_keyword("The (2026)") == ""
+    assert title_keyword("Air") == ""
+
+
+def test_falls_back_to_keywords_when_no_theme_or_location_is_observed():
+    """🔴 2026-09-23 시연 이슈 3개가 전부 여기서 None 으로 떨어져 GDELT 경로가 0 이었다."""
+    vocab = Vocabulary(n_docs=1000, themes={"NATURAL_DISASTER": 10}, locations={"paris": 5})
+    d = derive([Member("SummerSlam (2026)")], vocab)
+    assert d.predicate is not None
+    assert d.predicate.keywords == ("summerslam",)
+    assert d.predicate.themes == () and d.predicate.locations == ()
+    assert "키워드" in describe(d)
+
+
+def test_keyword_fallback_is_not_used_when_theme_and_location_work():
+    """재난형(§11 Milton) 동작은 그대로다 — 키워드가 끼면 술어가 바뀐다."""
+    vocab = Vocabulary(
+        n_docs=10000,
+        themes={"NATURAL_DISASTER_HURRICANE": 3000},
+        locations={"florida, united states": 2000},
+    )
+    d = derive([Member("Hurricane Milton"), Member("Florida")], vocab)
+    assert d.keywords == ()
+    assert d.predicate.keywords == ()
+
+
+def test_keyword_fallback_uses_seed_titles_first():
+    vocab = Vocabulary(n_docs=100)
+    d = derive([Member("Background Topic", is_seed=False), Member("IMAX", is_seed=True)], vocab)
+    assert d.predicate.keywords == ("imax",)

@@ -23,6 +23,8 @@ V1 이 없고 V2 만 있는 행이 있어(그리고 반대도) 합집합이 회�
 
 from __future__ import annotations
 
+import html
+import re
 from collections.abc import Iterable, Iterator
 from dataclasses import dataclass
 
@@ -35,6 +37,11 @@ COL_THEMES = 7
 COL_LOCATIONS = 9
 COL_ORGS_V1 = 13
 COL_ORGS_V2 = 14
+#: Extras XML. `<PAGE_TITLE>…</PAGE_TITLE>` 이 기사 제목이다 (WP-221).
+#: 2026-09-23 실물(20260717 슬롯 96개, 115,806행)에서 키워드 매칭에 쓴 컬럼이다.
+COL_EXTRAS = 26
+
+_PAGE_TITLE = re.compile(r"<PAGE_TITLE>(.*?)</PAGE_TITLE>", re.S)
 
 #: GKG 2.1 은 27 컬럼이다. 이보다 적으면 잘린 줄이니 버린다.
 MIN_COLUMNS = 27
@@ -53,6 +60,14 @@ class Record:
     orgs: frozenset[str]
     themes: tuple[str, ...]
     locations: tuple[str, ...]
+    #: 소문자 기사 제목. 없으면 빈 문자열. 키워드 술어(WP-221)가 쓴다.
+    title: str = ""
+
+
+def _title(extras: str) -> str:
+    """Extras XML 의 PAGE_TITLE 을 소문자로. HTML 엔티티(`&amp;`)는 푼다."""
+    m = _PAGE_TITLE.search(extras)
+    return html.unescape(m.group(1)).strip().lower() if m else ""
 
 
 def _clean(name: str) -> str:
@@ -105,6 +120,7 @@ def parse_row(row: list[str]) -> Record | None:
         orgs=_orgs(row[COL_ORGS_V1], row[COL_ORGS_V2]),
         themes=_themes(row[COL_THEMES]),
         locations=_locations(row[COL_LOCATIONS]),
+        title=_title(row[COL_EXTRAS]),
     )
 
 
