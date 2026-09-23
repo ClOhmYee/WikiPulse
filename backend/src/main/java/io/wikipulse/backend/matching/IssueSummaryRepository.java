@@ -202,20 +202,26 @@ public class IssueSummaryRepository {
      * @param topPerSnapshot 스냅샷당 {@code pulse_score} 상위 몇 개까지. 0 이하면 무제한
      * @param model {@code issue_report.model} 동등성으로 재사용 가능 여부를 본다
      * @param source {@code issue_cluster.source} 한정. {@code null}·빈 문자열이면 전체
+     * @param snapshotDays 쉼표 구분 UTC 날짜로 스냅샷 한정 (WP-215). 빈 값이면 전체.
+     *     🔴 후보 생성 쪽({@link CandidateRepository#pendingClusterIds})과 같은 값이어야 한다
      * @param maxAttempts 같은 model 로 이 횟수만큼 실패한 클러스터는 뺀다 (WP-182).
      *     🔴 이 제외가 없으면 저장 못 하는 클러스터를 매 폴 다시 집어 크레딧만 나간다 —
      *     {@code topPerSnapshot} 은 "몇 개를 고르나"라 이걸 못 막는다
      */
     public List<Long> clustersNeedingSummary(int limit, int topPerSnapshot, String model,
-                                             String source, int maxAttempts) {
+                                             String source, String snapshotDays,
+                                             int maxAttempts) {
         return jdbc.queryForList("""
                 WITH ranked AS (
                     SELECT id, status, issue_key, snapshot_ts,
                            row_number() OVER (PARTITION BY snapshot_ts
                                               ORDER BY pulse_score DESC, id ASC) AS rnk
                       FROM issue_cluster
-                     WHERE CAST(:source AS text) IS NULL
-                        OR source = CAST(:source AS text)
+                     WHERE (CAST(:source AS text) IS NULL
+                            OR source = CAST(:source AS text))
+                       AND (CAST(:days AS date[]) IS NULL
+                            OR CAST(snapshot_ts AT TIME ZONE 'UTC' AS date)
+                               = ANY (CAST(:days AS date[])))
                 )
                 SELECT id
                   FROM ranked
@@ -247,7 +253,8 @@ public class IssueSummaryRepository {
                 .addValue("top", topPerSnapshot)
                 .addValue("model", model)
                 .addValue("maxAttempts", maxAttempts)
-                .addValue("source", source == null || source.isBlank() ? null : source),
+                .addValue("source", source == null || source.isBlank() ? null : source)
+                .addValue("days", SnapshotDays.toSqlArray(snapshotDays)),
                 Long.class);
     }
 }

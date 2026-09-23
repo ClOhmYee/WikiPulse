@@ -48,7 +48,7 @@ class LlmBudgetWorkerTest {
     void 요약_예산이_소진되면_남은_클러스터를_시도하지_않는다() {
         when(summaryService.modelTag()).thenReturn("m");
         when(summaryRepository.clustersNeedingSummary(
-                anyInt(), anyInt(), anyString(), any(), anyInt()))
+                anyInt(), anyInt(), anyString(), any(), any(), anyInt()))
                 .thenReturn(List.of(1L, 2L, 3L));
         when(summaryService.processCluster(2L))
                 .thenThrow(new BudgetExceededException(LlmBudget.SUMMARY, 100));
@@ -65,7 +65,7 @@ class LlmBudgetWorkerTest {
     void 요약_전송실패는_예산소진과_달리_다음_클러스터로_넘어간다() {
         when(summaryService.modelTag()).thenReturn("m");
         when(summaryRepository.clustersNeedingSummary(
-                anyInt(), anyInt(), anyString(), any(), anyInt()))
+                anyInt(), anyInt(), anyString(), any(), any(), anyInt()))
                 .thenReturn(List.of(1L, 2L, 3L));
         when(summaryService.processCluster(2L))
                 .thenThrow(new UpstreamUnavailableException("GATEWAY 불가", new RuntimeException()));

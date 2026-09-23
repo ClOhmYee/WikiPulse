@@ -38,9 +38,10 @@ class IssueSummaryWorkerTest {
         props.getSummary().setBatchSize(7);
         props.getSummary().setTopPerSnapshot(3);
         props.getSummary().setSource("replay");
+        props.getSummary().setSnapshotDays("2026-07-17,2026-07-25");
         props.getSummary().setMaxAttempts(5);
         when(service.modelTag()).thenReturn("claude-x (summary_v1)");
-        when(repository.clustersNeedingSummary(anyInt(), anyInt(), anyString(), any(), anyInt()))
+        when(repository.clustersNeedingSummary(anyInt(), anyInt(), anyString(), any(), any(), anyInt()))
                 .thenReturn(List.of());
 
         worker().pollAndSummarize();
@@ -49,10 +50,11 @@ class IssueSummaryWorkerTest {
         ArgumentCaptor<Integer> top = ArgumentCaptor.forClass(Integer.class);
         ArgumentCaptor<String> model = ArgumentCaptor.forClass(String.class);
         ArgumentCaptor<String> source = ArgumentCaptor.forClass(String.class);
+        ArgumentCaptor<String> days = ArgumentCaptor.forClass(String.class);
         ArgumentCaptor<Integer> maxAttempts = ArgumentCaptor.forClass(Integer.class);
         verify(repository).clustersNeedingSummary(
                 limit.capture(), top.capture(), model.capture(), source.capture(),
-                maxAttempts.capture());
+                days.capture(), maxAttempts.capture());
         assertThat(limit.getValue()).isEqualTo(7);
         assertThat(top.getValue()).isEqualTo(3);
         // 🔴 서비스가 저장에 쓰는 것과 같은 model 이어야 한다. 따로 조립하면 조용히 갈려서
@@ -61,6 +63,8 @@ class IssueSummaryWorkerTest {
         // 설정의 source 가 실제로 전달되는지 — 안 넘기면 폴러가 LIVE 부터 집어
         // 과거 구간을 채우려던 의도가 조용히 무시된다(WP-168).
         assertThat(source.getValue()).isEqualTo("replay");
+        // 시연일 한정도 실제로 전달되는지 (WP-215)
+        assertThat(days.getValue()).isEqualTo("2026-07-17,2026-07-25");
         // 🔴 시도 상한을 안 넘기면 저장 못 하는 클러스터를 매 폴 다시 집어 크레딧만 나간다
         //    (WP-182). top-per-snapshot 은 이걸 못 막는다.
         assertThat(maxAttempts.getValue()).isEqualTo(5);
@@ -69,7 +73,7 @@ class IssueSummaryWorkerTest {
     @Test
     void 한_클러스터가_실패해도_나머지는_계속_처리된다() {
         when(service.modelTag()).thenReturn("m");
-        when(repository.clustersNeedingSummary(anyInt(), anyInt(), anyString(), any(), anyInt()))
+        when(repository.clustersNeedingSummary(anyInt(), anyInt(), anyString(), any(), any(), anyInt()))
                 .thenReturn(List.of(1L, 2L, 3L));
         when(service.processCluster(2L)).thenThrow(new RuntimeException("GATEWAY 오류"));
 
@@ -83,7 +87,7 @@ class IssueSummaryWorkerTest {
     @Test
     void 대상이_없으면_아무것도_하지_않는다() {
         when(service.modelTag()).thenReturn("m");
-        when(repository.clustersNeedingSummary(anyInt(), anyInt(), anyString(), any(), anyInt()))
+        when(repository.clustersNeedingSummary(anyInt(), anyInt(), anyString(), any(), any(), anyInt()))
                 .thenReturn(List.of());
 
         worker().pollAndSummarize();

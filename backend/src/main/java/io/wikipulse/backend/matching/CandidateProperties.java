@@ -322,6 +322,17 @@ public class CandidateProperties {
          */
         private String source = "";
 
+        /**
+         * 대상을 이 <b>UTC 날짜</b>들의 스냅샷으로 좁힌다 (WP-215). 쉼표 구분,
+         * 예: {@code 2026-07-17,2026-07-25}. 빈 값이면 전체 — 기본값이라 동작이 바뀌지 않는다.
+         *
+         * <p>{@link #source} 만으로는 replay 2개월(1,104 스냅샷) 중 <b>최신부터</b> 집어, 시연일에
+         * 닿기 전에 크레딧이 다른 날로 나간다. 시연일만 채울 때 쓴다.
+         *
+         * <p>🔴 <b>{@link Summary#snapshotDays} 와 같은 값이어야 한다</b> — {@link #source} 와 같은 이유.
+         */
+        private String snapshotDays = "";
+
         private boolean enabled = false;
         /**
          * 폴 간격 (ISO-8601 Duration). ⚠️ 실제 바인딩은 {@code @Scheduled(fixedDelayString=...)}
@@ -362,6 +373,14 @@ public class CandidateProperties {
 
         public void setSource(String source) {
             this.source = source;
+        }
+
+        public String getSnapshotDays() {
+            return snapshotDays;
+        }
+
+        public void setSnapshotDays(String snapshotDays) {
+            this.snapshotDays = snapshotDays;
         }
 
         public int getBatchSize() {
@@ -472,6 +491,12 @@ public class CandidateProperties {
         private String source = "";
 
         /**
+         * 대상을 이 UTC 날짜들의 스냅샷으로 좁힌다. 빈 값이면 전체(기본값).
+         * 🔴 <b>{@link Scheduler#snapshotDays} 와 같은 값이어야 한다</b> — 근거는 거기 적었다.
+         */
+        private String snapshotDays = "";
+
+        /**
          * 같은 model 로 요약 저장에 실패해도 되는 횟수 (WP-182).
          *
          * <p>🔴 <b>{@link #topPerSnapshot} 은 이걸 못 막는다.</b> 그 상한은 "한 스냅샷에서
@@ -533,6 +558,14 @@ public class CandidateProperties {
 
         public void setSource(String source) {
             this.source = source;
+        }
+
+        public String getSnapshotDays() {
+            return snapshotDays;
+        }
+
+        public void setSnapshotDays(String snapshotDays) {
+            this.snapshotDays = snapshotDays;
         }
     }
 }
