@@ -113,6 +113,18 @@ export function validateMap(body, requested = {}) {
           typeof node.isSeed === "boolean",
         "node",
       );
+      // titleKo 는 표시 전용 선택 필드다 — ko 문서가 없으면 null 이거나 아예 없다.
+      // 🔴 영문 title 을 대체하지 않으므로 위 title 검사를 완화하지 않는다.
+      requireContract(
+        node.titleKo === undefined || nullable(id, node.titleKo),
+        "titleKo",
+      );
+      // 기계 번역 폴백. titleKo 와 같은 선택·nullable 계약이다.
+      requireContract(
+        node.titleKoFallback === undefined ||
+          nullable(id, node.titleKoFallback),
+        "titleKoFallback",
+      );
       requireContract(
         nullable((v) => number(v) && v <= 1, node.sizeScore) &&
           nullable(number, node.spikeScore),

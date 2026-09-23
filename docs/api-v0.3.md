@@ -10,7 +10,7 @@
 
 ## 0. 이 문서가 정리한 것 — 계약이 두 벌이었다
 
-아래 표는 **2026-09-08 통합 결정 이전 상태**다. 2026-09-09 WP-76에서 BE의 Issue/Stock 경로는 `/api/v1`과 응답 봉투로 변경되었고, 이슈 상세에 `pageId/wiki/title/weight/isSeed/editCount/views`를 가진 `members`가 추가되었다. 펄스맵의 스냅샷 목록·일괄 그래프 조회도 WP-74에서 구현되었다. [펄스맵 구현·계약](frontend/PULSE_MAP.md)을 참고한다.
+아래 표는 **2026-09-08 통합 결정 이전 상태**다. 2026-09-09 WP-76에서 BE의 Issue/Stock 경로는 `/api/v1`과 응답 봉투로 변경되었고, 이슈 상세에 `pageId/wiki/title/weight/isSeed/editCount/views`를 가진 `members`가 추가되었다. 2026-09-22 WP-205에서 `members[]`와 펄스맵 `Node`에 표시 전용 `titleKo`가 **더해졌다**(선택·nullable, 영문 `title`은 그대로). 펄스맵의 스냅샷 목록·일괄 그래프 조회도 WP-74에서 구현되었다. [펄스맵 구현·계약](frontend/PULSE_MAP.md)을 참고한다.
 
 | | FE 제안 (`frontend/docs/openapi.yaml`, `0.2.0-proposal`) | BE 구현 (`backend/`, WP-36) |
 | --- | --- | --- |
@@ -130,7 +130,8 @@ DB `CHECK` 제약과 **같은 값을 그대로** 쓴다. 번역하지 않는다.
 }
 ```
 
-- `label`은 LLM이 붙이기 전 `null`이다. FE는 그때 대표 문서명(`GET /issues/{id}`의 `members[0].title`)을 쓴다.
+- `label`은 LLM이 붙이기 전 `null`이다. FE는 그때 대표 문서명을 쓴다 — `members[0].titleKo`가 있으면 그것, 없으면 `members[0].title`(영문)이다(WP-205).
+- `titleKo`는 ko.wikipedia 대응 제목이며 **표시 전용**이다. ko 문서가 없으면 `null`이거나 필드가 빠진다(실측상 절반 가까이가 그렇다). 🔴 `title`(영문)을 대체하지 않는다 — 위키백과 링크와 식별자는 계속 `title`을 쓴다.
 - `memberCount`·`stockCount`는 버블 크기·배지용 집계다. 목록에서 상세를 N번 부르지 않게 하려고 넣었다.
 
 ### `GET /api/v1/issues/snapshots`
@@ -154,6 +155,7 @@ DB `CHECK` 제약과 **같은 값을 그대로** 쓴다. 번역하지 않는다.
     "summary": "…", "summaryModel": "claude-…",
     "members": [
       { "pageId": 901, "wiki": "enwiki", "title": "Strait of Hormuz",
+        "titleKo": "호르무즈 해협",
         "weight": 1.0, "isSeed": true, "editCount": 87, "views": 12043,
         "completeness": "complete" }
     ],

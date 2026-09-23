@@ -1,6 +1,7 @@
 import { DataError } from "./contracts.js";
 import { issueCategories } from "./categories.js";
 import { listExploreIssues } from "./explore.js";
+import { clusterTitle, documentTitle } from "./titles.js";
 
 const unique = (items) => [
   ...new Map(items.map((item) => [item.id ?? item.symbol, item])).values(),
@@ -30,8 +31,14 @@ export function memberView(member, eventId) {
     id,
     pageId: id,
     wiki: member.wiki,
+    // 🔴 title 은 영문 원문 그대로다 — wikipediaUrl(article) 이 이걸 쓴다(lib/wiki.js).
     title: member.title,
-    name: member.title,
+    titleKo: member.titleKo ?? null,
+    titleKoFallback: member.titleKoFallback ?? null,
+    // 화면에 찍는 이름. ko 가 있으면 한국어, 없으면 영문. name 은 원래부터 표시용이라
+    // (= member.title 이었다) 여기만 바꾸면 기존 문서 표시 지점이 전부 따라온다.
+    displayTitle: documentTitle(member),
+    name: documentTitle(member),
     isSeed: member.isSeed,
     weight: member.weight,
     edits: optionalNumber(member.editCount),
@@ -58,7 +65,8 @@ export function issueView(raw, aliases = []) {
   return {
     id: String(raw.id),
     aliases: [...new Set(aliases.map(String))],
-    title: availableText(raw.label) || members[0]?.title || "제목 미제공",
+    // label(AI 이슈 제목) → root/lead 문서 ko 제목 → 그 영문 제목 → 안내문. 펄스맵과 같은 규칙이다.
+    title: clusterTitle({ label: raw.label, members }),
     summary: availableText(raw.summary),
     summaryModel: raw.summaryModel ?? null,
     report: reportView(raw, raw.snapshotTs),

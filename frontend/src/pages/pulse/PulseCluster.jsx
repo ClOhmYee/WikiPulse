@@ -308,7 +308,7 @@ export default memo(function PulseCluster({
             role="button"
             tabIndex="0"
             aria-pressed={active && nodeId === node.pageId}
-            aria-label={`${node.title}, ${node.isSeed ? "급증 감지 문서" : "연관 문서"}`}
+            aria-label={`${node.displayTitle}, ${node.isSeed ? "급증 감지 문서" : "연관 문서"}`}
             transform={`translate(${node.x} ${node.y})`}
             onClick={() => onNodeSelect(cluster.issueKey, node.pageId)}
             onKeyDown={activate(() =>
@@ -344,7 +344,7 @@ export default memo(function PulseCluster({
               />
             )}
             <title>
-              {node.title} ·{" "}
+              {node.displayTitle} ·{" "}
               {node.sizeScore === null
                 ? "급증 지표 미제공"
                 : `급증 점수 ${node.spikeScore ?? "미제공"}`}

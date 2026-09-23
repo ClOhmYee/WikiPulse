@@ -124,14 +124,14 @@ export default function PulsePreview({
                 aria-pressed={nodeId === v.pageId}
                 onClick={() => onNodeSelect(v.pageId)}
               >
-                <span>{v.title}</span>
+                <span>{v.displayTitle}</span>
                 <small>{v.isSeed ? "급증 감지" : "연관 문서"}</small>
               </button>
             ))}
           </div>
           {node && (
             <section className="pulse-node-detail" aria-label="선택한 문서">
-              <h3>{node.title}</h3>
+              <h3>{node.displayTitle}</h3>
               <dl className="pulse-metrics">
                 <div>
                   <dt>편집 수 / 기준선</dt>
@@ -189,7 +189,7 @@ export default function PulsePreview({
                               (edge.sourcePageId === nodeId
                                 ? edge.targetPageId
                                 : edge.sourcePageId),
-                          )?.title
+                          )?.displayTitle
                         }
                       </strong>
                       <span>

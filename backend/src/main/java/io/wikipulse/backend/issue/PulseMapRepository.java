@@ -83,6 +83,7 @@ public interface PulseMapRepository extends JpaRepository<IssueCluster, Long> {
     /** 한 스냅샷의 모든 노드(멤버). 고정 지표 그대로. DISCARDED 제외. */
     @Query(value = """
             SELECT c.id AS clusterId, p.id AS pageId, p.wiki AS wiki, p.title AS title,
+                   p.title_ko AS titleKo, p.title_ko_fallback AS titleKoFallback,
                    cm.is_seed AS isSeed, cm.edit_count AS editCount, cm.views AS views,
                    cm.edit_baseline AS editBaseline, cm.view_baseline AS viewBaseline,
                    cm.spike_score AS spikeScore, cm.size_score AS sizeScore,
@@ -141,6 +142,8 @@ public interface PulseMapRepository extends JpaRepository<IssueCluster, Long> {
         Long getPageId();
         String getWiki();
         String getTitle();
+        String getTitleKo();
+        String getTitleKoFallback();
         boolean getIsSeed();
         Integer getEditCount();
         Integer getViews();

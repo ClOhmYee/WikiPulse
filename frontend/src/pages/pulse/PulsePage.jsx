@@ -3,6 +3,7 @@ import { Search, X } from "lucide-react";
 import { dataClient } from "../../data/index.js";
 import { useAsyncResource } from "../../data/hooks/useAsyncResource.js";
 import { issueCategories } from "../../data/categories.js";
+import { searchableTitles } from "../../data/titles.js";
 import {
   calendarDays,
   kstDate,
@@ -80,7 +81,8 @@ export default function PulsePage({ savedEvents, onToggleEvent, onSource }) {
       (clusters || []).filter(
         (v) =>
           (category === "all" || v.category === category) &&
-          `${v.label} ${v.summary || ""} ${v.nodes.map((n) => n.title).join(" ")}`
+          // 한국어로 보이는 제목은 한국어로도 검색돼야 한다. 영문 원문도 계속 색인한다.
+          `${v.label} ${v.summary || ""} ${v.nodes.map(searchableTitles).join(" ")}`
             .toLowerCase()
             .includes(query.trim().toLowerCase()),
       ) || [],

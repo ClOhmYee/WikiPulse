@@ -225,6 +225,8 @@ const handlers = {
           pageId: pageId(node.pageId),
           wiki: node.wiki,
           title: node.title,
+          titleKo: node.titleKo ?? null,
+          titleKoFallback: node.titleKoFallback ?? null,
           weight: 1 / (index + 1),
           isSeed: node.isSeed,
           editCount: node.editCount,

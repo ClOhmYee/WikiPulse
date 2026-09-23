@@ -56,4 +56,22 @@ services:
       #    되돌리려면 claude-sonnet-4-5-20250929 을 넣는다. 요약은 측정 안 해서 Sonnet 유지.
       WIKIPULSE_MATCHING_GATEWAY_VERIFICATIONMODEL: ${WIKIPULSE_MATCHING_GATEWAY_VERIFICATIONMODEL:-gpt-5.4-nano}
       WIKIPULSE_MATCHING_GATEWAY_SUMMARYMODEL:      ${WIKIPULSE_MATCHING_GATEWAY_SUMMARYMODEL:-claude-sonnet-4-5-20250929}
+      # 문서 표시용 한국어 제목 채우기 워커 (WP-205, V20). 위 GATEWAY 워커들과 독립이다 —
+      # 크레딧을 쓰지 않고(위키미디어 무료) GATEWAY 키도 필요 없다. 🔴 기본 꺼짐이며
+      # **켜는 것이 곧 백필**이다: cluster_member 에 편입된 enwiki 문서 중 아직 조회 안 한
+      # 것을 훑어 wiki_page.title_ko 를 채운다. 끄면 화면이 영문 제목으로 떨어질 뿐이다.
+      WIKIPULSE_PAGETITLE_ENABLED: ${WIKIPULSE_PAGETITLE_ENABLED:-false}
+      # 🔴 폴당 위키 요청 수는 이 값 / 50 이다 — langlinks 는 한 요청에 제목 50개까지고
+      #    51개부터는 잘림이 아니라 toomanyvalues 에러다(2026-09-22 실측).
+      #    기본 500 이면 폴당 10 요청으로 resilience4j wikipedia RateLimiter(초당 10)와 같은 자릿수.
+      WIKIPULSE_PAGETITLE_BATCHSIZE: ${WIKIPULSE_PAGETITLE_BATCHSIZE:-500}
+      # 2단 폴백 — Azure Translator (WP-205). ko.wikipedia 대응이 없는 문서만 번역한다.
+      # 🔴 키는 저장소에 없다. 서버 .env 에만 둔다. 비어 있으면 번역을 건너뛰고 영문 표시다.
+      # 🔴 번역 결과는 표시·검색 전용이며 ko.wikipedia 정식 제목이 아니다 — 위키 링크에 쓰지 않는다.
+      AZURE_TRANSLATOR_KEY:       ${AZURE_TRANSLATOR_KEY:-}
+      AZURE_TRANSLATOR_ENDPOINT:  ${AZURE_TRANSLATOR_ENDPOINT:-https://api.cognitive.microsofttranslator.com}
+      AZURE_TRANSLATOR_REGION:    ${AZURE_TRANSLATOR_REGION:-}
+      # F0 는 월 200만 자다. 한 폴에서 번역할 문서 수 상한 — 위키 조회와 별개 축이다.
+      AZURE_TRANSLATOR_BATCHSIZE: ${AZURE_TRANSLATOR_BATCHSIZE:-200}
     # 열면 8080 이 외부에 직접 노출되고, 도커 게시 포트는 ufw 로 막히지도 않는다.
+

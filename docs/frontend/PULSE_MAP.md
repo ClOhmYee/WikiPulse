@@ -18,7 +18,7 @@ Spring의 `IssueController`/`PulseMapService`에 스냅샷 목록과 지도 조�
 - API 시각은 UTC `Z`, 화면 날짜·시각은 KST다. 날짜 목록은 제공된 범위의 빈 날짜를 비활성화한다. 완료된 빈 스냅샷과 아직 저장되지 않은 시점은 다르다.
 - 지도·이슈 선택 목록·정보 패널에는 해당 시점의 모든 클러스터를 표시한다(WP-112). NEW는 `0 <= snapshotTs - firstDetectedAt < newWindowHours`이며 기본 24시간이다. 최초 감지 미제공은 NEW로 추정하지 않는다. API의 HOT 판정은 유지하되 펄스맵에는 HOT 배지를 표시하지 않는다. 클러스터가 없는 스냅샷은 빈 상태로 안내한다.
 - 조회마다 AbortSignal을 전달하고 `useAsyncResource`의 요청 수명 검사로 이전 응답을 버린다. 대기 중 이전 지도·패널을 숨기고 새 응답을 함께 표시한다. 오류 시 재시도하며 mock으로 대체하지 않는다.
-- 클러스터 `id`는 상세·저장용, `issueKey`는 시점 간 추적용이다. 같은 issueKey의 선택은 유지한다. DB의 issueKey가 null이면 source/시각/id로 화면용 키를 만들며 시점 간 연속성을 추정하지 않는다. label이 없으면 문서 제목 또는 "제목 미제공"을 표시한다. 사라진 이슈·문서는 선택을 해제하고 안내한다. 검색·카테고리로 가린 선택은 지표를 다른 이슈로 바꾸지 않는다.
+- 클러스터 `id`는 상세·저장용, `issueKey`는 시점 간 추적용이다. 같은 issueKey의 선택은 유지한다. DB의 issueKey가 null이면 source/시각/id로 화면용 키를 만들며 시점 간 연속성을 추정하지 않는다. label이 없으면 문서 제목 또는 "제목 미제공"을 표시한다. 표시 제목은 `label` → root/lead 문서 `titleKo` → 그 `title`(영문) → "제목 미제공" 순이며, 문서 하나의 표시 제목은 `titleKo` → `title`이다(WP-205). 🔴 `title`(영문)은 대체하지 않는다 — 위키백과 링크·클러스터링 키·내부 식별자가 그 값을 쓴다. 검색은 한국어·영문 제목을 모두 색인한다. 사라진 이슈·문서는 선택을 해제하고 안내한다. 검색·카테고리로 가린 선택은 지표를 다른 이슈로 바꾸지 않는다.
 
 ## 그래프와 지표
 
@@ -96,7 +96,7 @@ Spring의 `IssueController`/`PulseMapService`에 스냅샷 목록과 지도 조�
 | 객체     | 필드                                                                                                                                                                    |
 | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Cluster  | `id`, nullable `issueKey`, nullable `label`, nullable `summary`, `category`, nullable `firstDetectedAt`, `hot`, `pulseScore`, `status`, `memberCount`, `nodes`, `edges` |
-| Node     | `pageId`, `wiki`, `title`, `isSeed`, nullable `editCount/views/editBaseline/viewBaseline/spikeScore/sizeScore`, `completeness`, `windowStart`, `windowEnd`              |
+| Node     | `pageId`, `wiki`, `title`, nullable·선택 `titleKo`, `isSeed`, nullable `editCount/views/editBaseline/viewBaseline/spikeScore/sizeScore`, `completeness`, `windowStart`, `windowEnd`              |
 | Edge     | `id`, `sourcePageId`, `targetPageId`, `kind` (`clickstream/wikidata`), `directed`, `weight`, `evidence`                                                                 |
 | Evidence | `label`, Clickstream의 `month` (`YYYY-MM`) 또는 Wikidata의 `observedAt` (UTC)                                                                                           |
 | Meta     | 실제 `snapshotTs`, `source` (`live/replay`), 선택적 `dataMode`, `scoreVersion`, `newWindowHours`, 전체 `clusterCount/nodeCount/edgeCount`, `truncated`                  |
