@@ -107,6 +107,7 @@
 | 뉴스 메타데이터 | **GDELT 2.0 GKG** 15분 파일 | 테마·지역으로 이슈 기사 필터링 → 기관명 lift 산출 및 LLM 컨텍스트, HDFS 원본 | 일 276~627 MB zip |
 | 종목 마스터 | NASDAQ Trader 심볼 디렉터리, SEC `company_tickers.json` | 미국 3대 거래소 보통주 약 5,100 | 2026-09-04 확정 |
 | 종목 설명 | yfinance `longBusinessSummary` | 종목 임베딩 입력 | 표본 200종목 보유율 100% |
+| 종목 산업 | yfinance `info.sector` (Yahoo 11분류, GICS 명칭 아님) | 종목 탐색·상세 산업 칸, `?sector=` 필터(정확 일치). 없으면 NULL = "산업 미제공" | 검증 티커 17/17 보유 (2026-09-23 로컬 실측, WP-204) |
 | 주가 | yfinance 일봉 | 종목 상세 그래프 | 5,100종목 × 5년 ≈ 640만 행, PostgreSQL로 충분 |
 | 임베딩 | OpenAI `text-embedding-3-small` (LLM 게이트웨이) | 이슈·종목 벡터 | — |
 | 검증 | Anthropic Claude (LLM 게이트웨이) | 근거 경로 판정, 요약 | GATEWAY가 Anthropic + web_search 서버 도구 중계 확인 (2026-09-07) |

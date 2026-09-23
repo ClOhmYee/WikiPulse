@@ -55,6 +55,13 @@ def tickers_missing_summary(conn: psycopg.Connection) -> list[str]:
         return [r[0] for r in cur.fetchall()]
 
 
+def tickers_missing_sector(conn: psycopg.Connection) -> list[str]:
+    """산업(sector)이 아직 없는 종목. sectors.py 가 여기부터 채운다 (WP-204)."""
+    with conn.cursor() as cur:
+        cur.execute("SELECT ticker FROM stock WHERE sector IS NULL ORDER BY ticker")
+        return [r[0] for r in cur.fetchall()]
+
+
 def tickers_missing_embedding(conn: psycopg.Connection) -> list[str]:
     with conn.cursor() as cur:
         cur.execute(
@@ -71,6 +78,17 @@ def save_summaries(conn: psycopg.Connection, summaries: Iterable[tuple[str, str]
         cur.executemany(
             "UPDATE stock SET business_summary = %s, updated_at = now() WHERE ticker = %s",
             [(summary, ticker) for ticker, summary in rows],
+        )
+        conn.commit()
+    return len(rows)
+
+
+def save_sectors(conn: psycopg.Connection, sectors: Iterable[tuple[str, str]]) -> int:
+    rows = list(sectors)
+    with conn.cursor() as cur:
+        cur.executemany(
+            "UPDATE stock SET sector = %s, updated_at = now() WHERE ticker = %s",
+            [(sector, ticker) for ticker, sector in rows],
         )
         conn.commit()
     return len(rows)
