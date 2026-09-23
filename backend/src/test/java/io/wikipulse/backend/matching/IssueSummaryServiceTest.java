@@ -70,6 +70,8 @@ class IssueSummaryServiceTest {
         ArgumentCaptor<String> model = ArgumentCaptor.forClass(String.class);
         verify(repository).upsertReport(eq(1L), eq("이란 이슈 요약."), model.capture());
         assertThat(model.getValue()).contains("summary_v1"); // 모델 + 프롬프트 버전 기록
+        // WP-213: 입력 규칙도 기록 — 앞 N문장으로 쓴 옛 요약을 재사용하지 않게
+        assertThat(model.getValue()).contains(IssueRepresentativeText.LLM_INPUT_VERSION);
         assertThat(r.summarized()).isTrue();
         assertThat(r.confirmed()).isFalse();
         verify(repository, never()).confirm(anyLong());

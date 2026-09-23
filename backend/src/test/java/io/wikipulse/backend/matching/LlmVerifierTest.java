@@ -41,10 +41,10 @@ class LlmVerifierTest {
         //    Sonnet 은 3개 통과시켰고 nano 는 0개였다). 버전이 프롬프트만 담으면 모델을 바꿔도
         //    옛 모델 판정이 조용히 재사용된다.
         props.getGateway().setVerificationModel("gpt-5.4-nano");
-        assertThat(verifier().verdictVersion()).isEqualTo("v1+gpt-5.4-nano");
+        assertThat(verifier().verdictVersion()).isEqualTo("v1+lead1+gpt-5.4-nano");
 
         props.getGateway().setVerificationModel("claude-sonnet-4-5-20250929");
-        assertThat(verifier().verdictVersion()).isEqualTo("v1+claude-sonnet-4-5-20250929");
+        assertThat(verifier().verdictVersion()).isEqualTo("v1+lead1+claude-sonnet-4-5-20250929");
     }
 
     private static final String VALID = """

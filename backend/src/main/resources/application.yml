@@ -40,6 +40,8 @@ wikipulse:
     embedding-top-k: 20
     gdelt-top-k: 10
     max-chars: 2000
+    # LLM 검증·요약 입력 상한 — 도입부 전체를 준다 (WP-213). 임베딩은 위 max-chars
+    llm-max-chars: 6000
     wikipedia:
       # 🔴 타임아웃 필수 — 소켓 hang 이 단일 스케줄러 스레드를 영구 정지시킨다.
       connect-timeout: 5s
