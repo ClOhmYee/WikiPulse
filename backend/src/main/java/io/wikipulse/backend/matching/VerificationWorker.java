@@ -39,7 +39,11 @@ public class VerificationWorker {
 
     @Scheduled(fixedDelayString = "${wikipulse.matching.verification.fixed-delay:PT5M}")
     public void pollAndVerify() {
-        List<Long> clusterIds = repository.clustersWithPending(props.getVerification().getBatchSize());
+        List<Long> clusterIds = repository.clustersWithPending(
+                props.getVerification().getBatchSize(),
+                // 🔴 후보 생성과 같은 범위를 쓴다(WP-215) — 검증은 후보를 따라가야 한다.
+                props.getScheduler().getSource(),
+                props.getScheduler().getSnapshotDays());
         if (clusterIds.isEmpty()) {
             return;
         }

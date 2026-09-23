@@ -58,10 +58,14 @@ public class LlmVerifier {
      * <p>{@code issue_report.model} 이 모델+프롬프트버전을 한 문자열로 담는 것과 같은 방식이다
      * ({@link IssueSummaryService} {@code modelTag}) — 새 컬럼·마이그레이션 없이 같은 의도를 이룬다.
      *
-     * @return 예: {@code "v1+gpt-5.4-nano"}
+     * <p>입력 규칙({@link IssueRepresentativeText#LLM_INPUT_VERSION})도 넣는다 (WP-213) —
+     * 도입부 앞 N문장으로 내린 판정은 합병·IMAX 같은 사건 문장을 못 본 판정이다.
+     *
+     * @return 예: {@code "v1+lead1+gpt-5.4-nano"}
      */
     String verdictVersion() {
-        return PROMPT_VERSION + "+" + props.getGateway().getVerificationModel();
+        return PROMPT_VERSION + "+" + IssueRepresentativeText.LLM_INPUT_VERSION + "+"
+                + props.getGateway().getVerificationModel();
     }
 
     /** 검증할 후보 한 건의 입력. issueText·gdeltContext 는 클러스터 단위로 한 번 만들어 공유된다. */

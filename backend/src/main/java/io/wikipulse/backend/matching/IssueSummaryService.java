@@ -167,6 +167,8 @@ public class IssueSummaryService {
     String modelTag() {
         // 🔴 요약 모델을 쓴다. -172 로 검증만 nano 로 내렸는데 여기서 검증 모델을 읽으면
         //    요약 내용은 Sonnet 인데 태그만 nano 로 찍혀 재사용 키가 통째로 틀어진다.
-        return props.getGateway().getSummaryModel() + " (" + IssueSummarizer.PROMPT_VERSION + ")";
+        //    입력 규칙도 넣는다(WP-213) — 도입부 앞 N문장으로 쓴 요약을 재사용하지 않게.
+        return props.getGateway().getSummaryModel() + " (" + IssueSummarizer.PROMPT_VERSION
+                + "+" + IssueRepresentativeText.LLM_INPUT_VERSION + ")";
     }
 }

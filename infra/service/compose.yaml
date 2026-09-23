@@ -36,11 +36,14 @@ services:
       # 🔴 SUMMARY_SOURCE 와 **같은 값**이어야 한다. 한쪽만 좁히면 같은 화면에서 요약은
       #    있는데 종목이 없거나 그 반대가 생긴다.
       WIKIPULSE_MATCHING_SCHEDULER_SOURCE: ${WIKIPULSE_MATCHING_SCHEDULER_SOURCE:-}
-      # 대상을 이 UTC 날짜들의 스냅샷으로 좁힌다 (WP-215). 예: 2026-07-17,2026-07-25
+      # 대상을 UTC 날짜 또는 스냅샷 시각으로 좁힌다 (WP-215). 예: 2026-07-17,2026-08-02T19:00
+      #    검증 워커도 SCHEDULER_SOURCE·SCHEDULER_SNAPSHOT_DAYS 를 따른다.
       #    SOURCE 만으로는 replay 2개월 중 최신부터 집어 시연일에 닿기 전에 크레딧이 나간다.
       # 🔴 SUMMARY_SNAPSHOT_DAYS 와 **같은 값**이어야 한다. 빈 값 = 전체(기존 동작).
       WIKIPULSE_MATCHING_SCHEDULER_SNAPSHOT_DAYS: ${WIKIPULSE_MATCHING_SCHEDULER_SNAPSHOT_DAYS:-}
       WIKIPULSE_MATCHING_VERIFICATION_BATCHSIZE: ${WIKIPULSE_MATCHING_VERIFICATION_BATCHSIZE:-20}
+      # 3등급 게이트 문턱. 0 = 끔(기본, WP-222). 2 로 두면 옛 동작(-22).
+      WIKIPULSE_MATCHING_VERIFICATION_TIER3THRESHOLD: ${WIKIPULSE_MATCHING_VERIFICATION_TIER3THRESHOLD:-0}
       WIKIPULSE_MATCHING_SUMMARY_BATCHSIZE:      ${WIKIPULSE_MATCHING_SUMMARY_BATCHSIZE:-20}
       # 🔴 요약의 실제 비용 상한 (WP-165). BATCHSIZE 는 한 폴 크기일 뿐이라
       #    폴을 반복하면 미처리 전체를 훑는다 — 운영 4,474건 전수가 약 277,000 크레딧이다.

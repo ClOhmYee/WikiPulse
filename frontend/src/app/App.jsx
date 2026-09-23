@@ -1,4 +1,12 @@
-import { Suspense, lazy, useEffect, useRef, useState } from "react";
+import {
+  Suspense,
+  lazy,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
+import { readTheme, saveTheme, applyTheme } from "./theme";
 import { readRoute } from "./router";
 import RouteContent from "./RouteContent";
 import WorkspaceLayout from "./layout/WorkspaceLayout";
@@ -9,6 +17,7 @@ import AuthModal from "../features/auth/AuthModal";
 import "../styles/workspace.css";
 const Onboarding = lazy(() => import("../pages/onboarding/OnboardingPage"));
 export default function App() {
+  const [theme, setTheme] = useState(readTheme);
   const [route, setRoute] = useState(readRoute);
   const requestedPath = route.split("?")[0];
   const authRoute = ["/login", "/signup"].includes(requestedPath);
@@ -32,6 +41,12 @@ export default function App() {
   const mainRef = useRef(null);
   const previousRoute = useRef(route);
   const onboarding = pathname === "/";
+  useLayoutEffect(() => applyTheme(theme, onboarding), [theme, onboarding]);
+  const toggleTheme = () => {
+    const next = theme === "dark" ? "light" : "dark";
+    saveTheme(next);
+    setTheme(next);
+  };
   useEffect(() => {
     const update = () => setRoute(readRoute());
     window.addEventListener("hashchange", update);
@@ -83,6 +98,8 @@ export default function App() {
   };
   return (
     <WorkspaceLayout
+      theme={theme}
+      onToggleTheme={toggleTheme}
       {...bookmarks}
       active={active}
       member={auth.member}

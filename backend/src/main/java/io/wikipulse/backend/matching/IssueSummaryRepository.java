@@ -219,9 +219,9 @@ public class IssueSummaryRepository {
                       FROM issue_cluster
                      WHERE (CAST(:source AS text) IS NULL
                             OR source = CAST(:source AS text))
-                       AND (CAST(:days AS date[]) IS NULL
-                            OR CAST(snapshot_ts AT TIME ZONE 'UTC' AS date)
-                               = ANY (CAST(:days AS date[])))
+                       AND ((CAST(:days AS date[]) IS NULL AND CAST(:times AS timestamptz[]) IS NULL)
+                            OR CAST(snapshot_ts AT TIME ZONE 'UTC' AS date) = ANY (CAST(:days AS date[]))
+                            OR snapshot_ts = ANY (CAST(:times AS timestamptz[])))
                 )
                 SELECT id
                   FROM ranked
@@ -254,7 +254,8 @@ public class IssueSummaryRepository {
                 .addValue("model", model)
                 .addValue("maxAttempts", maxAttempts)
                 .addValue("source", source == null || source.isBlank() ? null : source)
-                .addValue("days", SnapshotDays.toSqlArray(snapshotDays)),
+                .addValue("days", SnapshotDays.parse(snapshotDays).days())
+                .addValue("times", SnapshotDays.parse(snapshotDays).times()),
                 Long.class);
     }
 }

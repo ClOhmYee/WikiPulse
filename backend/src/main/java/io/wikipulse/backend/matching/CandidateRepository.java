@@ -74,9 +74,9 @@ public class CandidateRepository {
                       FROM issue_cluster
                      WHERE (CAST(:source AS text) IS NULL
                             OR source = CAST(:source AS text))
-                       AND (CAST(:days AS date[]) IS NULL
-                            OR CAST(snapshot_ts AT TIME ZONE 'UTC' AS date)
-                               = ANY (CAST(:days AS date[])))
+                       AND ((CAST(:days AS date[]) IS NULL AND CAST(:times AS timestamptz[]) IS NULL)
+                            OR CAST(snapshot_ts AT TIME ZONE 'UTC' AS date) = ANY (CAST(:days AS date[]))
+                            OR snapshot_ts = ANY (CAST(:times AS timestamptz[])))
                 )
                 SELECT r.id
                   FROM ranked r
@@ -97,7 +97,8 @@ public class CandidateRepository {
                 .addValue("limit", limit)
                 .addValue("top", topPerSnapshot)
                 .addValue("source", blankToNull(source))
-                .addValue("days", SnapshotDays.toSqlArray(snapshotDays)), Long.class);
+                .addValue("days", SnapshotDays.parse(snapshotDays).days())
+                .addValue("times", SnapshotDays.parse(snapshotDays).times()), Long.class);
     }
 
     /** 설정에서 온 빈 문자열을 "한정 없음"(NULL)으로 읽는다 — 미설정 환경변수가 빈 값이라서다. */

@@ -4,7 +4,7 @@ export function TrendChart({
   data = [],
   valueKey = "edits",
   label = "편집 추이",
-  color = "#86c9c4",
+  color = "var(--teal, #86c9c4)",
   baseline = false,
   height = 180,
   markers = [],
@@ -148,7 +148,7 @@ export function TrendChart({
                 x2={width - right}
                 y1={y(tick)}
                 y2={y(tick)}
-                stroke="#24313a"
+                stroke="var(--theme-border, #24313a)"
                 strokeDasharray="3 5"
               />
               <text x={left - 8} y={y(tick) + 4} textAnchor="end">
@@ -199,7 +199,7 @@ export function TrendChart({
                     .map(({ index, value }) => `${x(index)},${y(value)}`)
                     .join(" ")}
                   fill="none"
-                  stroke="#dbb057"
+                  stroke="var(--gold, #dbb057)"
                   strokeWidth="1.5"
                   strokeDasharray="5 5"
                 />
@@ -218,7 +218,7 @@ export function TrendChart({
                 cy={y(values[active])}
                 r="4"
                 fill={color}
-                stroke="#0b141b"
+                stroke="var(--theme-surface, #0b141b)"
                 strokeWidth="2"
               />
             )}
@@ -230,7 +230,7 @@ export function TrendChart({
                     x2={mx}
                     y1={top}
                     y2={y(min)}
-                    stroke="#dbb057"
+                    stroke="var(--gold, #dbb057)"
                     strokeWidth="1.5"
                     strokeDasharray="2 3"
                   />
@@ -238,8 +238,8 @@ export function TrendChart({
                     cx={mx}
                     cy={top}
                     r="4"
-                    fill="#dbb057"
-                    stroke="#0b141b"
+                    fill="var(--gold, #dbb057)"
+                    stroke="var(--theme-surface, #0b141b)"
                     strokeWidth="1.5"
                   />
                   <title>{`${marker.date} · ${marker.label}`}</title>
@@ -299,13 +299,13 @@ export function TrendChart({
         </span>
         {baseline && (
           <span>
-            <i style={{ background: "#dbb057" }} />
+            <i style={{ background: "var(--gold, #dbb057)" }} />
             평소 편집량
           </span>
         )}
         {visibleMarkers.length > 0 && (
           <span>
-            <i style={{ background: "#dbb057" }} />
+            <i style={{ background: "var(--gold, #dbb057)" }} />
             이슈 발생 시점
           </span>
         )}

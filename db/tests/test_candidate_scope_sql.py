@@ -39,8 +39,9 @@ WITH ranked AS (
       FROM issue_cluster
      WHERE (%(source)s::text IS NULL
             OR source = %(source)s::text)
-       AND (%(days)s::date[] IS NULL
-            OR (snapshot_ts AT TIME ZONE 'UTC')::date = ANY (%(days)s::date[]))
+       AND ((%(days)s::date[] IS NULL AND %(times)s::timestamptz[] IS NULL)
+            OR (snapshot_ts AT TIME ZONE 'UTC')::date = ANY (%(days)s::date[])
+            OR snapshot_ts = ANY (%(times)s::timestamptz[]))
 )
 SELECT r.id
   FROM ranked r
@@ -60,9 +61,9 @@ SELECT r.id
 """
 
 
-def _select(conn, top: int, limit: int = 100, source=None, days=None) -> list[int]:
+def _select(conn, top: int, limit: int = 100, source=None, days=None, times=None) -> list[int]:
     with conn.cursor() as cur:
-        cur.execute(_SELECT, {"top": top, "limit": limit, "source": source, "days": days})
+        cur.execute(_SELECT, {"top": top, "limit": limit, "source": source, "days": days, "times": times})
         return [row[0] for row in cur.fetchall()]
 
 
@@ -256,3 +257,20 @@ def test_날짜가_없으면_전체다(conn):
     b = _cluster(conn, score=1.0, snapshot="2026-09-01T00:00:00+00:00")
 
     assert set(_select(conn, top=0, days=None)) == {a, b}
+
+
+def test_시각을_주면_그_스냅샷만_고른다(conn):
+    """시연 스냅샷 하나만 채운다 (WP-215). 같은 날 다른 시각은 빠진다."""
+    demo = _cluster(conn, score=1.0, snapshot="2026-08-02T19:00:00+00:00")
+    other_hour = _cluster(conn, score=9.0, snapshot="2026-08-02T23:00:00+00:00")
+
+    assert _select(conn, top=0, times="{2026-08-02T19:00Z}") == [demo]
+    assert other_hour not in _select(conn, top=0, times="{2026-08-02T19:00Z}")
+
+
+def test_날짜와_시각은_합집합이다(conn):
+    a = _cluster(conn, score=1.0, snapshot="2026-07-17T05:00:00+00:00")
+    b = _cluster(conn, score=1.0, snapshot="2026-08-02T19:00:00+00:00")
+    _cluster(conn, score=1.0, snapshot="2026-08-02T20:00:00+00:00")
+
+    assert set(_select(conn, top=0, days="{2026-07-17}", times="{2026-08-02T19:00Z}")) == {a, b}

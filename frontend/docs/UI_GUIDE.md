@@ -1,5 +1,19 @@
 # WikiPulse workspace UI guide
 
+## Workspace themes (WP-220)
+
+- The first visit uses the **Clear Blue white** theme. The header's sun/moon button switches between dark and **Clear Blue white** on desktop and mobile. Its accessible name announces the current mode and the action; `aria-pressed` indicates white mode.
+- The workspace header stays at the top while scrolling on desktop and mobile, keeping search, theme switching and login accessible. Existing fixed side/bottom navigation remains in place.
+- The browser preference is `localStorage["wikipulse.theme"]`, accepting only `dark` or `light`. Missing/invalid values default to white. Storage failures do not prevent switching within the session. This is a device/browser preference, not an account setting or system-theme subscription.
+- `index.html` applies the saved preference before first paint; `app/theme.js` applies the effective theme to `html[data-theme]` and browser theme color. The introduction (`#/`) always stays dark without clearing the saved workspace preference.
+- `styles/theme.css` owns the white palette: page `#F3F7FF`, surface `#FFFFFF`, action `#245BEB`, text `#14213D`, secondary text `#526681`. Semantic `--theme-*` tokens override legacy colors; each legacy declaration retains its exact dark value as fallback. Page-specific `--wp-*`, `--dt-*`, and `--st-*` tokens resolve through that palette.
+- Coverage includes navigation/search, PulseMap and its fullscreen dialog, issue list/rankings/report/discussion, stocks/charts, saved/account screens, login/signup, and loading/empty/error controls. White maps preserve the original radial-gradient nodes, halos, cluster fields, title glow/shine, orbits and selection effects; only their colors change to category-specific pastels over a white canvas. Category identities and graph geometry remain unchanged.
+- Switching only repaints the mounted interface: it does not change routes, reset the map camera/selection/snapshot, clear filters or form inputs, or introduce a new API contract. Native modal dialogs retain their focus trap, so the header toggle is not interactive while a modal is open.
+- The white root canvas and full-height workspace both paint the page background so scrolling beyond the first viewport never exposes the dark onboarding canvas.
+- Keep new colors semantic with explicit dark fallbacks. Preserve the original onboarding colors and use the white palette only under `data-theme="light"`. Keep status colors and category identity distinct from blue action styling.
+
+Verification and local screenshot gallery: [Clear Blue validation](./CLEAR_BLUE_VALIDATION.md).
+
 This guide records the implemented post-onboarding frontend. Its interaction mode is **Operate** for searching, filtering, selecting and saving; issue report and stock detail surfaces use **Read** for following context and evidence. The existing four-scene onboarding remains a separate **Persuade** experience governed by [DESIGN.md](../DESIGN.md). This guide does not replace its composition or motion rules.
 
 Updated 2026-09-15. Mock and API modes use the same eight GET DTOs implemented by Spring. [API_SPEC.md](API_SPEC.md) and [openapi.yaml](openapi.yaml) describe this current contract; [API_DECISIONS.md](../../docs/frontend/API_DECISIONS.md) records unresolved server/AI agreements. HTTP interception validates frontend behavior, not a running backend. Discussion and saved items stay local and use separate mock/API storage namespaces.

@@ -1,9 +1,11 @@
-import { ArrowRight, ChevronRight, CircleHelp } from "lucide-react";
+import { ArrowRight, ChevronRight, CircleHelp, Sun, Moon } from "lucide-react";
 import { Suspense } from "react";
 import { NAV_ITEMS } from "../navigation";
 import { PageBoundary, PageSkeleton } from "./PageBoundary";
 import GlobalSearch from "../../features/global-search/GlobalSearch";
 export default function WorkspaceLayout({
+  theme,
+  onToggleTheme,
   active,
   savedEvents,
   savedStocks,
@@ -95,6 +97,16 @@ export default function WorkspaceLayout({
             </span>
           </div>
           <GlobalSearch searchRef={searchRef} />
+          <button
+            className="wp-button theme-toggle"
+            type="button"
+            aria-label={`${theme === "dark" ? "다크" : "화이트"} 모드 사용 중, ${theme === "dark" ? "화이트" : "다크"} 모드로 전환`}
+            aria-pressed={theme === "light"}
+            onClick={onToggleTheme}
+          >
+            {theme === "dark" ? <Sun size={18} /> : <Moon size={18} />}
+            <span>{theme === "dark" ? "화이트" : "다크"}</span>
+          </button>
           <button
             className="wp-button workspace-login"
             onClick={member ? onLogout : onLogin}
