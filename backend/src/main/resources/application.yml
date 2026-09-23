@@ -92,8 +92,10 @@ wikipulse:
       fixed-delay: PT5M
       batch-size: 20
       org-context-limit: 15
-      # 3등급(EMBEDDING_ONLY) 발동 문턱 — 1·2등급 확정 통과가 이 값 미만일 때만(WP-22).
-      tier3-threshold: 2
+      # 3등급(EMBEDDING_ONLY) 발동 문턱 — 1·2등급 확정 통과가 이 값 미만일 때만 검증한다.
+      # ~~2 (WP-22)~~ → 0 = 게이트 끔(WP-222). GDELT 약한 후보 2개가 통과하면
+      # 임베딩 정답(SummerSlam→TKO)이 영구 스킵됐다. ⚠️ 이슈당 검증 최대 30회 — 총량은 budget 이 묶는다.
+      tier3-threshold: ${WIKIPULSE_MATCHING_VERIFICATION_TIER3THRESHOLD:0}
     # 하루에 쓸 수 있는 LLM 호출 수 (WP-191).
     # 🔴 이미 있는 상한들과 축이 다르다 — top-per-snapshot 은 스냅샷당, summary.max-attempts 는
     #    클러스터당, 이건 하루에 몇 번이다. 셋 다 필요하다.

@@ -16,7 +16,8 @@ import org.springframework.stereotype.Service;
  * <h2>오케스트레이션 (명세 §6.3, WP-22 확정)</h2>
  * <ol>
  *   <li>tier 순서 BOTH → GDELT_ONLY → EMBEDDING_ONLY.</li>
- *   <li>EMBEDDING_ONLY(3등급)는 1·2등급 확정 통과가 N(=2) 미만일 때만 호출한다 — 돈 아낌.</li>
+ *   <li>EMBEDDING_ONLY(3등급)는 1·2등급 확정 통과가 N 미만일 때만 호출한다. ~~N=2~~ → <b>기본은 게이트 끔</b>
+ *       (N=0, WP-222) — GDELT 약한 후보 2개가 통과하면 임베딩 정답이 영구 스킵됐다.</li>
  * </ol>
  *
  * <h2>상태 전이 (-50)</h2>
@@ -108,9 +109,12 @@ public class VerificationService {
             }
 
             // 3등급 게이트: EMBEDDING_ONLY 는 1·2등급 확정 통과가 N 미만일 때만.
+            // 🔴 N <= 0 이면 게이트를 끈다(WP-222, 기본값). 조건에 `N > 0` 이 없으면
+            //    "통과 >= 0" 이 항상 참이라 3등급을 **전부** 건너뛰는 정반대가 된다.
+            int tier3Threshold = props.getVerification().getTier3Threshold();
             if (c.tier() == CandidateTier.EMBEDDING_ONLY
-                    && repository.verifiedPassCountTier12(clusterId)
-                        >= props.getVerification().getTier3Threshold()) {
+                    && tier3Threshold > 0
+                    && repository.verifiedPassCountTier12(clusterId) >= tier3Threshold) {
                 tier3Skipped++;
                 continue; // PENDING 유지 — 나중에 통과 수가 줄 일은 없으니 사실상 영구 스킵.
             }

@@ -105,6 +105,7 @@ class VerificationServiceTest {
 
     @Test
     void tier3는_1_2등급_확정통과가_N이상이면_건너뛴다() {
+        props.getVerification().setTier3Threshold(2); // 게이트를 켠 옛 동작(-22)
         when(repository.pendingCandidates(2L)).thenReturn(List.of(
                 new PendingCandidate("A", CandidateTier.BOTH),
                 new PendingCandidate("B", CandidateTier.GDELT_ONLY),
@@ -124,7 +125,41 @@ class VerificationServiceTest {
     }
 
     @Test
+    void 기본값은_게이트를_꺼서_1_2등급이_통과해도_tier3를_검증한다() {
+        // 🔴 WP-222: SummerSlam 에서 GDELT 약한 후보 2개(DIS·NFLX)가 통과하자 임베딩
+        //    정답 TKO 가 영구 스킵됐다. 기본은 게이트 끔(0).
+        assertThat(new CandidateProperties().getVerification().getTier3Threshold()).isZero();
+        when(repository.pendingCandidates(4L)).thenReturn(List.of(
+                new PendingCandidate("DIS", CandidateTier.GDELT_ONLY),
+                new PendingCandidate("NFLX", CandidateTier.GDELT_ONLY),
+                new PendingCandidate("TKO", CandidateTier.EMBEDDING_ONLY)));
+        when(verifier.verify(any())).thenReturn(Optional.of(pass()));
+        lenient().when(repository.verifiedPassCountTier12(4L)).thenReturn(2);
+
+        VerificationService.Result r = service().verifyCluster(4L);
+
+        assertThat(r.tier3Skipped()).isZero();
+        verify(repository).recordDone(eq(4L), eq("TKO"), any(), any(), any());
+    }
+
+    @Test
+    void 문턱_0은_전부_스킵이_아니라_게이트_끔이다() {
+        // 🔴 조건에 `N > 0` 이 없으면 "통과 >= 0" 이 항상 참이라 3등급을 전부 건너뛴다.
+        props.getVerification().setTier3Threshold(0);
+        when(repository.pendingCandidates(5L)).thenReturn(List.of(
+                new PendingCandidate("C", CandidateTier.EMBEDDING_ONLY)));
+        when(verifier.verify(any())).thenReturn(Optional.of(reject()));
+        lenient().when(repository.verifiedPassCountTier12(5L)).thenReturn(0);
+
+        VerificationService.Result r = service().verifyCluster(5L);
+
+        assertThat(r.tier3Skipped()).isZero();
+        verify(repository).recordDone(eq(5L), eq("C"), any(), any(), any());
+    }
+
+    @Test
     void tier3는_1_2등급_확정통과가_N미만이면_호출한다() {
+        props.getVerification().setTier3Threshold(2); // 게이트를 켠 옛 동작(-22)
         when(repository.pendingCandidates(3L)).thenReturn(List.of(
                 new PendingCandidate("A", CandidateTier.BOTH),
                 new PendingCandidate("C", CandidateTier.EMBEDDING_ONLY)));
@@ -303,6 +338,7 @@ class VerificationServiceTest {
 
     @Test
     void 재사용된_verified행은_tier3_게이트_카운트에_반영된다() {
+        props.getVerification().setTier3Threshold(2); // 게이트를 켠 옛 동작(-22)
         // BOTH 후보는 캐시 히트로 재사용되어 DB 에 DONE+verified 로 남는다. 그 결과 tier1·2 확정
         // 통과 수가 임계값에 도달하면(DB 조회 verifiedPassCountTier12), EMBEDDING_ONLY 는 건너뛴다.
         when(repository.pendingCandidates(14L)).thenReturn(List.of(
