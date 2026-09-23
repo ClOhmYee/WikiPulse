@@ -16,7 +16,7 @@ import {
   Pause,
 } from "lucide-react";
 import { isNewIssue } from "../../data/pulse/time.js";
-import { NEON_COLORS } from "./neonTheme.js";
+import { NEON_COLORS, LIGHT_COLORS } from "./neonTheme.js";
 import PulseCluster from "./PulseCluster.jsx";
 import useMapView from "./useMapView.js";
 import useNeonScan from "./useNeonScan.js";
@@ -204,26 +204,60 @@ export default function PulseMap({
       >
         <defs>
           {Object.entries(NEON_COLORS).map(([category, color]) => (
-            <g key={category}>
+            <g
+              key={category}
+              style={{ "--map-light-category-color": LIGHT_COLORS[category] }}
+            >
               <radialGradient
                 id={`${marker}-${category}-body`}
                 cx="42%"
                 cy="35%"
                 r="68%"
               >
-                <stop offset="0" stopColor="#091322" />
-                <stop offset="0.72" stopColor="#07101f" />
-                <stop offset="1" stopColor={color} stopOpacity="0.38" />
+                <stop offset="0" stopColor="var(--map-body-core, #091322)" />
+                <stop
+                  offset="0.72"
+                  stopColor="var(--map-body-middle, #07101f)"
+                />
+                <stop
+                  offset="1"
+                  stopColor={`var(--map-gradient-color, ${color})`}
+                  stopOpacity="0.38"
+                />
               </radialGradient>
               <radialGradient id={`${marker}-${category}-halo`}>
-                <stop offset="0.63" stopColor={color} stopOpacity="0" />
-                <stop offset="0.77" stopColor={color} stopOpacity="0.04" />
-                <stop offset="0.86" stopColor={color} stopOpacity="0.35" />
-                <stop offset="1" stopColor={color} stopOpacity="0" />
+                <stop
+                  offset="0.63"
+                  stopColor={`var(--map-gradient-color, ${color})`}
+                  stopOpacity="0"
+                />
+                <stop
+                  offset="0.77"
+                  stopColor={`var(--map-gradient-color, ${color})`}
+                  stopOpacity="0.04"
+                />
+                <stop
+                  offset="0.86"
+                  stopColor={`var(--map-gradient-color, ${color})`}
+                  stopOpacity="0.35"
+                />
+                <stop
+                  offset="1"
+                  stopColor={`var(--map-gradient-color, ${color})`}
+                  stopOpacity="0"
+                />
               </radialGradient>
               <radialGradient id={`${marker}-${category}-field`}>
-                <stop offset="0" stopColor={color} stopOpacity="0.065" />
-                <stop offset="1" stopColor={color} stopOpacity="0" />
+                <stop
+                  offset="0"
+                  stopColor={`var(--map-gradient-color, ${color})`}
+                  stopOpacity="0.065"
+                />
+                <stop
+                  offset="1"
+                  stopColor={`var(--map-gradient-color, ${color})`}
+                  stopOpacity="0"
+                />
               </radialGradient>
               <radialGradient
                 id={`${marker}-${category}-title-light`}
@@ -231,16 +265,40 @@ export default function PulseMap({
                 cy="100%"
                 r="95%"
               >
-                <stop offset="0" stopColor={color} stopOpacity="0.8" />
-                <stop offset="0.45" stopColor={color} stopOpacity="0.22" />
-                <stop offset="1" stopColor={color} stopOpacity="0" />
+                <stop
+                  offset="0"
+                  stopColor={`var(--map-gradient-color, ${color})`}
+                  stopOpacity="0.8"
+                />
+                <stop
+                  offset="0.45"
+                  stopColor={`var(--map-gradient-color, ${color})`}
+                  stopOpacity="0.22"
+                />
+                <stop
+                  offset="1"
+                  stopColor={`var(--map-gradient-color, ${color})`}
+                  stopOpacity="0"
+                />
               </radialGradient>
             </g>
           ))}
           <radialGradient id={`${marker}-scan-trail`}>
-            <stop offset="0.90" stopColor="#49dfff" stopOpacity="0" />
-            <stop offset="0.985" stopColor="#49dfff" stopOpacity="0.08" />
-            <stop offset="1" stopColor="#49dfff" stopOpacity="0.22" />
+            <stop
+              offset="0.90"
+              stopColor="var(--map-scan-color, #49dfff)"
+              stopOpacity="0"
+            />
+            <stop
+              offset="0.985"
+              stopColor="var(--map-scan-color, #49dfff)"
+              stopOpacity="0.08"
+            />
+            <stop
+              offset="1"
+              stopColor="var(--map-scan-color, #49dfff)"
+              stopOpacity="0.22"
+            />
           </radialGradient>
           <marker
             id={`${marker}-arrow`}

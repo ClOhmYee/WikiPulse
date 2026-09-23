@@ -1,0 +1,136 @@
+/* Clear Blue: opt-in workspace palette. Unset tokens retain exact dark values. */
+:root[data-theme="light"] {
+  color-scheme: light;
+  background: #f3f7ff;
+  color: #14213d;
+  --slate: #f3f7ff;
+  --slate-deep: #ffffff;
+  --paper: #14213d;
+  --muted: #526681;
+  --teal: #245beb;
+  --gold: #245beb;
+  --hairline: #d6e1f2;
+  --theme-page: #f3f7ff;
+  --theme-surface: #ffffff;
+  --theme-soft: #edf3ff;
+  --theme-hover: #e5eeff;
+  --theme-border: #d6e1f2;
+  --theme-control-border: #8094b3;
+  --theme-text: #14213d;
+  --theme-muted: #526681;
+  --theme-accent: #245beb;
+  --theme-on-accent: #ffffff;
+  --theme-success: #08785f;
+  --theme-danger: #b52d43;
+  --theme-warning: #8a5700;
+  --theme-shadow: rgb(20 33 61 / 12%);
+}
+
+:root[data-theme="light"] .workspace {
+  background: var(--theme-page);
+  --wp-surface: var(--theme-surface);
+  --wp-raised: var(--theme-soft);
+  --wp-border: var(--theme-border);
+  --wp-subtle: var(--theme-muted);
+}
+
+.theme-toggle {
+  min-width: 44px;
+  min-height: 44px;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+:root[data-theme="light"] .workspace-header,
+:root[data-theme="light"] .workspace-sidebar {
+  background: var(--theme-surface);
+}
+:root[data-theme="light"] .workspace-nav > a[aria-current="page"],
+:root[data-theme="light"] .wp-button[data-variant="primary"] {
+  color: var(--theme-on-accent);
+  background: var(--theme-accent);
+  border-color: var(--theme-accent);
+}
+:root[data-theme="light"] .wp-button[data-variant="primary"]:hover {
+  background: #1946bd;
+}
+:root[data-theme="light"] .workspace input::placeholder,
+:root[data-theme="light"] .workspace textarea::placeholder {
+  color: var(--theme-muted);
+}
+:root[data-theme="light"] ::selection {
+  background: #cddfff;
+  color: #14213d;
+}
+:root[data-theme="light"] .workspace ::-webkit-scrollbar-thumb {
+  background: #8094b3;
+}
+:root[data-theme="light"] .wp-category {
+  color: var(--theme-text);
+}
+:root[data-theme="light"] .wp-page-header h1 {
+  font-weight: 700;
+}
+:root[data-theme="light"] .global-search {
+  background: var(--theme-page);
+}
+:root[data-theme="light"] .workspace-toast {
+  background: var(--theme-accent);
+  color: var(--theme-on-accent);
+}
+:root[data-theme="light"]
+  .workspace
+  :is(.wp-select, .auth-modal input, .dc-discussion textarea) {
+  border-color: var(--theme-control-border);
+}
+:root[data-theme="light"] .auth-modal::backdrop,
+:root[data-theme="light"] .pulse-fullscreen::backdrop {
+  background: rgb(20 33 61 / 35%);
+}
+
+/* Keep the original layered map; only its palette changes on white. */
+:root[data-theme="light"] .document-map,
+:root[data-theme="light"] .document-map > svg {
+  background: #ffffff;
+  --map-scan-color: #b7d5f1;
+}
+:root[data-theme="light"] .document-cluster {
+  --theme-cluster-color: var(--cluster-light-color);
+}
+:root[data-theme="light"] .document-map defs > g {
+  --map-gradient-color: var(--map-light-category-color);
+  --map-body-core: #ffffff;
+  --map-body-middle: color-mix(
+    in srgb,
+    var(--map-light-category-color) 30%,
+    white
+  );
+}
+:root[data-theme="light"] .document-cluster__badge {
+  fill: #526681;
+}
+:root[data-theme="light"] .pulse-scan__wave,
+:root[data-theme="light"] .pulse-scan__echo {
+  stroke: var(--map-scan-color);
+}
+
+@media (max-width: 960px) {
+  .workspace-header {
+    gap: 12px;
+  }
+  .theme-toggle span {
+    display: none;
+  }
+}
+@media (max-width: 480px) {
+  .workspace-header {
+    gap: 8px;
+  }
+  .workspace-header .global-search {
+    min-width: 0;
+    flex: 1;
+  }
+  .workspace-header .workspace-login {
+    padding-inline: 10px;
+  }
+}

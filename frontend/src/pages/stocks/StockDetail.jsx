@@ -287,7 +287,7 @@ function StockPriceSection({ symbol, from, markers, isExample }) {
         data={points}
         valueKey="price"
         label="종가"
-        color="#86c9c4"
+        color="var(--teal, #86c9c4)"
         height={220}
         markers={markers}
         isExample={false}
