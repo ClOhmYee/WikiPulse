@@ -61,7 +61,7 @@ export default function RouteContent({
   );
   let content;
   if (isHistoryPreviewRoute(pathname, import.meta.env.DEV))
-    content = <IssueHistoryPreviewPage />;
+    content = <IssueHistoryPreviewPage pathname={pathname} />;
   else if (pathname === "/pulse")
     content = (
       <PulsePage

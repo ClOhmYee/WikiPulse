@@ -22,7 +22,10 @@ export default function App() {
   const requestedPath = route.split("?")[0];
   const authRoute = ["/login", "/signup"].includes(requestedPath);
   const pathname = authRoute ? "/pulse" : requestedPath;
-  const localHistoryPreview = isHistoryPreviewRoute(pathname, import.meta.env.DEV);
+  const localHistoryPreview = isHistoryPreviewRoute(
+    pathname,
+    import.meta.env.DEV,
+  );
   const auth = useAuth();
   const [authMode, setAuthMode] = useState(null);
   const [saveIntent, setSaveIntent] = useState(null);
@@ -90,7 +93,7 @@ export default function App() {
       </PageBoundary>
     );
   const first = pathname.split("/")[1];
-  const active = first;
+  const active = localHistoryPreview ? "issues" : first;
   const mode = authMode || (authRoute ? requestedPath.slice(1) : null);
   const closeAuth = () => {
     setAuthMode(null);

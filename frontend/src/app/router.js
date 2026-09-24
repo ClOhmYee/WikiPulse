@@ -18,7 +18,7 @@ export function normalizeRoute(raw = "/") {
 
 /** 운영 빌드에서는 미리보기 경로를 열지 않는다. */
 export function isHistoryPreviewRoute(pathname, isDev) {
-  return isDev && pathname === "/issue-history-preview";
+  return isDev && /^\/issue-history-preview(?:\/\d+)?$/.test(pathname);
 }
 
 export function readRoute() {
