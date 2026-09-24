@@ -142,6 +142,11 @@ export default function HistoryReportCalendar({ event }) {
               href={hrefFor(row.id)}
               aria-current={String(row.id) === event.id ? "page" : undefined}
             >
+              {row.source === "live"
+                ? "실시간 · "
+                : row.source === "replay"
+                  ? "과거 재구성 · "
+                  : ""}
               {timestampLabel(row.snapshotTs)}
             </a>
           ))}

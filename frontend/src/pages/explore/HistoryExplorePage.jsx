@@ -202,12 +202,7 @@ export default function HistoryExplorePage({ initialQuery = "" }) {
                         {group.defaultReportId === group.id &&
                           group.summary && <p>{group.summary}</p>}
                         <div className="event-row__meta">
-                          <span>
-                            {group.occurrenceCount}개 기록 ·{" "}
-                            {group.source === "replay"
-                              ? "과거 재구성"
-                              : "실시간"}
-                          </span>
+                          <span>{group.occurrenceCount}개 기록</span>
                           <time dateTime={group.snapshotTs}>
                             {timestampLabel(group.snapshotTs)}
                           </time>

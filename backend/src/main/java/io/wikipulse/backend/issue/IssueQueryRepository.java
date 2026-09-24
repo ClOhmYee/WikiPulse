@@ -46,25 +46,31 @@ public interface IssueQueryRepository extends JpaRepository<IssueCluster, Long> 
             @Param("from") Instant from,
             @Param("asOf") Instant asOf);
 
-    /** 완료·비폐기 행을 source+issue_key 별로 묶고 최신 행을 대표로 택한다. */
+    /** 같은 wiki:문서 제목은 live/replay 를 넘어 한 대표 카드로 묶는다. */
     @Query(value = """
-            WITH ranked AS (
+            WITH eligible AS (
                 SELECT c.id, c.source, c.issue_key, c.label, c.status,
                        c.pulse_score, c.snapshot_ts,
-                       min(c.snapshot_ts) OVER grouped AS first_seen,
-                       count(*) OVER grouped AS occurrence_count,
-                       row_number() OVER (
-                           PARTITION BY c.source, nullif(c.issue_key, ''),
-                                        CASE WHEN nullif(c.issue_key, '') IS NULL THEN c.id END
-                           ORDER BY c.snapshot_ts DESC, c.id DESC
-                       ) AS row_number
+                       CASE WHEN c.issue_key LIKE (c.source || ':_%:_%')
+                            THEN nullif(substr(c.issue_key, length(c.source) + 2), '')
+                       END AS document_key
                 FROM issue_cluster c
                 WHERE c.status <> 'DISCARDED'
                   AND (CAST(:source AS text) IS NULL OR c.source = CAST(:source AS text))
                   AND EXISTS (SELECT 1 FROM cluster_snapshot s
                               WHERE s.source = c.source AND s.snapshot_ts = c.snapshot_ts)
-                WINDOW grouped AS (PARTITION BY c.source, nullif(c.issue_key, ''),
-                                   CASE WHEN nullif(c.issue_key, '') IS NULL THEN c.id END)
+            ), ranked AS (
+                SELECT e.*,
+                       min(e.snapshot_ts) OVER grouped AS first_seen,
+                       count(*) OVER grouped AS occurrence_count,
+                       row_number() OVER (
+                           PARTITION BY e.document_key,
+                                        CASE WHEN e.document_key IS NULL THEN e.id END
+                           ORDER BY e.snapshot_ts DESC, e.id DESC
+                       ) AS row_number
+                FROM eligible e
+                WINDOW grouped AS (PARTITION BY e.document_key,
+                                   CASE WHEN e.document_key IS NULL THEN e.id END)
             ), named AS (
                 SELECT r.*, coalesce(nullif(r.label, ''),
                          (SELECT p.title FROM cluster_member cm
@@ -87,9 +93,11 @@ public interface IssueQueryRepository extends JpaRepository<IssueCluster, Long> 
                    g.occurrence_count AS occurrenceCount,
                    (SELECT c2.id FROM issue_cluster c2
                     JOIN issue_report r2 ON r2.cluster_id = c2.id
-                    WHERE c2.source = g.source AND c2.status <> 'DISCARDED'
-                      AND ((nullif(g.issue_key, '') IS NOT NULL AND c2.issue_key = g.issue_key)
-                           OR (nullif(g.issue_key, '') IS NULL AND c2.id = g.id))
+                    WHERE c2.status <> 'DISCARDED'
+                      AND (CAST(:source AS text) IS NULL OR c2.source = CAST(:source AS text))
+                      AND ((g.document_key IS NOT NULL
+                            AND c2.issue_key = c2.source || ':' || g.document_key)
+                           OR (g.document_key IS NULL AND c2.id = g.id))
                       AND EXISTS (SELECT 1 FROM cluster_snapshot s2
                                   WHERE s2.source = c2.source AND s2.snapshot_ts = c2.snapshot_ts)
                     ORDER BY CASE WHEN r2.report_sections IS NOT NULL
@@ -109,18 +117,24 @@ public interface IssueQueryRepository extends JpaRepository<IssueCluster, Long> 
             @Param("limit") int limit);
 
     @Query(value = """
-            WITH latest AS (
-                SELECT DISTINCT ON (c.source, nullif(c.issue_key, ''),
-                                    CASE WHEN nullif(c.issue_key, '') IS NULL THEN c.id END)
-                       c.id, c.label, c.status
+            WITH eligible AS (
+                SELECT c.id, c.label, c.status, c.snapshot_ts,
+                       CASE WHEN c.issue_key LIKE (c.source || ':_%:_%')
+                            THEN nullif(substr(c.issue_key, length(c.source) + 2), '')
+                       END AS document_key
                 FROM issue_cluster c
                 WHERE c.status <> 'DISCARDED'
                   AND (CAST(:source AS text) IS NULL OR c.source = CAST(:source AS text))
                   AND EXISTS (SELECT 1 FROM cluster_snapshot s
                               WHERE s.source = c.source AND s.snapshot_ts = c.snapshot_ts)
-                ORDER BY c.source, nullif(c.issue_key, ''),
-                         CASE WHEN nullif(c.issue_key, '') IS NULL THEN c.id END,
-                         c.snapshot_ts DESC, c.id DESC
+            ), latest AS (
+                SELECT DISTINCT ON (e.document_key,
+                                    CASE WHEN e.document_key IS NULL THEN e.id END)
+                       e.id, e.label, e.status
+                FROM eligible e
+                ORDER BY e.document_key,
+                         CASE WHEN e.document_key IS NULL THEN e.id END,
+                         e.snapshot_ts DESC, e.id DESC
             ), named AS (
                 SELECT l.*, coalesce(nullif(l.label, ''),
                          (SELECT p.title FROM cluster_member cm
@@ -141,12 +155,14 @@ public interface IssueQueryRepository extends JpaRepository<IssueCluster, Long> 
     /** 날짜는 프론트에서 KST로 묶는다. 여기서는 리포트 행의 원래 시각을 보존한다. */
     @Query(value = """
             SELECT c.id AS id, c.snapshot_ts AS snapshotTs, c.status AS status,
-                   c.pulse_score AS pulseScore
+                   c.pulse_score AS pulseScore, c.source AS source
             FROM issue_cluster c
             JOIN issue_report r ON r.cluster_id = c.id
-            WHERE c.source = :source AND c.status <> 'DISCARDED'
-              AND ((CAST(:issueKey AS text) IS NOT NULL AND c.issue_key = CAST(:issueKey AS text))
-                   OR (CAST(:issueKey AS text) IS NULL AND c.id = :anchorId))
+            WHERE c.status <> 'DISCARDED'
+              AND ((CAST(:issueKey AS text) IS NOT NULL
+                    AND c.issue_key = c.source || ':' || CAST(:issueKey AS text))
+                   OR (CAST(:issueKey AS text) IS NULL
+                       AND c.id = :anchorId AND c.source = :source))
               AND EXISTS (SELECT 1 FROM cluster_snapshot s
                           WHERE s.source = c.source AND s.snapshot_ts = c.snapshot_ts)
             ORDER BY c.snapshot_ts DESC, c.id DESC
@@ -160,9 +176,11 @@ public interface IssueQueryRepository extends JpaRepository<IssueCluster, Long> 
     @Query(value = """
             SELECT count(*) FROM issue_cluster c
             JOIN issue_report r ON r.cluster_id = c.id
-            WHERE c.source = :source AND c.status <> 'DISCARDED'
-              AND ((CAST(:issueKey AS text) IS NOT NULL AND c.issue_key = CAST(:issueKey AS text))
-                   OR (CAST(:issueKey AS text) IS NULL AND c.id = :anchorId))
+            WHERE c.status <> 'DISCARDED'
+              AND ((CAST(:issueKey AS text) IS NOT NULL
+                    AND c.issue_key = c.source || ':' || CAST(:issueKey AS text))
+                   OR (CAST(:issueKey AS text) IS NULL
+                       AND c.id = :anchorId AND c.source = :source))
               AND EXISTS (SELECT 1 FROM cluster_snapshot s
                           WHERE s.source = c.source AND s.snapshot_ts = c.snapshot_ts)
             """, nativeQuery = true)
