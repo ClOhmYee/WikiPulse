@@ -399,6 +399,7 @@ export default function EventPage({
               report={event.report}
               summary={event.summary}
               articles={articles}
+              stocks={relatedStocks}
               isExample={isExample}
             />
           )}

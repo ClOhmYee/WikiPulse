@@ -1,7 +1,81 @@
-import { AlertCircle, Clock3, FileText, Sparkles } from "lucide-react";
+import {
+  Activity,
+  AlertCircle,
+  Clock3,
+  FileText,
+  Landmark,
+  Network,
+  Sparkles,
+} from "lucide-react";
 import { wikipediaUrl } from "../../lib/wiki";
 import { IssueSummary } from "./IssueSummary";
 import { timestampLabel } from "../../pages/event/presentation.js";
+import { reportView } from "./reportView.js";
+
+const SECTION_ICON = {
+  overview: FileText,
+  documents: Network,
+  signal: Activity,
+  stocks: Landmark,
+};
+
+// 카드 안 근거 칩은 이 개수까지만 — 나머지는 아래 "참고 문서" 전체 목록에 있다.
+const CARD_EVIDENCE_LIMIT = 4;
+
+function EvidenceChip({ article }) {
+  return (
+    <a
+      className="dt-evidence-chip"
+      href={wikipediaUrl(article)}
+      target="_blank"
+      rel="noreferrer"
+    >
+      <FileText size={13} aria-hidden="true" />
+      {article.name || article.title}
+      <span className="dt-sr-only"> 원문 열기 (새 탭)</span>
+    </a>
+  );
+}
+
+function ReportCard({ card, stocks }) {
+  const Icon = SECTION_ICON[card.id] || Sparkles;
+  const shown = card.evidence.slice(0, CARD_EVIDENCE_LIMIT);
+  const hidden = card.evidence.length - shown.length;
+  const tickers = card.id === "stocks" ? stocks : [];
+  return (
+    <section className="dt-report-card" aria-label={card.title}>
+      <h3>
+        <Icon size={17} aria-hidden="true" />
+        {card.title}
+      </h3>
+      <div className="dt-report-card-body">
+        {card.paragraphs.map((paragraph, index) => (
+          <p key={index}>{paragraph}</p>
+        ))}
+      </div>
+      {(tickers.length > 0 || shown.length > 0) && (
+        <div className="dt-report-card-chips">
+          {tickers.map((stock) => (
+            <a
+              key={stock.symbol}
+              className="dt-report-ticker"
+              href={`#/stocks/${encodeURIComponent(stock.symbol)}`}
+              title={stock.name}
+            >
+              {stock.symbol}
+            </a>
+          ))}
+          {shown.map((article) => (
+            <EvidenceChip key={article.id} article={article} />
+          ))}
+          {hidden > 0 && (
+            <span className="dt-report-card-more">+{hidden}</span>
+          )}
+        </div>
+      )}
+    </section>
+  );
+}
 
 const STATUS_COPY = {
   generating: {
@@ -25,14 +99,11 @@ export function IssueReport({
   report,
   summary,
   articles = [],
+  stocks = [],
   isExample = false,
 }) {
-  const paragraphs = (report?.sections || []).flatMap((section) =>
-    (section.body || "")
-      .split(/\n\s*\n/)
-      .map((text) => text.trim())
-      .filter(Boolean),
-  );
+  const view = reportView(report, articles);
+  const { paragraphs, evidence } = view;
   const status =
     report?.status === "ready" && !paragraphs.length
       ? "insufficient_evidence"
@@ -51,18 +122,6 @@ export function IssueReport({
       }
     : STATUS_COPY[status] || STATUS_COPY.insufficient_evidence;
   const StateIcon = state.icon;
-  const articleById = new Map(
-    articles.map((article) => [String(article.id), article]),
-  );
-  const evidence = [
-    ...new Set(
-      (report?.sections || []).flatMap((section) =>
-        (section.evidenceIds || []).map(String),
-      ),
-    ),
-  ]
-    .map((id) => articleById.get(id))
-    .filter(Boolean);
   return (
     <section className="dt-report" aria-labelledby="issue-report-title">
       <div className="dt-report-heading">
@@ -81,27 +140,25 @@ export function IssueReport({
       <IssueSummary summary={summary} />
       {isReady ? (
         <article className="dt-report-article" aria-label="리포트 본문">
-          <div className="dt-report-prose">
-            {paragraphs.map((paragraph, index) => (
-              <p key={index}>{paragraph}</p>
-            ))}
-          </div>
+          {view.layout === "cards" ? (
+            <div className="dt-report-cards">
+              {view.cards.map((card) => (
+                <ReportCard key={card.id} card={card} stocks={stocks} />
+              ))}
+            </div>
+          ) : (
+            <div className="dt-report-prose">
+              {paragraphs.map((paragraph, index) => (
+                <p key={index}>{paragraph}</p>
+              ))}
+            </div>
+          )}
           {evidence.length > 0 && (
             <footer className="dt-report-sources">
               <h3>참고 문서</h3>
               <div className="dt-report-evidence">
                 {evidence.map((article) => (
-                  <a
-                    key={article.id}
-                    className="dt-evidence-chip"
-                    href={wikipediaUrl(article)}
-                    target="_blank"
-                    rel="noreferrer"
-                  >
-                    <FileText size={13} aria-hidden="true" />
-                    {article.name || article.title}
-                    <span className="dt-sr-only"> 원문 열기 (새 탭)</span>
-                  </a>
+                  <EvidenceChip key={article.id} article={article} />
                 ))}
               </div>
             </footer>
