@@ -26,6 +26,9 @@ import { TrendChart } from "../../components/charts/TrendChart";
 import { Timeline, EventNews, Evidence } from "./EventSections";
 import EventDiscussion from "./EventDiscussion";
 import { IssueReport } from "../../components/event/IssueReport";
+import HistoryReportCalendar from "./HistoryReportCalendar.jsx";
+import { issueHistoryEnabled } from "../../data/historyProduction.js";
+import { dataClient } from "../../data/index.js";
 import { wikipediaUrl } from "../../lib/wiki";
 import "../../styles/details.css";
 const exampleTabs = [
@@ -93,6 +96,13 @@ export default function EventPage({
     range === "7" ? (event.chart || []).slice(-7) : event.chart || [];
   const timeline = event.timeline || [];
   const tabs = isExample ? exampleTabs : apiTabs;
+  const historyMode = issueHistoryEnabled(
+    import.meta.env,
+    dataClient.dataSource,
+  );
+  const backQuery = new URLSearchParams(
+    window.location.hash.split("?")[1] || "",
+  ).get("q");
 
   function selectTab(nextTab) {
     setTab(nextTab);
@@ -116,7 +126,10 @@ export default function EventPage({
 
   return (
     <div className="wp-page dt-page">
-      <a href="#/issues" className="dt-back">
+      <a
+        href={`#/issues${backQuery ? `?q=${encodeURIComponent(backQuery)}` : ""}`}
+        className="dt-back"
+      >
         <ArrowLeft size={16} />
         이벤트 탐색
       </a>
@@ -194,6 +207,8 @@ export default function EventPage({
           </strong>
         </div>
       </div>
+
+      {historyMode && <HistoryReportCalendar key={event.id} event={event} />}
 
       <nav className="dt-tabs" role="tablist" aria-label="이벤트 상세 보기">
         {tabs.map((item, index) => (

@@ -4,6 +4,8 @@ import io.wikipulse.backend.common.ApiResponse;
 import io.wikipulse.backend.issue.dto.IssueCardResponse;
 import io.wikipulse.backend.issue.dto.IssueRankingsResponse;
 import io.wikipulse.backend.issue.dto.IssueDetailResponse;
+import io.wikipulse.backend.issue.dto.IssueHistoryGroupResponse;
+import io.wikipulse.backend.issue.dto.IssueHistoryReportResponse;
 import io.wikipulse.backend.issue.dto.pulse.PulseMap;
 import io.wikipulse.backend.issue.dto.pulse.SnapshotView;
 import io.wikipulse.backend.stock.dto.RelatedStockResponse;
@@ -73,6 +75,26 @@ public class IssueController {
     @GetMapping("/{id}")
     public ApiResponse<IssueDetailResponse> detail(@PathVariable Long id) {
         return service.detail(id);
+    }
+
+    /** 전체 완료 시점의 대표 문서 묶음. 기존 최신 시점 피드와 독립적이다. */
+    @GetMapping("/history/groups")
+    public ApiResponse<List<IssueHistoryGroupResponse>> historyGroups(
+            @RequestParam(required = false) String q,
+            @RequestParam(required = false) String status,
+            @RequestParam(required = false) String source,
+            @RequestParam(required = false) Integer offset,
+            @RequestParam(required = false) Integer limit) {
+        return service.historyGroups(q, status, source, offset, limit);
+    }
+
+    /** 같은 대표 문서에서 실제 DB 리포트가 저장된 시점만 반환한다. */
+    @GetMapping("/{id}/history/reports")
+    public ApiResponse<List<IssueHistoryReportResponse>> historyReports(
+            @PathVariable Long id,
+            @RequestParam(required = false) Integer offset,
+            @RequestParam(required = false) Integer limit) {
+        return service.historyReports(id, offset, limit);
     }
 
     /** GET /api/v1/issues/rankings — rolling 30-day and one-year peaks. */

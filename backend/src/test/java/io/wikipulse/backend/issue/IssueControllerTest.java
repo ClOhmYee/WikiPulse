@@ -14,6 +14,8 @@ import io.wikipulse.backend.issue.dto.IssueCardResponse;
 import io.wikipulse.backend.issue.dto.IssueDetailResponse;
 import io.wikipulse.backend.issue.dto.IssueMemberResponse;
 import io.wikipulse.backend.issue.dto.IssueReportResponse;
+import io.wikipulse.backend.issue.dto.IssueHistoryGroupResponse;
+import io.wikipulse.backend.issue.dto.IssueHistoryReportResponse;
 import io.wikipulse.backend.stock.dto.RelatedStockResponse;
 import java.util.List;
 import org.junit.jupiter.api.Test;
@@ -50,6 +52,38 @@ class IssueControllerTest {
                 .andExpect(jsonPath("$.data.monthly[0].id").value(42))
                 .andExpect(jsonPath("$.data.yearly[0].pulseScore").value(9.5))
                 .andExpect(jsonPath("$.data.asOf").value("2026-09-22T00:00:00Z"));
+    }
+
+    @Test
+    void 대표_문서_목록은_묶음과_기본_리포트_ID를_내려준다() throws Exception {
+        var group = new IssueHistoryGroupResponse(42, "The Odyssey (2026 film)",
+                "replay", "CONFIRMED", 12.0, "2026-07-18T01:00:00Z",
+                "2026-07-17T01:00:00Z", 10, 41L, "저장된 요약", 3, 1);
+        when(service.historyGroups(any(), any(), any(), any(), any())).thenReturn(
+                ApiResponse.of(List.of(group), PageMeta.of(
+                        PageMeta.Pagination.of(0, 20, 1, 1))));
+
+        mvc.perform(get("/api/v1/issues/history/groups?q=Odyssey&offset=0&limit=20"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data[0].id").value(42))
+                .andExpect(jsonPath("$.data[0].defaultReportId").value(41))
+                .andExpect(jsonPath("$.data[0].occurrenceCount").value(10))
+                .andExpect(jsonPath("$.meta.pagination.total").value(1));
+    }
+
+    @Test
+    void 리포트_이력은_시점별_ID와_시각을_내려준다() throws Exception {
+        var report = new IssueHistoryReportResponse(41, "2026-07-17T01:00:00Z",
+                "CONFIRMED", 11.0);
+        when(service.historyReports(eq(42L), any(), any())).thenReturn(
+                ApiResponse.of(List.of(report), PageMeta.of(
+                        PageMeta.Pagination.of(0, 100, 1, 1))));
+
+        mvc.perform(get("/api/v1/issues/42/history/reports?limit=100"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data[0].id").value(41))
+                .andExpect(jsonPath("$.data[0].snapshotTs").value("2026-07-17T01:00:00Z"))
+                .andExpect(jsonPath("$.meta.pagination.hasMore").value(false));
     }
 
     @Test

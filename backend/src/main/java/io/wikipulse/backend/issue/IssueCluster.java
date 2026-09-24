@@ -38,6 +38,9 @@ public class IssueCluster {
     @Column(name = "source", nullable = false)
     private String source;
 
+    @Column(name = "issue_key")
+    private String issueKey;
+
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
@@ -66,6 +69,10 @@ public class IssueCluster {
 
     public String getSource() {
         return source;
+    }
+
+    public String getIssueKey() {
+        return issueKey;
     }
 
     public Instant getCreatedAt() {

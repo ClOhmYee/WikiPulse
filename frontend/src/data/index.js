@@ -43,6 +43,8 @@ export function createDataClient(env = {}) {
     ...Object.fromEntries(
       [
         "listIssues",
+        "listIssueHistoryGroups",
+        "listIssueHistoryReports",
         "getIssueRankings",
         "getIssue",
         "listIssueStocks",

@@ -9,6 +9,8 @@
  * @property {string} dataSource
  * @property {(params?: object, options?: RequestOptions) => Promise<DataResponse<object>>} getIssueRankings
  * @property {(params?: ListParams, options?: RequestOptions) => Promise<DataResponse<object[]>>} listIssues
+ * @property {(params?: ListParams, options?: RequestOptions) => Promise<DataResponse<object[]>>} listIssueHistoryGroups
+ * @property {(id: string, params?: ListParams, options?: RequestOptions) => Promise<DataResponse<object[]>>} listIssueHistoryReports
  * @property {(id: string, options?: RequestOptions) => Promise<DataResponse<object>>} getIssue
  * @property {(id: string, params?: {limit?: number}, options?: RequestOptions) => Promise<DataResponse<object[]>>} listIssueStocks
  * @property {(params?: ListParams, options?: RequestOptions) => Promise<DataResponse<object[]>>} listStocks

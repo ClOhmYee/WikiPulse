@@ -7,7 +7,7 @@ import {
   useState,
 } from "react";
 import { readTheme, saveTheme, applyTheme } from "./theme";
-import { readRoute } from "./router";
+import { isHistoryPreviewRoute, readRoute } from "./router";
 import RouteContent from "./RouteContent";
 import WorkspaceLayout from "./layout/WorkspaceLayout";
 import { PageBoundary, PageSkeleton } from "./layout/PageBoundary";
@@ -22,6 +22,10 @@ export default function App() {
   const requestedPath = route.split("?")[0];
   const authRoute = ["/login", "/signup"].includes(requestedPath);
   const pathname = authRoute ? "/pulse" : requestedPath;
+  const localHistoryPreview = isHistoryPreviewRoute(
+    pathname,
+    import.meta.env.DEV,
+  );
   const auth = useAuth();
   const [authMode, setAuthMode] = useState(null);
   const [saveIntent, setSaveIntent] = useState(null);
@@ -89,7 +93,7 @@ export default function App() {
       </PageBoundary>
     );
   const first = pathname.split("/")[1];
-  const active = first;
+  const active = localHistoryPreview ? "issues" : first;
   const mode = authMode || (authRoute ? requestedPath.slice(1) : null);
   const closeAuth = () => {
     setAuthMode(null);
@@ -109,7 +113,7 @@ export default function App() {
       mainRef={mainRef}
       route={route}
     >
-      {auth.error && (
+      {auth.error && !localHistoryPreview && (
         <div className="wp-page" role="alert">
           {auth.error}{" "}
           <button className="wp-button" onClick={auth.restore}>

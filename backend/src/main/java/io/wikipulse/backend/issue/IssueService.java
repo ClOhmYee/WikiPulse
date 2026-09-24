@@ -7,12 +7,15 @@ import io.wikipulse.backend.common.QueryParams;
 import io.wikipulse.backend.issue.dto.IssueCardResponse;
 import io.wikipulse.backend.issue.dto.IssueRankingsResponse;
 import io.wikipulse.backend.issue.dto.IssueDetailResponse;
+import io.wikipulse.backend.issue.dto.IssueHistoryGroupResponse;
+import io.wikipulse.backend.issue.dto.IssueHistoryReportResponse;
 import io.wikipulse.backend.issue.dto.IssueMemberResponse;
 import io.wikipulse.backend.issue.dto.IssueReportResponse;
 import io.wikipulse.backend.stock.dto.RelatedStockResponse;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.util.List;
+import java.util.Set;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -98,6 +101,46 @@ public class IssueService {
 
         return ApiResponse.of(
                 IssueDetailResponse.of(cluster, summary, summaryModel, members, stocks, report));
+    }
+
+    public ApiResponse<List<IssueHistoryGroupResponse>> historyGroups(
+            String q, String status, String source, Integer offset, Integer limit) {
+        int off = QueryParams.offset(offset);
+        int lim = QueryParams.limit(limit);
+        String src = QueryParams.source(source);
+        String state = status == null || status.isBlank() ? null : status;
+        if (state != null && !Set.of("DETECTED", "VERIFYING", "CONFIRMED").contains(state)) {
+            throw ApiException.invalidQuery("unknown status: " + state);
+        }
+        String trimmed = q == null ? "" : q.trim();
+        if (trimmed.length() > 200) {
+            throw ApiException.invalidQuery("q must be at most 200 characters");
+        }
+        // SQL ESCAPE '!'를 써서 %, _, !도 일반 문자로 검색한다.
+        String pattern = trimmed.isEmpty() ? null
+                : "%" + trimmed.replace("!", "!!").replace("%", "!%")
+                        .replace("_", "!_") + "%";
+        long total = queryRepository.countHistoryGroups(pattern, state, src);
+        var items = queryRepository.findHistoryGroups(pattern, state, src, off, lim)
+                .stream().map(IssueHistoryGroupResponse::from).toList();
+        return ApiResponse.of(items, PageMeta.of(
+                PageMeta.Pagination.of(off, lim, total, items.size())));
+    }
+
+    public ApiResponse<List<IssueHistoryReportResponse>> historyReports(
+            Long id, Integer offset, Integer limit) {
+        int off = QueryParams.offset(offset);
+        int lim = QueryParams.limit(limit);
+        IssueCluster anchor = clusterRepository.findById(id)
+                .filter(c -> !"DISCARDED".equals(c.getStatus()))
+                .orElseThrow(() -> ApiException.notFound("issue %d not found".formatted(id)));
+        String key = anchor.getIssueKey();
+        if (key != null && key.isBlank()) key = null;
+        long total = queryRepository.countHistoryReports(id, key, anchor.getSource());
+        var items = queryRepository.findHistoryReports(id, key, anchor.getSource(), off, lim)
+                .stream().map(IssueHistoryReportResponse::from).toList();
+        return ApiResponse.of(items, PageMeta.of(
+                PageMeta.Pagination.of(off, lim, total, items.size())));
     }
 
     /** /issues/{id}/stocks — 전체 관련 종목. */
