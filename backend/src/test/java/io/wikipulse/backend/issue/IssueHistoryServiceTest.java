@@ -36,15 +36,28 @@ class IssueHistoryServiceTest {
     }
 
     @Test
-    void 리포트_이력은_기준_이슈의_출처와_키를_사용한다() {
+    void 리포트_이력은_출처를_뺀_대표_문서_키를_사용한다() {
         IssueCluster anchor = mock(IssueCluster.class);
         when(anchor.getStatus()).thenReturn("CONFIRMED");
         when(anchor.getSource()).thenReturn("replay");
         when(anchor.getIssueKey()).thenReturn("replay:enwiki:A");
         when(clusters.findById(42L)).thenReturn(Optional.of(anchor));
-        when(queries.findHistoryReports(42L, "replay:enwiki:A", "replay", 0, 100))
+        when(queries.findHistoryReports(42L, "enwiki:A", "replay", 0, 100))
                 .thenReturn(List.of());
         service.historyReports(42L, 0, 100);
-        verify(queries).countHistoryReports(42L, "replay:enwiki:A", "replay");
+        verify(queries).countHistoryReports(42L, "enwiki:A", "replay");
+    }
+
+    @Test
+    void 출처가_맞지_않는_키는_다른_문서와_묶지_않는다() {
+        IssueCluster anchor = mock(IssueCluster.class);
+        when(anchor.getStatus()).thenReturn("CONFIRMED");
+        when(anchor.getSource()).thenReturn("live");
+        when(anchor.getIssueKey()).thenReturn("replay:enwiki:A");
+        when(clusters.findById(42L)).thenReturn(Optional.of(anchor));
+        when(queries.findHistoryReports(42L, null, "live", 0, 100))
+                .thenReturn(List.of());
+        service.historyReports(42L, 0, 100);
+        verify(queries).countHistoryReports(42L, null, "live");
     }
 }

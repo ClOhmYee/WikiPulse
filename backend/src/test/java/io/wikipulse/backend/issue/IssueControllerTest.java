@@ -74,7 +74,7 @@ class IssueControllerTest {
     @Test
     void 리포트_이력은_시점별_ID와_시각을_내려준다() throws Exception {
         var report = new IssueHistoryReportResponse(41, "2026-07-17T01:00:00Z",
-                "CONFIRMED", 11.0);
+                "CONFIRMED", 11.0, "replay");
         when(service.historyReports(eq(42L), any(), any())).thenReturn(
                 ApiResponse.of(List.of(report), PageMeta.of(
                         PageMeta.Pagination.of(0, 100, 1, 1))));
@@ -83,6 +83,7 @@ class IssueControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data[0].id").value(41))
                 .andExpect(jsonPath("$.data[0].snapshotTs").value("2026-07-17T01:00:00Z"))
+                .andExpect(jsonPath("$.data[0].source").value("replay"))
                 .andExpect(jsonPath("$.meta.pagination.hasMore").value(false));
     }
 

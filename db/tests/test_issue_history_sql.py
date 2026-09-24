@@ -14,7 +14,7 @@ def query_for(method):
     assert annotation_at >= 0
     start = annotation_at + len('@Query(value = """')
     end = SOURCE.index('"""', start)
-    return re.sub(r":([A-Za-z]\w*)", r"%(\1)s", SOURCE[start:end])
+    return re.sub(r":([A-Za-z]\w*)", r"%(\1)s", SOURCE[start:end].replace("%", "%%"))
 
 
 def run(conn, method, params):
@@ -37,7 +37,31 @@ def group_params(**changes):
     return dict(pattern=None, status=None, source=None, offset=0, limit=20) | changes
 
 
-def test_groups_are_stable_across_dates_but_not_sources_or_null_keys(conn):
+def test_same_wiki_document_across_sources_has_one_card_and_shared_report_dates(conn):
+    replay = cluster(conn, "replay:enwiki:The Odyssey (2026 film)", "The Odyssey (2026 film)",
+                     "2040-07-17T01:00:00Z")
+    report(conn, replay, full=True)
+    live = cluster(conn, "live:enwiki:The Odyssey (2026 film)", "The Odyssey (2026 film)",
+                   "2040-07-19T01:00:00Z", source="live")
+    different_page = cluster(conn, "live:enwiki:The Odyssey (1997 miniseries)",
+                             "The Odyssey (2026 film)", "2040-07-20T01:00:00Z", source="live")
+
+    rows = run(conn, "findHistoryGroups", group_params())
+    by_id = {row[0]: row for row in rows}
+    assert set(by_id) == {live, different_page}
+    assert by_id[live][7] == 2  # occurrenceCount, both sources
+    assert by_id[live][8] == replay  # full report from replay
+    assert run(conn, "countHistoryGroups", group_params())[0][0] == 2
+    assert [row[0] for row in run(conn, "findHistoryGroups", group_params(source="live"))] == [different_page, live]
+    assert run(conn, "findHistoryGroups", group_params(source="live"))[1][8] is None
+
+    params = dict(anchorId=live, issueKey="enwiki:The Odyssey (2026 film)",
+                  source="live", offset=0, limit=100)
+    assert [row[0] for row in run(conn, "findHistoryReports", params)] == [replay]
+    assert run(conn, "countHistoryReports", params)[0][0] == 1
+
+
+def test_groups_are_stable_across_dates_but_not_malformed_or_null_keys(conn):
     old = cluster(conn, "replay:enwiki:Odyssey", "Odyssey", "2040-07-17T01:00:00Z")
     latest = cluster(conn, "replay:enwiki:Odyssey", "Odyssey", "2040-07-18T01:00:00Z")
     report(conn, old, full=True)
@@ -69,25 +93,26 @@ def test_literal_search_and_latest_status_filter(conn):
     assert [row[0] for row in run(conn, "findHistoryGroups", group_params(status="CONFIRMED"))] == [target]
 
 
-def test_report_history_uses_only_report_rows_and_same_source(conn):
-    first = cluster(conn, "k", "A", "2040-07-17T01:00:00Z")
-    middle = cluster(conn, "k", "A", "2040-07-17T02:00:00Z")
-    last = cluster(conn, "k", "A", "2040-07-18T01:00:00Z")
+def test_report_history_uses_only_report_rows_across_sources(conn):
+    first = cluster(conn, "replay:enwiki:A", "A", "2040-07-17T01:00:00Z")
+    middle = cluster(conn, "replay:enwiki:A", "A", "2040-07-17T02:00:00Z")
+    last = cluster(conn, "replay:enwiki:A", "A", "2040-07-18T01:00:00Z")
     report(conn, first)
     report(conn, last, full=True)
-    other = cluster(conn, "k", "A", "2040-07-19T01:00:00Z", source="live")
+    other = cluster(conn, "live:enwiki:A", "A", "2040-07-19T01:00:00Z", source="live")
     report(conn, other)
-    params = dict(anchorId=middle, issueKey="k", source="replay", offset=0, limit=100)
-    assert [row[0] for row in run(conn, "findHistoryReports", params)] == [last, first]
-    assert run(conn, "countHistoryReports", params)[0][0] == 2
-    assert [row[0] for row in run(conn, "findHistoryReports", params | dict(offset=1, limit=1))] == [first]
+    params = dict(anchorId=middle, issueKey="enwiki:A", source="replay", offset=0, limit=100)
+    assert [row[0] for row in run(conn, "findHistoryReports", params)] == [other, last, first]
+    assert [row[4] for row in run(conn, "findHistoryReports", params)] == ["live", "replay", "replay"]
+    assert run(conn, "countHistoryReports", params)[0][0] == 3
+    assert [row[0] for row in run(conn, "findHistoryReports", params | dict(offset=1, limit=1))] == [last]
     assert [row[0] for row in run(conn, "findHistoryReports", params | dict(anchorId=first, issueKey=None))] == [first]
 
 
 def test_full_report_is_default_and_missing_label_uses_representative_page(conn):
-    full = cluster(conn, "k", "Old label", "2040-07-17T01:00:00Z")
+    full = cluster(conn, "replay:enwiki:Real root", "Old label", "2040-07-17T01:00:00Z")
     report(conn, full, full=True)
-    latest = cluster(conn, "k", None, "2040-07-18T01:00:00Z")
+    latest = cluster(conn, "replay:enwiki:Real root", None, "2040-07-18T01:00:00Z")
     report(conn, latest)
     page = q(conn, "INSERT INTO wiki_page(wiki,title) VALUES ('enwiki','Real root') RETURNING id")[0][0]
     x(conn, "INSERT INTO cluster_member(cluster_id,page_id,is_seed) VALUES (%s,%s,true)", latest, page)

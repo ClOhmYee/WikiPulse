@@ -135,7 +135,11 @@ public class IssueService {
                 .filter(c -> !"DISCARDED".equals(c.getStatus()))
                 .orElseThrow(() -> ApiException.notFound("issue %d not found".formatted(id)));
         String key = anchor.getIssueKey();
-        if (key != null && key.isBlank()) key = null;
+        String prefix = anchor.getSource() + ":";
+        int titleSeparator = key == null ? -1 : key.indexOf(':', prefix.length());
+        key = key != null && key.startsWith(prefix)
+                && titleSeparator > prefix.length() && titleSeparator < key.length() - 1
+                ? key.substring(prefix.length()) : null;
         long total = queryRepository.countHistoryReports(id, key, anchor.getSource());
         var items = queryRepository.findHistoryReports(id, key, anchor.getSource(), off, lim)
                 .stream().map(IssueHistoryReportResponse::from).toList();

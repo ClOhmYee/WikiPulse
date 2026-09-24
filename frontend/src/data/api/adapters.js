@@ -60,7 +60,8 @@ export const issueHistoryReport = (v) =>
   id(v.id) &&
   timestamp(v.snapshotTs) &&
   status(v.status) &&
-  number(v.pulseScore);
+  number(v.pulseScore) &&
+  (v.source == null || source(v.source));
 export const stockCard = (v) =>
   object(v) &&
   text(v.ticker) &&

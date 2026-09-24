@@ -77,6 +77,7 @@ test("리포트 시점 API는 해당 ID만 인코딩하고 리포트 시각을 �
           snapshotTs: "2026-07-17T01:00:00Z",
           status: "CONFIRMED",
           pulseScore: 11,
+          source: "replay",
         },
       ],
       meta: { pagination: { offset: 0, limit: 100, total: 1, hasMore: false } },
@@ -88,6 +89,18 @@ test("리포트 시점 API는 해당 ID만 인코딩하고 리포트 시각을 �
   });
   assert.equal(url, "/api/v1/issues/a%2Fb/history/reports?offset=0&limit=100");
   assert.equal(result.data[0].id, 41);
+  assert.equal(result.data[0].source, "replay");
+  await assert.rejects(
+    createApiClient("/api/v1", async () =>
+      Response.json({
+        data: [{ ...result.data[0], source: "unknown" }],
+        meta: {
+          pagination: { offset: 0, limit: 100, total: 1, hasMore: false },
+        },
+      }),
+    ).listIssueHistoryReports(42),
+    { code: "INVALID_RESPONSE" },
+  );
 });
 
 test("달력은 리포트 이력의 모든 서버 페이지를 읽는다", async () => {

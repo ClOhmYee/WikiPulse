@@ -87,6 +87,7 @@ test("운영 이슈 탐색에서 대표 문서 한 건과 리포트 보유 날�
   await page.goto("/#/issues");
   await expect(page.locator(".explore-layout .event-row")).toHaveCount(1);
   await expect(page.locator(".event-row")).toContainText("2개 기록");
+  await expect(page.locator(".event-row")).not.toContainText("과거 재구성");
   await expect(page.locator(".event-row")).not.toContainText("최신 요약 없음");
   await page.getByRole("searchbox", { name: "사건 검색" }).fill("Odyssey");
   await expect
@@ -169,12 +170,14 @@ test("같은 날짜의 리포트 두 건은 시각별 ID로 구분한다", async
               snapshotTs: "2026-07-17T02:00:00Z",
               status: "CONFIRMED",
               pulseScore: 12,
+              source: "live",
             },
             {
               id: 46,
               snapshotTs: "2026-07-17T01:00:00Z",
               status: "CONFIRMED",
               pulseScore: 11,
+              source: "replay",
             },
           ],
           meta: {
@@ -210,6 +213,12 @@ test("같은 날짜의 리포트 두 건은 시각별 ID로 구분한다", async
   await expect(
     page.getByRole("group", { name: "선택한 날짜의 시각별 기록" }).locator("a"),
   ).toHaveCount(2);
+  await expect(
+    page.locator('.hp-same-day a[href="#/issues/46"]'),
+  ).toContainText("과거 재구성");
+  await expect(
+    page.locator('.hp-same-day a[href="#/issues/47"]'),
+  ).toContainText("실시간");
   await page.locator('.hp-same-day a[href="#/issues/46"]').click();
   await expect(page).toHaveURL(/\/issues\/46$/);
 });
