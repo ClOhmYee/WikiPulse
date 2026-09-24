@@ -1,0 +1,26 @@
+.history-preview-page { max-width: 1500px; margin: 0 auto; }
+.hp-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; margin-bottom: 1.5rem; }
+.hp-header h1 { margin: .5rem 0; }
+.hp-header p, .hp-scope { color: var(--text-muted, #67788a); }
+.hp-back { color: inherit; text-decoration: underline; }
+.hp-badge { border: 1px solid currentColor; border-radius: 999px; padding: .35rem .7rem; white-space: nowrap; }
+.hp-layout { display: grid; grid-template-columns: minmax(300px, 1fr) minmax(360px, 1.45fr); gap: 1rem; align-items: start; }
+.hp-panel { border: 1px solid var(--border, #bccad7); border-radius: 16px; padding: 1.2rem; background: var(--surface, #fff); }
+.hp-search label { display: block; font-weight: 700; margin-bottom: .5rem; }
+.hp-search input { width: 100%; padding: .7rem .8rem; border: 1px solid var(--border, #bccad7); border-radius: 9px; color: inherit; background: transparent; }
+.hp-search > p, .hp-detail > p { color: var(--text-muted, #67788a); }
+.hp-results { display: grid; gap: .5rem; max-height: 70vh; overflow-y: auto; }
+.hp-group, .hp-timeline button { display: grid; gap: .2rem; width: 100%; text-align: left; padding: .7rem .8rem; border: 1px solid var(--border, #bccad7); border-radius: 9px; background: transparent; color: inherit; cursor: pointer; }
+.hp-group[aria-pressed="true"], .hp-timeline button[aria-pressed="true"] { border-color: #0ca6aa; background: color-mix(in srgb, #0ca6aa 12%, transparent); }
+.hp-group span, .hp-timeline span { font-size: .9rem; }
+.hp-group small { color: var(--text-muted, #67788a); }
+.hp-pagination { display: flex; align-items: center; justify-content: center; gap: 1rem; margin-top: 1rem; }
+.hp-pagination button { padding: .45rem .7rem; }
+.hp-timeline { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: .5rem; max-height: 260px; overflow-y: auto; margin-bottom: 1rem; }
+.hp-snapshot { border-top: 1px solid var(--border, #bccad7); padding-top: .5rem; }
+.hp-snapshot h4 { margin-bottom: .35rem; }
+.hp-snapshot ul { margin-top: .25rem; padding-left: 1.4rem; }
+.hp-snapshot li { margin-bottom: .4rem; }
+.hp-summary { white-space: pre-wrap; line-height: 1.6; }
+.hp-missing { padding: .8rem; border-radius: 9px; background: color-mix(in srgb, #d49c10 12%, transparent); }
+@media (max-width: 950px) { .hp-layout { grid-template-columns: 1fr; } .hp-results { max-height: 320px; } }

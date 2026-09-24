@@ -4,7 +4,11 @@ import { EmptyState } from "../components/ui/EmptyState";
 import ExplorePage from "../pages/explore/ExplorePage";
 import SavedPage from "../pages/saved/SavedPage";
 import { PageDataBoundary } from "../data/hooks/PageData";
+import { isHistoryPreviewRoute } from "./router";
 const EventPage = lazy(() => import("../pages/event/EventPage"));
+const IssueHistoryPreviewPage = import.meta.env.DEV
+  ? lazy(() => import("../pages/issue-history-preview/IssueHistoryPreviewPage"))
+  : null;
 const AccountPage = lazy(() => import("../pages/account/AccountPage"));
 const StocksPage = lazy(() => import("../pages/stocks/StocksPage"));
 const PulsePage = lazy(() => import("../pages/pulse/PulsePage"));
@@ -56,7 +60,9 @@ export default function RouteContent({
     separator < 0 ? "" : route.slice(separator + 1),
   );
   let content;
-  if (pathname === "/pulse")
+  if (isHistoryPreviewRoute(pathname, import.meta.env.DEV))
+    content = <IssueHistoryPreviewPage />;
+  else if (pathname === "/pulse")
     content = (
       <PulsePage
         savedEvents={savedEvents}
