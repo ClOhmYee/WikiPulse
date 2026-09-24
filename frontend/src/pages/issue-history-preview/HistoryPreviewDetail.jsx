@@ -9,6 +9,7 @@ import {
   preferredSnapshot,
   snapshotsByKstDay,
   snapshotsForGroup,
+  snapshotsWithReports,
 } from "../../data/historyPreview.js";
 import { metricLabel, timestampLabel } from "../event/presentation.js";
 
@@ -28,7 +29,7 @@ function HistoryCalendar({ month, onMonth, byDay, selectedDate, onSelect }) {
         <div>
           <h2>날짜별 기록</h2>
           <p>
-            기록이 있는 날짜만 선택할 수 있습니다. 기준 시간대는 한국
+            DB 리포트가 저장된 날짜만 선택할 수 있습니다. 기준 시간대는 한국
             시간입니다.
           </p>
         </div>
@@ -50,6 +51,7 @@ function HistoryCalendar({ month, onMonth, byDay, selectedDate, onSelect }) {
           <ChevronRight size={18} />
         </button>
       </div>
+      {byDay.size === 0 && <p>이 대표 문서에 저장된 리포트가 없습니다.</p>}
       <div className="hp-calendar-grid" role="group" aria-label={monthLabel}>
         {["일", "월", "화", "수", "목", "금", "토"].map((day) => (
           <span key={day} className="hp-weekday">
@@ -62,7 +64,7 @@ function HistoryCalendar({ month, onMonth, byDay, selectedDate, onSelect }) {
               type="button"
               key={cell.date}
               data-testid={`calendar-day-${cell.date}`}
-              aria-label={`${Number(month.slice(5))}월 ${cell.day}일, 기록 ${cell.count}건`}
+              aria-label={`${Number(month.slice(5))}월 ${cell.day}일, 리포트 ${cell.count}건`}
               aria-pressed={cell.date === selectedDate}
               disabled={!cell.enabled}
               onClick={() => onSelect(cell.date)}
@@ -144,7 +146,10 @@ export default function HistoryPreviewDetail({ group, data }) {
     () => snapshotsForGroup(data.metadata, group.key),
     [data, group.key],
   );
-  const byDay = useMemo(() => snapshotsByKstDay(occurrences), [occurrences]);
+  const byDay = useMemo(
+    () => snapshotsByKstDay(snapshotsWithReports(occurrences, data.reports)),
+    [occurrences, data.reports],
+  );
   const reportById = useMemo(
     () => new Map(data.reports.map((report) => [report.id, report])),
     [data],
@@ -223,7 +228,7 @@ export default function HistoryPreviewDetail({ group, data }) {
         month={month}
         onMonth={setMonth}
         byDay={byDay}
-        selectedDate={selectedDate}
+        selectedDate={report ? selectedDate : null}
         onSelect={(date) => {
           const row = preferredSnapshot(byDay.get(date), data.reports);
           setSelectedId(row.id);
@@ -325,8 +330,8 @@ export default function HistoryPreviewDetail({ group, data }) {
           <section className="dt-context-note">
             <h2>기록을 읽는 방법</h2>
             <p>
-              달력은 DB에 기록된 시점만 활성화합니다. 리포트가 없는 날짜에 다른
-              시점의 요약을 대신 표시하지 않습니다.
+              달력은 DB 리포트가 있는 날짜만 활성화합니다. 리포트가 없는 날짜에
+              다른 시점의 요약을 대신 표시하지 않습니다.
             </p>
           </section>
         </aside>

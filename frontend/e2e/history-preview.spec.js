@@ -85,14 +85,16 @@ test("운영 이슈 탐색 형식의 대표 문서 목록에서 달력과 날짜
     page.getByRole("heading", { name: "날짜별 기록" }),
   ).toBeVisible();
   await expect(page.getByTestId("calendar-day-2026-07-17")).toBeEnabled();
-  await expect(page.getByTestId("calendar-day-2026-07-18")).toBeEnabled();
+  await expect(page.getByTestId("calendar-day-2026-07-18")).toBeDisabled();
   await expect(page.getByTestId("calendar-day-2026-07-19")).toBeDisabled();
   await expect(page.getByText("첫날 DB 본문")).toBeVisible();
   await expect(page.getByText("AAA", { exact: true })).toBeVisible();
-  await page.getByTestId("calendar-day-2026-07-18").click();
-  await expect(page.getByText("이 날짜의 DB 리포트가 없습니다.")).toBeVisible();
-  await expect(page.getByText("첫날 DB 본문")).toHaveCount(0);
-  await expect(page.getByText("AAA", { exact: true })).toHaveCount(0);
   await page.getByTestId("calendar-day-2026-07-17").click();
   await expect(page.getByText("첫날 DB 본문")).toBeVisible();
+  await page.goto("/#/issue-history-preview/3");
+  await expect(
+    page.getByText("이 대표 문서에 저장된 리포트가 없습니다."),
+  ).toBeVisible();
+  await expect(page.getByTestId("calendar-day-2026-07-18")).toBeDisabled();
+  await expect(page.getByText("이 날짜의 DB 리포트가 없습니다.")).toBeVisible();
 });

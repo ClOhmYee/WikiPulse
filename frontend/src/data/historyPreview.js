@@ -94,6 +94,11 @@ export function snapshotsByKstDay(rows) {
   return byDay;
 }
 
+export function snapshotsWithReports(rows, reports) {
+  const reportIds = new Set(reports.map((report) => report.id));
+  return rows.filter((row) => reportIds.has(row.id));
+}
+
 export function calendarDays(month, byDay) {
   const [year, monthNumber] = month.split("-").map(Number);
   const firstWeekday = new Date(Date.UTC(year, monthNumber - 1, 1)).getUTCDay();

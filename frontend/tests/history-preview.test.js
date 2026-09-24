@@ -133,6 +133,32 @@ test("KST 날짜별로 기록을 묶고 달력에는 기록된 날만 활성화�
   );
 });
 
+test("달력 대상은 DB 리포트가 있는 기록만 남기고 요약만 있는 리포트도 포함한다", () => {
+  const rows = [
+    { id: 1, snapshot_ts: "2026-07-17T01:00:00+00:00" },
+    { id: 2, snapshot_ts: "2026-07-18T01:00:00+00:00" },
+    { id: 3, snapshot_ts: "2026-07-19T01:00:00+00:00" },
+    { id: 4, snapshot_ts: "2026-07-17T02:00:00+00:00" },
+  ];
+  const reports = [
+    { id: 1, sections: [{ body: "본문" }] },
+    { id: 2, summary: "요약", sections: null },
+  ];
+  assert.deepEqual(
+    history.snapshotsWithReports(rows, reports).map((row) => row.id),
+    [1, 2],
+  );
+  const days = history.calendarDays(
+    "2026-07",
+    history.snapshotsByKstDay(history.snapshotsWithReports(rows, reports)),
+  );
+  assert.deepEqual(
+    days.filter((day) => day?.enabled).map((day) => day.date),
+    ["2026-07-17", "2026-07-18"],
+  );
+  assert.equal(days.find((day) => day?.date === "2026-07-17").count, 1);
+});
+
 test("상세 진입 시 DB 본문 리포트가 있는 가장 최근 시점을 우선한다", () => {
   const rows = [
     { id: 3, snapshot_ts: "2026-07-19T01:00:00+00:00" },
