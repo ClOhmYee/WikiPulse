@@ -7,6 +7,8 @@ import {
   stockDetail,
   stockPrice,
   relatedStock,
+  issueHistoryGroup,
+  issueHistoryReport,
 } from "./adapters.js";
 import { validateMap, validateSnapshots } from "../pulse/contract.js";
 import { validateRankings } from "../rankings.js";
@@ -27,6 +29,16 @@ export function createApiClient(baseURL, fetcher) {
       validateRankings(await request("/issues/rankings", params, options)),
     listIssues: (params = {}, options) =>
       list("/issues", params, options, issueCard, true),
+    listIssueHistoryGroups: (params = {}, options) =>
+      list("/issues/history/groups", params, options, issueHistoryGroup, true),
+    listIssueHistoryReports: (id, params = {}, options) =>
+      list(
+        `/issues/${pathId(id)}/history/reports`,
+        params,
+        options,
+        issueHistoryReport,
+        true,
+      ),
     getIssue: async (id, options) =>
       adaptResponse(await request(`/issues/${pathId(id)}`, {}, options), {
         validate: issueDetail,

@@ -1,6 +1,8 @@
 package io.wikipulse.backend.issue;
 
 import io.wikipulse.backend.issue.dto.IssueCardResponse;
+import io.wikipulse.backend.issue.dto.IssueHistoryGroupResponse;
+import io.wikipulse.backend.issue.dto.IssueHistoryReportResponse;
 import io.wikipulse.backend.issue.dto.IssueRankingsResponse;
 import io.wikipulse.backend.issue.dto.IssueMemberResponse;
 import io.wikipulse.backend.issue.dto.IssueReportResponse;
@@ -43,6 +45,131 @@ public interface IssueQueryRepository extends JpaRepository<IssueCluster, Long> 
     List<IssueRankingsResponse.Projection> findRankings(
             @Param("from") Instant from,
             @Param("asOf") Instant asOf);
+
+    /** 완료·비폐기 행을 source+issue_key 별로 묶고 최신 행을 대표로 택한다. */
+    @Query(value = """
+            WITH ranked AS (
+                SELECT c.id, c.source, c.issue_key, c.label, c.status,
+                       c.pulse_score, c.snapshot_ts,
+                       min(c.snapshot_ts) OVER grouped AS first_seen,
+                       count(*) OVER grouped AS occurrence_count,
+                       row_number() OVER (
+                           PARTITION BY c.source, nullif(c.issue_key, ''),
+                                        CASE WHEN nullif(c.issue_key, '') IS NULL THEN c.id END
+                           ORDER BY c.snapshot_ts DESC, c.id DESC
+                       ) AS row_number
+                FROM issue_cluster c
+                WHERE c.status <> 'DISCARDED'
+                  AND (CAST(:source AS text) IS NULL OR c.source = CAST(:source AS text))
+                  AND EXISTS (SELECT 1 FROM cluster_snapshot s
+                              WHERE s.source = c.source AND s.snapshot_ts = c.snapshot_ts)
+                WINDOW grouped AS (PARTITION BY c.source, nullif(c.issue_key, ''),
+                                   CASE WHEN nullif(c.issue_key, '') IS NULL THEN c.id END)
+            ), named AS (
+                SELECT r.*, coalesce(nullif(r.label, ''),
+                         (SELECT p.title FROM cluster_member cm
+                          JOIN wiki_page p ON p.id = cm.page_id
+                          WHERE cm.cluster_id = r.id
+                          ORDER BY cm.is_seed DESC, cm.weight DESC, p.id ASC LIMIT 1),
+                         '제목 없음') AS display_label
+                FROM ranked r WHERE r.row_number = 1
+            ), page AS (
+                SELECT * FROM named n
+                WHERE (CAST(:pattern AS text) IS NULL
+                       OR n.display_label ILIKE CAST(:pattern AS text) ESCAPE '!')
+                  AND (CAST(:status AS text) IS NULL OR n.status = CAST(:status AS text))
+                ORDER BY n.snapshot_ts DESC, n.id ASC
+                OFFSET :offset LIMIT :limit
+            )
+            SELECT g.id AS id, g.display_label AS label, g.source AS source,
+                   g.status AS status, g.pulse_score AS pulseScore,
+                   g.snapshot_ts AS snapshotTs, g.first_seen AS firstSeen,
+                   g.occurrence_count AS occurrenceCount,
+                   (SELECT c2.id FROM issue_cluster c2
+                    JOIN issue_report r2 ON r2.cluster_id = c2.id
+                    WHERE c2.source = g.source AND c2.status <> 'DISCARDED'
+                      AND ((nullif(g.issue_key, '') IS NOT NULL AND c2.issue_key = g.issue_key)
+                           OR (nullif(g.issue_key, '') IS NULL AND c2.id = g.id))
+                      AND EXISTS (SELECT 1 FROM cluster_snapshot s2
+                                  WHERE s2.source = c2.source AND s2.snapshot_ts = c2.snapshot_ts)
+                    ORDER BY CASE WHEN r2.report_sections IS NOT NULL
+                                       AND jsonb_array_length(r2.report_sections) > 0
+                                  THEN 0 ELSE 1 END,
+                             c2.snapshot_ts DESC, c2.id DESC LIMIT 1) AS defaultReportId,
+                   (SELECT r3.summary FROM issue_report r3 WHERE r3.cluster_id = g.id) AS summary,
+                   (SELECT count(*) FROM cluster_member cm WHERE cm.cluster_id = g.id) AS memberCount,
+                   (SELECT count(*) FROM cluster_stock cs
+                    WHERE cs.cluster_id = g.id AND cs.verified) AS stockCount
+            FROM page g
+            ORDER BY g.snapshot_ts DESC, g.id ASC
+            """, nativeQuery = true)
+    List<IssueHistoryGroupResponse.Projection> findHistoryGroups(
+            @Param("pattern") String pattern, @Param("status") String status,
+            @Param("source") String source, @Param("offset") int offset,
+            @Param("limit") int limit);
+
+    @Query(value = """
+            WITH latest AS (
+                SELECT DISTINCT ON (c.source, nullif(c.issue_key, ''),
+                                    CASE WHEN nullif(c.issue_key, '') IS NULL THEN c.id END)
+                       c.id, c.label, c.status
+                FROM issue_cluster c
+                WHERE c.status <> 'DISCARDED'
+                  AND (CAST(:source AS text) IS NULL OR c.source = CAST(:source AS text))
+                  AND EXISTS (SELECT 1 FROM cluster_snapshot s
+                              WHERE s.source = c.source AND s.snapshot_ts = c.snapshot_ts)
+                ORDER BY c.source, nullif(c.issue_key, ''),
+                         CASE WHEN nullif(c.issue_key, '') IS NULL THEN c.id END,
+                         c.snapshot_ts DESC, c.id DESC
+            ), named AS (
+                SELECT l.*, coalesce(nullif(l.label, ''),
+                         (SELECT p.title FROM cluster_member cm
+                          JOIN wiki_page p ON p.id = cm.page_id
+                          WHERE cm.cluster_id = l.id
+                          ORDER BY cm.is_seed DESC, cm.weight DESC, p.id ASC LIMIT 1),
+                         '제목 없음') AS display_label
+                FROM latest l
+            )
+            SELECT count(*) FROM named n
+            WHERE (CAST(:pattern AS text) IS NULL
+                   OR n.display_label ILIKE CAST(:pattern AS text) ESCAPE '!')
+              AND (CAST(:status AS text) IS NULL OR n.status = CAST(:status AS text))
+            """, nativeQuery = true)
+    long countHistoryGroups(@Param("pattern") String pattern,
+                            @Param("status") String status, @Param("source") String source);
+
+    /** 날짜는 프론트에서 KST로 묶는다. 여기서는 리포트 행의 원래 시각을 보존한다. */
+    @Query(value = """
+            SELECT c.id AS id, c.snapshot_ts AS snapshotTs, c.status AS status,
+                   c.pulse_score AS pulseScore
+            FROM issue_cluster c
+            JOIN issue_report r ON r.cluster_id = c.id
+            WHERE c.source = :source AND c.status <> 'DISCARDED'
+              AND ((CAST(:issueKey AS text) IS NOT NULL AND c.issue_key = CAST(:issueKey AS text))
+                   OR (CAST(:issueKey AS text) IS NULL AND c.id = :anchorId))
+              AND EXISTS (SELECT 1 FROM cluster_snapshot s
+                          WHERE s.source = c.source AND s.snapshot_ts = c.snapshot_ts)
+            ORDER BY c.snapshot_ts DESC, c.id DESC
+            OFFSET :offset LIMIT :limit
+            """, nativeQuery = true)
+    List<IssueHistoryReportResponse.Projection> findHistoryReports(
+            @Param("anchorId") long anchorId, @Param("issueKey") String issueKey,
+            @Param("source") String source, @Param("offset") int offset,
+            @Param("limit") int limit);
+
+    @Query(value = """
+            SELECT count(*) FROM issue_cluster c
+            JOIN issue_report r ON r.cluster_id = c.id
+            WHERE c.source = :source AND c.status <> 'DISCARDED'
+              AND ((CAST(:issueKey AS text) IS NOT NULL AND c.issue_key = CAST(:issueKey AS text))
+                   OR (CAST(:issueKey AS text) IS NULL AND c.id = :anchorId))
+              AND EXISTS (SELECT 1 FROM cluster_snapshot s
+                          WHERE s.source = c.source AND s.snapshot_ts = c.snapshot_ts)
+            """, nativeQuery = true)
+    long countHistoryReports(@Param("anchorId") long anchorId,
+                             @Param("issueKey") String issueKey,
+                             @Param("source") String source);
+
 
     /**
      * 이슈 상세의 멤버 문서. weight 내림차순. API 명세 §2.

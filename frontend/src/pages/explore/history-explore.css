@@ -1,0 +1,6 @@
+.history-explore .event-row {
+  cursor: pointer;
+}
+.history-explore .event-row:hover .event-row__title {
+  color: var(--teal);
+}

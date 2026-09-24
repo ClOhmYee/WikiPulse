@@ -101,14 +101,18 @@
   margin: -15px 0 30px;
   font-size: 13px;
 }
-.hp-same-day button {
+.hp-same-day button,
+.hp-same-day a {
+  display: inline-flex;
   padding: 7px 10px;
   border: 1px solid var(--dt-border);
   border-radius: 7px;
   color: var(--dt-paper);
   background: var(--dt-soft);
+  text-decoration: none;
 }
-.hp-same-day button[aria-pressed="true"] {
+.hp-same-day button[aria-pressed="true"],
+.hp-same-day a[aria-current="page"] {
   border-color: var(--dt-teal);
 }
 .hp-no-report {

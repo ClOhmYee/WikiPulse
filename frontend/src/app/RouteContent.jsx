@@ -2,9 +2,12 @@ import { lazy } from "react";
 import { ArrowRight } from "lucide-react";
 import { EmptyState } from "../components/ui/EmptyState";
 import ExplorePage from "../pages/explore/ExplorePage";
+import HistoryExplorePage from "../pages/explore/HistoryExplorePage";
 import SavedPage from "../pages/saved/SavedPage";
 import { PageDataBoundary } from "../data/hooks/PageData";
 import { isHistoryPreviewRoute } from "./router";
+import { dataClient } from "../data/index.js";
+import { issueHistoryEnabled } from "../data/historyProduction.js";
 const EventPage = lazy(() => import("../pages/event/EventPage"));
 const IssueHistoryPreviewPage = import.meta.env.DEV
   ? lazy(() => import("../pages/issue-history-preview/IssueHistoryPreviewPage"))
@@ -59,6 +62,10 @@ export default function RouteContent({
   const queryParams = new URLSearchParams(
     separator < 0 ? "" : route.slice(separator + 1),
   );
+  const historyMode = issueHistoryEnabled(
+    import.meta.env,
+    dataClient.dataSource,
+  );
   let content;
   if (isHistoryPreviewRoute(pathname, import.meta.env.DEV))
     content = <IssueHistoryPreviewPage pathname={pathname} />;
@@ -71,7 +78,12 @@ export default function RouteContent({
       />
     );
   else if (pathname === "/issues")
-    content = (
+    content = historyMode ? (
+      <HistoryExplorePage
+        key={route}
+        initialQuery={queryParams.get("q") || ""}
+      />
+    ) : (
       <ExplorePage
         key={route}
         initialQuery={queryParams.get("q") || ""}
@@ -130,7 +142,9 @@ export default function RouteContent({
     );
   const resource =
     pathname === "/issues"
-      ? "explore"
+      ? historyMode
+        ? null
+        : "explore"
       : parts[0] === "issues" && parts.length === 2
         ? "event"
         : parts[0] === "issues" && parts.length === 3 && parts[2] === "stocks"

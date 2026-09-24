@@ -38,7 +38,18 @@ export function IssueReport({
       ? "insufficient_evidence"
       : report?.status || "insufficient_evidence";
   const isReady = status === "ready";
-  const state = STATUS_COPY[status] || STATUS_COPY.insufficient_evidence;
+  const summaryOnly =
+    !isExample &&
+    status === "insufficient_evidence" &&
+    typeof summary === "string" &&
+    summary.trim();
+  const state = summaryOnly
+    ? {
+        title: "본문 리포트는 저장되지 않았습니다",
+        body: "DB에 저장된 요약만 표시합니다.",
+        icon: FileText,
+      }
+    : STATUS_COPY[status] || STATUS_COPY.insufficient_evidence;
   const StateIcon = state.icon;
   const articleById = new Map(
     articles.map((article) => [String(article.id), article]),

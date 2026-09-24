@@ -40,6 +40,27 @@ export const issueCard = (v) =>
   timestamp(v.snapshotTs) &&
   count(v.memberCount) &&
   count(v.stockCount);
+export const issueHistoryGroup = (v) =>
+  object(v) &&
+  id(v.id) &&
+  text(v.label) &&
+  source(v.source) &&
+  status(v.status) &&
+  number(v.pulseScore) &&
+  timestamp(v.snapshotTs) &&
+  timestamp(v.firstSeen) &&
+  count(v.occurrenceCount) &&
+  v.occurrenceCount > 0 &&
+  (v.defaultReportId == null || id(v.defaultReportId)) &&
+  optionalText(v.summary) &&
+  count(v.memberCount) &&
+  count(v.stockCount);
+export const issueHistoryReport = (v) =>
+  object(v) &&
+  id(v.id) &&
+  timestamp(v.snapshotTs) &&
+  status(v.status) &&
+  number(v.pulseScore);
 export const stockCard = (v) =>
   object(v) &&
   text(v.ticker) &&

@@ -178,6 +178,15 @@ DB `CHECK` 제약과 **같은 값을 그대로** 쓴다. 번역하지 않는다.
 - `members[].completeness`는 그 `null`이 무슨 뜻인지 말한다 — `complete`(판정 끝) / `pending`(입력 대기) / `unavailable`(원본 없음). 지도 노드와 같은 어휘다. 둘 다 빈칸으로 보이면 사용자는 서비스가 고장 난 줄 안다.
 - `relatedStocks`는 아래 endpoint와 **같은 객체**이며, 상세 진입 시 왕복을 줄이려고 상위 5개만 미리 담는다. 전체는 아래로 부른다.
 
+### 이슈 기록 조회 (운영 활성화 전, 읽기 전용)
+
+기존 `GET /api/v1/issues`의 **최신 스냅샷** 계약은 유지한다. 아래 두 경로는 `VITE_ISSUE_HISTORY_ENABLED=true`인 API 빌드의 이슈 탐색에서 사용하며, 이 문서 변경만으로 운영에 배포되거나 켜지지 않는다.
+
+- `GET /api/v1/issues/history/groups?q=&status=&source=&offset=&limit=`: 완료·비폐기 클러스터를 `source + issue_key`별로 한 건으로 묶어 반환한다. 키가 없으면 ID별 독립 건이다. `q`는 선택적인 대표 제목 부분검색(최대 200자, `%`·`_`·`!`도 일반 문자), `status`는 최신 기록 상태, `source`는 `live`/`replay`다. 묶음 기준 페이지네이션. 응답 항목은 `id`, `label`, `source`, `status`, `pulseScore`, `snapshotTs`, `firstSeen`, `occurrenceCount`, `defaultReportId`(없으면 null), `summary`, `memberCount`, `stockCount`다. `defaultReportId`는 섹션형 본문이 있는 가장 최근 리포트, 없으면 요약만 있는 최근 리포트 ID다.
+- `GET /api/v1/issues/{id}/history/reports?offset=&limit=`: 같은 출처·대표 문서 키에 속하고 `issue_report` 행이 있는 시점만 반환한다. 응답 항목은 `id`, `snapshotTs`, `status`, `pulseScore`이며 최신순이다. 요약만 있어도 포함한다. 상세 본문·멤버·종목은 선택한 ID의 **기존** `GET /issues/{id}`에서 읽는다.
+
+두 경로 모두 기존 `data`/`meta.pagination` 봉투를 사용한다. DB 스키마·적재·기존 API 응답은 바꾸지 않는다. 같은 `issue_key`는 같은 대표 문서의 시점 기록이지 현실의 단일 사건임을 보증하지 않는다.
+
 ### `GET /api/v1/issues/{id}/stocks`
 
 ```json
