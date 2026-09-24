@@ -241,7 +241,7 @@ def _judge_views(window: Window, baseline: Baseline | None) -> SpikeDecision:
             is_new_page=thin,
             edit_z=edit_z,
             view_ratio=None,
-            spike_score=_score(None, views) if enough_absolute else 0.0,
+            spike_score=_score(views, _reference_views(baseline)) if enough_absolute else 0.0,
             reason=("조회수 기준선 없음 — 절대 하한 통과(0 에서의 급등)" if enough_absolute
                     else f"조회수 기준선 없음 — {views}회 < {MIN_ABSOLUTE_VIEWS}"),
         )
@@ -260,7 +260,7 @@ def _judge_views(window: Window, baseline: Baseline | None) -> SpikeDecision:
             is_new_page=thin,
             edit_z=edit_z,
             view_ratio=ratio,
-            spike_score=_score(None, views) if passed else 0.0,
+            spike_score=_score(views, baseline.view_ewma) if passed else 0.0,
             reason=(f"표준편차 없음 — 배수 {ratio:.1f}·{views}회로 판정"
                     f"({'통과' if passed else '미달'})"),
         )
@@ -271,7 +271,7 @@ def _judge_views(window: Window, baseline: Baseline | None) -> SpikeDecision:
         is_new_page=thin,
         edit_z=edit_z,
         view_ratio=ratio,
-        spike_score=_score(view_z, views) if passed else 0.0,
+        spike_score=_score(views, baseline.view_ewma) if passed else 0.0,
         reason=("2단계 통과 — 조회수 급등 확정" if passed
                 else f"조회수 미달 (배수={ratio:.1f}, z={view_z:.1f}, {views}회)"),
     )
@@ -302,23 +302,36 @@ def _edit_z(window: Window, baseline: Baseline | None) -> float | None:
     return _z(window.edit_count, baseline.edit_ewma, baseline.edit_stddev)
 
 
-def _score(view_z: float | None, views: int) -> float:
-    """급등도. 버블맵 버블 크기·피드 정렬에 쓴다.
+def _reference_views(baseline: Baseline | None) -> float:
+    """점수에서 뺄 "평소 조회수". 평균이 없으면 0 — 0 에서의 급등으로 본다.
+
+    얇은 기준선(표본 7일 미만)이라도 평균이 있으면 쓴다. 관문은 명세대로 절대 하한만
+    보지만, 점수까지 평균을 버리면 평소보다 **덜 본** 문서가 높은 점수를 받는다.
+    """
+    if baseline is None or not baseline.view_ewma or baseline.view_ewma <= 0:
+        return 0.0
+    return float(baseline.view_ewma)
+
+
+def _score(views: int, reference: float) -> float:
+    """급등도. 버블맵 버블 크기·피드 정렬에 쓴다 = log1p(평소보다 더 본 조회수).
 
     **조회수 급등 강도 중심**이다 (명세 §3.2 4번: "클러스터 `pulse_score` 는 조회수
     급등 강도를 중심으로 계산한다"). 편집은 2단계 계약에서 관문이 아니라 후보 신호라
     점수에서도 뺐다 — ~~편집 z 와 조회수 z 의 곱~~ (WP-93).
 
-    z 를 못 내는 경우(표본 없음·표준편차 0)는 절대 조회수로 대신한다. 두 값이 단위가
-    달라 한 축에 섞이는 문제가 -93 에서 지적됐는데, 여기서는 **log 를 씌운 뒤 같은
-    스케일로 맞춘다** — z 든 조회수든 log1p 한 값이라 자릿수 차가 눌린다.
+    ~~z 가 있으면 log1p(z), 없으면 log1p(조회수)~~ → **두 경로 모두 초과 조회수**
+    (2026-09-24). 옛 식은 "log 를 씌우면 같은 스케일" 이라고 봤지만 단위가 달라 비교가
+    안 됐다 — z 5 는 1.8, 조회수 795 는 6.7 이다. 기준선이 거의 다 얇던 동안은 로그
+    조회수 경로만 타서 안 드러났고, 2개월 replay 에 두꺼운 기준선이 들어가자 **유명
+    문서일수록 점수가 낮아지고** 얇은 무명 문서가 시점 상위를 채웠다
+    (The Odyssey 07-17 01시 1위 → 17위, 조회 795·평소 1,706 인 문서가 1위).
 
-    log1p 로 누르는 이유는 그대로다: z 5311 이 날것으로 들어가면 버블 하나가 화면을
-    다 먹는다.
+    초과 조회수는 두 경로가 같은 단위(회)이고, 기준선이 없으면 평소=0 이라 옛
+    log1p(조회수) 와 같은 값이 나온다 — HOT 임계(5.0)·버블 크기 척도가 유지된다.
+
+    log1p 로 누르는 이유는 그대로다: 극단값 하나가 화면을 다 먹지 않게.
     """
     import math
 
-    if view_z is not None:
-        return round(math.log1p(max(0.0, view_z)), 3)
-    # 표본이 없어 z 가 없다. 절대 조회수로 — 100회면 4.6, 10만회면 11.5.
-    return round(math.log1p(max(0, views)), 3)
+    return round(math.log1p(max(0.0, views - reference)), 3)

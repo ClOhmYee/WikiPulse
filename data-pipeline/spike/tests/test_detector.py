@@ -240,6 +240,27 @@ def test_극단값이_점수를_지배하지_않는다():
     assert detect(Window(1, 1, 291_824), base).spike_score < 20
 
 
+def test_두꺼운_기준선과_얇은_기준선의_점수가_같은_척도다():
+    """2026-09-24 2개월 replay 실측 — log1p(z) 와 log1p(조회수) 가 섞여 유명 문서가 밀렸다.
+
+    The Odyssey(조회 30,963 · 평소 5,700, 표본 28일) 가 1.87 점,
+    평소보다 덜 본 얇은 문서(조회 795 · 평소 1,706, 표본 3일) 가 6.68 점이었다.
+    """
+    thick = Baseline(edit_ewma=1.0, edit_stddev=1.0, view_ewma=5_700.5,
+                     sample_days=28, view_stddev=1_000.0)
+    thin = Baseline(edit_ewma=1.0, edit_stddev=1.0, view_ewma=1_706.3,
+                    sample_days=3, view_stddev=1_385.0)
+    odyssey = detect(Window(1, 1, 30_963), thick)
+    below_usual = detect(Window(1, 1, 795), thin)
+    assert odyssey.spike_score > below_usual.spike_score
+
+
+def test_기준선이_없으면_옛_점수와_같다():
+    """평소=0 이면 log1p(조회수) 그대로 — HOT 임계(5.0)·버블 척도가 안 바뀐다."""
+    import math
+    assert detect(Window(1, 1, 1_224), None).spike_score == round(math.log1p(1_224), 3)
+
+
 def test_편집은_점수에_안_들어간다():
     """편집은 관문도 아니고 점수도 아니다 — 후보를 만드는 신호일 뿐이다."""
     base = hormuz_baseline()
