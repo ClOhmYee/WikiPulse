@@ -8,6 +8,7 @@ import io.wikipulse.backend.issue.dto.IssueCardResponse;
 import io.wikipulse.backend.issue.dto.IssueRankingsResponse;
 import io.wikipulse.backend.issue.dto.IssueDetailResponse;
 import io.wikipulse.backend.issue.dto.IssueMemberResponse;
+import io.wikipulse.backend.issue.dto.IssueReportResponse;
 import io.wikipulse.backend.stock.dto.RelatedStockResponse;
 import java.time.Instant;
 import java.time.ZoneId;
@@ -91,8 +92,12 @@ public class IssueService {
                 .findVerifiedStocks(id, DETAIL_STOCK_PREVIEW)
                 .stream().map(RelatedStockResponse::from).toList();
 
+        IssueReportResponse report = queryRepository.findReport(id)
+                .flatMap(row -> IssueReportResponse.from(row, cluster.getSnapshotTs().toString()))
+                .orElse(null);
+
         return ApiResponse.of(
-                IssueDetailResponse.of(cluster, summary, summaryModel, members, stocks));
+                IssueDetailResponse.of(cluster, summary, summaryModel, members, stocks, report));
     }
 
     /** /issues/{id}/stocks — 전체 관련 종목. */
