@@ -2,6 +2,7 @@ import { DataError } from "./contracts.js";
 import { issueCategories } from "./categories.js";
 import { listExploreIssues } from "./explore.js";
 import { clusterTitle, documentTitle } from "./titles.js";
+import { stockDescriptionsKo } from "./stockDescriptionsKo.js";
 
 const unique = (items) => [
   ...new Map(items.map((item) => [item.id ?? item.symbol, item])).values(),
@@ -98,6 +99,7 @@ export function issueView(raw, aliases = []) {
   };
 }
 export function stockView(raw, eventId) {
+  const description = availableText(raw.businessSummary);
   const relation =
     eventId === undefined
       ? []
@@ -117,7 +119,10 @@ export function stockView(raw, eventId) {
     exchange: raw.exchange,
     market: raw.exchange,
     sector: raw.sector ?? null,
-    description: availableText(raw.businessSummary),
+    description,
+    descriptionKo: description
+      ? (stockDescriptionsKo[raw.ticker] ?? null)
+      : null,
     cik: raw.cik ?? null,
     issueCount: raw.issueCount ?? null,
     // 목록 카드의 최신 종가(WP-189). 상세는 /prices 로 따로 받으므로 여기선

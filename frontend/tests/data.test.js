@@ -5,7 +5,7 @@ import { events, stocks } from "../src/data/mock/fixtures/catalog.js";
 import { readDataConfig } from "../src/data/config.js";
 import { describeSource } from "../src/data/contracts.js";
 import { createApiClient } from "../src/data/api/client.js";
-import { loadPageData } from "../src/data/resources.js";
+import { loadPageData, stockView } from "../src/data/resources.js";
 import { issueId } from "../src/data/mock/identity.js";
 import { createDataClient, presentPulseMap } from "../src/data/index.js";
 
@@ -166,6 +166,39 @@ test("stock details get linked issue cards separately and never invent relation 
   assert.equal(page.stocks[0].description, null);
   assert.equal(page.events[0].title, "제목 미제공");
   assert.equal(page.collectionLimit, 50);
+});
+
+test("six demo stocks keep the English source and expose Korean display descriptions", () => {
+  const samples = [
+    ["CMCSA", "미디어"],
+    ["CNK", "영화관"],
+    ["CDRO", "온라인 카지노"],
+    ["SLMT", "축구 구단"],
+    ["SRAD", "스포츠 데이터"],
+    ["MANU", "맨체스터 유나이티드"],
+  ];
+  for (const [ticker, keyword] of samples) {
+    const result = stockView({
+      ticker,
+      name: ticker,
+      exchange: "NASDAQ",
+      businessSummary: "Original English business summary",
+    });
+    assert.equal(result.description, "Original English business summary");
+    assert.match(result.descriptionKo, new RegExp(keyword), ticker);
+  }
+});
+
+test("unlisted stocks and stocks without a source description have no Korean override", () => {
+  const apple = stockView({
+    ticker: "AAPL",
+    businessSummary: "English description",
+  });
+  assert.equal(apple.description, "English description");
+  assert.equal(apple.descriptionKo, null);
+  const missing = stockView({ ticker: "CMCSA", businessSummary: null });
+  assert.equal(missing.description, null);
+  assert.equal(missing.descriptionKo, null);
 });
 
 test("mock filtering, raw response projection, stable legacy aliases and cancellation", async () => {

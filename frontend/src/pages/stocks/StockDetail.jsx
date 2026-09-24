@@ -89,7 +89,9 @@ export default function StockDetail({ symbol, savedStocks, onToggleStock }) {
         />
       </header>
       <p className="st-stock-description">
-        {stock.description || "기업 소개가 제공되지 않았습니다."}
+        {(!isExample && stock.descriptionKo) ||
+          stock.description ||
+          "기업 소개가 제공되지 않았습니다."}
       </p>
       <div className="st-detail-layout">
         <section
