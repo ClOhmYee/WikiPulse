@@ -3,6 +3,7 @@ package io.wikipulse.backend.issue;
 import io.wikipulse.backend.issue.dto.IssueCardResponse;
 import io.wikipulse.backend.issue.dto.IssueRankingsResponse;
 import io.wikipulse.backend.issue.dto.IssueMemberResponse;
+import io.wikipulse.backend.issue.dto.IssueReportResponse;
 import io.wikipulse.backend.stock.dto.RelatedStockResponse;
 import java.time.Instant;
 import java.util.List;
@@ -76,6 +77,15 @@ public interface IssueQueryRepository extends JpaRepository<IssueCluster, Long> 
     @Query(value = "SELECT model FROM issue_report WHERE cluster_id = :clusterId",
             nativeQuery = true)
     Optional<String> findSummaryModel(@Param("clusterId") Long clusterId);
+
+    /** 섹션형 리포트 (V21, WP-223). 리포트가 없으면 빈 결과. */
+    @Query(value = """
+            SELECT report_sections::text AS sections, report_model AS model,
+                   report_generated_at AS generatedAt
+            FROM issue_report
+            WHERE cluster_id = :clusterId AND report_sections IS NOT NULL
+            """, nativeQuery = true)
+    Optional<IssueReportResponse.Projection> findReport(@Param("clusterId") Long clusterId);
 
     /**
      * 한 이슈의 검증된 관련 종목. verified=true 만.

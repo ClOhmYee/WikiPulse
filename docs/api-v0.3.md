@@ -159,11 +159,19 @@ DB `CHECK` 제약과 **같은 값을 그대로** 쓴다. 번역하지 않는다.
         "weight": 1.0, "isSeed": true, "editCount": 87, "views": 12043,
         "completeness": "complete" }
     ],
-    "relatedStocks": [ ]
+    "relatedStocks": [ ],
+    "report": {
+      "status": "ready", "model": "claude-sonnet-4-5-20250929 (report_v1)",
+      "generatedAt": "2026-09-24T05:00:00Z", "snapshotTs": "2026-09-08T04:00:00Z",
+      "sections": [
+        { "id": "overview", "title": "이슈 개요", "body": "…", "evidenceIds": ["901"] }
+      ]
+    }
   }
 }
 ```
 
+- `report`는 섹션형 리포트(`issue_report.report_sections`, V21, WP-223). **저장된 리포트가 없으면 필드째 빠진다** — 프론트는 그때 기존 "근거가 충분하지 않습니다" 상태를 보인다. `evidenceIds`는 이 이슈 멤버의 `pageId`(문자열)다. 지금은 시연 이슈만 일회성 도구(`tools/issue_report_generate.py`)로 채우고 자동 생성 워커는 없다.
 - `summary`는 `issue_report`. 아직 없으면 `null`. 운영 writer와 상태 전이는 WP-119로 구현됐고 EC2에서 실제 GATEWAY 호출도 수행했다. 다만 2026-09-22 재클러스터링 뒤 운영 `issue_report`는 0건이며 summary worker는 꺼져 있다. 과거 로컬 데모 값은 시드에서 생성한 요약이므로 현재 운영 결과로 간주하지 않는다.
 - `members`는 `weight` 내림차순. `isSeed=true`는 최종 급증 관문을 직접 통과한 루트 문서 또는 생성 시각 동시성으로 편입된 새 사건 문서다. `isSeed=false`는 Clickstream 이웃 중 사건기간 편집 재급증 기준을 통과한 기존 문서다. Wikidata 관계는 멤버 편입 사유가 아니다.
 - `members[].editCount/views`는 이 `cluster_id`가 가리키는 스냅샷에서 판정에 사용한 고정값(`cluster_member`)이다. 아직 판정 입력이 없거나 원본이 없어서 `null`일 수 있지만, 최신 원시 테이블 값으로 대체하지 않는다. ~~최신 `page_edit_window`·`page_view_hourly` 한 행을 끌어왔다~~ → 고정값으로 전환 (2026-09-18, WP-129). 과거 스냅샷에 그 뒤의 수치가 붙던 결함이다.

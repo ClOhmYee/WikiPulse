@@ -13,6 +13,7 @@ import io.wikipulse.backend.common.PageMeta;
 import io.wikipulse.backend.issue.dto.IssueCardResponse;
 import io.wikipulse.backend.issue.dto.IssueDetailResponse;
 import io.wikipulse.backend.issue.dto.IssueMemberResponse;
+import io.wikipulse.backend.issue.dto.IssueReportResponse;
 import io.wikipulse.backend.stock.dto.RelatedStockResponse;
 import java.util.List;
 import org.junit.jupiter.api.Test;
@@ -106,6 +107,35 @@ class IssueControllerTest {
                 .andExpect(jsonPath("$.data.relatedStocks[0].ticker").value("FANG"))
                 .andExpect(jsonPath("$.data.relatedStocks[0].tier").value("BOTH"))
                 .andExpect(jsonPath("$.data.summaryModel").value("claude-x"));
+    }
+
+    @Test
+    void 상세는_리포트가_있으면_report_섹션을_담는다() throws Exception {
+        var report = new IssueReportResponse("ready", "claude-x (report_v1)",
+                "2026-09-24T05:00:00Z", "2026-07-19T23:00:00Z",
+                List.of(new IssueReportResponse.Section("overview", "이슈 개요", "본문",
+                        List.of("901"))));
+        when(service.detail(43L)).thenReturn(ApiResponse.of(new IssueDetailResponse(
+                43, "2026 FIFA World Cup", 12.15, "CONFIRMED", "replay",
+                "2026-07-19T23:00:00Z", "요약", "claude-x", List.of(), List.of(), report)));
+
+        mvc.perform(get("/api/v1/issues/43"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.report.status").value("ready"))
+                .andExpect(jsonPath("$.data.report.sections[0].id").value("overview"))
+                .andExpect(jsonPath("$.data.report.sections[0].evidenceIds[0]").value("901"));
+    }
+
+    @Test
+    void 상세는_리포트가_없으면_report_필드가_없다() throws Exception {
+        // 프론트는 report 가 없을 때 기존 "근거 부족" 상태를 그대로 보인다.
+        when(service.detail(44L)).thenReturn(ApiResponse.of(new IssueDetailResponse(
+                44, "x", 1.0, "DETECTED", "live", "2026-07-19T23:00:00Z",
+                null, null, List.of(), List.of())));
+
+        mvc.perform(get("/api/v1/issues/44"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.report").doesNotExist());
     }
 
     @Test
