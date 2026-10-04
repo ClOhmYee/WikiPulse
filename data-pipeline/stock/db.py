@@ -16,7 +16,7 @@ def dsn() -> str:
     if not url:
         raise SystemExit(
             "DATABASE_URL 이 필요하다. 예:\n"
-            "  postgresql://wikipulse:pw@localhost:5432/wikipulse"
+            "  postgresql://wikipulse:<password>@localhost:5432/wikipulse"
         )
     return url
 

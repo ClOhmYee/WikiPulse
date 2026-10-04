@@ -6,7 +6,7 @@
 
 | ID | 날짜 | 환경 | 범위 | 판정 | 보고서 |
 | --- | --- | --- | --- | --- | --- |
-| VAL-2026-09-17-EC2-01 | 2026-09-17 | EC2 2대 | 인프라 상태·최소 쓰기·변경 영향 | PASS/PARTIAL | [프로젝트 문서](https://github.com/ClOhmYee/WikiPulse) |
+| VAL-2026-09-17-EC2-01 | 2026-09-17 | EC2 2대 | 인프라 상태·최소 쓰기·변경 영향 | PASS/PARTIAL | [인프라 인계서](https://github.com/ClOhmYee/WikiPulse) |
 | VAL-2026-09-17-EC2-02 | 2026-09-17 | EC2 2대 | 2025-06-12 HDFS → Spark → PostgreSQL 원시 신호 | PASS, 최종 판정 BLOCKED | [골든 데이 §1~9](../golden-day-validation-2025-06-12.md) |
 | VAL-2026-09-18-LOCAL-01 | 2026-09-18 | 로컬 | 실제 편집 덤프·24시간 `other/pageviews` → 재평가 | PASS, 기준선 품질 미검증 | [골든 데이 §10](../golden-day-validation-2025-06-12.md#10-로컬-후속-검증-2026-09-18-ec2-미사용) |
 | VAL-2026-09-18-LOCAL-02 | 2026-09-18 | 로컬 | `creation` 대기 73개 전수 원인 분석 | PASS | [생성 기준 시각 대기 감사](2026-09-18-creation-pending-audit.md) |

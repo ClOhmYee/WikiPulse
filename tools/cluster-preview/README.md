@@ -36,7 +36,7 @@ root-only issue cluster
 | --- | --- |
 | preview DB | `localhost:5436` · 컨테이너 `wikipulse-cluster-preview-pg` · 볼륨 `wikipulse-cluster-preview-pgdata` |
 | DB 이름 | `wikipulse_cluster_preview` (5434 볼륨 복사본을 rename) |
-| 계정 | `replay` / `<local-db-password>` |
+| 계정 | `replay` / `<set PREVIEW_DB_PASSWORD>` |
 | `public` 스키마 | **production driver 산출물** (ROOT SELECTION + CORE) — 서비스가 읽는 곳 |
 | `baseline` 스키마 | 교체 전 원본 4개 테이블 그대로 (root 1건 = 클러스터 1건, 22,080개) |
 | 백엔드 | http://localhost:18080 |

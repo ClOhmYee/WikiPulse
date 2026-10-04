@@ -23,7 +23,7 @@
 ## 실행
 
 ```bash
-export DATABASE_URL=postgresql://wikipulse:pw@localhost:5432/wikipulse
+export DATABASE_URL=postgresql://wikipulse:<password>@localhost:5432/wikipulse
 export LLM_GATEWAY_API_KEY=...            # .env 참고. 저장소에 넣지 않는다.
 
 python -m stock.universe          # 1. 마스터 (약 5,400종목)
@@ -96,7 +96,7 @@ ACM, AERO, ALK, BA, CAAP, CPA, DAL, DJT, FUBO, FUN, GRSD, MANU, MMYT, OKLO, OPBK
 # 로컬(Windows Git Bash)에서 SSH로 EC2에 붙어 일회성 컨테이너 실행.
 # pem 경로는 각자 로컬 경로로 바꾼다(개인 환경 — 저장소에 실경로를 박지 않는다).
 # DB 비밀번호는 컨테이너 env에서 서버 안에서만 읽어 DATABASE_URL로 넘긴다 — 저장소·로그에 안 남긴다.
-ssh -i <로컬 pem 경로>/example-account.pem ubuntu@service.example.com '
+ssh -i <로컬 pem 경로>/service-server.pem ubuntu@service.example.com '
 PGPW=$(sudo docker inspect postgres-postgres-1 --format "{{range .Config.Env}}{{println .}}{{end}}" | grep "^POSTGRES_PASSWORD=" | cut -d= -f2-)
 sudo docker run --rm --network postgres_default \
   -v /home/deploy/wikipulse-local-test/data-pipeline:/opt/app -w /opt/app \
@@ -156,7 +156,7 @@ python -m stock.sectors --limit 20 --dry-run  # DB 안 건드리고 20종목만 
 🔴 **`git pull` 하지 않는다.** `/home/deploy/wikipulse-local-test` 는 git 체크아웃이 아니라
 tarball 복사본이고(`infra/live/README.md`), 운영 `live-cycle`·`live-cluster`·`edit-stream` 이
 같은 디렉터리를 읽는다. 지금까지처럼 **파일 단위로 백업 후 복사**하고 md5 로 확인한다
-(`docs/next-steps-2026-09-23.md` §5 와 같은 방식). 인프라 작업이라 담당자와 조율한다.
+(`https://github.com/ClOhmYee/WikiPulse` §5 와 같은 방식). 인프라 작업이라 담당자와 조율한다.
 
 올릴 파일은 셋이다. 운영 컨테이너는 `stock/` 을 임포트하지 않는다(일회성 컨테이너만 쓴다).
 
@@ -168,7 +168,7 @@ tarball 복사본이고(`infra/live/README.md`), 운영 `live-cycle`·`live-clus
 
 ```bash
 # 로컬 저장소 루트에서. <로컬 pem 경로> 는 각자 바꾼다(개인 경로를 저장소에 박지 않는다).
-PEM=<로컬 pem 경로>/example-account.pem
+PEM=<로컬 pem 경로>/service-server.pem
 HOST=ubuntu@service.example.com
 DIR=/home/deploy/wikipulse-local-test/data-pipeline/stock
 TS=$(date -u +%Y%m%d-%H%M%S)
@@ -189,7 +189,7 @@ ssh -i "$PEM" "$HOST" "cd $DIR && md5sum sectors.py db.py prices.py"
 yfinance 는 `requirements.txt` 와 같은 **1.7.0 으로 고정**한다 — 0.2.51 은 조용히 0행이었다.
 
 ```bash
-ssh -i <로컬 pem 경로>/example-account.pem ubuntu@service.example.com '
+ssh -i <로컬 pem 경로>/service-server.pem ubuntu@service.example.com '
 PGPW=$(sudo docker inspect postgres-postgres-1 --format "{{range .Config.Env}}{{println .}}{{end}}" | grep "^POSTGRES_PASSWORD=" | cut -d= -f2-)
 sudo docker run --rm --network postgres_default \
   -v /home/deploy/wikipulse-local-test/data-pipeline:/opt/app -w /opt/app \
@@ -204,7 +204,7 @@ sudo docker run --rm --network postgres_default \
 - **커버리지(읽기 전용)** — SQL 에 작은따옴표가 있어 ssh 인자는 큰따옴표로 감싼다:
 
 ```bash
-ssh -i <로컬 pem 경로>/example-account.pem ubuntu@service.example.com \
+ssh -i <로컬 pem 경로>/service-server.pem ubuntu@service.example.com \
   "sudo docker exec postgres-postgres-1 psql -U wikipulse -d wikipulse -c \"SELECT count(*) FILTER (WHERE sector IS NOT NULL) AS filled, count(*) FROM stock WHERE ticker IN ('ACM','AERO','ALK','BA','CAAP','CPA','DAL','DJT','FUBO','FUN','GRSD','MANU','MMYT','OKLO','OPBK','WH','YTRA');\""
 ```
 
@@ -235,7 +235,7 @@ UPDATE stock SET sector = NULL WHERE ticker IN ('ACM','AERO','ALK','BA','CAAP','
 ## 왜 이렇게 소스를 골랐나
 
 **티커는 NASDAQ Trader 가 정답이다.** Wikidata `wdt:P249` 로 조회하면 40건만
-나온다 — 티커가 P414 문의 한정어라 조용히 0에 수렴한다 (CLAUDE.md 폐기 절).
+나온다 — 티커가 P414 문의 한정어라 조용히 0에 수렴한다 (https://github.com/ClOhmYee/WikiPulse 폐기 절).
 NASDAQ Trader `nasdaqlisted.txt` + `otherlisted.txt` 가 거래소별 상장 목록을
 그대로 준다.
 

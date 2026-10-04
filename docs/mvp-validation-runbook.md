@@ -3,7 +3,7 @@
 - 작성 기준: **2026-09-17 18:12~18:30 KST 로컬·EC2 실측 + 2026-09-18 로컬 후속 검증**
 - 제품 정본: [requirements-v0.3.md](requirements-v0.3.md)
 - 기술 정본: [tech-spec-v0.3.md](tech-spec-v0.3.md)
-- 인프라 인계: [프로젝트 문서](https://github.com/ClOhmYee/WikiPulse)
+- 인프라 인계: [https://github.com/ClOhmYee/WikiPulse](https://github.com/ClOhmYee/WikiPulse)
 - 골든 데이 실측: [golden-day-validation-2025-06-12.md](golden-day-validation-2025-06-12.md)
 
 이 문서는 요구사항을 다시 정의하지 않는다. **무엇을 어디에서 확인해야 MVP라고 말할 수
@@ -24,9 +24,9 @@ MVP는 아래 한 문장을 실제 데이터로 시연할 수 있어야 한다.
 | --- | --- | --- |
 | G1 원본 | `2026-07-17~09-17` 편집·시간별 조회수·일별 user 조회수·GDELT·Clickstream 원본의 날짜별 매니페스트와 결손 사유가 있다 | **FAIL** — EC2 HDFS에는 2025년 표본만 있고 해당 구간 원본을 찾지 못함 |
 | G2 공통 판정 | 과거와 LIVE가 `사람 편집 1건 → 조회수 급등`의 같은 코드 경로를 사용한다 | **PARTIAL** — 2025-06-12 실제 편집 덤프와 24시간 `other/pageviews`의 로컬 PostgreSQL E2E 통과. LIVE scheduler·실제 28일 기준선·고정 2개월 회귀가 남음 |
-| G3 스냅샷 | 과거 여러 시점과 최신 시점의 점수·멤버가 DB에 저장되고 미래 근거가 과거에 섞이지 않는다 | **PARTIAL** — 2025-06-12 실제 원본으로 seed-only 스냅샷 15개 저장. historical 도입부·멤버 조회수·`completeness`·revision 감사 필드는 WP-129로 로컬 구현했지만 실제 replay를 다시 돌리지 않았다. 요약·종목 결과 재사용의 대상 스냅샷 상한도 미완료 |
-| G4 보강 | 이슈 요약, 후보 종목, LLM 검증, 상태 전이가 멱등 실행되고 실패와 정상 0건을 구분한다 | **PARTIAL** — 실제 BA 임베딩·후보·GATEWAY LLM 검증 통과. 요약 writer·상태 전이는 WP-119로 구현했지만 worker 기본값이 꺼져 있고 실제 GATEWAY 실행·GKG 검색 술어 자동 배선·EC2 검증이 없음 |
-| G5 서빙 | PostgreSQL → Spring API → React 화면에서 지도·피드·리포트·종목 상세가 같은 시점을 가리킨다 | **PARTIAL** — 실제 canary DB → Spring API → Frontend dev proxy 통과. 상세 members 고정 조회는 WP-129로 구현했지만 같은 실데이터 경로를 재검증하지 않았고 브라우저 시각 검증·가격 연결도 남음 |
+| G3 스냅샷 | 과거 여러 시점과 최신 시점의 점수·멤버가 DB에 저장되고 미래 근거가 과거에 섞이지 않는다 | **PARTIAL** — 2025-06-12 실제 원본으로 seed-only 스냅샷 15개 저장. historical 도입부·멤버 조회수·`completeness`·revision 감사 필드는 WikiPulse-129로 로컬 구현했지만 실제 replay를 다시 돌리지 않았다. 요약·종목 결과 재사용의 대상 스냅샷 상한도 미완료 |
+| G4 보강 | 이슈 요약, 후보 종목, LLM 검증, 상태 전이가 멱등 실행되고 실패와 정상 0건을 구분한다 | **PARTIAL** — 실제 BA 임베딩·후보·GATEWAY LLM 검증 통과. 요약 writer·상태 전이는 WikiPulse-119로 구현했지만 worker 기본값이 꺼져 있고 실제 GATEWAY 실행·GKG 검색 술어 자동 배선·EC2 검증이 없음 |
+| G5 서빙 | PostgreSQL → Spring API → React 화면에서 지도·피드·리포트·종목 상세가 같은 시점을 가리킨다 | **PARTIAL** — 실제 canary DB → Spring API → Frontend dev proxy 통과. 상세 members 고정 조회는 WikiPulse-129로 구현했지만 같은 실데이터 경로를 재검증하지 않았고 브라우저 시각 검증·가격 연결도 남음 |
 | G6 LIVE | 실제 편집 1건부터 최종 노출까지 통상 2~3시간(~~1~2시간~~, 2026-09-21 덤프 지연 정정), 시간별 원본 도착 뒤 내부 15분 이내로 이어진다 | **FAIL** — Kafka 실데이터와 실행 중 소비자가 없음 |
 | G7 재현 | 로컬 명령과 EC2 배포 파일이 저장소에서 재현되고 비밀값은 외부 주입된다 | **FAIL** — EC2 `~/infra/*`가 저장소에 없음 |
 
@@ -235,11 +235,11 @@ CloudWatch/계정 측 확인이 필요하다. 이를 확인하지 않은 채 24�
 ### P0 — 없으면 MVP가 아님
 
 1. 실제 2개월 원본 카탈로그와 결손 처리
-2. WP-118의 2단계 판정 및 시간별 조회수 대기·재평가
+2. WikiPulse-118의 2단계 판정 및 시간별 조회수 대기·재평가
 3. 실제 원본 replay → 시점별 cluster snapshot. historical 대표 텍스트·멤버 증거값 고정 코드는 구현됐으므로 실제 원본으로 재검증
 4. WP-119 요약 worker 활성화·실제 GATEWAY 상태 전이 검증과 요약/종목 재사용의 대상 스냅샷 상한·원 유효 시각 보존
-5. WP-120의 GKG 자동 배선·Docker GATEWAY/worker 설정·2개월 수작업 seed 교체. 상세 시점 고정과 임베딩·LLM 한 종목 canary는 로컬 통과
-6. WP-124의 가격 API·그래프 연결
+5. WikiPulse-120의 GKG 자동 배선·Docker GATEWAY/worker 설정·2개월 수작업 seed 교체. 상세 시점 고정과 임베딩·LLM 한 종목 canary는 로컬 통과
+6. WikiPulse-124의 가격 API·그래프 연결
 7. 실제 DB/API/브라우저와 이후 LIVE 누적 검증. DB/API/Frontend proxy canary는 통과했으나 브라우저·가격·LIVE는 남음
 
 ### P1 — 안정적인 시연에 필요

@@ -61,4 +61,21 @@ artifacts/*.sql
 artifacts/*.tar.gz
 
 #개인 문서
-docs/Yoon/
+docs/local/
+
+# Credentials and local artifacts
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
+*.keystore
+*.sqlite
+*.sqlite3
+*.db
+*.dump
+**/credentials.json
+**/secrets.json
+output/
+frontend/test-results/
+frontend/playwright-report/

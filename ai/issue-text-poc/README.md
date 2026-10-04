@@ -27,4 +27,4 @@ python issue_text_experiment.py result.txt
 ## 주의
 
 - 출력은 UTF-8 파일로 쓴다. Windows 콘솔로 바로 뿌리면 한글이 깨진다.
-- 정답 종목 목록은 잠정값이다. 확정은 WP-39에서 한다.
+- 정답 종목 목록은 잠정값이다. 확정은 WikiPulse-39에서 한다.

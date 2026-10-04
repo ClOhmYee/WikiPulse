@@ -365,4 +365,3 @@ def test_덤프_제목_표기가_흔들려도_같은_키로_모인다(dump_title
 def test_다른_문서는_여전히_다른_키다():
     """정규화가 서로 다른 문서를 뭉쳐버리지 않는지. 반대 방향 확인."""
     assert dump_titled("Hurricane_Milton")["title"] != dump_titled("Hurricane_Helene")["title"]
-

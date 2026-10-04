@@ -12,7 +12,7 @@
 
 MR 제출 전 `origin/develop`의 `af298a7`을 반영한 `d521b33`에서 전체 검사를 추가 실행했다. `npm.cmd test` **43/43**, `npm.cmd run test:api` **13/13** 통과(exit 0). 위 Pulse 18개/6개도 각각 이 전체 실행에 포함됐다. `lint`, `test:data`, `test:contract`, `build`도 통과했다. 빌드의 기존 Onboarding 약 906.71kB 청크 경고는 남는다. 검증 후 변경은 이 결과와 이슈 추적 문서뿐이다.
 
-측정 원자료와 재현 방법은 [최적화 기록](../../.impeccable/performance/OPTIMIZATION.md)에 있다.
+측정 원자료와 재현 방법은 [최적화 기록](../../docs/frontend/PERFORMANCE.md)에 있다.
 
 ## 2026-09-15 — NEW 중심 펄스맵과 전체화면 탐색
 
@@ -109,7 +109,7 @@ npm.cmd --prefix frontend run test:api
 
 ## 2026-09-09 — 페이지 URL 재구성 검증
 
-대상: WP-70의 로컬 작업 트리, Windows · Node.js · Playwright Chromium. 페이지 구성의 정본은 [PAGES.md](../../docs/frontend/PAGES.md)다. 아래 결과는 2026-09-09 구현 작업에서 실행한 결과이며, 배포·병합 완료를 뜻하지 않는다.
+대상: WikiPulse-70의 로컬 작업 트리, Windows · Node.js · Playwright Chromium. 페이지 구성의 정본은 [PAGES.md](../../docs/frontend/PAGES.md)다. 아래 결과는 2026-09-09 구현 작업에서 실행한 결과이며, 배포·병합 완료를 뜻하지 않는다.
 
 | 검사                                                        | 결과           | 확인 범위                                                                    |
 | ----------------------------------------------------------- | -------------- | ---------------------------------------------------------------------------- |

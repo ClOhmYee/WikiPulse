@@ -39,7 +39,7 @@ LLM 검증(-68)에 **GDELT 동시출현 컨텍스트를 넣는 것**이 판정 �
    - 🔴 **여기가 사례별 판단이 드는 유일한 지점**: `IssuePredicate(themes=…, locations=…)` 를
      사례마다 정해야 한다(Milton = `themes=("HURRICANE",), locations=("florida",)` 는 -47 에서
      검증됨). 나머지 4사례 술어는 **실행 시 실 GKG 를 보며 확정**한다 — 오프라인에서 추측으로
-     박으면 CLAUDE.md "표본·명세만 보고 단정 금지"에 걸린다. 이 미확정이 실행 보류의 실질 이유다.
+     박으면 https://github.com/ClOhmYee/WikiPulse "표본·명세만 보고 단정 금지"에 걸린다. 이 미확정이 실행 보류의 실질 이유다.
 3. `gkg.match`(`build_ticker_index` · `merge_aliases` · `match_ticker`) + `gkg.aliases` —
    기관명을 티커로 붙일 필요는 **없다**(컨텍스트는 기관명 문자열 그대로). lift 상위 Top-15
    `org_name` 만 뽑아 컨텍스트로 쓴다.

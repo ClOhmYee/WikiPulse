@@ -6,7 +6,7 @@
 - 상위 문서: [requirements-v0.3.md](requirements-v0.3.md) — **왜 이 컴포넌트가 있는가는 §3.1이 정본이다.** 여기 다시 적지 않는다.
 - 이 문서가 다루는 것: **무엇이 어느 버전으로, 어느 서버 어느 포트에서, 어떻게 뜨는가.**
 - API는 [api-v0.3.md](api-v0.3.md), 데이터 모델은 [erd-v0.1.md](erd-v0.1.md).
-- 구현·검증 순서는 [MVP 구현·검증 실행서](mvp-validation-runbook.md), 2026-09-17 서버 실측·변경 흔적은 [프로젝트 문서](https://github.com/ClOhmYee/WikiPulse)를 따른다.
+- 구현·검증 순서는 [MVP 구현·검증 실행서](mvp-validation-runbook.md), 2026-09-17 서버 실측·변경 흔적은 [인프라 인계서](https://github.com/ClOhmYee/WikiPulse)를 따른다.
 
 ⚠️ 아래 표에서 **(저장소)** 는 저장소 파일에서 읽은 확정 값, **(계획)** 은 아직 안 깔아본 값이다. 계획값을 실측값처럼 인용하지 말 것.
 
@@ -52,8 +52,8 @@
 | Hadoop / HDFS | **3.5.0** (`apache/hadoop:3.5.0`) | NameNode 1 + DataNode 2, 복제 2. `/wikipulse`는 논리 약 1.7 GiB·복제 포함 약 3.5 GiB이며 `mediawiki_history`와 `pageview_complete` 원본이 있다. 고정 MVP 2개월 원본은 아직 완성되지 않았다 (2026-09-22 실측) |
 | Spark (EC2) | **3.5.3** (`apache/spark:3.5.3-python3`) | Standalone 2노드, client 모드. 제한 2코어 작업에서 Worker 2대 참여·HDFS Parquet 20행 왕복 통과 (2026-09-17 18:26 KST) |
 | Kafka (EC2) | **3.9.0** (`apache/kafka:3.9.0`) | 추가 EC2 KRaft 단일 broker + controller. `wiki.edits` 3파티션과 EventStreams producer·edit-stream 잡이 기동 상태다 (2026-09-22 실측) |
-| Redis | **채택 여부 미정** | CLAUDE.md 인프라 절에 이름만 있고 명세 §3.1 컴포넌트 표에는 없다. 지금 필요한 캐시가 무엇인지부터 정할 것 |
-| Nginx / 배포 | Nginx **1.30.5** / GitLab CI | Nginx·Frontend·Spring Backend가 기본 EC2에 배포됐다. HTTPS 루트와 snapshots·map·rankings·stocks API가 모두 200을 반환했다 (2026-09-22 실측). 현재 자동 배포 정본은 `.gitlab-ci.yml`이며 Jenkins는 배포 경로가 아니다 |
+| Redis | **채택 여부 미정** | https://github.com/ClOhmYee/WikiPulse 인프라 절에 이름만 있고 명세 §3.1 컴포넌트 표에는 없다. 지금 필요한 캐시가 무엇인지부터 정할 것 |
+| Nginx / 배포 | Nginx **1.30.5** / GitLab CI | Nginx·Frontend·Spring Backend가 기본 EC2에 배포됐다. HTTPS 루트와 snapshots·map·rankings·stocks API가 모두 200을 반환했다 (2026-09-22 실측). `.github/workflows/ci.yml`은 lint·테스트·빌드를 수행한다 |
 
 ⚠️ **로컬 개발 스택의 Hadoop 은 3.4.1, EC2 는 3.5.0 이다** (2026-09-17 확인). 서로 다른 환경이라 그 자체로 불일치는 아니지만, 한쪽만 보고 다른 쪽을 "고치지" 말 것. 맞출지 여부는 결정된 바 없다. Kafka(3.9.0)·Spark(3.5.3)는 양쪽이 같다.
 

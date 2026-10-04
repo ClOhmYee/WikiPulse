@@ -13,7 +13,7 @@ docker compose --profile gdelt up -d        # GDELT 수집(HDFS namenode·datano
 docker compose down                         # 정지 (데이터 유지)
 ```
 
-`.env.example` 을 `.env` 로 복사해서 채운다 (`.env` 는 gitignore).
+`python tools/setup_local_env.py`로 무작위 DB 비밀번호가 포함된 `.env`를 만든다. 외부 서비스 설정은 직접 채운다 (`.env`는 gitignore).
 
 ## 서비스
 
@@ -178,7 +178,7 @@ docker compose up -d postgres
     SPARK_SINK=spike docker compose --profile pipeline up -d spark
 
 ⚠️ **EC2 적용은 Driver 와 Worker 를 동시에 바꾼다.** 드라이버와 워커의 파이썬이 갈리면
-파이썬 워커가 뜨는 순간 executor 가 죽는다(CLAUDE.md 인프라 절). 순서:
+파이썬 워커가 뜨는 순간 executor 가 죽는다(https://github.com/ClOhmYee/WikiPulse 인프라 절). 순서:
 
 1. 두 EC2 에서 이 이미지를 빌드하거나 레지스트리로 옮긴다 (`~/infra/spark`)
 2. Worker → Master → Driver 순으로 교체하고 `spark-submit --version` 으로 파이썬을 확인한다

@@ -10,7 +10,7 @@
 
 ## 0. 이 문서가 정리한 것 — 계약이 두 벌이었다
 
-아래 표는 **2026-09-08 통합 결정 이전 상태**다. 2026-09-09 WP-76에서 BE의 Issue/Stock 경로는 `/api/v1`과 응답 봉투로 변경되었고, 이슈 상세에 `pageId/wiki/title/weight/isSeed/editCount/views`를 가진 `members`가 추가되었다. 2026-09-22 WP-205에서 `members[]`와 펄스맵 `Node`에 표시 전용 `titleKo`가 **더해졌다**(선택·nullable, 영문 `title`은 그대로). 펄스맵의 스냅샷 목록·일괄 그래프 조회도 WP-74에서 구현되었다. [펄스맵 구현·계약](frontend/PULSE_MAP.md)을 참고한다.
+아래 표는 **2026-09-08 통합 결정 이전 상태**다. 2026-09-09 WikiPulse-76에서 BE의 Issue/Stock 경로는 `/api/v1`과 응답 봉투로 변경되었고, 이슈 상세에 `pageId/wiki/title/weight/isSeed/editCount/views`를 가진 `members`가 추가되었다. 2026-09-22 WikiPulse-205에서 `members[]`와 펄스맵 `Node`에 표시 전용 `titleKo`가 **더해졌다**(선택·nullable, 영문 `title`은 그대로). 펄스맵의 스냅샷 목록·일괄 그래프 조회도 WikiPulse-74에서 구현되었다. [펄스맵 구현·계약](frontend/PULSE_MAP.md)을 참고한다.
 
 | | FE 제안 (`frontend/docs/openapi.yaml`, `0.2.0-proposal`) | BE 구현 (`backend/`, WP-36) |
 | --- | --- | --- |
@@ -22,7 +22,7 @@
 **v0.1은 이렇게 합친다** (2026-09-08 결정):
 
 - **경로·어휘·식별자는 BE·DB 쪽을 쓴다.** `event`가 아니라 `issue`, `entity`가 아니라 `page`. DB가 `issue_cluster`·`cluster_member`이고 명세 §3.2도 "클러스터 = 이슈"라, API만 다른 말을 쓰면 세 곳을 머릿속에서 번역해야 한다.
-- **봉투·페이지네이션·오류 규약은 FE 제안 쪽을 쓴다.** 이미 설계돼 있고 프론트 조회 계층이 그 형태를 기대한다. BE의 적용은 WP-76에 포함되었다.
+- **봉투·페이지네이션·오류 규약은 FE 제안 쪽을 쓴다.** 이미 설계돼 있고 프론트 조회 계층이 그 형태를 기대한다. BE의 적용은 WikiPulse-76에 포함되었다.
 - base path는 `/api/v1`. ~~`/api`~~ → 버전 없는 경로는 계약이 바뀔 때 갈아탈 자리가 없다.
 
 ~~`frontend/docs/openapi.yaml`은 이 결정 이후 낡았다~~ → **현재 OpenAPI는 Spring 컨트롤러의 8개 GET 경로와 DTO를 반영했다** (2026-09-15, WP-95·97). 구현되지 않은 미래 API는 OpenAPI에 넣지 않는다. FE mock과 실제 API의 통합 실행 여부는 별도 검증 기록으로 구분한다.
@@ -99,7 +99,7 @@ DB `CHECK` 제약과 **같은 값을 그대로** 쓴다. 번역하지 않는다.
 
 `status`는 이슈 판정 단계가 아니라 판정 후 AI 보강 상태다. `DETECTED`는 요약·종목 검증 전, `VERIFYING`은 처리 중, `CONFIRMED`는 요약 생성과 종목 검증 작업이 끝난 상태다. 조회수 미도착은 아직 이슈가 아닌 후보 대기이며, GATEWAY·GDELT 실패는 재시도/`VERIFYING`으로 남긴다. 모든 작업이 끝난 뒤 검증 통과 종목이 없는 `CONFIRMED`만 정상 0건이다. 미처리·장애 데이터를 시연 편의로 `CONFIRMED`에 올리면 안 된다.
 
-과거 스냅샷을 조회할 때 버블 점수·멤버·편집수·조회수·기준선은 해당 `cluster_id`의 `cluster_member` 고정값을 사용한다. 일반 이슈 상세도 최신 `page_edit_window`나 `page_view_hourly` 행으로 이를 보충하지 않는다. 이 멤버 수치 계약은 WP-129로 구현됐다. 요약·검증 종목은 `issue_key` 단위 결과를 재사용하되 **원본 클러스터의 `snapshot_ts <=` 대상 클러스터의 `snapshot_ts`**인 결과만 복사한다(WP-208). 허용된 원본이 여러 개면 대상 이하의 가장 가까운 스냅샷을 선택한다. `generated_at`·`verified_at`은 처리 시각이라 event-time 상한으로 쓰지 않는다 — historical backfill은 사건 뒤에 실행되는 것이 정상이라 이를 `snapshotTs`와 비교하면 안전한 과거 결과도 전부 탈락한다. 미래 원문·수치·요약·종목 결과를 같은 `issue_key`의 과거 화면에 소급 노출하지 않는 기준은 처리 시각이 아니라 원본 스냅샷 시각이다.
+과거 스냅샷을 조회할 때 버블 점수·멤버·편집수·조회수·기준선은 해당 `cluster_id`의 `cluster_member` 고정값을 사용한다. 일반 이슈 상세도 최신 `page_edit_window`나 `page_view_hourly` 행으로 이를 보충하지 않는다. 이 멤버 수치 계약은 WikiPulse-129로 구현됐다. 요약·검증 종목은 `issue_key` 단위 결과를 재사용하되 **원본 클러스터의 `snapshot_ts <=` 대상 클러스터의 `snapshot_ts`**인 결과만 복사한다(WP-208). 허용된 원본이 여러 개면 대상 이하의 가장 가까운 스냅샷을 선택한다. `generated_at`·`verified_at`은 처리 시각이라 event-time 상한으로 쓰지 않는다 — historical backfill은 사건 뒤에 실행되는 것이 정상이라 이를 `snapshotTs`와 비교하면 안전한 과거 결과도 전부 탈락한다. 미래 원문·수치·요약·종목 결과를 같은 `issue_key`의 과거 화면에 소급 노출하지 않는 기준은 처리 시각이 아니라 원본 스냅샷 시각이다.
 
 ---
 
@@ -172,7 +172,7 @@ DB `CHECK` 제약과 **같은 값을 그대로** 쓴다. 번역하지 않는다.
 ```
 
 - `report`는 섹션형 리포트(`issue_report.report_sections`, V21, WP-223). **저장된 리포트가 없으면 필드째 빠진다** — 프론트는 그때 기존 "근거가 충분하지 않습니다" 상태를 보인다. `evidenceIds`는 이 이슈 멤버의 `pageId`(문자열)다. 지금은 시연 이슈만 일회성 도구(`tools/issue_report_generate.py`)로 채우고 자동 생성 워커는 없다.
-- `summary`는 `issue_report`. 아직 없으면 `null`. 운영 writer와 상태 전이는 WP-119로 구현됐고 EC2에서 실제 GATEWAY 호출도 수행했다. 다만 2026-09-22 재클러스터링 뒤 운영 `issue_report`는 0건이며 summary worker는 꺼져 있다. 과거 로컬 데모 값은 시드에서 생성한 요약이므로 현재 운영 결과로 간주하지 않는다.
+- `summary`는 `issue_report`. 아직 없으면 `null`. 운영 writer와 상태 전이는 WikiPulse-119로 구현됐고 EC2에서 실제 GATEWAY 호출도 수행했다. 다만 2026-09-22 재클러스터링 뒤 운영 `issue_report`는 0건이며 summary worker는 꺼져 있다. 과거 로컬 데모 값은 시드에서 생성한 요약이므로 현재 운영 결과로 간주하지 않는다.
 - `members`는 `weight` 내림차순. `isSeed=true`는 최종 급증 관문을 직접 통과한 루트 문서 또는 생성 시각 동시성으로 편입된 새 사건 문서다. `isSeed=false`는 Clickstream 이웃 중 사건기간 편집 재급증 기준을 통과한 기존 문서다. Wikidata 관계는 멤버 편입 사유가 아니다.
 - `members[].editCount/views`는 이 `cluster_id`가 가리키는 스냅샷에서 판정에 사용한 고정값(`cluster_member`)이다. 아직 판정 입력이 없거나 원본이 없어서 `null`일 수 있지만, 최신 원시 테이블 값으로 대체하지 않는다. ~~최신 `page_edit_window`·`page_view_hourly` 한 행을 끌어왔다~~ → 고정값으로 전환 (2026-09-18, WP-129). 과거 스냅샷에 그 뒤의 수치가 붙던 결함이다.
 - `members[].completeness`는 그 `null`이 무슨 뜻인지 말한다 — `complete`(판정 끝) / `pending`(입력 대기) / `unavailable`(원본 없음). 지도 노드와 같은 어휘다. 둘 다 빈칸으로 보이면 사용자는 서비스가 고장 난 줄 안다.
@@ -306,7 +306,7 @@ DB `CHECK` 제약과 **같은 값을 그대로** 쓴다. 번역하지 않는다.
 
 ## 5. 회원 · 보관함 / 알림 · 토론
 
-회원·보관함은 WP-211에서 구현했다. 과거 `{token, member}` 초안은 폐기하고
+회원·보관함은 WikiPulse-211에서 구현했다. 과거 `{token, member}` 초안은 폐기하고
 **HttpOnly 쿠키 + PostgreSQL 서버 세션 + CSRF**를 사용한다.
 상세 요청·응답, 검증 규칙과 적용 순서는 [계정·보관함 계약](backend/ACCOUNT_BOOKMARKS.md)을 따른다.
 
@@ -376,7 +376,7 @@ FE 공통 헤더용. 이슈·문서·종목을 한 번에.
 
 | endpoint | 상태 |
 | --- | --- |
-| `GET /api/v1/issues`, `/issues/{id}`, `/issues/{id}/stocks` | **구현됨** — 상세 members는 WP-129부터 `cluster_member` 고정값과 `completeness`를 읽음. 로컬 회귀 테스트 완료, EC2·실데이터 API 재검증은 하지 않음 |
+| `GET /api/v1/issues`, `/issues/{id}`, `/issues/{id}/stocks` | **구현됨** — 상세 members는 WikiPulse-129부터 `cluster_member` 고정값과 `completeness`를 읽음. 로컬 회귀 테스트 완료, EC2·실데이터 API 재검증은 하지 않음 |
 | `GET /api/v1/issues/snapshots`, `/issues/map` | **구현됨** — 완료 스냅샷 목록과 원자적 그래프. map은 `cluster_member` 고정값을 읽음 |
 | `GET /api/v1/stocks`, `/stocks/{ticker}`, `/stocks/{ticker}/issues` | **구현됨** — 응답 봉투 적용. 요약·후보·검증 재사용은 원본 `snapshot_ts <=` 대상 `snapshot_ts` 상한을 적용함(WP-208) |
 | `GET /api/v1/stocks/{ticker}/prices` | **구현됨** (WP-124). 거래일 일봉, 없는 티커 404·빈 구간 200 빈 data·잘못된 날짜 400. 로컬 실데이터·프론트 차트·마커 연결까지 검증(2026-09-18) |
@@ -390,6 +390,6 @@ FE 공통 헤더용. 이슈·문서·종목을 한 번에.
 
 - ~~`GET /api/v1/stocks/{ticker}/prices` — 아직 컨트롤러·OpenAPI에 없고 로컬 `stock_price`도 0건~~ → **완료** (WP-124, 2026-09-18). 컨트롤러·서비스·리포지토리·OpenAPI 추가, 로컬 PostgreSQL에 시연 44종목(verified 3 + 정답셋) 일봉 적재(55,176행), 프론트 종목 상세 차트를 실 API에 연결하고 연관 이슈 시점 마커를 겹쳤다. 전 종목(5,100×5년) 적재는 시연 범위 밖.
 - ~~`/issues/{id}`의 members 쿼리를 `cluster_member.edit_count/views`로 전환하고, 과거 스냅샷 뒤에 들어온 원시 행이 응답을 바꾸지 않는 회귀 테스트를 추가한다(WP-120).~~ → **완료** (2026-09-18, WP-129). 회귀는 `db/tests/test_issue_detail_sql.py`가 실 PostgreSQL로 고정한다.
-- 운영 이슈 요약 worker를 활성화해 실제 GATEWAY로 요약·상태 전이를 실행하고, GKG·종목 매칭 자동 배선(WP-120)이 실제 데이터를 채운 뒤 8개 GET의 실데이터 응답을 다시 검증한다. 같은 `issue_key`의 미래 스냅샷 역복사는 WP-208의 대상 시점 상한으로 차단했다. 한 종목 canary 통과나 writer 코드 존재는 고정 2개월 자동화·EC2 E2E 검증 완료를 뜻하지 않는다.
+- 운영 이슈 요약 worker를 활성화해 실제 GATEWAY로 요약·상태 전이를 실행하고, GKG·종목 매칭 자동 배선(WP-120)이 실제 데이터를 채운 뒤 8개 GET의 실데이터 응답을 다시 검증한다. 같은 `issue_key`의 미래 스냅샷 역복사는 WikiPulse-208의 대상 시점 상한으로 차단했다. 한 종목 canary 통과나 writer 코드 존재는 고정 2개월 자동화·EC2 E2E 검증 완료를 뜻하지 않는다.
 - 2026-07-17~09-17 로컬 시드는 모든 스냅샷을 `CONFIRMED`로 고정하고 요약·종목을 이슈별 마지막 `cluster_id`에만 연결한다. 이 시드는 API 형태·시간 슬라이더 시연용이며 상태 전이, 과거 시점 보강 데이터, 실제 매칭 E2E 검증 근거가 아니다.
 - 관련 종목의 **제품 노출 상한은 두지 않기로 확정**했다(WP-22). 다만 현재 `/issues/{id}/stocks`의 전송 `limit` 기본 50·최대 100은 API 응답 크기 보호용이며 제품 정책상 노출 상한과 다른 값이다.

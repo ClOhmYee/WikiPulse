@@ -36,7 +36,7 @@ from cluster.asof_links import link_key                    # noqa: E402
 DEFAULT_SQLITE = os.path.join(os.environ.get("TEMP", "."), "poc_asof_links.sqlite3")
 DEFAULT_DSN = ""
     "PREVIEW_DSN",
-    "postgresql://replay:<local-db-password>@localhost:5436/wikipulse_cluster_preview",
+    "",
 )
 
 
@@ -46,6 +46,8 @@ def main() -> None:
     ap.add_argument("--dsn", default=DEFAULT_DSN)
     ap.add_argument("--batch", type=int, default=2000)
     args = ap.parse_args()
+    if not args.dsn:
+        ap.error("Set PREVIEW_DSN or pass --dsn; no database password is bundled.")
 
     if ":5434/" in args.dsn or ":5435/" in args.dsn:
         raise SystemExit("거부: 5434·5435 는 읽기 전용 원본이다. preview(5436) 로만 쓴다.")

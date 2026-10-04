@@ -323,7 +323,7 @@ executor를 계속 실행한다.
 ### 10.6 이후 저장소 정리 (2026-09-19, 서버 무변경)
 
 develop을 이 브랜치에 통합하면서 배포 파일을 `deploy/live-pipeline/`에서
-`infra/pipeline/`으로 옮겼다. WP-133이 EC2 compose 정본을 `infra/*`에 두기로
+`infra/pipeline/`으로 옮겼다. WikiPulse-133이 EC2 compose 정본을 `infra/*`에 두기로
 했고 서버 경로도 `/home/deploy/infra/pipeline`이라 이름을 맞춘 것이다. 파일 내용과
 서버 상태는 바꾸지 않았으므로 위 §10.1~§10.5의 증거는 그대로 유효하다. 이 절 위의
 기록에 남은 `deploy/live-pipeline` 경로는 배포 당시의 사실이라 고치지 않았다.

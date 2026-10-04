@@ -44,7 +44,7 @@ import psycopg
 
 DEFAULT_DSN = ""
     "PREVIEW_DSN",
-    "postgresql://replay:<local-db-password>@localhost:5436/wikipulse_cluster_preview",
+    "",
 )
 DEFAULT_CSV = os.path.join(os.path.dirname(os.path.abspath(__file__)),
                            "poc5-core-components-1104.csv")
@@ -110,6 +110,8 @@ def main() -> None:
     #    만든 문제가 아니라 replay 데이터셋이 원래 그렇다.
     ap.add_argument("--keep-clickstream-members", action="store_true")
     args = ap.parse_args()
+    if not args.dsn:
+        ap.error("Set PREVIEW_DSN or pass --dsn; no database password is bundled.")
 
     if ":5434/" in args.dsn or ":5435/" in args.dsn:
         raise SystemExit("거부: 5434·5435 는 읽기 전용 원본이다. preview(5436) 로만 쓴다.")

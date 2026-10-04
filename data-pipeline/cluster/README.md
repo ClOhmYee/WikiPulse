@@ -288,7 +288,7 @@ DB(이 README 의 Milton 6행)에서 `GET /api/v1/issues` 가 에러 없이 빈 
 (`share/postgresql/timezone`)가 없어 JDBC 가 보내는 `TimeZone` 파라미터를 전부 거절한다
 (`Asia/Seoul`·`UTC` 둘 다 `FATAL: invalid value`). `GMT` 만 통과한다 —
 위 확인은 `-Duser.timezone=GMT` 로 돌린 것이다. 실 PostgreSQL(docker compose)에는
-없는 문제다(CLAUDE.md). 팀 기본 경로는 `docker compose up -d postgres` 다.
+없는 문제다(https://github.com/ClOhmYee/WikiPulse). 팀 기본 경로는 `docker compose up -d postgres` 다.
 
 ## 배선됨 (WP-115, 2026-09-17 · 2026-09-18 정정)
 

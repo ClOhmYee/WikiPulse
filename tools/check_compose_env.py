@@ -38,7 +38,7 @@ COMPOSES = [ROOT / "infra/service/compose.yaml", ROOT / "docker-compose.yml"]
 #: application.yml 이 플레이스홀더로 읽는 환경변수의 접두사들.
 #: ⚠️ 접두사를 하나로 박아 두면 새 축(외부 서비스)이 생길 때마다 가드 밖으로 샌다 —
 #:    WIKIPULSE_MATCHING_ 로 박혀 있어서 page-title 노브가 한 번 새었다(2026-09-22).
-PREFIXES = ("WIKIPULSE_", "AZURE_TRANSLATOR_")
+PREFIXES = ("WIKIPULSE_", "AZURE_TRANSLATOR_", "LLM_GATEWAY_")
 _ALTERNATION = "|".join(PREFIXES)
 PLACEHOLDER = re.compile(r"\$\{((?:" + _ALTERNATION + r")[A-Z0-9_]+)")
 

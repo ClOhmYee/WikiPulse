@@ -86,7 +86,7 @@ docker compose run --rm spark
 | `KAFKA_BOOTSTRAP_SERVERS` | `localhost:9092` | 컨테이너 안에서는 `kafka:29092` |
 | `KAFKA_TOPIC` | `wiki.edits` | |
 | `SSE_CURSOR_FILE` | (빈 값) | Kafka 확인 완료 뒤 저장할 EventStreams cursor 파일. 빈 값이면 로컬 임시 동작 유지 |
-| `WINDOW_SIZE` / `SLIDE_SIZE` | `1 hour` / `5 minutes` | 현재 집계 구현값. 현행 v0.3에서는 편집 횟수 임계가 아니라 조회수 검사 후보를 내는 주기를 결정하며 WP-118에서 재검토 |
+| `WINDOW_SIZE` / `SLIDE_SIZE` | `1 hour` / `5 minutes` | 현재 집계 구현값. 현행 v0.3에서는 편집 횟수 임계가 아니라 조회수 검사 후보를 내는 주기를 결정하며 WikiPulse-118에서 재검토 |
 | `STARTING_OFFSETS` | `latest` | 처음부터 읽으려면 `earliest` |
 | `SINK` | `console` | `spike` 면 판정까지 가서 `spike(source='live')` 에 적재 (WP-100) |
 | `DATABASE_URL` | (없음) | `SINK=spike` 에 필수. 없으면 기동 때 멈춘다 — 조용히 콘솔로 안 떨어진다 |

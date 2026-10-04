@@ -25,7 +25,7 @@ services:
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-wikipulse}
       POSTGRES_USER: ${POSTGRES_USER:-wikipulse}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in your local .env}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Run python tools/setup_local_env.py first}
       # pgserver 에서 겪은 시간대 문제를 피하려고 UTC 로 못박는다.
       TZ: UTC
     ports:
@@ -79,7 +79,7 @@ services:
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-wikipulse}
       POSTGRES_USER: ${POSTGRES_USER:-wikipulse}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in your local .env}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Run python tools/setup_local_env.py first}
     volumes:
       - ./db:/db:ro
     restart: "no"
@@ -94,7 +94,7 @@ services:
     environment:
       DATABASE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-wikipulse}
       DB_USER: ${POSTGRES_USER:-wikipulse}
-      DB_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in your local .env}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:?Run python tools/setup_local_env.py first}
       # This compose stack serves local HTTP; production defaults to Secure cookies.
       SESSION_COOKIE_SECURE: ${SESSION_COOKIE_SECURE:-false}
       SESSION_TIMEOUT: ${SESSION_TIMEOUT:-24h}
@@ -103,6 +103,7 @@ services:
       # ⚠️ 여기서 전달하지 않으면 .env 에 값을 넣어도 컨테이너 안에 안 들어간다.
       #    애플리케이션 기본값(false·빈 키)으로 조용히 떨어져서 "켰는데 아무 일도
       #    안 일어난다"로 보인다. infra/service/compose.yaml 과 같은 목록이다.
+      LLM_GATEWAY_BASE_URL: ${LLM_GATEWAY_BASE_URL:-https://llm-gateway.example.com}
       LLM_GATEWAY_KEY: ${LLM_GATEWAY_KEY:-}
       WIKIPULSE_MATCHING_SCHEDULER_ENABLED: ${WIKIPULSE_MATCHING_SCHEDULER_ENABLED:-false}
       WIKIPULSE_MATCHING_VERIFICATION_ENABLED: ${WIKIPULSE_MATCHING_VERIFICATION_ENABLED:-false}
@@ -194,7 +195,7 @@ services:
       migrate:
         condition: service_completed_successfully
     environment:
-      DATABASE_URL: postgresql://${POSTGRES_USER:-wikipulse}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in your local .env}@postgres:5432/${POSTGRES_DB:-wikipulse}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-wikipulse}:${POSTGRES_PASSWORD:?Run python tools/setup_local_env.py first}@postgres:5432/${POSTGRES_DB:-wikipulse}
       DUMP_CACHE: /data/cache
       PAGEVIEW_HOURLY_OUT: /data/pageview-hourly
       # Wikimedia 는 연락처 없는 User-Agent 를 차단한다 (batch/ingest.py user_agent).
@@ -234,7 +235,7 @@ services:
       # 윈도우는 spike_candidate 에 대기로 쌓는다 (WP-100·-128).
       # ~~그 경로는 psycopg 가 없어서 못 돈다~~ → 이미지를 바꿔 해소했다 (-136).
       SINK: ${SPARK_SINK:-console}
-      DATABASE_URL: postgresql://${POSTGRES_USER:-wikipulse}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in your local .env}@postgres:5432/${POSTGRES_DB:-wikipulse}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-wikipulse}:${POSTGRES_PASSWORD:?Run python tools/setup_local_env.py first}@postgres:5432/${POSTGRES_DB:-wikipulse}
       # 🔴 **SINK=spike 면 정각 tumbling 으로 흘린다** (WP-128·-136).
       #    조회수는 시간 버킷이라 윈도우 시작이 정각이어야 1:1 로 붙는다. 기본 슬라이드
       #    5분으로 흘리면 한 문서가 시간당 12개 대기를 만들고 그중 정각 하나만 확정

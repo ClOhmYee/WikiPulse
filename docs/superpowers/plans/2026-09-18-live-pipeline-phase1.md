@@ -625,11 +625,11 @@ Run locally with the exact commit from Task 5:
 ```bash
 : "${VERIFIED_COMMIT:?Task 5에서 기록한 전체 40자리 SHA를 설정한다}"
 test "$(git rev-parse "${VERIFIED_COMMIT}^{commit}")" = "$VERIFIED_COMMIT"
-git archive --format=tar.gz --output=.agents/local/wikipulse-live-phase1.tar.gz \
+git archive --format=tar.gz --output=output/local/wikipulse-live-phase1.tar.gz \
   "$VERIFIED_COMMIT" data-pipeline deploy/live-pipeline
 ```
 
-Record `$VERIFIED_COMMIT` beside `Get-FileHash .agents/local/wikipulse-live-phase1.tar.gz -Algorithm SHA256`. Do not replace the archive revision with a later `HEAD`. The generated archive lives in the ignored `.agents/local` directory, is a deployment artifact rather than a source edit, and must not be committed.
+Record `$VERIFIED_COMMIT` beside `Get-FileHash output/local/wikipulse-live-phase1.tar.gz -Algorithm SHA256`. Do not replace the archive revision with a later `HEAD`. The generated archive lives in the ignored `.agents/local` directory, is a deployment artifact rather than a source edit, and must not be committed.
 
 - [ ] **Step 4: Upload into a new directory only**
 

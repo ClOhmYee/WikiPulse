@@ -29,11 +29,11 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
-        
+
 networks:
   wikipulse:
     external: true
     name: wikipulse-net
-    
+
 volumes:
   postgres-data:

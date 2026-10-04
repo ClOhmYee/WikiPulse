@@ -248,7 +248,7 @@ def main() -> None:
             # 조용히 콘솔로 떨어지지 않는다 — 적재한 줄 알고 빈 테이블을 보게 된다.
             raise SystemExit(
                 f"SINK={SINK_SPIKE} 에는 DATABASE_URL 이 필요하다. "
-                "예: postgresql://wikipulse:wikipulse@postgres:5432/wikipulse"
+                "예: postgresql://wikipulse:<password>@postgres:5432/wikipulse"
             )
         ensure_project_root_on_path()
         from streaming.live_spike import make_spike_batch_writer

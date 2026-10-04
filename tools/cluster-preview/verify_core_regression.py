@@ -38,7 +38,7 @@ from cluster.root_selection import (                       # noqa: E402
 
 DEFAULT_DSN = ""
     "PREVIEW_DSN",
-    "postgresql://replay:<local-db-password>@localhost:5436/wikipulse_cluster_preview",
+    "",
 )
 
 #: PoC 5 `full-1104/summary.json` 실측. 한 칸이라도 어긋나면 회귀다.
@@ -128,6 +128,8 @@ def main() -> int:
     ap.add_argument("--dsn", default=DEFAULT_DSN)
     ap.add_argument("--source", default="replay")
     args = ap.parse_args()
+    if not args.dsn:
+        ap.error("Set PREVIEW_DSN or pass --dsn; no database password is bundled.")
 
     conn = psycopg.connect(args.dsn)
     roots_ok, selection = check_root_selection(conn, args.source)

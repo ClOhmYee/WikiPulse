@@ -47,6 +47,7 @@ wikipulse:
       connect-timeout: 5s
       read-timeout: 10s
     gateway:
+      base-url: ${LLM_GATEWAY_BASE_URL:https://llm-gateway.example.com}
       api-key: ${LLM_GATEWAY_KEY:}
       connect-timeout: 5s
       # read 는 게이트웨이 p99 지연을 덮게(페이로드는 항상 작다).
@@ -245,4 +246,3 @@ server:
     session:
       cookie:
         secure: ${SESSION_COOKIE_SECURE:true}
-

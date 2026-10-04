@@ -15,9 +15,10 @@ services:
       # ⚠️ .env 는 POSTGRES_* 인데 백엔드가 읽는 이름은 다르다. 여기서 변환한다.
       DATABASE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-wikipulse}
       DB_USER:      ${POSTGRES_USER:-wikipulse}
-      DB_PASSWORD:  ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in your local .env}
+      DB_PASSWORD:  ${POSTGRES_PASSWORD:?Run python tools/setup_local_env.py first}
       SESSION_COOKIE_SECURE: ${SESSION_COOKIE_SECURE:-true}
       SESSION_TIMEOUT: ${SESSION_TIMEOUT:-24h}
+      LLM_GATEWAY_BASE_URL: ${LLM_GATEWAY_BASE_URL:-https://llm-gateway.example.com}
       LLM_GATEWAY_KEY:      ${LLM_GATEWAY_KEY:-}
       WIKIPULSE_MATCHING_SCHEDULER_ENABLED:    ${WIKIPULSE_MATCHING_SCHEDULER_ENABLED:-false}
       WIKIPULSE_MATCHING_VERIFICATION_ENABLED: ${WIKIPULSE_MATCHING_VERIFICATION_ENABLED:-false}
@@ -83,4 +84,3 @@ services:
       # F0 는 월 200만 자다. 한 폴에서 번역할 문서 수 상한 — 위키 조회와 별개 축이다.
       AZURE_TRANSLATOR_BATCHSIZE: ${AZURE_TRANSLATOR_BATCHSIZE:-200}
     # 열면 8080 이 외부에 직접 노출되고, 도커 게시 포트는 ufw 로 막히지도 않는다.
-

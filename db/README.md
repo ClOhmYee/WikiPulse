@@ -89,7 +89,7 @@ LIVE 화면은 가장 최근 값을, 리플레이는 사용자가 고른 시점�
 | --- | --- |
 | `issue_cluster` | 한 시점의 클러스터 = 버블 하나. `status` 로 3단계 노출 |
 | `cluster_member` | 묶인 문서. `weight`는 Clickstream 이동량. `is_seed=true`는 루트 급증 문서 또는 생성일 동시성으로 편입된 새 사건 문서, `false`는 재급증 기준으로 편입된 기존 문서. Wikidata는 멤버십을 만들지 않음 |
-| `issue_report` | LLM 요약. 운영 writer·상태 전이는 WP-119로 구현됐지만 worker 기본값은 꺼져 있고 실제 GATEWAY·EC2 실행은 미검증 |
+| `issue_report` | LLM 요약. 운영 writer·상태 전이는 WikiPulse-119로 구현됐지만 worker 기본값은 꺼져 있고 실제 GATEWAY·EC2 실행은 미검증 |
 
 ### 종목
 
@@ -117,7 +117,7 @@ LIVE 화면은 가장 최근 값을, 리플레이는 사용자가 고른 시점�
 
 ~~`spike.view_ratio`가 NULL이면 조회수 도착 전 감지 상태~~ → **아니다.** V7부터 조회수 도착 여부는 `spike.views`로 판단한다(WP-129). `view_ratio`는 기준선 표본이 없는 신규 문서가 절대 하한으로 확정될 때도 정상적으로 NULL이며, V7 이전 행도 NULL일 수 있다. `cluster_member.completeness`를 `view_ratio`만으로 결정하지 않는다. 조회수 원본이 늦으면 `spike`를 만들지 않고 후보 대기에 남긴다.
 
-**V6 재사용 인덱스가 as-of를 보장하지는 않는다.** 같은 `issue_key`의 최근 완료 요약·종목 판정을 찾는 경로는 구현됐지만, 현재 조회에는 원 결과 스냅샷이 대상 `snapshot_ts` 이하인지 확인하는 상한이 없다. 과거 backfill에 미래 결과가 섞이지 않도록 WP-120에서 조회 조건과 원 `generated_at`·`verified_at` 보존을 보완한다.
+**V6 재사용 인덱스가 as-of를 보장하지는 않는다.** 같은 `issue_key`의 최근 완료 요약·종목 판정을 찾는 경로는 구현됐지만, 현재 조회에는 원 결과 스냅샷이 대상 `snapshot_ts` 이하인지 확인하는 상한이 없다. 과거 backfill에 미래 결과가 섞이지 않도록 WikiPulse-120에서 조회 조건과 원 `generated_at`·`verified_at` 보존을 보완한다.
 
 **회원·관심종목·알림·토론 테이블은 향후 기능용으로만 남아 있다.** MVP에서는 관련
 API·UI·운영 적재를 구현하지 않는다(WP-104). 스키마 자체의 삭제 전파 규칙은

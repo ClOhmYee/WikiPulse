@@ -53,7 +53,7 @@ sudo docker compose --env-file .env run --rm live-cycle \
 ```
 
 `spike_candidate` 의 대기가 줄고 `page_view_hourly` 에 그 시간 행이 생기는지 DB 에서
-직접 확인한다 — 로그만 보고 넘어가지 않는다(CLAUDE.md "운영 DB 에서 행 수 확인").
+직접 확인한다 — 로그만 보고 넘어가지 않는다(https://github.com/ClOhmYee/WikiPulse "운영 DB 에서 행 수 확인").
 
 ## 상주 전환
 

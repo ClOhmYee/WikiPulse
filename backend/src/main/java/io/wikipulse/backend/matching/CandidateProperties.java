@@ -145,7 +145,7 @@ public class CandidateProperties {
     public static class Wikipedia {
         private String apiUrl = "https://en.wikipedia.org/w/api.php";
         /** 위키미디어 API 예절 — 연락처를 담은 User-Agent 를 붙인다. */
-        private String userAgent = "WikiPulse/0.1 (https://github.com/ClOhmYee/WikiPulse)";
+        private String userAgent = "WikiPulse/0.1 (https://example.com/internal-tracker)";
         /** 🔴 타임아웃 필수 — 없으면 소켓 hang 이 단일 스케줄러 스레드를 영구 정지시킨다. */
         private Duration connectTimeout = Duration.ofSeconds(5);
         private Duration readTimeout = Duration.ofSeconds(10);

@@ -69,7 +69,7 @@ spike → issue_cluster ─┬─ cluster_member   (어떤 문서가 묶였나)
 | `spike_candidate` | `(source, page_id, window_start)` | `page_id` | 편집 관문은 통과했지만 조회수 원본이 아직 오지 않은 창(V10). 확정·폐기 시 삭제한다 |
 | `issue_cluster` | `id` | — | `snapshot_ts` 가 시점을 가른다 |
 | `cluster_member` | `(cluster_id, page_id)` | `cluster_id`, `page_id` | 한 문서가 여러 클러스터에 들어갈 수 있다. `is_seed=true`는 루트 급증 문서 또는 생성일 동시성으로 편입된 새 사건 문서, `false`는 재급증 기준으로 편입된 기존 문서다. Wikidata는 멤버십을 만들지 않는다 |
-| `issue_report` | `cluster_id` | `cluster_id` | PK가 곧 FK = **1:1**. 운영 writer·상태 전이는 WP-119로 구현됐다. 실제 EC2 호출도 수행했지만 2026-09-22 재클러스터링 뒤 운영 행은 0건이고 worker는 꺼져 있다 |
+| `issue_report` | `cluster_id` | `cluster_id` | PK가 곧 FK = **1:1**. 운영 writer·상태 전이는 WikiPulse-119로 구현됐다. 실제 EC2 호출도 수행했지만 2026-09-22 재클러스터링 뒤 운영 행은 0건이고 worker는 꺼져 있다 |
 | `issue_summary_attempt` | `cluster_id` | `cluster_id` | 요약이 저장되지 못한 시도 원장(V11). 반복 호출을 `attempt_count`와 실패 상태로 제한한다 |
 | `stock` | `ticker` | — | 티커가 자연키. 대리키 없음 |
 | `stock_price` | `(ticker, trade_date)` | `ticker` | 약 640만 행, 파티셔닝 없음 |
@@ -119,7 +119,7 @@ ORDER BY s.embedding <=> :q     -- <=> 여야 HNSW 인덱스를 탄다
 LIMIT :k;
 ```
 
-**이슈 임베딩은 저장하지 않는다.** 후보 생성 시 계산해 쓰고 버린다. 같은 이슈의 LLM 판정을 반복하지 않도록 `cluster_stock`의 `(issue_key, ticker, prompt_version)` 기준으로 완료 결과를 재사용한다(WP-49, `V6__cluster_stock_reuse.sql`). 재사용 판정이 존재해도 API는 시점별 `cluster_id`를 읽으므로 각 대상 행으로 복사한다. WP-208부터 요약·후보·검증 재사용은 원본 클러스터 `snapshot_ts <=` 대상 `snapshot_ts`만 허용하고, 가능한 원본 중 대상 시점에 가장 가까운 것을 고른다. `generated_at`·`verified_at`은 backfill 실행 시각이므로 event-time 상한으로 사용하지 않는다.
+**이슈 임베딩은 저장하지 않는다.** 후보 생성 시 계산해 쓰고 버린다. 같은 이슈의 LLM 판정을 반복하지 않도록 `cluster_stock`의 `(issue_key, ticker, prompt_version)` 기준으로 완료 결과를 재사용한다(WP-49, `V6__cluster_stock_reuse.sql`). 재사용 판정이 존재해도 API는 시점별 `cluster_id`를 읽으므로 각 대상 행으로 복사한다. WikiPulse-208부터 요약·후보·검증 재사용은 원본 클러스터 `snapshot_ts <=` 대상 `snapshot_ts`만 허용하고, 가능한 원본 중 대상 시점에 가장 가까운 것을 고른다. `generated_at`·`verified_at`은 backfill 실행 시각이므로 event-time 상한으로 사용하지 않는다.
 
 ---
 
