@@ -2,9 +2,9 @@
 
 | 이름 | GitHub |
 | --- | --- |
-| 이경호 | — |
-| 방지섭 | — |
-| 유상은 | — |
+| 이경호 | [ClOhmYee](https://github.com/ClOhmYee) |
+| 방지섭 | [bjs0306b](https://github.com/bjs0306b) |
+| 유상은 | [sangeune](https://github.com/sangeune) |
 | yl656982 | — |
 | 이유정 | — |
-| 임소민 | — |
+| 임소민 | [lavendmin](https://github.com/lavendmin) |
