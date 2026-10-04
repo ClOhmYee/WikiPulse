@@ -14,6 +14,18 @@ jobs:
           python-version: "3.11"
       - run: python tools/check_public_export.py --history
       - run: python tools/check_compose_env.py
+      - name: Scan credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          version=8.30.1
+          scanner_dir="$(mktemp -d)"
+          release="https://github.com/gitleaks/gitleaks/releases/download/v${version}"
+          curl --fail --silent --show-error --location --retry 3 "${release}/gitleaks_${version}_linux_x64.tar.gz" -o "${scanner_dir}/gitleaks_${version}_linux_x64.tar.gz"
+          curl --fail --silent --show-error --location --retry 3 "${release}/gitleaks_${version}_checksums.txt" -o "${scanner_dir}/checksums.txt"
+          (cd "${scanner_dir}" && sha256sum --ignore-missing --check checksums.txt && tar -xzf "gitleaks_${version}_linux_x64.tar.gz" gitleaks)
+          "${scanner_dir}/gitleaks" git . --log-opts="--all --full-history" --max-archive-depth=3 --max-decode-depth=5 --ignore-gitleaks-allow --redact=100 --no-banner
+          "${scanner_dir}/gitleaks" dir . --max-archive-depth=3 --max-decode-depth=5 --ignore-gitleaks-allow --redact=100 --no-banner
   frontend:
     runs-on: ubuntu-latest
     defaults:

@@ -1,0 +1,20 @@
+title = "WikiPulse secret scanning"
+[extend]
+useDefault = true
+
+[[rules]]
+id = "generic-api-key"
+
+[[rules.allowlists]]
+description = "Issue identifiers used in map and article assertions"
+condition = "AND"
+regexTarget = "match"
+paths = ['''(^|/)frontend/e2e/(newsroom|pulse)\.spec\.js$''']
+regexes = ['''issueKey\s*===\s*"iran-hormuz-2025"''']
+
+[[rules.allowlists]]
+description = "Issue identifiers used in SQL reuse tests"
+condition = "AND"
+regexTarget = "match"
+paths = ['''(^|/)db/tests/test_candidate_worker_sql\.py$''']
+regexes = ['''issue_key\s*=\s*"'crowdstrike-2024'"?''']
