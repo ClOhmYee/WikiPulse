@@ -1,5 +1,9 @@
 # WikiPulse
 
+<p align="center">
+  <img src="docs/images/wikipulse-logo.png" alt="WikiPulse" width="552" />
+</p>
+
 위키백과의 관심 변화에서 이슈를 찾고, 근거가 있는 미국 상장 종목을 연결하는 서비스입니다.
 
 ![WikiPulse 펄스맵](docs/images/pulse-map.png)
@@ -69,7 +73,7 @@ docker compose up -d --build
 
 설정 도구는 무작위 DB 비밀번호가 들어간 로컬 `.env`를 만들며 기존 파일은 덮어쓰지 않습니다. 빈 DB에는 기본적으로 이슈가 없습니다. 시연 데이터 적재와 상세 실행 방법은 [Docker 가이드](docker/README.md)를 참고하세요.
 
-외부 수집·AI 워커는 기본 OFF입니다. 수집에는 CONTACT_EMAIL, AI 기능에는 사용자 소유의 LLM_GATEWAY_BASE_URL과 LLM_GATEWAY_KEY가 필요합니다. 연결 계약과 Python 도구의 설정은 [AI 게이트웨이 설정](docs/AI_GATEWAY.md)을 참고하세요.
+외부 수집·AI 워커는 기본 OFF입니다. 수집에는 `CONTACT_EMAIL`, AI 기능에는 `LLM_GATEWAY_BASE_URL`과 `LLM_GATEWAY_KEY`를 설정합니다. 연결 계약과 Python 도구의 설정은 [AI 게이트웨이 설정](docs/AI_GATEWAY.md)을 참고하세요.
 
 ## 저장소 안내
 
